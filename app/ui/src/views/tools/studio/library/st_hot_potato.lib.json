@@ -352,10 +352,54 @@
    "graph": "hp_pass"
   },
   {
+   "id": "hp_pass_fa",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ta",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ok",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
    "id": "hp_pass_br",
    "type": "flow.branch",
    "pos": {
-    "x": 1040,
+    "x": 2080,
     "y": 0
    },
    "params": {},
@@ -365,7 +409,7 @@
    "id": "hp_pass_off",
    "type": "player.set_glow",
    "pos": {
-    "x": 1300,
+    "x": 2340,
     "y": 0
    },
    "params": {
@@ -377,7 +421,7 @@
    "id": "hp_pass_hold",
    "type": "var.set",
    "pos": {
-    "x": 1560,
+    "x": 2600,
     "y": 0
    },
    "params": {
@@ -389,7 +433,7 @@
    "id": "hp_pass_mark",
    "type": "fn.call",
    "pos": {
-    "x": 1820,
+    "x": 2860,
     "y": 0
    },
    "params": {
@@ -401,7 +445,7 @@
    "id": "hp_pass_ret",
    "type": "fn.return",
    "pos": {
-    "x": 2080,
+    "x": 3120,
     "y": 0
    },
    "params": {},
@@ -411,7 +455,7 @@
    "id": "hp_pass_ret2",
    "type": "fn.return",
    "pos": {
-    "x": 2340,
+    "x": 3380,
     "y": 180
    },
    "params": {},
@@ -972,6 +1016,72 @@
    "id": "w32",
    "from": {
     "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_fa",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_ta",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "hp_pass_fa",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "hp_pass_ta",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "hp_pass_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "hp_pass_entry",
     "pin": "then"
    },
    "to": {
@@ -980,9 +1090,9 @@
    }
   },
   {
-   "id": "w33",
+   "id": "w39",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -991,7 +1101,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w40",
    "from": {
     "node": "hp_pass_br",
     "pin": "true"
@@ -1002,7 +1112,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w41",
    "from": {
     "node": "hp_pass_entry",
     "pin": "from"
@@ -1013,7 +1123,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w42",
    "from": {
     "node": "hp_pass_off",
     "pin": "then"
@@ -1024,7 +1134,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w43",
    "from": {
     "node": "hp_pass_entry",
     "pin": "to"
@@ -1035,7 +1145,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w44",
    "from": {
     "node": "hp_pass_hold",
     "pin": "then"
@@ -1046,7 +1156,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w45",
    "from": {
     "node": "hp_pass_entry",
     "pin": "to"
@@ -1057,7 +1167,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w46",
    "from": {
     "node": "hp_pass_mark",
     "pin": "then"
@@ -1068,9 +1178,9 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w47",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -1079,7 +1189,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w48",
    "from": {
     "node": "hp_pass_br",
     "pin": "false"
@@ -1090,9 +1200,9 @@
    }
   },
   {
-   "id": "w43",
+   "id": "w49",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -1101,7 +1211,7 @@
    }
   },
   {
-   "id": "w44",
+   "id": "w50",
    "from": {
     "node": "hp_tick_entry",
     "pin": "then"
@@ -1112,7 +1222,7 @@
    }
   },
   {
-   "id": "w45",
+   "id": "w51",
    "from": {
     "node": "hp_tick_lv",
     "pin": "out"
@@ -1123,7 +1233,7 @@
    }
   },
   {
-   "id": "w46",
+   "id": "w52",
    "from": {
     "node": "hp_tick_dec",
     "pin": "then"
@@ -1134,7 +1244,7 @@
    }
   },
   {
-   "id": "w47",
+   "id": "w53",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -1145,7 +1255,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w54",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -1156,7 +1266,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w55",
    "from": {
     "node": "hp_tick_br",
     "pin": "true"
@@ -1167,7 +1277,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w56",
    "from": {
     "node": "hp_tick_alive",
     "pin": "out"
@@ -1178,7 +1288,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w57",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -1189,7 +1299,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w58",
    "from": {
     "node": "hp_tick_br2",
     "pin": "true"
@@ -1200,7 +1310,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w59",
    "from": {
     "node": "hp_tick_pos",
     "pin": "out"
@@ -1211,7 +1321,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w60",
    "from": {
     "node": "hp_tick_boom",
     "pin": "then"
@@ -1222,7 +1332,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w61",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -1233,7 +1343,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w62",
    "from": {
     "node": "hp_tick_off",
     "pin": "then"
@@ -1244,7 +1354,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w63",
    "from": {
     "node": "hp_tick_clear",
     "pin": "then"
@@ -1255,7 +1365,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w64",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -1266,7 +1376,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w65",
    "from": {
     "node": "hp_tick_br2",
     "pin": "false"
@@ -1277,7 +1387,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w66",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -1288,7 +1398,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w67",
    "from": {
     "node": "hp_tick_lv",
     "pin": "out"
@@ -1299,7 +1409,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w68",
    "from": {
     "node": "hp_tick_br",
     "pin": "false"
@@ -1310,7 +1420,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w69",
    "from": {
     "node": "hp_tick_five",
     "pin": "out"
@@ -1321,7 +1431,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w70",
    "from": {
     "node": "hp_tick_br5",
     "pin": "true"
@@ -1332,7 +1442,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w71",
    "from": {
     "node": "hp_tick_h2",
     "pin": "out"
@@ -1343,7 +1453,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w72",
    "from": {
     "node": "hp_tick_avoid",
     "pin": "then"
@@ -1354,7 +1464,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w73",
    "from": {
     "node": "hp_tick_br5",
     "pin": "false"

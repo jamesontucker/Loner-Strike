@@ -240,15 +240,16 @@
   },
   {
    "id": "cd_run_hud",
-   "type": "msg.hud",
+   "type": "msg.big_hud",
    "pos": {
-    "x": 3900,
+    "x": -1,
     "y": 0
    },
    "params": {
-    "slot": "top",
+    "text": "",
+    "y": 0.12,
     "seconds": 1.1,
-    "text": ""
+    "effect": "fade"
    },
    "graph": "cd_run"
   },
@@ -256,7 +257,7 @@
    "id": "cd_run_dec",
    "type": "var.add",
    "pos": {
-    "x": 4160,
+    "x": 3900,
     "y": 0
    },
    "params": {
@@ -269,7 +270,7 @@
    "id": "cd_run_over",
    "type": "math.compare",
    "pos": {
-    "x": 4420,
+    "x": 4160,
     "y": 720
    },
    "params": {
@@ -282,7 +283,7 @@
    "id": "cd_run_br",
    "type": "flow.branch",
    "pos": {
-    "x": 4680,
+    "x": 4420,
     "y": 0
    },
    "params": {},
@@ -292,7 +293,7 @@
    "id": "cd_run_stop",
    "type": "timer.clear",
    "pos": {
-    "x": 4940,
+    "x": 4680,
     "y": 0
    },
    "params": {},

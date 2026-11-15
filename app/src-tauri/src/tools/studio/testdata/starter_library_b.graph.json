@@ -29,6 +29,27 @@
    "default": 0
   },
   {
+   "id": "cd_left",
+   "name": "Countdown left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "cd_label",
+   "name": "Countdown label",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  },
+  {
+   "id": "lb_text",
+   "name": "Leaderboard text",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  },
+  {
    "id": "qs_step",
    "name": "Quest step",
    "type": "text",
@@ -111,6 +132,18 @@
      "type": "number"
     }
    ]
+  },
+  {
+   "id": "lb_show",
+   "name": "Show Leaderboard",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
   },
   {
    "id": "cz_make",
@@ -333,6 +366,39 @@
     {
      "id": "over",
      "name": "Over",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "cd_run",
+   "name": "Countdown HUD",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "label",
+     "name": "Label",
+     "type": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "exec"
+    },
+    {
+     "id": "done",
+     "name": "Done",
      "type": "exec"
     }
    ]
@@ -1319,6 +1385,351 @@
    "graph": "ks_kill"
   },
   {
+   "id": "cd_run_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_setl",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "every": 1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_g",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 540
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_ft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 2340,
+    "y": 540
+   },
+   "params": {
+    "style": "ms"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_gl",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 720
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dlabel",
+   "type": "text.literal",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "value": "Time left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_lab",
+   "type": "logic.select",
+   "pos": {
+    "x": 3380,
+    "y": 720
+   },
+   "params": {
+    "of": "text"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "text": "[0]: [1]"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_hud",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": -1,
+    "y": 0
+   },
+   "params": {
+    "text": "",
+    "y": 0.12,
+    "seconds": 1.1,
+    "effect": "fade"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left",
+    "amount": -1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_over",
+   "type": "math.compare",
+   "pos": {
+    "x": 4160,
+    "y": 720
+   },
+   "params": {
+    "op": "lt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_stop",
+   "type": "timer.clear",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "lb_show_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_clear",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text",
+    "value": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_top",
+   "type": "save.top",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "key": "kills",
+    "order": "high"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g",
+   "type": "var.get",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_line",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "text": "[0][1]. [2]: [3][br]"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_add",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_win",
+   "type": "msg.info_window",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "title": "Top players",
+    "text": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  },
+  {
    "id": "cz_make_entry",
    "type": "fn.entry",
    "pos": {
@@ -1874,22 +2285,24 @@
   },
   {
    "id": "ev10",
-   "type": "event.player_spawned",
+   "type": "math.number",
    "pos": {
     "x": 600,
-    "y": 360
+    "y": 0
    },
-   "params": {}
+   "params": {
+    "value": 120
+   }
   },
   {
    "id": "ev11",
-   "type": "math.number",
+   "type": "text.literal",
    "pos": {
     "x": 900,
-    "y": 360
+    "y": 0
    },
    "params": {
-    "value": 0
+    "value": "Round"
    }
   },
   {
@@ -1897,15 +2310,15 @@
    "type": "macro.use",
    "pos": {
     "x": 1200,
-    "y": 360
+    "y": 0
    },
    "params": {
-    "macro": "sp_give"
+    "macro": "cd_run"
    }
   },
   {
    "id": "ev13",
-   "type": "event.weapon_fired",
+   "type": "event.player_spawned",
    "pos": {
     "x": 1500,
     "y": 360
@@ -1914,9 +2327,40 @@
   },
   {
    "id": "ev14",
-   "type": "fn.call",
+   "type": "math.number",
    "pos": {
     "x": 1800,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev15",
+   "type": "macro.use",
+   "pos": {
+    "x": 2100,
+    "y": 360
+   },
+   "params": {
+    "macro": "sp_give"
+   }
+  },
+  {
+   "id": "ev16",
+   "type": "event.weapon_fired",
+   "pos": {
+    "x": 0,
+    "y": 360
+   },
+   "params": {}
+  },
+  {
+   "id": "ev17",
+   "type": "fn.call",
+   "pos": {
+    "x": 300,
     "y": 360
    },
    "params": {
@@ -1924,19 +2368,19 @@
    }
   },
   {
-   "id": "ev15",
+   "id": "ev18",
    "type": "event.player_killed",
    "pos": {
-    "x": 2100,
+    "x": 600,
     "y": 720
    },
    "params": {}
   },
   {
-   "id": "ev16",
+   "id": "ev19",
    "type": "fn.call",
    "pos": {
-    "x": 0,
+    "x": 900,
     "y": 720
    },
    "params": {
@@ -1944,10 +2388,10 @@
    }
   },
   {
-   "id": "ev17",
+   "id": "ev20",
    "type": "fn.call",
    "pos": {
-    "x": 300,
+    "x": 1200,
     "y": 720
    },
    "params": {
@@ -1955,10 +2399,10 @@
    }
   },
   {
-   "id": "ev18",
+   "id": "ev21",
    "type": "math.number",
    "pos": {
-    "x": 600,
+    "x": 1500,
     "y": 720
    },
    "params": {
@@ -1966,10 +2410,10 @@
    }
   },
   {
-   "id": "ev19",
+   "id": "ev22",
    "type": "macro.use",
    "pos": {
-    "x": 900,
+    "x": 1800,
     "y": 720
    },
    "params": {
@@ -1977,10 +2421,10 @@
    }
   },
   {
-   "id": "ev20",
+   "id": "ev23",
    "type": "math.number",
    "pos": {
-    "x": 1200,
+    "x": 2100,
     "y": 720
    },
    "params": {
@@ -1988,10 +2432,10 @@
    }
   },
   {
-   "id": "ev21",
+   "id": "ev24",
    "type": "fn.call",
    "pos": {
-    "x": 1500,
+    "x": 0,
     "y": 720
    },
    "params": {
@@ -1999,97 +2443,67 @@
    }
   },
   {
-   "id": "ev22",
-   "type": "event.player_hurt",
-   "pos": {
-    "x": 1800,
-    "y": 1080
-   },
-   "params": {}
-  },
-  {
-   "id": "ev23",
-   "type": "flow.branch",
-   "pos": {
-    "x": 2100,
-    "y": 1080
-   },
-   "params": {}
-  },
-  {
-   "id": "ev24",
-   "type": "math.number",
-   "pos": {
-    "x": 0,
-    "y": 1080
-   },
-   "params": {
-    "value": 1
-   }
-  },
-  {
    "id": "ev25",
-   "type": "macro.use",
+   "type": "save.add",
    "pos": {
     "x": 300,
-    "y": 1080
+    "y": 720
    },
    "params": {
-    "macro": "st_freeze"
+    "key": "kills",
+    "amount": 1
    }
   },
   {
    "id": "ev26",
-   "type": "math.number",
+   "type": "fn.call",
    "pos": {
     "x": 600,
-    "y": 1080
+    "y": 720
    },
    "params": {
-    "value": 1
+    "func": "lb_show"
    }
   },
   {
    "id": "ev27",
-   "type": "math.number",
+   "type": "event.player_hurt",
    "pos": {
     "x": 900,
     "y": 1080
    },
-   "params": {
-    "value": 200
-   }
+   "params": {}
   },
   {
    "id": "ev28",
-   "type": "macro.use",
+   "type": "flow.branch",
    "pos": {
     "x": 1200,
     "y": 1080
    },
-   "params": {
-    "macro": "st_slow"
-   }
+   "params": {}
   },
   {
    "id": "ev29",
-   "type": "text.equals",
+   "type": "math.number",
    "pos": {
     "x": 1500,
     "y": 1080
    },
    "params": {
-    "b": "knife"
+    "value": 1
    }
   },
   {
    "id": "ev30",
-   "type": "flow.branch",
+   "type": "macro.use",
    "pos": {
     "x": 1800,
     "y": 1080
    },
-   "params": {}
+   "params": {
+    "macro": "st_freeze"
+   }
   },
   {
    "id": "ev31",
@@ -2099,7 +2513,7 @@
     "y": 1080
    },
    "params": {
-    "value": 3
+    "value": 1
    }
   },
   {
@@ -2110,7 +2524,7 @@
     "y": 1080
    },
    "params": {
-    "value": 4
+    "value": 200
    }
   },
   {
@@ -2121,35 +2535,35 @@
     "y": 1080
    },
    "params": {
-    "macro": "st_burn"
+    "macro": "st_slow"
    }
   },
   {
    "id": "ev34",
-   "type": "event.time_up",
+   "type": "text.equals",
    "pos": {
     "x": 600,
-    "y": 1440
+    "y": 1080
    },
-   "params": {}
+   "params": {
+    "b": "knife"
+   }
   },
   {
    "id": "ev35",
-   "type": "flow.pick_player",
+   "type": "flow.branch",
    "pos": {
     "x": 900,
-    "y": 1440
+    "y": 1080
    },
-   "params": {
-    "which": "alive"
-   }
+   "params": {}
   },
   {
    "id": "ev36",
    "type": "math.number",
    "pos": {
     "x": 1200,
-    "y": 1440
+    "y": 1080
    },
    "params": {
     "value": 3
@@ -2157,9 +2571,62 @@
   },
   {
    "id": "ev37",
-   "type": "macro.use",
+   "type": "math.number",
    "pos": {
     "x": 1500,
+    "y": 1080
+   },
+   "params": {
+    "value": 4
+   }
+  },
+  {
+   "id": "ev38",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 1080
+   },
+   "params": {
+    "macro": "st_burn"
+   }
+  },
+  {
+   "id": "ev39",
+   "type": "event.time_up",
+   "pos": {
+    "x": 2100,
+    "y": 1440
+   },
+   "params": {}
+  },
+  {
+   "id": "ev40",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 0,
+    "y": 1440
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "ev41",
+   "type": "math.number",
+   "pos": {
+    "x": 300,
+    "y": 1440
+   },
+   "params": {
+    "value": 3
+   }
+  },
+  {
+   "id": "ev42",
+   "type": "macro.use",
+   "pos": {
+    "x": 600,
     "y": 1440
    },
    "params": {
@@ -3511,6 +3978,424 @@
    }
   },
   {
+   "id": "countdown_w1",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w2",
+   "from": {
+    "node": "cd_run_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w3",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w4",
+   "from": {
+    "node": "cd_run_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w5",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w6",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "label"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w7",
+   "from": {
+    "node": "cd_run_setl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w8",
+   "from": {
+    "node": "cd_run_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w9",
+   "from": {
+    "node": "cd_run_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w10",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "countdown_w11",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_ft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "countdown_w12",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w13",
+   "from": {
+    "node": "cd_run_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w14",
+   "from": {
+    "node": "cd_run_dlabel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w15",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w16",
+   "from": {
+    "node": "cd_run_lab",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "countdown_w17",
+   "from": {
+    "node": "cd_run_ft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "countdown_w18",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w19",
+   "from": {
+    "node": "cd_run_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w20",
+   "from": {
+    "node": "cd_run_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w21",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_over",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w22",
+   "from": {
+    "node": "cd_run_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w23",
+   "from": {
+    "node": "cd_run_over",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w24",
+   "from": {
+    "node": "cd_run_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w25",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "handle"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "handle"
+   }
+  },
+  {
+   "id": "countdown_w26",
+   "from": {
+    "node": "cd_run_stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "done"
+   }
+  },
+  {
+   "id": "leaderboard_w1",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w2",
+   "from": {
+    "node": "lb_show_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_top",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w3",
+   "from": {
+    "node": "lb_show_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "leaderboard_w4",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "rank"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "leaderboard_w5",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "name"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "leaderboard_w6",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "value"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "leaderboard_w7",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "each"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w8",
+   "from": {
+    "node": "lb_show_line",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "leaderboard_w9",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w10",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "leaderboard_w11",
+   "from": {
+    "node": "lb_show_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "more"
+   }
+  },
+  {
+   "id": "leaderboard_w12",
+   "from": {
+    "node": "lb_show_win",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_ret",
+    "pin": "exec"
+   }
+  },
+  {
    "id": "capture_w1",
    "from": {
     "node": "cz_make_entry",
@@ -4160,7 +5045,7 @@
    }
   },
   {
-   "id": "ev_w181",
+   "id": "ev_w219",
    "from": {
     "node": "ev1",
     "pin": "then"
@@ -4171,7 +5056,7 @@
    }
   },
   {
-   "id": "ev_w182",
+   "id": "ev_w220",
    "from": {
     "node": "ev2",
     "pin": "each"
@@ -4182,7 +5067,7 @@
    }
   },
   {
-   "id": "ev_w183",
+   "id": "ev_w221",
    "from": {
     "node": "ev2",
     "pin": "player"
@@ -4193,7 +5078,7 @@
    }
   },
   {
-   "id": "ev_w184",
+   "id": "ev_w222",
    "from": {
     "node": "ev3",
     "pin": "out"
@@ -4204,7 +5089,7 @@
    }
   },
   {
-   "id": "ev_w185",
+   "id": "ev_w223",
    "from": {
     "node": "ev4",
     "pin": "then"
@@ -4215,7 +5100,7 @@
    }
   },
   {
-   "id": "ev_w186",
+   "id": "ev_w224",
    "from": {
     "node": "ev2",
     "pin": "player"
@@ -4226,7 +5111,7 @@
    }
   },
   {
-   "id": "ev_w187",
+   "id": "ev_w225",
    "from": {
     "node": "ev5",
     "pin": "out"
@@ -4237,7 +5122,7 @@
    }
   },
   {
-   "id": "ev_w188",
+   "id": "ev_w226",
    "from": {
     "node": "ev6",
     "pin": "out"
@@ -4248,7 +5133,7 @@
    }
   },
   {
-   "id": "ev_w189",
+   "id": "ev_w227",
    "from": {
     "node": "ev2",
     "pin": "then"
@@ -4259,7 +5144,7 @@
    }
   },
   {
-   "id": "ev_w190",
+   "id": "ev_w228",
    "from": {
     "node": "ev8",
     "pin": "then"
@@ -4270,7 +5155,7 @@
    }
   },
   {
-   "id": "ev_w191",
+   "id": "ev_w229",
    "from": {
     "node": "ev8",
     "pin": "entity"
@@ -4281,9 +5166,9 @@
    }
   },
   {
-   "id": "ev_w192",
+   "id": "ev_w230",
    "from": {
-    "node": "ev10",
+    "node": "ev9",
     "pin": "then"
    },
    "to": {
@@ -4292,348 +5177,337 @@
    }
   },
   {
-   "id": "ev_w193",
+   "id": "ev_w231",
    "from": {
     "node": "ev10",
-    "pin": "player"
+    "pin": "out"
    },
    "to": {
     "node": "ev12",
-    "pin": "who"
+    "pin": "secs"
    }
   },
   {
-   "id": "ev_w194",
+   "id": "ev_w232",
    "from": {
     "node": "ev11",
     "pin": "out"
    },
    "to": {
     "node": "ev12",
-    "pin": "secs"
+    "pin": "label"
    }
   },
   {
-   "id": "ev_w195",
+   "id": "ev_w233",
    "from": {
     "node": "ev13",
     "pin": "then"
    },
    "to": {
-    "node": "ev14",
-    "pin": "exec"
+    "node": "ev15",
+    "pin": "go"
    }
   },
   {
-   "id": "ev_w196",
+   "id": "ev_w234",
    "from": {
     "node": "ev13",
     "pin": "player"
    },
    "to": {
+    "node": "ev15",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w235",
+   "from": {
     "node": "ev14",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w197",
-   "from": {
-    "node": "ev15",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev16",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w198",
-   "from": {
-    "node": "ev15",
-    "pin": "attacker"
-   },
-   "to": {
-    "node": "ev16",
-    "pin": "killer"
-   }
-  },
-  {
-   "id": "ev_w199",
-   "from": {
-    "node": "ev15",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev16",
-    "pin": "victim"
-   }
-  },
-  {
-   "id": "ev_w200",
-   "from": {
-    "node": "ev16",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev17",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w201",
-   "from": {
-    "node": "ev15",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev17",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w202",
-   "from": {
-    "node": "ev17",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev19",
-    "pin": "go"
-   }
-  },
-  {
-   "id": "ev_w203",
-   "from": {
-    "node": "ev15",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev19",
-    "pin": "victim"
-   }
-  },
-  {
-   "id": "ev_w204",
-   "from": {
-    "node": "ev15",
-    "pin": "attacker"
-   },
-   "to": {
-    "node": "ev19",
-    "pin": "killer"
-   }
-  },
-  {
-   "id": "ev_w205",
-   "from": {
-    "node": "ev18",
     "pin": "out"
    },
    "to": {
-    "node": "ev19",
+    "node": "ev15",
     "pin": "secs"
    }
   },
   {
-   "id": "ev_w206",
+   "id": "ev_w236",
    "from": {
-    "node": "ev19",
-    "pin": "next"
+    "node": "ev16",
+    "pin": "then"
    },
    "to": {
-    "node": "ev21",
+    "node": "ev17",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w207",
+   "id": "ev_w237",
    "from": {
-    "node": "ev15",
-    "pin": "attacker"
+    "node": "ev16",
+    "pin": "player"
    },
    "to": {
-    "node": "ev21",
+    "node": "ev17",
     "pin": "who"
    }
   },
   {
-   "id": "ev_w208",
+   "id": "ev_w238",
+   "from": {
+    "node": "ev18",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w239",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "killer"
+   }
+  },
+  {
+   "id": "ev_w240",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "victim"
+   }
+  },
+  {
+   "id": "ev_w241",
+   "from": {
+    "node": "ev19",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev20",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w242",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev20",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w243",
    "from": {
     "node": "ev20",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w244",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "victim"
+   }
+  },
+  {
+   "id": "ev_w245",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "killer"
+   }
+  },
+  {
+   "id": "ev_w246",
+   "from": {
+    "node": "ev21",
     "pin": "out"
    },
    "to": {
-    "node": "ev21",
+    "node": "ev22",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w247",
+   "from": {
+    "node": "ev22",
+    "pin": "next"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w248",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w249",
+   "from": {
+    "node": "ev23",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev24",
     "pin": "reward"
    }
   },
   {
-   "id": "ev_w209",
+   "id": "ev_w250",
    "from": {
-    "node": "ev22",
+    "node": "ev24",
     "pin": "then"
    },
    "to": {
-    "node": "ev23",
+    "node": "ev25",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w210",
+   "id": "ev_w251",
    "from": {
-    "node": "ev22",
-    "pin": "headshot"
-   },
-   "to": {
-    "node": "ev23",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "ev_w211",
-   "from": {
-    "node": "ev23",
-    "pin": "true"
-   },
-   "to": {
-    "node": "ev25",
-    "pin": "go"
-   }
-  },
-  {
-   "id": "ev_w212",
-   "from": {
-    "node": "ev22",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev25",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w213",
-   "from": {
-    "node": "ev24",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev25",
-    "pin": "secs"
-   }
-  },
-  {
-   "id": "ev_w214",
-   "from": {
-    "node": "ev23",
-    "pin": "false"
-   },
-   "to": {
-    "node": "ev28",
-    "pin": "go"
-   }
-  },
-  {
-   "id": "ev_w215",
-   "from": {
-    "node": "ev22",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev28",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w216",
-   "from": {
-    "node": "ev26",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev28",
-    "pin": "secs"
-   }
-  },
-  {
-   "id": "ev_w217",
-   "from": {
-    "node": "ev27",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev28",
-    "pin": "speed"
-   }
-  },
-  {
-   "id": "ev_w218",
-   "from": {
-    "node": "ev22",
-    "pin": "weapon"
-   },
-   "to": {
-    "node": "ev29",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "ev_w219",
-   "from": {
-    "node": "ev28",
-    "pin": "next"
-   },
-   "to": {
-    "node": "ev30",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w220",
-   "from": {
-    "node": "ev29",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev30",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "ev_w221",
-   "from": {
-    "node": "ev30",
-    "pin": "true"
-   },
-   "to": {
-    "node": "ev33",
-    "pin": "go"
-   }
-  },
-  {
-   "id": "ev_w222",
-   "from": {
-    "node": "ev22",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "ev33",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w223",
-   "from": {
-    "node": "ev22",
+    "node": "ev18",
     "pin": "attacker"
    },
    "to": {
-    "node": "ev33",
-    "pin": "by"
+    "node": "ev25",
+    "pin": "player"
    }
   },
   {
-   "id": "ev_w224",
+   "id": "ev_w252",
+   "from": {
+    "node": "ev25",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w253",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w254",
+   "from": {
+    "node": "ev27",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w255",
+   "from": {
+    "node": "ev27",
+    "pin": "headshot"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w256",
+   "from": {
+    "node": "ev28",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w257",
+   "from": {
+    "node": "ev27",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w258",
+   "from": {
+    "node": "ev29",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w259",
+   "from": {
+    "node": "ev28",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w260",
+   "from": {
+    "node": "ev27",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w261",
    "from": {
     "node": "ev31",
     "pin": "out"
@@ -4644,21 +5518,32 @@
    }
   },
   {
-   "id": "ev_w225",
+   "id": "ev_w262",
    "from": {
     "node": "ev32",
     "pin": "out"
    },
    "to": {
     "node": "ev33",
-    "pin": "dps"
+    "pin": "speed"
    }
   },
   {
-   "id": "ev_w226",
+   "id": "ev_w263",
    "from": {
+    "node": "ev27",
+    "pin": "weapon"
+   },
+   "to": {
     "node": "ev34",
-    "pin": "then"
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ev_w264",
+   "from": {
+    "node": "ev33",
+    "pin": "next"
    },
    "to": {
     "node": "ev35",
@@ -4666,35 +5551,112 @@
    }
   },
   {
-   "id": "ev_w227",
+   "id": "ev_w265",
    "from": {
-    "node": "ev35",
-    "pin": "then"
+    "node": "ev34",
+    "pin": "out"
    },
    "to": {
-    "node": "ev37",
+    "node": "ev35",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w266",
+   "from": {
+    "node": "ev35",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev38",
     "pin": "go"
    }
   },
   {
-   "id": "ev_w228",
+   "id": "ev_w267",
    "from": {
-    "node": "ev35",
-    "pin": "player"
+    "node": "ev27",
+    "pin": "victim"
    },
    "to": {
-    "node": "ev37",
-    "pin": "winner"
+    "node": "ev38",
+    "pin": "who"
    }
   },
   {
-   "id": "ev_w229",
+   "id": "ev_w268",
+   "from": {
+    "node": "ev27",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "by"
+   }
+  },
+  {
+   "id": "ev_w269",
    "from": {
     "node": "ev36",
     "pin": "out"
    },
    "to": {
+    "node": "ev38",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w270",
+   "from": {
     "node": "ev37",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "dps"
+   }
+  },
+  {
+   "id": "ev_w271",
+   "from": {
+    "node": "ev39",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev40",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w272",
+   "from": {
+    "node": "ev40",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev42",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w273",
+   "from": {
+    "node": "ev40",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev42",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "ev_w274",
+   "from": {
+    "node": "ev41",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev42",
     "pin": "secs"
    }
   }
@@ -4764,6 +5726,45 @@
     "h": 120
    },
    "text": "Kill Streak Announcer: Wire Player Killed in (Killer = attacker, Victim = victim). Streak is the killer's count after this kill. Bots' streaks are announced too."
+  },
+  {
+   "id": "countdown_help",
+   "graph": "cd_run",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Countdown HUD: Wire Round Started (or Freeze Time Ended) in. Label goes before the time (empty: Time left); it stops at 0 and runs Done. Bots don't read it."
+  },
+  {
+   "id": "leaderboard_help",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Leaderboard Display: Save the score with Add To Saved (the same Key) as players earn it, then call this from a say command, a key or the round's end. Bots are on it like anyone; they don't open it."
+  },
+  {
+   "id": "leaderboard_c1",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Show Leaderboard: the Key is Top Players' setting (kills); change it to the key your mode saves."
   },
   {
    "id": "capture_help",

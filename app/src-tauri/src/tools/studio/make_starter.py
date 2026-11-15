@@ -571,12 +571,12 @@ it.W(stop, "then", eout, "done")
 
 # ---- Leaderboard Display (Top Players + Show Info Window) --------------------------------
 if all(t in NODES_OK for t in ("save.top", "msg.info_window")):
-    it = item("st_leaderboard", "Leaderboard Display", "Shows a player the top 10 of a saved score (Key, e.g. kills) in an info window.", "Starter: rounds and scoring",
+    it = item("st_leaderboard", "Leaderboard Display", "Shows a player the top players of a saved score (Key, e.g. kills) in an info window.", "Starter: rounds and scoring",
               "Save the score with Add To Saved (the same Key) as players earn it, then call this from a say command, a key or the round's end. Bots are on it like anyone; they don't open it.")
     TXT = it.var("lb_text", "Leaderboard text", "text", "mode", "")
     e = it.function("lb_show", "Show Leaderboard", [("who", "Player", "player")], root=True)
     s0 = it.N("clear", "var.set", var=TXT, value=""); it.W(e, "then", s0, "exec")
-    top = it.N("top", "save.top", key="kills", order="high", count=10); it.W(s0, "then", top, "exec")
+    top = it.N("top", "save.top", key="kills", order="high"); it.W(s0, "then", top, "exec")
     g = it.get("g", TXT, row=3)
     line = it.N("line", "text.format", row=3, text="[0][1]. [2]: [3][br]"); it.W(g, "out", line, "a0"); it.W(top, "rank", line, "a1"); it.W(top, "name", line, "a2"); it.W(top, "value", line, "a3")
     s1 = it.N("add", "var.set", var=TXT); it.W(top, "each", s1, "exec"); it.W(line, "out", s1, "value")
@@ -649,12 +649,17 @@ r = it.ret(); it.W(fol, "then", r, "exec"); it.W(brb, "false", r, "exec"); it.W(
 e = it.function("hp_pass", "Pass Potato", [("from", "Attacker", "player"), ("to", "Victim", "player")], [("passed", "Passed", "bool")])
 h0 = it.get("h0", HOLD)
 is_h = it.N("ish", "logic.equal", row=2, of="player", op="eq"); it.W(e, "from", is_h, "a"); it.W(h0, "out", is_h, "b")
-br = it.N("br", "flow.branch"); it.W(e, "then", br, "exec"); it.W(is_h, "out", br, "cond")
+# (a real player hit a living one: a fall or the world has no attacker)
+fa = it.N("fa", "player.is_alive", row=3); it.W(e, "from", fa, "player")
+ta = it.N("ta", "player.is_alive", row=3); it.W(e, "to", ta, "player")
+both = it.N("both", "logic.and_or", row=3, op="and"); it.W(fa, "out", both, "a"); it.W(ta, "out", both, "b")
+ok = it.N("ok", "logic.and_or", row=2, op="and"); it.W(is_h, "out", ok, "a"); it.W(both, "out", ok, "b")
+br = it.N("br", "flow.branch"); it.W(e, "then", br, "exec"); it.W(ok, "out", br, "cond")
 off = it.N("off", "player.set_glow", color="off"); it.W(br, "true", off, "exec"); it.W(e, "from", off, "player")
 s1 = it.N("hold", "var.set", var=HOLD); it.W(off, "then", s1, "exec"); it.W(e, "to", s1, "value")
 mk = it.N("mark", "fn.call", func="hp_mark"); it.W(s1, "then", mk, "exec"); it.W(e, "to", mk, "who")
-r = it.ret(); it.W(mk, "then", r, "exec"); it.W(is_h, "out", r, "passed")
-r2 = it.N("ret2", "fn.return", row=1); it.pins[r2] = ({"exec", "passed"}, set()); it.W(br, "false", r2, "exec"); it.W(is_h, "out", r2, "passed")
+r = it.ret(); it.W(mk, "then", r, "exec"); it.W(ok, "out", r, "passed")
+r2 = it.N("ret2", "fn.return", row=1); it.pins[r2] = ({"exec", "passed"}, set()); it.W(br, "false", r2, "exec"); it.W(ok, "out", r2, "passed")
 e = it.function("hp_tick", "Potato Tick", [], [("boom", "Blew up", "bool")])
 dec = it.N("dec", "var.add", var=LEFTV, amount=-1); it.W(e, "then", dec, "exec")
 lv = it.get("lv", LEFTV, row=2)
@@ -718,7 +723,7 @@ class Skip(tuple):
 
 def test_mode(part):
     """part a: movement, abilities, pickups, Hot Potato, Countdown; b: the rest (a graph holds 400 nodes)"""
-    A = ("st_jump_pad", "st_teleporter", "st_dash", "st_double_jump", "st_ability", "st_fireball", "st_mine", "st_health_pack", "st_weapon_pick", "st_hot_potato", "st_countdown")
+    A = ("st_jump_pad", "st_teleporter", "st_dash", "st_double_jump", "st_ability", "st_fireball", "st_mine", "st_health_pack", "st_weapon_pick", "st_hot_potato")
     mine = [it for it in ITEMS if (it.file in A) == (part == "a") and not it.missing]
     g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": f"starter_test_{part}", "name": f"Starter library test {part.upper()}", "description": "Starter library premades at once"},
          "variables": [], "functions": [], "macros": [], "nodes": [], "edges": [], "comments": []}
@@ -784,7 +789,8 @@ def test_mode(part):
         c = call("lv_reset", (each, "each"), who=(each, "player"), n=lit(3))
         c = call("qs_set", c, who=(each, "player"), step=lit("survive"), say=lit("Survive the round"))
         pk = N("flow.pick_entity", by="class", name="info_player_deathmatch"); W(each, "then", pk, "exec")
-        call("cz_make", (pk, "then"), at=(pk, "entity"))
+        c = call("cz_make", (pk, "then"), at=(pk, "entity"))
+        call("cd_run", c, secs=lit(120), label=lit("Round"))
         return part_b(g, N, W, call, lit, row)
     # a round: pickups at spawn points, a jump pad, a teleporter pad, the countdown, the potato, a mine
     seq = N("flow.sequence", count=2); W(rs, "then", seq, "exec")
@@ -800,8 +806,7 @@ def test_mode(part):
         tpv = N("vol.spawn", shape="sphere", radius=64, name="tp"); W(pk, "then", tpv, "exec")
         tpos = N("vec.entity"); W(pk, "entity", tpos, "in"); W(tpos, "out", tpv, "pos")
         prev = (tpv, "then")
-    m = call("cd_run", prev, secs=lit(120), label=lit("Round"))
-    pp = N("flow.pick_player", which="alive"); W(m, "started", pp, "exec")
+    pp = N("flow.pick_player", which="alive"); W(prev[0], prev[1], pp, "exec")
     prev = call("hp_give", (pp, "then"), who=(pp, "player"), secs=lit(25))
     pb = N("flow.pick_player", which="bots"); W(prev[0], prev[1], pb, "exec")
     call("mine_place", (pb, "then"), who=(pb, "player"), radius=lit(0), dmg=lit(0))
@@ -833,6 +838,10 @@ def test_mode(part):
         row()
     h = N("event.player_hurt")
     call("hp_pass", (h, "then"), **{"from": (h, "attacker"), "to": (h, "victim")})
+    jb = N("in.pressed", button="jump", when="pressed", bots=True)
+    call("dj_jump", (jb, "then"), who=(jb, "player"), boost=lit(0))
+    rb = N("in.pressed", button="reload", when="pressed", bots=True)
+    call("dash_go", (rb, "then"), who=(rb, "player"), speed=lit(0), cd=lit(0))
     if "vol.on_begin" in NODES_OK and "tp_go" in fns:
         b = N("vol.on_begin", name="tp")
         pk = N("flow.pick_entity", by="class", name="info_player_deathmatch"); W(b, "then", pk, "exec")
@@ -852,7 +861,10 @@ def part_b(g, N, W, call, lit, row):
     c = call("ks_kill", (k, "then"), killer=(k, "attacker"), victim=(k, "victim"))
     c = call("lv_lose", c, who=(k, "victim"))
     m = call("kc_show", c, victim=(k, "victim"), killer=(k, "attacker"), secs=lit(2))
-    call("qs_done", (m, "next"), who=(k, "attacker"), reward=lit(100))
+    c = call("qs_done", (m, "next"), who=(k, "attacker"), reward=lit(100))
+    if any(f["id"] == "lb_show" for f in g["functions"]):
+        sv = N("save.add", key="kills", amount=1); W(c[0], c[1], sv, "exec"); W(k, "attacker", sv, "player")
+        call("lb_show", (sv, "then"), who=(k, "victim"))
     row()
     h = N("event.player_hurt")
     hs = N("flow.branch"); W(h, "then", hs, "exec"); W(h, "headshot", hs, "cond")

@@ -12,6 +12,7 @@ pub const BUILTIN: &[(&str, &str)] = &[
     ("st_jump_pad", include_str!("../../../../ui/src/views/tools/studio/library/st_jump_pad.lib.json")),
     ("st_kill_cam", include_str!("../../../../ui/src/views/tools/studio/library/st_kill_cam.lib.json")),
     ("st_kill_streak", include_str!("../../../../ui/src/views/tools/studio/library/st_kill_streak.lib.json")),
+    ("st_leaderboard", include_str!("../../../../ui/src/views/tools/studio/library/st_leaderboard.lib.json")),
     ("st_lives", include_str!("../../../../ui/src/views/tools/studio/library/st_lives.lib.json")),
     ("st_mine", include_str!("../../../../ui/src/views/tools/studio/library/st_mine.lib.json")),
     ("st_quest", include_str!("../../../../ui/src/views/tools/studio/library/st_quest.lib.json")),

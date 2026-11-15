@@ -1,0 +1,306 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Leaderboard Display",
+ "description": "Shows a player the top players of a saved score (Key, e.g. kills) in an info window.",
+ "category": "Starter: rounds and scoring",
+ "kind": "function",
+ "root": "lb_show",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "lb_show",
+   "name": "Show Leaderboard",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "lb_text",
+   "name": "Leaderboard text",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  }
+ ],
+ "nodes": [
+  {
+   "id": "lb_show_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_clear",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text",
+    "value": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_top",
+   "type": "save.top",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "key": "kills",
+    "order": "high"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g",
+   "type": "var.get",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_line",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "text": "[0][1]. [2]: [3][br]"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_add",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_win",
+   "type": "msg.info_window",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "title": "Top players",
+    "text": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "lb_show_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_top",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "lb_show_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "rank"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "name"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "value"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "each"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "lb_show_line",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "lb_show_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "more"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "lb_show_win",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_ret",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Leaderboard Display: Save the score with Add To Saved (the same Key) as players earn it, then call this from a say command, a key or the round's end. Bots are on it like anyone; they don't open it."
+  },
+  {
+   "id": "c1",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Show Leaderboard: the Key is Top Players' setting (kills); change it to the key your mode saves."
+  }
+ ]
+}

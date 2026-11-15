@@ -115,20 +115,6 @@
    "scope": "mode"
   },
   {
-   "id": "cd_left",
-   "name": "Countdown left",
-   "type": "number",
-   "scope": "mode",
-   "default": 0
-  },
-  {
-   "id": "cd_label",
-   "name": "Countdown label",
-   "type": "text",
-   "scope": "mode",
-   "default": ""
-  },
-  {
    "id": "hp_holder",
    "name": "Potato holder",
    "type": "player",
@@ -680,39 +666,6 @@
     {
      "id": "no",
      "name": "Not taken",
-     "type": "exec"
-    }
-   ]
-  },
-  {
-   "id": "cd_run",
-   "name": "Countdown HUD",
-   "inputs": [
-    {
-     "id": "go",
-     "name": "In",
-     "type": "exec"
-    },
-    {
-     "id": "secs",
-     "name": "Seconds",
-     "type": "number"
-    },
-    {
-     "id": "label",
-     "name": "Label",
-     "type": "text"
-    }
-   ],
-   "outputs": [
-    {
-     "id": "started",
-     "name": "Started",
-     "type": "exec"
-    },
-    {
-     "id": "done",
-     "name": "Done",
      "type": "exec"
     }
    ]
@@ -3831,243 +3784,6 @@
    "graph": "weap_take"
   },
   {
-   "id": "cd_run_in",
-   "type": "macro.entry",
-   "pos": {
-    "x": 260,
-    "y": 0
-   },
-   "params": {},
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_out",
-   "type": "macro.exit",
-   "pos": {
-    "x": 4000,
-    "y": 0
-   },
-   "params": {},
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_secs_set",
-   "type": "math.compare",
-   "pos": {
-    "x": 520,
-    "y": 540
-   },
-   "params": {
-    "op": "gt",
-    "b": 0
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_secs_d",
-   "type": "math.number",
-   "pos": {
-    "x": 780,
-    "y": 720
-   },
-   "params": {
-    "value": 60
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_secs",
-   "type": "logic.select",
-   "pos": {
-    "x": 1040,
-    "y": 540
-   },
-   "params": {
-    "of": "number"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_setl",
-   "type": "var.set",
-   "pos": {
-    "x": 1300,
-    "y": 0
-   },
-   "params": {
-    "var": "cd_label"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_set",
-   "type": "var.set",
-   "pos": {
-    "x": 1560,
-    "y": 0
-   },
-   "params": {
-    "var": "cd_left"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_rep",
-   "type": "timer.repeat",
-   "pos": {
-    "x": 1820,
-    "y": 0
-   },
-   "params": {
-    "every": 1
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_g",
-   "type": "var.get",
-   "pos": {
-    "x": 2080,
-    "y": 540
-   },
-   "params": {
-    "var": "cd_left"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_ft",
-   "type": "text.format_time",
-   "pos": {
-    "x": 2340,
-    "y": 540
-   },
-   "params": {
-    "style": "ms"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_gl",
-   "type": "var.get",
-   "pos": {
-    "x": 2600,
-    "y": 720
-   },
-   "params": {
-    "var": "cd_label"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_empty",
-   "type": "text.equals",
-   "pos": {
-    "x": 2860,
-    "y": 720
-   },
-   "params": {
-    "b": ""
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_dlabel",
-   "type": "text.literal",
-   "pos": {
-    "x": 3120,
-    "y": 900
-   },
-   "params": {
-    "value": "Time left"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_lab",
-   "type": "logic.select",
-   "pos": {
-    "x": 3380,
-    "y": 720
-   },
-   "params": {
-    "of": "text"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_txt",
-   "type": "text.format",
-   "pos": {
-    "x": 3640,
-    "y": 540
-   },
-   "params": {
-    "text": "[0]: [1]"
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_hud",
-   "type": "msg.hud",
-   "pos": {
-    "x": 3900,
-    "y": 0
-   },
-   "params": {
-    "slot": "top",
-    "seconds": 1.1,
-    "text": ""
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_dec",
-   "type": "var.add",
-   "pos": {
-    "x": 4160,
-    "y": 0
-   },
-   "params": {
-    "var": "cd_left",
-    "amount": -1
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_over",
-   "type": "math.compare",
-   "pos": {
-    "x": 4420,
-    "y": 720
-   },
-   "params": {
-    "op": "lt",
-    "b": 0
-   },
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_br",
-   "type": "flow.branch",
-   "pos": {
-    "x": 4680,
-    "y": 0
-   },
-   "params": {},
-   "graph": "cd_run"
-  },
-  {
-   "id": "cd_run_stop",
-   "type": "timer.clear",
-   "pos": {
-    "x": 4940,
-    "y": 0
-   },
-   "params": {},
-   "graph": "cd_run"
-  },
-  {
    "id": "hp_give_entry",
    "type": "fn.entry",
    "pos": {
@@ -4328,10 +4044,54 @@
    "graph": "hp_pass"
   },
   {
+   "id": "hp_pass_fa",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ta",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ok",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
    "id": "hp_pass_br",
    "type": "flow.branch",
    "pos": {
-    "x": 1040,
+    "x": 2080,
     "y": 0
    },
    "params": {},
@@ -4341,7 +4101,7 @@
    "id": "hp_pass_off",
    "type": "player.set_glow",
    "pos": {
-    "x": 1300,
+    "x": 2340,
     "y": 0
    },
    "params": {
@@ -4353,7 +4113,7 @@
    "id": "hp_pass_hold",
    "type": "var.set",
    "pos": {
-    "x": 1560,
+    "x": 2600,
     "y": 0
    },
    "params": {
@@ -4365,7 +4125,7 @@
    "id": "hp_pass_mark",
    "type": "fn.call",
    "pos": {
-    "x": 1820,
+    "x": 2860,
     "y": 0
    },
    "params": {
@@ -4377,7 +4137,7 @@
    "id": "hp_pass_ret",
    "type": "fn.return",
    "pos": {
-    "x": 2080,
+    "x": 3120,
     "y": 0
    },
    "params": {},
@@ -4387,7 +4147,7 @@
    "id": "hp_pass_ret2",
    "type": "fn.return",
    "pos": {
-    "x": 2340,
+    "x": 3380,
     "y": 180
    },
    "params": {},
@@ -4726,35 +4486,35 @@
   },
   {
    "id": "ev12",
-   "type": "math.number",
+   "type": "flow.pick_player",
    "pos": {
     "x": 1200,
     "y": 0
    },
    "params": {
-    "value": 120
+    "which": "alive"
    }
   },
   {
    "id": "ev13",
-   "type": "text.literal",
+   "type": "math.number",
    "pos": {
     "x": 1500,
     "y": 0
    },
    "params": {
-    "value": "Round"
+    "value": 25
    }
   },
   {
    "id": "ev14",
-   "type": "macro.use",
+   "type": "fn.call",
    "pos": {
     "x": 1800,
     "y": 0
    },
    "params": {
-    "macro": "cd_run"
+    "func": "hp_give"
    }
   },
   {
@@ -4765,7 +4525,7 @@
     "y": 0
    },
    "params": {
-    "which": "alive"
+    "which": "bots"
    }
   },
   {
@@ -4776,58 +4536,25 @@
     "y": 0
    },
    "params": {
-    "value": 25
+    "value": 0
    }
   },
   {
    "id": "ev17",
-   "type": "fn.call",
+   "type": "math.number",
    "pos": {
     "x": 300,
     "y": 0
    },
    "params": {
-    "func": "hp_give"
+    "value": 0
    }
   },
   {
    "id": "ev18",
-   "type": "flow.pick_player",
-   "pos": {
-    "x": 600,
-    "y": 0
-   },
-   "params": {
-    "which": "bots"
-   }
-  },
-  {
-   "id": "ev19",
-   "type": "math.number",
-   "pos": {
-    "x": 900,
-    "y": 0
-   },
-   "params": {
-    "value": 0
-   }
-  },
-  {
-   "id": "ev20",
-   "type": "math.number",
-   "pos": {
-    "x": 1200,
-    "y": 0
-   },
-   "params": {
-    "value": 0
-   }
-  },
-  {
-   "id": "ev21",
    "type": "fn.call",
    "pos": {
-    "x": 1500,
+    "x": 600,
     "y": 0
    },
    "params": {
@@ -4835,10 +4562,10 @@
    }
   },
   {
-   "id": "ev22",
+   "id": "ev19",
    "type": "timer.repeat",
    "pos": {
-    "x": 1800,
+    "x": 900,
     "y": 360
    },
    "params": {
@@ -4846,10 +4573,10 @@
    }
   },
   {
-   "id": "ev23",
+   "id": "ev20",
    "type": "flow.sequence",
    "pos": {
-    "x": 2100,
+    "x": 1200,
     "y": 360
    },
    "params": {
@@ -4857,10 +4584,10 @@
    }
   },
   {
-   "id": "ev24",
+   "id": "ev21",
    "type": "fn.call",
    "pos": {
-    "x": 0,
+    "x": 1500,
     "y": 360
    },
    "params": {
@@ -4868,10 +4595,10 @@
    }
   },
   {
-   "id": "ev25",
+   "id": "ev22",
    "type": "flow.for_each_player",
    "pos": {
-    "x": 300,
+    "x": 1800,
     "y": 360
    },
    "params": {
@@ -4879,15 +4606,46 @@
    }
   },
   {
-   "id": "ev26",
+   "id": "ev23",
    "type": "math.number",
    "pos": {
-    "x": 600,
+    "x": 2100,
     "y": 360
    },
    "params": {
     "value": 0
    }
+  },
+  {
+   "id": "ev24",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev25",
+   "type": "fn.call",
+   "pos": {
+    "x": 300,
+    "y": 360
+   },
+   "params": {
+    "func": "ab_bot"
+   }
+  },
+  {
+   "id": "ev26",
+   "type": "flow.branch",
+   "pos": {
+    "x": 600,
+    "y": 360
+   },
+   "params": {}
   },
   {
    "id": "ev27",
@@ -4897,28 +4655,30 @@
     "y": 360
    },
    "params": {
-    "value": 0
+    "value": 6
    }
   },
   {
    "id": "ev28",
-   "type": "fn.call",
+   "type": "macro.use",
    "pos": {
     "x": 1200,
     "y": 360
    },
    "params": {
-    "func": "ab_bot"
+    "macro": "ab_use"
    }
   },
   {
    "id": "ev29",
-   "type": "flow.branch",
+   "type": "math.number",
    "pos": {
     "x": 1500,
     "y": 360
    },
-   "params": {}
+   "params": {
+    "value": 0
+   }
   },
   {
    "id": "ev30",
@@ -4928,7 +4688,7 @@
     "y": 360
    },
    "params": {
-    "value": 6
+    "value": 0
    }
   },
   {
@@ -4939,7 +4699,7 @@
     "y": 360
    },
    "params": {
-    "macro": "ab_use"
+    "macro": "fb_throw"
    }
   },
   {
@@ -4961,7 +4721,7 @@
     "y": 360
    },
    "params": {
-    "value": 0
+    "value": 4
    }
   },
   {
@@ -4972,7 +4732,7 @@
     "y": 360
    },
    "params": {
-    "macro": "fb_throw"
+    "macro": "dash_go"
    }
   },
   {
@@ -4988,24 +4748,24 @@
   },
   {
    "id": "ev36",
-   "type": "math.number",
+   "type": "macro.use",
    "pos": {
     "x": 1200,
     "y": 360
    },
    "params": {
-    "value": 4
+    "macro": "dj_jump"
    }
   },
   {
    "id": "ev37",
-   "type": "macro.use",
+   "type": "math.number",
    "pos": {
     "x": 1500,
-    "y": 360
+    "y": 720
    },
    "params": {
-    "macro": "dash_go"
+    "value": 50
    }
   },
   {
@@ -5013,21 +4773,21 @@
    "type": "math.number",
    "pos": {
     "x": 1800,
-    "y": 360
+    "y": 720
    },
    "params": {
-    "value": 0
+    "value": 10
    }
   },
   {
    "id": "ev39",
-   "type": "macro.use",
+   "type": "text.literal",
    "pos": {
     "x": 2100,
-    "y": 360
+    "y": 720
    },
    "params": {
-    "macro": "dj_jump"
+    "value": "awp"
    }
   },
   {
@@ -5038,7 +4798,7 @@
     "y": 720
    },
    "params": {
-    "value": 50
+    "value": 15
    }
   },
   {
@@ -5049,47 +4809,14 @@
     "y": 720
    },
    "params": {
-    "value": 10
-   }
-  },
-  {
-   "id": "ev42",
-   "type": "text.literal",
-   "pos": {
-    "x": 600,
-    "y": 720
-   },
-   "params": {
-    "value": "awp"
-   }
-  },
-  {
-   "id": "ev43",
-   "type": "math.number",
-   "pos": {
-    "x": 900,
-    "y": 720
-   },
-   "params": {
-    "value": 15
-   }
-  },
-  {
-   "id": "ev44",
-   "type": "math.number",
-   "pos": {
-    "x": 1200,
-    "y": 720
-   },
-   "params": {
     "value": 0
    }
   },
   {
-   "id": "ev45",
+   "id": "ev42",
    "type": "vol.on_begin",
    "pos": {
-    "x": 1500,
+    "x": 600,
     "y": 720
    },
    "params": {
@@ -5097,10 +4824,10 @@
    }
   },
   {
-   "id": "ev46",
+   "id": "ev43",
    "type": "macro.use",
    "pos": {
-    "x": 1800,
+    "x": 900,
     "y": 720
    },
    "params": {
@@ -5108,10 +4835,10 @@
    }
   },
   {
-   "id": "ev47",
+   "id": "ev44",
    "type": "vol.on_begin",
    "pos": {
-    "x": 2100,
+    "x": 1200,
     "y": 1080
    },
    "params": {
@@ -5119,10 +4846,10 @@
    }
   },
   {
-   "id": "ev48",
+   "id": "ev45",
    "type": "macro.use",
    "pos": {
-    "x": 0,
+    "x": 1500,
     "y": 1080
    },
    "params": {
@@ -5130,10 +4857,10 @@
    }
   },
   {
-   "id": "ev49",
+   "id": "ev46",
    "type": "vol.on_begin",
    "pos": {
-    "x": 300,
+    "x": 1800,
     "y": 1440
    },
    "params": {
@@ -5141,10 +4868,10 @@
    }
   },
   {
-   "id": "ev50",
+   "id": "ev47",
    "type": "fn.call",
    "pos": {
-    "x": 600,
+    "x": 2100,
     "y": 1440
    },
    "params": {
@@ -5152,10 +4879,10 @@
    }
   },
   {
-   "id": "ev51",
+   "id": "ev48",
    "type": "vol.on_begin",
    "pos": {
-    "x": 900,
+    "x": 0,
     "y": 1800
    },
    "params": {
@@ -5163,10 +4890,10 @@
    }
   },
   {
-   "id": "ev52",
+   "id": "ev49",
    "type": "fn.call",
    "pos": {
-    "x": 1200,
+    "x": 300,
     "y": 1800
    },
    "params": {
@@ -5174,19 +4901,19 @@
    }
   },
   {
-   "id": "ev53",
+   "id": "ev50",
    "type": "event.player_hurt",
    "pos": {
-    "x": 1500,
+    "x": 600,
     "y": 2160
    },
    "params": {}
   },
   {
-   "id": "ev54",
+   "id": "ev51",
    "type": "fn.call",
    "pos": {
-    "x": 1800,
+    "x": 900,
     "y": 2160
    },
    "params": {
@@ -5194,26 +4921,62 @@
    }
   },
   {
+   "id": "ev52",
+   "type": "in.pressed",
+   "pos": {
+    "x": 1200,
+    "y": 2160
+   },
+   "params": {
+    "button": "jump",
+    "when": "pressed",
+    "bots": true
+   }
+  },
+  {
+   "id": "ev53",
+   "type": "math.number",
+   "pos": {
+    "x": 1500,
+    "y": 2160
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev54",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 2160
+   },
+   "params": {
+    "macro": "dj_jump"
+   }
+  },
+  {
    "id": "ev55",
-   "type": "vol.on_begin",
+   "type": "in.pressed",
    "pos": {
     "x": 2100,
     "y": 2160
    },
    "params": {
-    "name": "tp"
+    "button": "reload",
+    "when": "pressed",
+    "bots": true
    }
   },
   {
    "id": "ev56",
-   "type": "flow.pick_entity",
+   "type": "math.number",
    "pos": {
     "x": 0,
     "y": 2160
    },
    "params": {
-    "by": "class",
-    "name": "info_player_deathmatch"
+    "value": 0
    }
   },
   {
@@ -5229,9 +4992,54 @@
   },
   {
    "id": "ev58",
-   "type": "fn.call",
+   "type": "macro.use",
    "pos": {
     "x": 600,
+    "y": 2160
+   },
+   "params": {
+    "macro": "dash_go"
+   }
+  },
+  {
+   "id": "ev59",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 900,
+    "y": 2160
+   },
+   "params": {
+    "name": "tp"
+   }
+  },
+  {
+   "id": "ev60",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 1200,
+    "y": 2160
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev61",
+   "type": "math.number",
+   "pos": {
+    "x": 1500,
+    "y": 2160
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev62",
+   "type": "fn.call",
+   "pos": {
+    "x": 1800,
     "y": 2160
    },
    "params": {
@@ -9597,292 +9405,6 @@
    }
   },
   {
-   "id": "countdown_w1",
-   "from": {
-    "node": "cd_run_in",
-    "pin": "secs"
-   },
-   "to": {
-    "node": "cd_run_secs_set",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "countdown_w2",
-   "from": {
-    "node": "cd_run_secs_set",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_secs",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "countdown_w3",
-   "from": {
-    "node": "cd_run_in",
-    "pin": "secs"
-   },
-   "to": {
-    "node": "cd_run_secs",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "countdown_w4",
-   "from": {
-    "node": "cd_run_secs_d",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_secs",
-    "pin": "b"
-   }
-  },
-  {
-   "id": "countdown_w5",
-   "from": {
-    "node": "cd_run_in",
-    "pin": "go"
-   },
-   "to": {
-    "node": "cd_run_setl",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w6",
-   "from": {
-    "node": "cd_run_in",
-    "pin": "label"
-   },
-   "to": {
-    "node": "cd_run_setl",
-    "pin": "value"
-   }
-  },
-  {
-   "id": "countdown_w7",
-   "from": {
-    "node": "cd_run_setl",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_set",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w8",
-   "from": {
-    "node": "cd_run_secs",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_set",
-    "pin": "value"
-   }
-  },
-  {
-   "id": "countdown_w9",
-   "from": {
-    "node": "cd_run_set",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_rep",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w10",
-   "from": {
-    "node": "cd_run_rep",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_out",
-    "pin": "started"
-   }
-  },
-  {
-   "id": "countdown_w11",
-   "from": {
-    "node": "cd_run_g",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_ft",
-    "pin": "secs"
-   }
-  },
-  {
-   "id": "countdown_w12",
-   "from": {
-    "node": "cd_run_gl",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_empty",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "countdown_w13",
-   "from": {
-    "node": "cd_run_empty",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_lab",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "countdown_w14",
-   "from": {
-    "node": "cd_run_dlabel",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_lab",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "countdown_w15",
-   "from": {
-    "node": "cd_run_gl",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_lab",
-    "pin": "b"
-   }
-  },
-  {
-   "id": "countdown_w16",
-   "from": {
-    "node": "cd_run_lab",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_txt",
-    "pin": "a0"
-   }
-  },
-  {
-   "id": "countdown_w17",
-   "from": {
-    "node": "cd_run_ft",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_txt",
-    "pin": "a1"
-   }
-  },
-  {
-   "id": "countdown_w18",
-   "from": {
-    "node": "cd_run_rep",
-    "pin": "tick"
-   },
-   "to": {
-    "node": "cd_run_hud",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w19",
-   "from": {
-    "node": "cd_run_txt",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_hud",
-    "pin": "value"
-   }
-  },
-  {
-   "id": "countdown_w20",
-   "from": {
-    "node": "cd_run_hud",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_dec",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w21",
-   "from": {
-    "node": "cd_run_g",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_over",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "countdown_w22",
-   "from": {
-    "node": "cd_run_dec",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_br",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w23",
-   "from": {
-    "node": "cd_run_over",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cd_run_br",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "countdown_w24",
-   "from": {
-    "node": "cd_run_br",
-    "pin": "true"
-   },
-   "to": {
-    "node": "cd_run_stop",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "countdown_w25",
-   "from": {
-    "node": "cd_run_rep",
-    "pin": "handle"
-   },
-   "to": {
-    "node": "cd_run_stop",
-    "pin": "handle"
-   }
-  },
-  {
-   "id": "countdown_w26",
-   "from": {
-    "node": "cd_run_stop",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cd_run_out",
-    "pin": "done"
-   }
-  },
-  {
    "id": "hot_potato_w1",
    "from": {
     "node": "hp_give_entry",
@@ -10227,6 +9749,72 @@
    "id": "hot_potato_w32",
    "from": {
     "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_fa",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w33",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_ta",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w34",
+   "from": {
+    "node": "hp_pass_fa",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w35",
+   "from": {
+    "node": "hp_pass_ta",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "hot_potato_w36",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w37",
+   "from": {
+    "node": "hp_pass_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "hot_potato_w38",
+   "from": {
+    "node": "hp_pass_entry",
     "pin": "then"
    },
    "to": {
@@ -10235,9 +9823,9 @@
    }
   },
   {
-   "id": "hot_potato_w33",
+   "id": "hot_potato_w39",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -10246,7 +9834,7 @@
    }
   },
   {
-   "id": "hot_potato_w34",
+   "id": "hot_potato_w40",
    "from": {
     "node": "hp_pass_br",
     "pin": "true"
@@ -10257,7 +9845,7 @@
    }
   },
   {
-   "id": "hot_potato_w35",
+   "id": "hot_potato_w41",
    "from": {
     "node": "hp_pass_entry",
     "pin": "from"
@@ -10268,7 +9856,7 @@
    }
   },
   {
-   "id": "hot_potato_w36",
+   "id": "hot_potato_w42",
    "from": {
     "node": "hp_pass_off",
     "pin": "then"
@@ -10279,7 +9867,7 @@
    }
   },
   {
-   "id": "hot_potato_w37",
+   "id": "hot_potato_w43",
    "from": {
     "node": "hp_pass_entry",
     "pin": "to"
@@ -10290,7 +9878,7 @@
    }
   },
   {
-   "id": "hot_potato_w38",
+   "id": "hot_potato_w44",
    "from": {
     "node": "hp_pass_hold",
     "pin": "then"
@@ -10301,7 +9889,7 @@
    }
   },
   {
-   "id": "hot_potato_w39",
+   "id": "hot_potato_w45",
    "from": {
     "node": "hp_pass_entry",
     "pin": "to"
@@ -10312,7 +9900,7 @@
    }
   },
   {
-   "id": "hot_potato_w40",
+   "id": "hot_potato_w46",
    "from": {
     "node": "hp_pass_mark",
     "pin": "then"
@@ -10323,9 +9911,9 @@
    }
   },
   {
-   "id": "hot_potato_w41",
+   "id": "hot_potato_w47",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -10334,7 +9922,7 @@
    }
   },
   {
-   "id": "hot_potato_w42",
+   "id": "hot_potato_w48",
    "from": {
     "node": "hp_pass_br",
     "pin": "false"
@@ -10345,9 +9933,9 @@
    }
   },
   {
-   "id": "hot_potato_w43",
+   "id": "hot_potato_w49",
    "from": {
-    "node": "hp_pass_ish",
+    "node": "hp_pass_ok",
     "pin": "out"
    },
    "to": {
@@ -10356,7 +9944,7 @@
    }
   },
   {
-   "id": "hot_potato_w44",
+   "id": "hot_potato_w50",
    "from": {
     "node": "hp_tick_entry",
     "pin": "then"
@@ -10367,7 +9955,7 @@
    }
   },
   {
-   "id": "hot_potato_w45",
+   "id": "hot_potato_w51",
    "from": {
     "node": "hp_tick_lv",
     "pin": "out"
@@ -10378,7 +9966,7 @@
    }
   },
   {
-   "id": "hot_potato_w46",
+   "id": "hot_potato_w52",
    "from": {
     "node": "hp_tick_dec",
     "pin": "then"
@@ -10389,7 +9977,7 @@
    }
   },
   {
-   "id": "hot_potato_w47",
+   "id": "hot_potato_w53",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -10400,7 +9988,7 @@
    }
   },
   {
-   "id": "hot_potato_w48",
+   "id": "hot_potato_w54",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -10411,7 +9999,7 @@
    }
   },
   {
-   "id": "hot_potato_w49",
+   "id": "hot_potato_w55",
    "from": {
     "node": "hp_tick_br",
     "pin": "true"
@@ -10422,7 +10010,7 @@
    }
   },
   {
-   "id": "hot_potato_w50",
+   "id": "hot_potato_w56",
    "from": {
     "node": "hp_tick_alive",
     "pin": "out"
@@ -10433,7 +10021,7 @@
    }
   },
   {
-   "id": "hot_potato_w51",
+   "id": "hot_potato_w57",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -10444,7 +10032,7 @@
    }
   },
   {
-   "id": "hot_potato_w52",
+   "id": "hot_potato_w58",
    "from": {
     "node": "hp_tick_br2",
     "pin": "true"
@@ -10455,7 +10043,7 @@
    }
   },
   {
-   "id": "hot_potato_w53",
+   "id": "hot_potato_w59",
    "from": {
     "node": "hp_tick_pos",
     "pin": "out"
@@ -10466,7 +10054,7 @@
    }
   },
   {
-   "id": "hot_potato_w54",
+   "id": "hot_potato_w60",
    "from": {
     "node": "hp_tick_boom",
     "pin": "then"
@@ -10477,7 +10065,7 @@
    }
   },
   {
-   "id": "hot_potato_w55",
+   "id": "hot_potato_w61",
    "from": {
     "node": "hp_tick_h1",
     "pin": "out"
@@ -10488,7 +10076,7 @@
    }
   },
   {
-   "id": "hot_potato_w56",
+   "id": "hot_potato_w62",
    "from": {
     "node": "hp_tick_off",
     "pin": "then"
@@ -10499,7 +10087,7 @@
    }
   },
   {
-   "id": "hot_potato_w57",
+   "id": "hot_potato_w63",
    "from": {
     "node": "hp_tick_clear",
     "pin": "then"
@@ -10510,7 +10098,7 @@
    }
   },
   {
-   "id": "hot_potato_w58",
+   "id": "hot_potato_w64",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -10521,7 +10109,7 @@
    }
   },
   {
-   "id": "hot_potato_w59",
+   "id": "hot_potato_w65",
    "from": {
     "node": "hp_tick_br2",
     "pin": "false"
@@ -10532,7 +10120,7 @@
    }
   },
   {
-   "id": "hot_potato_w60",
+   "id": "hot_potato_w66",
    "from": {
     "node": "hp_tick_zero",
     "pin": "out"
@@ -10543,7 +10131,7 @@
    }
   },
   {
-   "id": "hot_potato_w61",
+   "id": "hot_potato_w67",
    "from": {
     "node": "hp_tick_lv",
     "pin": "out"
@@ -10554,7 +10142,7 @@
    }
   },
   {
-   "id": "hot_potato_w62",
+   "id": "hot_potato_w68",
    "from": {
     "node": "hp_tick_br",
     "pin": "false"
@@ -10565,7 +10153,7 @@
    }
   },
   {
-   "id": "hot_potato_w63",
+   "id": "hot_potato_w69",
    "from": {
     "node": "hp_tick_five",
     "pin": "out"
@@ -10576,7 +10164,7 @@
    }
   },
   {
-   "id": "hot_potato_w64",
+   "id": "hot_potato_w70",
    "from": {
     "node": "hp_tick_br5",
     "pin": "true"
@@ -10587,7 +10175,7 @@
    }
   },
   {
-   "id": "hot_potato_w65",
+   "id": "hot_potato_w71",
    "from": {
     "node": "hp_tick_h2",
     "pin": "out"
@@ -10598,7 +10186,7 @@
    }
   },
   {
-   "id": "hot_potato_w66",
+   "id": "hot_potato_w72",
    "from": {
     "node": "hp_tick_avoid",
     "pin": "then"
@@ -10609,7 +10197,7 @@
    }
   },
   {
-   "id": "hot_potato_w67",
+   "id": "hot_potato_w73",
    "from": {
     "node": "hp_tick_br5",
     "pin": "false"
@@ -10620,7 +10208,7 @@
    }
   },
   {
-   "id": "ev_w489",
+   "id": "ev_w469",
    "from": {
     "node": "ev1",
     "pin": "then"
@@ -10631,7 +10219,7 @@
    }
   },
   {
-   "id": "ev_w490",
+   "id": "ev_w470",
    "from": {
     "node": "ev2",
     "pin": "then0"
@@ -10642,7 +10230,7 @@
    }
   },
   {
-   "id": "ev_w491",
+   "id": "ev_w471",
    "from": {
     "node": "ev3",
     "pin": "then"
@@ -10653,7 +10241,7 @@
    }
   },
   {
-   "id": "ev_w492",
+   "id": "ev_w472",
    "from": {
     "node": "ev3",
     "pin": "entity"
@@ -10664,7 +10252,7 @@
    }
   },
   {
-   "id": "ev_w493",
+   "id": "ev_w473",
    "from": {
     "node": "ev4",
     "pin": "next"
@@ -10675,7 +10263,7 @@
    }
   },
   {
-   "id": "ev_w494",
+   "id": "ev_w474",
    "from": {
     "node": "ev5",
     "pin": "then"
@@ -10686,7 +10274,7 @@
    }
   },
   {
-   "id": "ev_w495",
+   "id": "ev_w475",
    "from": {
     "node": "ev5",
     "pin": "entity"
@@ -10697,7 +10285,7 @@
    }
   },
   {
-   "id": "ev_w496",
+   "id": "ev_w476",
    "from": {
     "node": "ev6",
     "pin": "next"
@@ -10708,7 +10296,7 @@
    }
   },
   {
-   "id": "ev_w497",
+   "id": "ev_w477",
    "from": {
     "node": "ev7",
     "pin": "then"
@@ -10719,7 +10307,7 @@
    }
   },
   {
-   "id": "ev_w498",
+   "id": "ev_w478",
    "from": {
     "node": "ev7",
     "pin": "entity"
@@ -10730,7 +10318,7 @@
    }
   },
   {
-   "id": "ev_w499",
+   "id": "ev_w479",
    "from": {
     "node": "ev8",
     "pin": "then"
@@ -10741,7 +10329,7 @@
    }
   },
   {
-   "id": "ev_w500",
+   "id": "ev_w480",
    "from": {
     "node": "ev9",
     "pin": "then"
@@ -10752,7 +10340,7 @@
    }
   },
   {
-   "id": "ev_w501",
+   "id": "ev_w481",
    "from": {
     "node": "ev9",
     "pin": "entity"
@@ -10763,7 +10351,7 @@
    }
   },
   {
-   "id": "ev_w502",
+   "id": "ev_w482",
    "from": {
     "node": "ev11",
     "pin": "out"
@@ -10774,43 +10362,54 @@
    }
   },
   {
-   "id": "ev_w503",
+   "id": "ev_w483",
    "from": {
     "node": "ev10",
     "pin": "then"
    },
    "to": {
-    "node": "ev14",
-    "pin": "go"
+    "node": "ev12",
+    "pin": "exec"
    }
   },
   {
-   "id": "ev_w504",
+   "id": "ev_w484",
    "from": {
     "node": "ev12",
-    "pin": "out"
+    "pin": "then"
    },
    "to": {
     "node": "ev14",
-    "pin": "secs"
+    "pin": "exec"
    }
   },
   {
-   "id": "ev_w505",
+   "id": "ev_w485",
+   "from": {
+    "node": "ev12",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev14",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w486",
    "from": {
     "node": "ev13",
     "pin": "out"
    },
    "to": {
     "node": "ev14",
-    "pin": "label"
+    "pin": "secs"
    }
   },
   {
-   "id": "ev_w506",
+   "id": "ev_w487",
    "from": {
     "node": "ev14",
-    "pin": "started"
+    "pin": "then"
    },
    "to": {
     "node": "ev15",
@@ -10818,208 +10417,197 @@
    }
   },
   {
-   "id": "ev_w507",
+   "id": "ev_w488",
    "from": {
     "node": "ev15",
     "pin": "then"
    },
    "to": {
-    "node": "ev17",
+    "node": "ev18",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w508",
+   "id": "ev_w489",
    "from": {
     "node": "ev15",
     "pin": "player"
    },
    "to": {
-    "node": "ev17",
+    "node": "ev18",
     "pin": "who"
    }
   },
   {
-   "id": "ev_w509",
+   "id": "ev_w490",
    "from": {
     "node": "ev16",
     "pin": "out"
    },
    "to": {
-    "node": "ev17",
-    "pin": "secs"
-   }
-  },
-  {
-   "id": "ev_w510",
-   "from": {
-    "node": "ev17",
-    "pin": "then"
-   },
-   "to": {
     "node": "ev18",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w511",
-   "from": {
-    "node": "ev18",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev21",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w512",
-   "from": {
-    "node": "ev18",
-    "pin": "player"
-   },
-   "to": {
-    "node": "ev21",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w513",
-   "from": {
-    "node": "ev19",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev21",
     "pin": "radius"
    }
   },
   {
-   "id": "ev_w514",
+   "id": "ev_w491",
    "from": {
-    "node": "ev20",
+    "node": "ev17",
     "pin": "out"
    },
    "to": {
-    "node": "ev21",
+    "node": "ev18",
     "pin": "dmg"
    }
   },
   {
-   "id": "ev_w515",
+   "id": "ev_w492",
    "from": {
     "node": "ev2",
     "pin": "then1"
    },
    "to": {
-    "node": "ev22",
+    "node": "ev19",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w516",
+   "id": "ev_w493",
    "from": {
-    "node": "ev22",
+    "node": "ev19",
     "pin": "tick"
    },
    "to": {
-    "node": "ev23",
+    "node": "ev20",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w517",
+   "id": "ev_w494",
    "from": {
-    "node": "ev23",
+    "node": "ev20",
     "pin": "then0"
    },
    "to": {
-    "node": "ev24",
+    "node": "ev21",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w518",
+   "id": "ev_w495",
    "from": {
-    "node": "ev23",
+    "node": "ev20",
     "pin": "then1"
    },
    "to": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w519",
+   "id": "ev_w496",
    "from": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "each"
    },
    "to": {
-    "node": "ev28",
+    "node": "ev25",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w520",
+   "id": "ev_w497",
    "from": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "player"
    },
    "to": {
-    "node": "ev28",
+    "node": "ev25",
     "pin": "bot"
    }
   },
   {
-   "id": "ev_w521",
+   "id": "ev_w498",
    "from": {
-    "node": "ev26",
+    "node": "ev23",
     "pin": "out"
    },
    "to": {
-    "node": "ev28",
+    "node": "ev25",
     "pin": "chance"
    }
   },
   {
-   "id": "ev_w522",
+   "id": "ev_w499",
+   "from": {
+    "node": "ev24",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev25",
+    "pin": "range"
+   }
+  },
+  {
+   "id": "ev_w500",
+   "from": {
+    "node": "ev25",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w501",
+   "from": {
+    "node": "ev25",
+    "pin": "yes"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w502",
+   "from": {
+    "node": "ev26",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w503",
+   "from": {
+    "node": "ev22",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w504",
    "from": {
     "node": "ev27",
     "pin": "out"
    },
    "to": {
     "node": "ev28",
-    "pin": "range"
+    "pin": "cd"
    }
   },
   {
-   "id": "ev_w523",
+   "id": "ev_w505",
    "from": {
     "node": "ev28",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev29",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w524",
-   "from": {
-    "node": "ev28",
-    "pin": "yes"
-   },
-   "to": {
-    "node": "ev29",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "ev_w525",
-   "from": {
-    "node": "ev29",
-    "pin": "true"
+    "pin": "use"
    },
    "to": {
     "node": "ev31",
@@ -11027,9 +10615,9 @@
    }
   },
   {
-   "id": "ev_w526",
+   "id": "ev_w506",
    "from": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "player"
    },
    "to": {
@@ -11038,21 +10626,32 @@
    }
   },
   {
-   "id": "ev_w527",
+   "id": "ev_w507",
+   "from": {
+    "node": "ev29",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev31",
+    "pin": "dmg"
+   }
+  },
+  {
+   "id": "ev_w508",
    "from": {
     "node": "ev30",
     "pin": "out"
    },
    "to": {
     "node": "ev31",
-    "pin": "cd"
+    "pin": "speed"
    }
   },
   {
-   "id": "ev_w528",
+   "id": "ev_w509",
    "from": {
-    "node": "ev31",
-    "pin": "use"
+    "node": "ev28",
+    "pin": "wait"
    },
    "to": {
     "node": "ev34",
@@ -11060,9 +10659,9 @@
    }
   },
   {
-   "id": "ev_w529",
+   "id": "ev_w510",
    "from": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "player"
    },
    "to": {
@@ -11071,340 +10670,318 @@
    }
   },
   {
-   "id": "ev_w530",
+   "id": "ev_w511",
    "from": {
     "node": "ev32",
     "pin": "out"
    },
    "to": {
     "node": "ev34",
-    "pin": "dmg"
+    "pin": "speed"
    }
   },
   {
-   "id": "ev_w531",
+   "id": "ev_w512",
    "from": {
     "node": "ev33",
     "pin": "out"
    },
    "to": {
     "node": "ev34",
-    "pin": "speed"
+    "pin": "cd"
    }
   },
   {
-   "id": "ev_w532",
+   "id": "ev_w513",
    "from": {
-    "node": "ev31",
-    "pin": "wait"
+    "node": "ev26",
+    "pin": "false"
    },
    "to": {
-    "node": "ev37",
+    "node": "ev36",
     "pin": "go"
    }
   },
   {
-   "id": "ev_w533",
+   "id": "ev_w514",
    "from": {
-    "node": "ev25",
+    "node": "ev22",
     "pin": "player"
    },
    "to": {
-    "node": "ev37",
+    "node": "ev36",
     "pin": "who"
    }
   },
   {
-   "id": "ev_w534",
+   "id": "ev_w515",
    "from": {
     "node": "ev35",
     "pin": "out"
    },
    "to": {
-    "node": "ev37",
-    "pin": "speed"
-   }
-  },
-  {
-   "id": "ev_w535",
-   "from": {
     "node": "ev36",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev37",
-    "pin": "cd"
+    "pin": "boost"
    }
   },
   {
-   "id": "ev_w536",
+   "id": "ev_w516",
    "from": {
-    "node": "ev29",
-    "pin": "false"
+    "node": "ev42",
+    "pin": "then"
    },
    "to": {
-    "node": "ev39",
+    "node": "ev43",
     "pin": "go"
    }
   },
   {
-   "id": "ev_w537",
+   "id": "ev_w517",
    "from": {
-    "node": "ev25",
-    "pin": "player"
+    "node": "ev37",
+    "pin": "out"
    },
    "to": {
-    "node": "ev39",
-    "pin": "who"
+    "node": "ev43",
+    "pin": "heal"
    }
   },
   {
-   "id": "ev_w538",
+   "id": "ev_w518",
    "from": {
     "node": "ev38",
     "pin": "out"
    },
    "to": {
-    "node": "ev39",
-    "pin": "boost"
+    "node": "ev43",
+    "pin": "respawn"
    }
   },
   {
-   "id": "ev_w539",
+   "id": "ev_w519",
    "from": {
-    "node": "ev45",
+    "node": "ev42",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ev43",
+    "pin": "vol"
+   }
+  },
+  {
+   "id": "ev_w520",
+   "from": {
+    "node": "ev42",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev43",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w521",
+   "from": {
+    "node": "ev44",
     "pin": "then"
    },
    "to": {
-    "node": "ev46",
+    "node": "ev45",
     "pin": "go"
    }
   },
   {
-   "id": "ev_w540",
+   "id": "ev_w522",
+   "from": {
+    "node": "ev39",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev45",
+    "pin": "weapon"
+   }
+  },
+  {
+   "id": "ev_w523",
    "from": {
     "node": "ev40",
     "pin": "out"
    },
    "to": {
-    "node": "ev46",
-    "pin": "heal"
+    "node": "ev45",
+    "pin": "respawn"
    }
   },
   {
-   "id": "ev_w541",
+   "id": "ev_w524",
+   "from": {
+    "node": "ev44",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ev45",
+    "pin": "vol"
+   }
+  },
+  {
+   "id": "ev_w525",
+   "from": {
+    "node": "ev44",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev45",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w526",
+   "from": {
+    "node": "ev46",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev47",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w527",
    "from": {
     "node": "ev41",
     "pin": "out"
    },
    "to": {
-    "node": "ev46",
-    "pin": "respawn"
-   }
-  },
-  {
-   "id": "ev_w542",
-   "from": {
-    "node": "ev45",
-    "pin": "volume"
-   },
-   "to": {
-    "node": "ev46",
-    "pin": "vol"
-   }
-  },
-  {
-   "id": "ev_w543",
-   "from": {
-    "node": "ev45",
-    "pin": "who"
-   },
-   "to": {
-    "node": "ev46",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w544",
-   "from": {
     "node": "ev47",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev48",
-    "pin": "go"
-   }
-  },
-  {
-   "id": "ev_w545",
-   "from": {
-    "node": "ev42",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev48",
-    "pin": "weapon"
-   }
-  },
-  {
-   "id": "ev_w546",
-   "from": {
-    "node": "ev43",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev48",
-    "pin": "respawn"
-   }
-  },
-  {
-   "id": "ev_w547",
-   "from": {
-    "node": "ev47",
-    "pin": "volume"
-   },
-   "to": {
-    "node": "ev48",
-    "pin": "vol"
-   }
-  },
-  {
-   "id": "ev_w548",
-   "from": {
-    "node": "ev47",
-    "pin": "who"
-   },
-   "to": {
-    "node": "ev48",
-    "pin": "who"
-   }
-  },
-  {
-   "id": "ev_w549",
-   "from": {
-    "node": "ev49",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ev50",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w550",
-   "from": {
-    "node": "ev44",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ev50",
     "pin": "speed"
    }
   },
   {
-   "id": "ev_w551",
+   "id": "ev_w528",
    "from": {
-    "node": "ev49",
+    "node": "ev46",
     "pin": "who"
    },
    "to": {
-    "node": "ev50",
+    "node": "ev47",
     "pin": "who"
    }
   },
   {
-   "id": "ev_w552",
+   "id": "ev_w529",
    "from": {
-    "node": "ev51",
+    "node": "ev48",
     "pin": "then"
    },
    "to": {
-    "node": "ev52",
+    "node": "ev49",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w553",
+   "id": "ev_w530",
    "from": {
-    "node": "ev51",
+    "node": "ev48",
     "pin": "volume"
    },
    "to": {
-    "node": "ev52",
+    "node": "ev49",
     "pin": "mine"
    }
   },
   {
-   "id": "ev_w554",
+   "id": "ev_w531",
    "from": {
-    "node": "ev51",
+    "node": "ev48",
     "pin": "who"
    },
    "to": {
-    "node": "ev52",
+    "node": "ev49",
     "pin": "who"
    }
   },
   {
-   "id": "ev_w555",
+   "id": "ev_w532",
    "from": {
-    "node": "ev53",
+    "node": "ev50",
     "pin": "then"
    },
    "to": {
-    "node": "ev54",
+    "node": "ev51",
     "pin": "exec"
    }
   },
   {
-   "id": "ev_w556",
+   "id": "ev_w533",
    "from": {
-    "node": "ev53",
+    "node": "ev50",
     "pin": "attacker"
    },
    "to": {
-    "node": "ev54",
+    "node": "ev51",
     "pin": "from"
    }
   },
   {
-   "id": "ev_w557",
+   "id": "ev_w534",
    "from": {
-    "node": "ev53",
+    "node": "ev50",
     "pin": "victim"
    },
    "to": {
+    "node": "ev51",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "ev_w535",
+   "from": {
+    "node": "ev52",
+    "pin": "then"
+   },
+   "to": {
     "node": "ev54",
-    "pin": "to"
+    "pin": "go"
    }
   },
   {
-   "id": "ev_w558",
+   "id": "ev_w536",
+   "from": {
+    "node": "ev52",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev54",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w537",
+   "from": {
+    "node": "ev53",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev54",
+    "pin": "boost"
+   }
+  },
+  {
+   "id": "ev_w538",
    "from": {
     "node": "ev55",
     "pin": "then"
    },
    "to": {
-    "node": "ev56",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "ev_w559",
-   "from": {
-    "node": "ev56",
-    "pin": "then"
-   },
-   "to": {
     "node": "ev58",
-    "pin": "exec"
+    "pin": "go"
    }
   },
   {
-   "id": "ev_w560",
+   "id": "ev_w539",
    "from": {
     "node": "ev55",
-    "pin": "who"
+    "pin": "player"
    },
    "to": {
     "node": "ev58",
@@ -11412,24 +10989,79 @@
    }
   },
   {
-   "id": "ev_w561",
+   "id": "ev_w540",
    "from": {
     "node": "ev56",
-    "pin": "entity"
+    "pin": "out"
    },
    "to": {
     "node": "ev58",
-    "pin": "to"
+    "pin": "speed"
    }
   },
   {
-   "id": "ev_w562",
+   "id": "ev_w541",
    "from": {
     "node": "ev57",
     "pin": "out"
    },
    "to": {
     "node": "ev58",
+    "pin": "cd"
+   }
+  },
+  {
+   "id": "ev_w542",
+   "from": {
+    "node": "ev59",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev60",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w543",
+   "from": {
+    "node": "ev60",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev62",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w544",
+   "from": {
+    "node": "ev59",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev62",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w545",
+   "from": {
+    "node": "ev60",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev62",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "ev_w546",
+   "from": {
+    "node": "ev61",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev62",
     "pin": "cd"
    }
   }
@@ -11616,19 +11248,6 @@
     "h": 120
    },
    "text": "Take Weapon Pickup: Volume and Who are Begin Overlap's (name weap). Respawn after 0 is 20 seconds. How many pickups a map has is up to you."
-  },
-  {
-   "id": "countdown_help",
-   "graph": "cd_run",
-   "pos": {
-    "x": -40,
-    "y": -420
-   },
-   "size": {
-    "w": 1400,
-    "h": 120
-   },
-   "text": "Countdown HUD: Wire Round Started (or Freeze Time Ended) in. Label goes before the time (empty: Time left); it stops at 0 and runs Done. Bots don't read it."
   },
   {
    "id": "hot_potato_help",
