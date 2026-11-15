@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_4"
 #define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 23
+#define LSG_N 36
 #define LSG_TASK 7310000
-#pragma dynamic 18816
+#pragma dynamic 27136
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -36,9 +36,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 1
 #define LSG_OT 1
 
-#define LSD_N 23
-new const g_lsdIds[LSD_N][] = { "ps", "hud", "huda", "fov", "vm", "vm2", "vm3", "li", "li2", "nv", "nv2", "st", "tag", "col", "cd", "cd1", "pk", "sp", "sp2", "pb", "pf", "pa", "pt" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 36
+new const g_lsdIds[LSD_N][] = { "ps", "hud", "huda", "fov", "vm", "vm2", "vm3", "li", "li2", "nv", "nv2", "st", "tag", "col", "cd", "cd1", "pk", "sp", "sp2", "pb", "pf", "pa", "pt", "be", "ic", "ic2", "icr", "sa", "tr", "rb", "rb2", "rbc", "tsc", "we", "we2", "fg" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -3069,6 +3069,7 @@ stock lsg_mp_vec(ent, k, kind, which)
 
 #define LSG_VMN 3
 stock const g_lsgVmList[LSG_VMN + 1][] = { "", "models/p_usp.mdl", "models/v_knife.mdl", "models/v_usp.mdl" }
+stock g_lsgEngSpr[5]
 // ---- HUD & View (engine nodes): the game's own switches, kept through what resets them ----
 stock g_lsgHud[33], g_lsgHudSet[33], bool:g_lsgHudKeep[33], g_lsgFov[33], bool:g_lsgFovKeep[33]
 stock g_lsgVm[33][33], g_lsgPm[33][33], bool:g_lsgNoLight[33], bool:g_lsgQuiet[33]
@@ -3077,6 +3078,8 @@ stock g_lsgTag[33], bool:g_lsgTagKeep[33], g_lsgShowTeam[33], g_lsgSpec[33]
 // the same spawn's "back to normal"
 stock Float:g_lsgEngAt[33]
 stock const g_lsgTeamWord[][] = { "UNASSIGNED", "TERRORIST", "CT", "SPECTATOR" }
+// Set Weather / Set Fog for everyone (sent again when the HUD is redrawn); -1: not set
+stock g_lsgWeather = -1, g_lsgFog[3], Float:g_lsgFogD = -1.0
 
 // Hide HUD Parts: our bits in the game's m_iHideHUD (it sends HideWeapon and the crosshair itself)
 stock lsg_eng_hud(id, mask, bool:keep)
@@ -3194,10 +3197,13 @@ stock lsg_eng_light(id, what, bat)
 		lit = false
 	set_pev(id, pev_effects, lit ? (pev(id, pev_effects) | EF_DIMLIGHT) : (pev(id, pev_effects) & ~EF_DIMLIGHT))
 	set_ent_data_float(id, "CBasePlayer", "m_flFlashLightTime", get_gametime() + (lit ? 1.2 : 0.2))
-	message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
-	write_byte(lit ? 1 : 0)
-	write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
-	message_end()
+	if (!is_user_bot(id) && lsg_msg_room("Flashlight", 1, id))
+	{
+		message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
+		write_byte(lit ? 1 : 0)
+		write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
+		message_end()
+	}
 	return 1
 }
 
@@ -3215,7 +3221,7 @@ stock lsg_eng_nvg(id, what)
 	if (what == 0 || what == 3 || what == 2)
 	{
 		set_ent_data(id, "CBasePlayer", "m_bNightVisionOn", on)
-		if (!is_user_bot(id))
+		if (!is_user_bot(id) && lsg_msg_room("Night Vision", 1, id))
 		{
 			message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
 			write_byte(on ? 1 : 0)
@@ -3241,6 +3247,8 @@ stock lsg_eng_tag(id, tag, bool:keep)
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
 	g_lsgEngAt[id] = get_gametime()
+	if (!lsg_msg_room("Scoreboard Tag", 2))
+		return
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
 	write_byte(lsg_eng_real_attr(id) | tag)
@@ -3270,6 +3278,8 @@ stock lsg_eng_color(id, t)
 {
 	g_lsgShowTeam[id] = t
 	new real = _:cs_get_user_team(id)
+	if (!lsg_msg_room("Scoreboard Team Color", 2))
+		return
 	message_begin(MSG_ALL, get_user_msgid("TeamInfo"))
 	write_byte(id)
 	write_string(g_lsgTeamWord[t ? t : clamp(real, 0, 3)])
@@ -3313,7 +3323,7 @@ stock lsg_eng_spec_put(id)
 // Play Soundtrack: as a map's trigger_cdaudio does it (the player's own music files)
 stock lsg_eng_cd(id, track, bool:loop)
 {
-	if (!is_user_connected(id) || is_user_bot(id))
+	if (!is_user_connected(id) || is_user_bot(id) || !lsg_msg_room("Play Soundtrack", 1, id))
 		return
 	if (!track)
 		client_cmd(id, "cd stop")
@@ -3341,6 +3351,10 @@ public lsg_eng_tick()
 // the HUD redrawn (a respawn, a reconnect's first frame): ours again
 public lsg_eng_reset(id)
 {
+	if (g_lsgWeather >= 0)
+		lsg_eng_weather(id, g_lsgWeather)
+	if (g_lsgFogD >= 0.0)
+		lsg_eng_fog(id, g_lsgFog[0], g_lsgFog[1], g_lsgFog[2], g_lsgFogD)
 	if (g_lsgHud[id])
 		lsg_eng_hud_put(id)
 	if (g_lsgFov[id])
@@ -3406,11 +3420,213 @@ public lsg_eng_left(id)
 	return FMRES_IGNORED
 }
 
+// ---- effects, radar, team score, weather and fog ----
+
+// who sees it: 0 everyone, 1 Terrorists, 2 Counter-Terrorists, 3 only the viewer
+stock bool:lsg_eng_sees(p, who, viewer)
+{
+	if (!is_user_connected(p) || is_user_bot(p))
+		return false
+	if (who == 3)
+		return p == viewer
+	return who == 0 || get_user_team(p) == who
+}
+
+stock lsg_eng_beam(a, b, k, life, w, noise, r, g, bl)
+{
+	if (!pev_valid(a) || !pev_valid(b) || !g_lsgEngSpr[k] || !lsg_msg_room("Beam Between Entities"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMENTS)
+	write_short(a)
+	write_short(b)
+	write_short(g_lsgEngSpr[k])
+	write_byte(0)
+	write_byte(10)
+	write_byte(life)
+	write_byte(w)
+	write_byte(noise)
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+	return 1
+}
+
+stock lsg_eng_icon(id, who, viewer, k, h, life)
+{
+	if (!lsg_ok(id) || !g_lsgEngSpr[k])
+		return 0
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Icon Over Player", 1, p))
+			continue
+		message_begin(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, _, p)
+		write_byte(TE_PLAYERATTACHMENT)
+		write_byte(id)
+		write_coord(h)
+		write_short(g_lsgEngSpr[k])
+		write_short(life)
+		message_end()
+	}
+	return 1
+}
+
+stock lsg_eng_icon_off(id, who, viewer)
+{
+	if (!lsg_ok(id))
+		return
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Icon Over Player", 1, p))
+			continue
+		message_begin(MSG_ONE, SVC_TEMPENTITY, _, p)
+		write_byte(TE_KILLPLAYERATTACHMENTS)
+		write_byte(id)
+		message_end()
+	}
+}
+
+stock lsg_eng_sprite(v, k, scale, br)
+{
+	if (!g_lsgEngSpr[k] || !lsg_msg_room("Sprite At"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_SPRITE)
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(v, i))
+	write_short(g_lsgEngSpr[k])
+	write_byte(scale)
+	write_byte(br)
+	message_end()
+	return 1
+}
+
+stock lsg_eng_tracer(a, b)
+{
+	if (!lsg_msg_room("Tracer"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_TRACER)
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(a, i))
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(b, i))
+	message_end()
+	return 1
+}
+
+// Radar Blip: hostage dots 1-4 (the game's indexes 21-24, past any map's hostages), the bomb dot
+stock Float:lsg_eng_x(ent, k)
+{
+	new Float:o[3]
+	if (ent > 0 && pev_valid(ent))
+		pev(ent, pev_origin, o)
+	return o[k]
+}
+
+stock lsg_eng_blip(who, viewer, bool:bomb, slot, Float:x, Float:y, Float:z)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Radar Blip", 1, p))
+			continue
+		if (bomb)
+		{
+			message_begin(MSG_ONE, get_user_msgid("BombDrop"), _, p)
+			engfunc(EngFunc_WriteCoord, x)
+			engfunc(EngFunc_WriteCoord, y)
+			engfunc(EngFunc_WriteCoord, z)
+			write_byte(0)
+			message_end()
+		}
+		else
+		{
+			message_begin(MSG_ONE, get_user_msgid("HostagePos"), _, p)
+			write_byte(1)
+			write_byte(20 + clamp(slot, 1, 4))
+			engfunc(EngFunc_WriteCoord, x)
+			engfunc(EngFunc_WriteCoord, y)
+			engfunc(EngFunc_WriteCoord, z)
+			message_end()
+		}
+	}
+}
+
+stock lsg_eng_blip_off(who, viewer, bool:bomb, slot)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Radar Blip", 1, p))
+			continue
+		if (bomb)
+		{
+			message_begin(MSG_ONE, get_user_msgid("BombPickup"), _, p)
+			message_end()
+		}
+		else
+		{
+			message_begin(MSG_ONE, get_user_msgid("HostageK"), _, p)
+			write_byte(20 + clamp(slot, 1, 4))
+			message_end()
+		}
+	}
+}
+
+stock lsg_eng_score(team, score)
+{
+	if (!lsg_msg_room("Show Team Score", 2))
+		return
+	message_begin(MSG_ALL, get_user_msgid("TeamScore"))
+	write_string(team == 2 ? "CT" : "TERRORIST")
+	write_short(score)
+	message_end()
+}
+
+// weather: 0 clear, 1 rain, 2 snow (0 player: everyone)
+stock lsg_eng_weather(id, k)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Weather", 1, p))
+			continue
+		message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
+		write_byte(k)
+		message_end()
+	}
+}
+
+// fog: the color and the thickness as the game's Fog message has it (the float's four bytes)
+stock lsg_eng_fog(id, r, g, b, Float:d)
+{
+	new bits = _:d
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Fog", 1, p))
+			continue
+		message_begin(MSG_ONE, get_user_msgid("Fog"), _, p)
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+		write_byte(bits & 255)
+		write_byte((bits >> 8) & 255)
+		write_byte((bits >> 16) & 255)
+		write_byte((bits >>> 24) & 255)
+		message_end()
+	}
+}
+
 public plugin_precache()
 {
 	lsg_pre_model("models/p_usp.mdl")
 	lsg_pre_model("models/v_knife.mdl")
 	lsg_pre_model("models/v_usp.mdl")
+	g_lsgEngSpr[1] = lsg_pre_model("sprites/glow01.spr")
+	g_lsgEngSpr[2] = lsg_pre_model("sprites/ic4.spr")
+	g_lsgEngSpr[3] = lsg_pre_model("sprites/iplayervip.spr")
+	g_lsgEngSpr[4] = lsg_pre_model("sprites/laserbeam.spr")
 }
 
 public plugin_init()
@@ -3629,6 +3845,7 @@ lsg_n7(ctx[])
 	}
 	if (lsd_enter(7, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_eng_light(lsi0, 1, 50))
 		lsd_error(7, "Not done: that player isn't alive.")
 	else
@@ -3647,6 +3864,7 @@ lsg_n8(ctx[])
 	}
 	if (lsd_enter(8, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_eng_light(lsi0, 3, -1))
 		lsd_error(8, "Not done: that player isn't alive.")
 	else
@@ -3665,6 +3883,7 @@ lsg_n9(ctx[])
 	}
 	if (lsd_enter(9, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_eng_nvg(lsi0, 1))
 		lsd_error(9, "Not done: nobody there.")
 	else
@@ -3683,6 +3902,7 @@ lsg_n10(ctx[])
 	}
 	if (lsd_enter(10, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_eng_nvg(lsi0, 2))
 		lsd_error(10, "Not done: nobody there.")
 	else
@@ -3719,6 +3939,7 @@ lsg_n12(ctx[])
 	}
 	if (lsd_enter(12, ctx))
 		return
+	g_lsgMsgLim = 48
 	new p = lsi0
 	if (lsg_ok(p))
 		lsg_eng_tag(p, 4, false)
@@ -3737,6 +3958,7 @@ lsg_n13(ctx[])
 	}
 	if (lsd_enter(13, ctx))
 		return
+	g_lsgMsgLim = 48
 	new p = lsi0
 	if (lsg_ok(p))
 		lsg_eng_color(p, 2)
@@ -3753,6 +3975,7 @@ lsg_n14(ctx[])
 	}
 	if (lsd_enter(14, ctx))
 		return
+	g_lsgMsgLim = 48
 	for (new p = 1; p <= MaxClients; p++)
 		if (is_user_connected(p))
 			lsg_eng_cd(p, 11, true)
@@ -3771,6 +3994,7 @@ lsg_n15(ctx[])
 	}
 	if (lsd_enter(15, ctx))
 		return
+	g_lsgMsgLim = 48
 	new p = lsi0
 	if (lsg_ok(p))
 		lsg_eng_cd(p, 0, false)
@@ -3905,6 +4129,241 @@ lsg_n22(ctx[])
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
 	lsd_exit(22, esc)
+	lsg_n23(ctx)
+}
+
+// Beam Between Entities (be)
+lsg_n23(ctx[])
+{
+	new lsi0 = ctx[0]
+	new lsi1 = ctx[0]
+	if (lsd_want(23))
+	{
+	lsd_begin()
+	lsd_in_entity("From", lsi0)
+	lsd_in_entity("To", lsi1)
+	}
+	if (lsd_enter(23, ctx))
+		return
+	g_lsgMsgLim = 48
+	if (!lsg_eng_beam(lsi0, lsi1, 4, 30, 12, 5, 255, 200, 40))
+		lsd_error(23, "Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on.")
+	else
+		lsd_exit(23, "shown")
+	lsg_n24(ctx)
+}
+
+// Icon Over Player (ic)
+lsg_n24(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(24))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(24, ctx))
+		return
+	g_lsgMsgLim = 48
+	if (!lsg_eng_icon(lsi0, 0, 0, 3, 45, 32767))
+		lsd_error(24, "Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on.")
+	else
+		lsd_exit(24, "shown")
+	lsg_n25(ctx)
+}
+
+// Icon Over Player (ic2)
+lsg_n25(ctx[])
+{
+	new lsi0 = ctx[0]
+	new lsi1 = ctx[0]
+	if (lsd_want(25))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_player("Viewer", lsi1)
+	}
+	if (lsd_enter(25, ctx))
+		return
+	g_lsgMsgLim = 48
+	if (!lsg_eng_icon(lsi0, 3, lsi1, 2, 60, 50))
+		lsd_error(25, "Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on.")
+	else
+		lsd_exit(25, "shown")
+	lsg_n26(ctx)
+}
+
+// Icon Over Player (icr)
+lsg_n26(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(26))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(26, ctx))
+		return
+	lsg_eng_icon_off(lsi0, 1, 0)
+	lsd_exit(26, "removed")
+	lsg_n27(ctx)
+}
+
+// Sprite At (sa)
+lsg_n27(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(27))
+	{
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	}
+	if (lsd_enter(27, ctx))
+		return
+	g_lsgMsgLim = 48
+	if (!lsg_eng_sprite(lsg_vent(lsi0), 1, 20, 180))
+		lsd_error(27, "Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on.")
+	else
+		lsd_exit(27, "shown")
+	lsg_n28(ctx)
+}
+
+// Tracer (tr)
+lsg_n28(ctx[])
+{
+	new lsi0 = lsg_vplayer(ctx[0], 0)
+	new lsi1 = lsg_mp_vec(ctx[0], lsg_mp_bone(ctx[0], "Bip01 R Hand"), 0, 0)
+	if (lsd_want(28))
+	{
+	lsd_begin()
+	lsd_in_text("From", lsg_vtext(lsi0))
+	lsd_in_text("To", lsg_vtext(lsi1))
+	}
+	if (lsd_enter(28, ctx))
+		return
+	g_lsgMsgLim = 48
+	if (!lsg_eng_tracer(lsi0, lsi1))
+		lsd_error(28, "Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on.")
+	else
+		lsd_exit(28, "shown")
+	lsg_n29(ctx)
+}
+
+// Radar Blip (rb)
+lsg_n29(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(29))
+	{
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	}
+	if (lsd_enter(29, ctx))
+		return
+	g_lsgMsgLim = 48
+	lsg_eng_blip(2, 0, false, 2, lsg_eng_x(lsi0, 0), lsg_eng_x(lsi0, 1), lsg_eng_x(lsi0, 2))
+	lsd_exit(29, "shown")
+	lsg_n30(ctx)
+}
+
+// Radar Blip (rb2)
+lsg_n30(ctx[])
+{
+	new lsi1 = lsg_vplayer(ctx[0], 0)
+	if (lsd_want(30))
+	{
+	lsd_begin()
+	lsd_in_text("Position", lsg_vtext(lsi1))
+	}
+	if (lsd_enter(30, ctx))
+		return
+	g_lsgMsgLim = 48
+	lsg_eng_blip(0, 0, true, 1, lsg_vc(lsi1, 0), lsg_vc(lsi1, 1), lsg_vc(lsi1, 2))
+	lsd_exit(30, "shown")
+	lsg_n31(ctx)
+}
+
+// Radar Blip (rbc)
+lsg_n31(ctx[])
+{
+	if (lsd_want(31))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(31, ctx))
+		return
+	g_lsgMsgLim = 48
+	lsg_eng_blip_off(2, 0, false, 2)
+	lsd_exit(31, "cleared")
+	lsg_n32(ctx)
+}
+
+// Show Team Score (tsc)
+lsg_n32(ctx[])
+{
+	new Float:lsi0 = 7.0
+	if (lsd_want(32))
+	{
+	lsd_begin()
+	lsd_in_number("Score", lsi0)
+	}
+	if (lsd_enter(32, ctx))
+		return
+	g_lsgMsgLim = 48
+	lsg_eng_score(2, 7)
+	lsd_exit(32, "shown")
+	lsg_n33(ctx)
+}
+
+// Set Weather (we)
+lsg_n33(ctx[])
+{
+	if (lsd_want(33))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(33, ctx))
+		return
+	g_lsgMsgLim = 48
+	g_lsgWeather = 2
+	lsg_eng_weather(0, 2)
+	lsd_exit(33, "set")
+	lsg_n34(ctx)
+}
+
+// Set Weather (we2)
+lsg_n34(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(34))
+	{
+	lsd_begin()
+	lsd_in_player("Player (empty: everyone)", lsi0)
+	}
+	if (lsd_enter(34, ctx))
+		return
+	g_lsgMsgLim = 48
+	lsg_eng_weather(lsi0, 1)
+	lsd_exit(34, "set")
+	lsg_n35(ctx)
+}
+
+// Set Fog (fg)
+lsg_n35(ctx[])
+{
+	if (lsd_want(35))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(35, ctx))
+		return
+	g_lsgMsgLim = 48
+	g_lsgFog[0] = 100
+	g_lsgFog[1] = 120
+	g_lsgFog[2] = 140
+	g_lsgFogD = 0.003
+	lsg_eng_fog(0, 100, 120, 140, 0.003)
+	lsd_exit(35, "set")
 }
 
 lsd_call(n, const data[])
@@ -3937,5 +4396,18 @@ lsd_call(n, const data[])
 		case 20: lsg_n20(ctx)
 		case 21: lsg_n21(ctx)
 		case 22: lsg_n22(ctx)
+		case 23: lsg_n23(ctx)
+		case 24: lsg_n24(ctx)
+		case 25: lsg_n25(ctx)
+		case 26: lsg_n26(ctx)
+		case 27: lsg_n27(ctx)
+		case 28: lsg_n28(ctx)
+		case 29: lsg_n29(ctx)
+		case 30: lsg_n30(ctx)
+		case 31: lsg_n31(ctx)
+		case 32: lsg_n32(ctx)
+		case 33: lsg_n33(ctx)
+		case 34: lsg_n34(ctx)
+		case 35: lsg_n35(ctx)
 	}
 }

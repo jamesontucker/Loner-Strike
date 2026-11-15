@@ -7,12 +7,20 @@
 //! node code, `blocks` for the helpers and hooks, `init` inside plugin_init, `precache` inside
 //! plugin_precache; graph.rs calls `problems`.
 
-use super::{model_text, pawn_str, Gen, Out};
+use super::{float_lit, model_text, pawn_str, sprite_text, Gen, Out};
 use crate::tools::studio::graph::{Graph, Node, NodeDef, Problem, View};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-pub(crate) const KINDS: [&str; 10] = [
+pub(crate) const KINDS: [&str; 18] = [
+    "fx.beam_ents",
+    "fx.icon_over",
+    "fx.sprite_at",
+    "fx.tracer",
+    "hud.radar_blip",
+    "hud.team_score",
+    "world.weather",
+    "world.fog",
     "eng.hide_hud",
     "eng.fov",
     "eng.view_model",
@@ -100,6 +108,36 @@ fn view_models(g: &Graph) -> Vec<String> {
     set.into_iter().collect()
 }
 
+/// The sprites the effect nodes name (index + 1 in g_lsgEngSpr), the beam's own first.
+fn sprites(g: &Graph) -> Vec<String> {
+    let mut set = BTreeSet::new();
+    if uses(g, "fx.beam_ents") {
+        set.insert("sprites/laserbeam.spr".to_string());
+    }
+    for n in g.nodes.iter().filter(|n| n.kind == "fx.icon_over" || n.kind == "fx.sprite_at") {
+        if let Some(s) = n.params.get("sprite").and_then(Value::as_str) {
+            set.insert(sprite_text(s));
+        } else {
+            set.insert(if n.kind == "fx.icon_over" { "sprites/iplayervip.spr" } else { "sprites/glow01.spr" }.to_string());
+        }
+    }
+    set.into_iter().collect()
+}
+
+fn sprite_k(g: &Graph, s: &str) -> usize {
+    sprites(g).iter().position(|x| x == s).map(|i| i + 1).unwrap_or(0)
+}
+
+/// Who an effect is sent to: everyone, a team, or the Viewer (code for lsg_eng_to's first two).
+fn seen_by(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
+    match gen.choice(n, def, "who") {
+        "t" => "1, 0".into(),
+        "ct" => "2, 0".into(),
+        "player" => format!("3, {}", if gen.v.data_source(id, "viewer").is_some() { gen.need(id, "viewer", "player") } else { "0".into() }),
+        _ => "0, 0".into(),
+    }
+}
+
 /// The node's code (inside its function, before it goes on).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Out, inp: &dyn Fn(&str, &str) -> String, exit: &dyn Fn(&str) -> String, err: &dyn Fn(&str) -> String) {
@@ -120,6 +158,10 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
         }
     };
     let on = |k: &str| if gen.boolean(n, def, k) { "true" } else { "false" };
+    // the messages these send count against the mode's Effect messages a frame (lsg_msg_room)
+    if super::super::limits::get("messages").is_some_and(|l| l.kinds.contains(&def.kind.as_str())) && !def.kind.starts_with("fx.") {
+        b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
+    }
     match def.kind.as_str() {
         "eng.hide_hud" => {
             let mut mask = 0;
@@ -226,7 +268,91 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             each(b, &call);
             ex(b, if stop { "stopped" } else { "playing" });
         }
+        "fx.beam_ents" => {
+            let (r, g_, bl) = match gen.choice(n, def, "colour") { "green" => (40, 220, 60), "blue" => (60, 120, 255), "white" => (255, 255, 255), "gold" => (255, 200, 40), _ => (230, 30, 30) };
+            let life = (gen.num(n, def, "secs") * 10.0).round().clamp(1.0, 250.0) as i64;
+            let w = gen.num(n, def, "width").round().clamp(1.0, 100.0) as i64;
+            let noise = gen.num(n, def, "noise").round().clamp(0.0, 100.0) as i64;
+            let k = sprite_k(super::g_of(gen), "sprites/laserbeam.spr");
+            let call = format!("lsg_eng_beam({}, {}, {k}, {life}, {w}, {noise}, {r}, {g_}, {bl})", inp("a", "entity"), inp("b", "entity"));
+            fx(gen, b, &call, debug, exit, err);
+        }
+        "fx.icon_over" => {
+            let p = inp("player", "player");
+            if gen.choice(n, def, "do") == "remove" {
+                b.line(format!("\tlsg_eng_icon_off({p}, {})", seen_by(gen, id, n, def)));
+                ex(b, "removed");
+            } else {
+                let spr = sprite_text(gen.text(n, def, "sprite"));
+                let k = sprite_k(super::g_of(gen), &spr);
+                let life = (gen.num(n, def, "secs") * 10.0).round().clamp(0.0, 6000.0) as i64;
+                let life = if life == 0 { 32767 } else { life };
+                let h = gen.num(n, def, "height").round().clamp(0.0, 200.0) as i64;
+                fx(gen, b, &format!("lsg_eng_icon({p}, {}, {k}, {h}, {life})", seen_by(gen, id, n, def)), debug, exit, err);
+            }
+        }
+        "fx.sprite_at" => {
+            let spr = sprite_text(gen.text(n, def, "sprite"));
+            let k = sprite_k(super::g_of(gen), &spr);
+            let scale = (gen.num(n, def, "scale") * 10.0).round().clamp(1.0, 250.0) as i64;
+            let br = gen.num(n, def, "bright").round().clamp(0.0, 255.0) as i64;
+            let at = if wired("pos") { inp("pos", "vector") } else { format!("lsg_vent({})", inp("at", "entity")) };
+            fx(gen, b, &format!("lsg_eng_sprite({at}, {k}, {scale}, {br})"), debug, exit, err);
+        }
+        "fx.tracer" => {
+            fx(gen, b, &format!("lsg_eng_tracer({}, {})", inp("from", "vector"), inp("to", "vector")), debug, exit, err);
+        }
+        "hud.radar_blip" => {
+            let bomb = gen.choice(n, def, "kind") == "bomb";
+            let slot: i64 = gen.choice(n, def, "slot").parse().unwrap_or(1);
+            let to = seen_by(gen, id, n, def);
+            if gen.choice(n, def, "do") == "clear" {
+                b.line(format!("\tlsg_eng_blip_off({to}, {}, {slot})", if bomb { "true" } else { "false" }));
+                ex(b, "cleared");
+            } else {
+                // (a position wired: its three numbers; else the entity's place, read here)
+                let at = if wired("pos") { let v = inp("pos", "vector"); format!("lsg_vc({v}, 0), lsg_vc({v}, 1), lsg_vc({v}, 2)") } else { format!("lsg_eng_x({e}, 0), lsg_eng_x({e}, 1), lsg_eng_x({e}, 2)", e = inp("at", "entity")) };
+                b.line(format!("\tlsg_eng_blip({to}, {}, {slot}, {at})", if bomb { "true" } else { "false" }));
+                ex(b, "shown");
+            }
+        }
+        "hud.team_score" => {
+            let sc = if wired("score") { format!("clamp(floatround({}), 0, 32767)", inp("score", "number")) } else { (gen.num(n, def, "score").round() as i64).clamp(0, 32767).to_string() };
+            b.line(format!("\tlsg_eng_score({}, {sc})", if gen.choice(n, def, "team") == "ct" { 2 } else { 1 }));
+            ex(b, "shown");
+        }
+        "world.weather" => {
+            let k = match gen.choice(n, def, "kind") { "rain" => 1, "snow" => 2, _ => 0 };
+            if wired("player") {
+                b.line(format!("\tlsg_eng_weather({}, {k})", inp("player", "player")));
+            } else {
+                b.line(format!("\tg_lsgWeather = {k}\n\tlsg_eng_weather(0, {k})"));
+            }
+            ex(b, "set");
+        }
+        "world.fog" => {
+            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            let d = float_lit(gen.num(n, def, "density").clamp(0.0, 0.05));
+            let (r, g_, bl) = (c("r"), c("g"), c("b"));
+            if wired("player") {
+                b.line(format!("\tlsg_eng_fog({}, {r}, {g_}, {bl}, {d})", inp("player", "player")));
+            } else {
+                b.line(format!("\tg_lsgFog[0] = {r}\n\tg_lsgFog[1] = {g_}\n\tg_lsgFog[2] = {bl}\n\tg_lsgFogD = {d}\n\tlsg_eng_fog(0, {r}, {g_}, {bl}, {d})"));
+            }
+            ex(b, "set");
+        }
         _ => {}
+    }
+}
+
+/// An effect: sent, or skipped past the frame's budget (the debugger says so).
+fn fx(gen: &Gen, b: &mut Out, call: &str, debug: bool, exit: &dyn Fn(&str) -> String, err: &dyn Fn(&str) -> String) {
+    // (the mode's Effect messages a frame limit, shared with the other effect nodes: lsg_msg_room)
+    b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
+    if debug {
+        b.line(format!("\tif (!{call})\n\t\t{}\n\telse\n\t{}", err("Skipped: too many effects this frame (the mode's Effect messages a frame), its sprite isn't on the server, or nothing to show it on."), exit("shown")));
+    } else {
+        b.line(format!("\t{call}"));
     }
 }
 
@@ -241,7 +367,9 @@ pub(super) fn blocks(g: &Graph, o: &mut Out) {
     let vms = view_models(g);
     let list = if vms.is_empty() { "\"\"".to_string() } else { vms.iter().map(|m| pawn_str(m)).collect::<Vec<_>>().join(", ") };
     o.line(format!("#define LSG_VMN {}\nstock const g_lsgVmList[LSG_VMN + 1][] = {{ \"\", {list} }}", vms.len().max(1)));
+    o.line(format!("stock g_lsgEngSpr[{}]", sprites(g).len() + 1));
     o.line(RUNTIME);
+    o.line(EFFECTS);
 }
 
 /// Inside plugin_init.
@@ -253,7 +381,7 @@ pub(super) fn init(g: &Graph, o: &mut Out) {
     if spawn {
         o.line("\tRegisterHamPlayer(Ham_Spawn, \"lsg_eng_spawn\", 1)\n\tRegisterHamPlayer(Ham_Killed, \"lsg_eng_dead\", 1)");
     }
-    if uses(g, "eng.hide_hud") || uses(g, "eng.fov") {
+    if uses(g, "eng.hide_hud") || uses(g, "eng.fov") || uses(g, "world.weather") || uses(g, "world.fog") {
         o.line("\tregister_event(\"ResetHUD\", \"lsg_eng_reset\", \"be\")");
     }
     if uses(g, "eng.hide_hud") || uses(g, "eng.fov") || uses(g, "eng.spectate") {
@@ -282,11 +410,15 @@ pub(super) fn init(g: &Graph, o: &mut Out) {
 /// Inside plugin_precache: the view models, only those on the server (a missing file would stop
 /// the map loading; the node then leaves the weapon as it is).
 pub(super) fn precache(g: &Graph) -> Vec<String> {
-    view_models(g).iter().map(|m| format!("\tlsg_pre_model({})", pawn_str(m))).collect()
+    let mut out: Vec<String> = view_models(g).iter().map(|m| format!("\tlsg_pre_model({})", pawn_str(m))).collect();
+    for (i, s) in sprites(g).iter().enumerate() {
+        out.push(format!("\tg_lsgEngSpr[{}] = lsg_pre_model({})", i + 1, pawn_str(s)));
+    }
+    out
 }
 
 pub(super) fn needs_precache(g: &Graph) -> bool {
-    !view_models(g).is_empty()
+    !view_models(g).is_empty() || !sprites(g).is_empty()
 }
 
 fn err(node: &str, msg: &str) -> Problem {
@@ -313,6 +445,20 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                 let pm = n.params.get("pmodel").and_then(Value::as_str).unwrap_or("");
                 if !pm.is_empty() && model_of(n, "pmodel").is_empty() {
                     p.push(err(&n.id, "Model others see is a model file (models/p_...mdl) or empty."));
+                }
+            }
+            "fx.sprite_at" | "hud.radar_blip" => {
+                let clear = n.params.get("do").and_then(Value::as_str) == Some("clear");
+                if !clear && v.data_source(&n.id, "at").is_none() && v.data_source(&n.id, "pos").is_none() {
+                    p.push(warn(&n.id, "Wire At or Position: with neither it's at the map's middle (0 0 0)."));
+                }
+                if n.params.get("who").and_then(Value::as_str) == Some("player") && v.data_source(&n.id, "viewer").is_none() {
+                    p.push(warn(&n.id, "Seen by Only Viewer: wire a Viewer, or nobody sees it."));
+                }
+            }
+            "fx.icon_over" => {
+                if n.params.get("who").and_then(Value::as_str) == Some("player") && v.data_source(&n.id, "viewer").is_none() {
+                    p.push(warn(&n.id, "Seen by Only Viewer: wire a Viewer, or nobody sees it."));
                 }
             }
             "eng.score_color" => p.push(warn(&n.id, "Only how the player is shown changes: radar, name tags and their own buy menu follow the shown team; damage, spawns and winning keep the real one.")),
@@ -434,6 +580,205 @@ stock lsg_mp_vec(ent, k, kind, which)
 }
 "##;
 
+const EFFECTS: &str = r##"// ---- effects, radar, team score, weather and fog ----
+
+// who sees it: 0 everyone, 1 Terrorists, 2 Counter-Terrorists, 3 only the viewer
+stock bool:lsg_eng_sees(p, who, viewer)
+{
+	if (!is_user_connected(p) || is_user_bot(p))
+		return false
+	if (who == 3)
+		return p == viewer
+	return who == 0 || get_user_team(p) == who
+}
+
+stock lsg_eng_beam(a, b, k, life, w, noise, r, g, bl)
+{
+	if (!pev_valid(a) || !pev_valid(b) || !g_lsgEngSpr[k] || !lsg_msg_room("Beam Between Entities"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMENTS)
+	write_short(a)
+	write_short(b)
+	write_short(g_lsgEngSpr[k])
+	write_byte(0)
+	write_byte(10)
+	write_byte(life)
+	write_byte(w)
+	write_byte(noise)
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+	return 1
+}
+
+stock lsg_eng_icon(id, who, viewer, k, h, life)
+{
+	if (!lsg_ok(id) || !g_lsgEngSpr[k])
+		return 0
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Icon Over Player", 1, p))
+			continue
+		message_begin(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, _, p)
+		write_byte(TE_PLAYERATTACHMENT)
+		write_byte(id)
+		write_coord(h)
+		write_short(g_lsgEngSpr[k])
+		write_short(life)
+		message_end()
+	}
+	return 1
+}
+
+stock lsg_eng_icon_off(id, who, viewer)
+{
+	if (!lsg_ok(id))
+		return
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Icon Over Player", 1, p))
+			continue
+		message_begin(MSG_ONE, SVC_TEMPENTITY, _, p)
+		write_byte(TE_KILLPLAYERATTACHMENTS)
+		write_byte(id)
+		message_end()
+	}
+}
+
+stock lsg_eng_sprite(v, k, scale, br)
+{
+	if (!g_lsgEngSpr[k] || !lsg_msg_room("Sprite At"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_SPRITE)
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(v, i))
+	write_short(g_lsgEngSpr[k])
+	write_byte(scale)
+	write_byte(br)
+	message_end()
+	return 1
+}
+
+stock lsg_eng_tracer(a, b)
+{
+	if (!lsg_msg_room("Tracer"))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_TRACER)
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(a, i))
+	for (new i = 0; i < 3; i++)
+		engfunc(EngFunc_WriteCoord, lsg_vc(b, i))
+	message_end()
+	return 1
+}
+
+// Radar Blip: hostage dots 1-4 (the game's indexes 21-24, past any map's hostages), the bomb dot
+stock Float:lsg_eng_x(ent, k)
+{
+	new Float:o[3]
+	if (ent > 0 && pev_valid(ent))
+		pev(ent, pev_origin, o)
+	return o[k]
+}
+
+stock lsg_eng_blip(who, viewer, bool:bomb, slot, Float:x, Float:y, Float:z)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Radar Blip", 1, p))
+			continue
+		if (bomb)
+		{
+			message_begin(MSG_ONE, get_user_msgid("BombDrop"), _, p)
+			engfunc(EngFunc_WriteCoord, x)
+			engfunc(EngFunc_WriteCoord, y)
+			engfunc(EngFunc_WriteCoord, z)
+			write_byte(0)
+			message_end()
+		}
+		else
+		{
+			message_begin(MSG_ONE, get_user_msgid("HostagePos"), _, p)
+			write_byte(1)
+			write_byte(20 + clamp(slot, 1, 4))
+			engfunc(EngFunc_WriteCoord, x)
+			engfunc(EngFunc_WriteCoord, y)
+			engfunc(EngFunc_WriteCoord, z)
+			message_end()
+		}
+	}
+}
+
+stock lsg_eng_blip_off(who, viewer, bool:bomb, slot)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_eng_sees(p, who, viewer) || !lsg_msg_room("Radar Blip", 1, p))
+			continue
+		if (bomb)
+		{
+			message_begin(MSG_ONE, get_user_msgid("BombPickup"), _, p)
+			message_end()
+		}
+		else
+		{
+			message_begin(MSG_ONE, get_user_msgid("HostageK"), _, p)
+			write_byte(20 + clamp(slot, 1, 4))
+			message_end()
+		}
+	}
+}
+
+stock lsg_eng_score(team, score)
+{
+	if (!lsg_msg_room("Show Team Score", 2))
+		return
+	message_begin(MSG_ALL, get_user_msgid("TeamScore"))
+	write_string(team == 2 ? "CT" : "TERRORIST")
+	write_short(score)
+	message_end()
+}
+
+// weather: 0 clear, 1 rain, 2 snow (0 player: everyone)
+stock lsg_eng_weather(id, k)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Weather", 1, p))
+			continue
+		message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
+		write_byte(k)
+		message_end()
+	}
+}
+
+// fog: the color and the thickness as the game's Fog message has it (the float's four bytes)
+stock lsg_eng_fog(id, r, g, b, Float:d)
+{
+	new bits = _:d
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Fog", 1, p))
+			continue
+		message_begin(MSG_ONE, get_user_msgid("Fog"), _, p)
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+		write_byte(bits & 255)
+		write_byte((bits >> 8) & 255)
+		write_byte((bits >> 16) & 255)
+		write_byte((bits >>> 24) & 255)
+		message_end()
+	}
+}
+"##;
+
 const RUNTIME: &str = r##"// ---- HUD & View (engine nodes): the game's own switches, kept through what resets them ----
 stock g_lsgHud[33], g_lsgHudSet[33], bool:g_lsgHudKeep[33], g_lsgFov[33], bool:g_lsgFovKeep[33]
 stock g_lsgVm[33][33], g_lsgPm[33][33], bool:g_lsgNoLight[33], bool:g_lsgQuiet[33]
@@ -442,6 +787,8 @@ stock g_lsgTag[33], bool:g_lsgTagKeep[33], g_lsgShowTeam[33], g_lsgSpec[33]
 // the same spawn's "back to normal"
 stock Float:g_lsgEngAt[33]
 stock const g_lsgTeamWord[][] = { "UNASSIGNED", "TERRORIST", "CT", "SPECTATOR" }
+// Set Weather / Set Fog for everyone (sent again when the HUD is redrawn); -1: not set
+stock g_lsgWeather = -1, g_lsgFog[3], Float:g_lsgFogD = -1.0
 
 // Hide HUD Parts: our bits in the game's m_iHideHUD (it sends HideWeapon and the crosshair itself)
 stock lsg_eng_hud(id, mask, bool:keep)
@@ -559,10 +906,13 @@ stock lsg_eng_light(id, what, bat)
 		lit = false
 	set_pev(id, pev_effects, lit ? (pev(id, pev_effects) | EF_DIMLIGHT) : (pev(id, pev_effects) & ~EF_DIMLIGHT))
 	set_ent_data_float(id, "CBasePlayer", "m_flFlashLightTime", get_gametime() + (lit ? 1.2 : 0.2))
-	message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
-	write_byte(lit ? 1 : 0)
-	write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
-	message_end()
+	if (!is_user_bot(id) && lsg_msg_room("Flashlight", 1, id))
+	{
+		message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
+		write_byte(lit ? 1 : 0)
+		write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
+		message_end()
+	}
 	return 1
 }
 
@@ -580,7 +930,7 @@ stock lsg_eng_nvg(id, what)
 	if (what == 0 || what == 3 || what == 2)
 	{
 		set_ent_data(id, "CBasePlayer", "m_bNightVisionOn", on)
-		if (!is_user_bot(id))
+		if (!is_user_bot(id) && lsg_msg_room("Night Vision", 1, id))
 		{
 			message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
 			write_byte(on ? 1 : 0)
@@ -606,6 +956,8 @@ stock lsg_eng_tag(id, tag, bool:keep)
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
 	g_lsgEngAt[id] = get_gametime()
+	if (!lsg_msg_room("Scoreboard Tag", 2))
+		return
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
 	write_byte(lsg_eng_real_attr(id) | tag)
@@ -635,6 +987,8 @@ stock lsg_eng_color(id, t)
 {
 	g_lsgShowTeam[id] = t
 	new real = _:cs_get_user_team(id)
+	if (!lsg_msg_room("Scoreboard Team Color", 2))
+		return
 	message_begin(MSG_ALL, get_user_msgid("TeamInfo"))
 	write_byte(id)
 	write_string(g_lsgTeamWord[t ? t : clamp(real, 0, 3)])
@@ -678,7 +1032,7 @@ stock lsg_eng_spec_put(id)
 // Play Soundtrack: as a map's trigger_cdaudio does it (the player's own music files)
 stock lsg_eng_cd(id, track, bool:loop)
 {
-	if (!is_user_connected(id) || is_user_bot(id))
+	if (!is_user_connected(id) || is_user_bot(id) || !lsg_msg_room("Play Soundtrack", 1, id))
 		return
 	if (!track)
 		client_cmd(id, "cd stop")
@@ -706,6 +1060,10 @@ public lsg_eng_tick()
 // the HUD redrawn (a respawn, a reconnect's first frame): ours again
 public lsg_eng_reset(id)
 {
+	if (g_lsgWeather >= 0)
+		lsg_eng_weather(id, g_lsgWeather)
+	if (g_lsgFogD >= 0.0)
+		lsg_eng_fog(id, g_lsgFog[0], g_lsgFog[1], g_lsgFog[2], g_lsgFogD)
 	if (g_lsgHud[id])
 		lsg_eng_hud_put(id)
 	if (g_lsgFov[id])
@@ -831,6 +1189,40 @@ mod tests {
         assert!(graph::validate(&g2).iter().any(|p| p.level == "error" && p.message.contains("bone's name")));
         let src2 = generate(&g2, false).source;
         assert!(!src2.contains("server_cmd(\"quit"));
+    }
+
+    /// The effects, radar, team score, weather and fog (engine audit 17, 18, 25) and Set Armor's type.
+    #[test]
+    fn effects_radar_weather_generate() {
+        let g = parse(G).unwrap();
+        let errs: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level == "error").collect();
+        assert!(errs.is_empty(), "{errs:#?}");
+        let src = generate(&g, false).source;
+        // the sprites, loaded with the map only if there, in one list (laserbeam first for the beam)
+        assert!(src.contains("g_lsgEngSpr[1] = lsg_pre_model(\"sprites/glow01.spr\")") || src.contains("lsg_pre_model(\"sprites/laserbeam.spr\")"), "{src}");
+        assert!(src.contains("lsg_pre_model(\"sprites/iplayervip.spr\")") && src.contains("lsg_pre_model(\"sprites/ic4.spr\")"));
+        assert!(src.contains("lsg_eng_beam(ctx[0], ctx[0], ") && src.contains(", 30, 12, 5, 255, 200, 40)"), "gold, 3 s, width 12, wobble 5");
+        assert!(src.contains("write_byte(TE_BEAMENTS)") && src.contains("write_byte(TE_PLAYERATTACHMENT)") && src.contains("write_byte(TE_KILLPLAYERATTACHMENTS)"));
+        assert!(src.contains("lsg_eng_icon(ctx[0], 0, 0, ") && src.contains(", 45, 32767)"), "until removed: the longest life");
+        assert!(src.contains("lsg_eng_icon(ctx[0], 3, ctx[0], ") && src.contains(", 60, 50)"), "only the viewer, 5 s");
+        assert!(src.contains("lsg_eng_icon_off(ctx[0], 1, 0)"));
+        assert!(src.contains("lsg_eng_sprite(lsg_vent(ctx[0]), ") && src.contains(", 20, 180)"));
+        assert!(src.contains("lsg_eng_tracer(") && src.contains("write_byte(TE_TRACER)"));
+        assert!(src.contains("lsg_eng_blip(2, 0, false, 2, lsg_eng_x(ctx[0], 0), lsg_eng_x(ctx[0], 1), lsg_eng_x(ctx[0], 2))"));
+        assert!(src.contains("lsg_eng_blip(0, 0, true, 1, lsg_vc(") && src.contains("lsg_eng_blip_off(2, 0, false, 2)"));
+        assert!(src.contains("write_byte(20 + clamp(slot, 1, 4))"), "past any map's own hostages");
+        assert!(src.contains("lsg_eng_score(2, 7)"));
+        assert!(src.contains("g_lsgWeather = 2\n\tlsg_eng_weather(0, 2)") && src.contains("lsg_eng_weather(ctx[0], 1)"));
+        assert!(src.contains("g_lsgFogD = 0.003") && src.contains("lsg_eng_fog(0, 100, 120, 140, 0.003)"));
+        assert!(src.contains("g_lsgMsgLim = 48\n") && src.contains("lsg_msg_room(\"Beam Between Entities\")") && src.contains("lsg_msg_room(\"Radar Blip\", 1, p)"), "the shared message budget");
+        assert!(src.contains("register_event(\"ResetHUD\", \"lsg_eng_reset\", \"be\")"), "weather and fog again after a respawn");
+        // Set Armor's type: kevlar only
+        let v: serde_json::Value = serde_json::json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "armor", "name": "A"},
+            "nodes": [{"id": "ps", "type": "event.player_spawned"}, {"id": "a", "type": "player.set_armor", "params": {"amount": 50, "type": "vest"}}, {"id": "b", "type": "player.set_armor", "params": {"amount": 100}}],
+            "edges": [{"id": "w1", "from": {"node": "ps", "pin": "then"}, "to": {"node": "a", "pin": "exec"}}, {"id": "w2", "from": {"node": "ps", "pin": "player"}, "to": {"node": "a", "pin": "player"}},
+                      {"id": "w3", "from": {"node": "a", "pin": "then"}, "to": {"node": "b", "pin": "exec"}}, {"id": "w4", "from": {"node": "ps", "pin": "player"}, "to": {"node": "b", "pin": "player"}}]});
+        let src = generate(&graph::from_value(v).unwrap(), false).source;
+        assert!(src.contains("ls_set_armor(ctx[0], max(floatround(50.0), 0), false)") && src.contains("ls_set_armor(ctx[0], max(floatround(100.0), 0), true)"), "{src}");
     }
 
     /// Only what a graph uses is hooked: a soundtrack alone needs no spawn, deploy or message hooks.

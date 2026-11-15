@@ -2253,7 +2253,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let (call, done) = match def.kind.as_str() {
                 "player.strip" => (format!("ls_strip({p}, {})", if gen.boolean(n, def, "knife") { "true" } else { "false" }), "stripped"),
                 "player.set_health" => (format!("ls_set_health({p}, max(floatround({}), 1))", inp("amount", "number")), "set"),
-                "player.set_armor" => (format!("ls_set_armor({p}, max(floatround({}), 0), true)", inp("amount", "number")), "set"),
+                "player.set_armor" => (format!("ls_set_armor({p}, max(floatround({}), 0), {})", inp("amount", "number"), if gen.choice(n, def, "type") == "vest" { "false" } else { "true" }), "set"),
                 "player.set_speed" => (format!("set_user_maxspeed({p}, {})", inp("speed", "number")), "set"),
                 _ => (String::new(), "teleported"),
             };

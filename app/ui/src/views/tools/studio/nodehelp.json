@@ -3989,7 +3989,7 @@
 "player.set_armor":{
 "title":"Set Armor",
 "category":"Players",
-"what":"Sets a living player's armor (with a helmet).",
+"what":"Sets a living player's armor: kevlar and a helmet, or kevlar only.",
 "pins":[
 {
 "id":"exec",
@@ -4016,6 +4016,10 @@
 {
 "id":"amount",
 "help":"A number from 0 to 1000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"type",
+"help":"Pick one: Kevlar and helmet, Kevlar only."
 }
 ],
 "related":[
@@ -4043,7 +4047,8 @@
 "y":0
 },
 "params":{
-"amount":100
+"amount":100,
+"type":"vesthelm"
 }
 }
 ],
@@ -49070,6 +49075,775 @@
 "params":{
 "count":1,
 "team":"any"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.beam_ents":{
+"title":"Beam Between Entities",
+"category":"Effects",
+"what":"A beam from one player or entity to another that follows both as they move, for some seconds. Effects are skipped (and the debugger says so) past 24 in one server frame, so many at once can't flood players' games.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"a",
+"dir":"in",
+"help":"From: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"b",
+"dir":"in",
+"help":"To: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"colour",
+"help":"Pick one: Red, Green, Blue, White, Gold."
+},
+{
+"id":"secs",
+"help":"A number from 0.1 to 25."
+},
+{
+"id":"width",
+"help":"A number from 1 to 100."
+},
+{
+"id":"noise",
+"help":"A number from 0 to 100."
+}
+],
+"related":[
+"fx.icon_over",
+"fx.sprite_at",
+"fx.tracer"
+],
+"risk":"Each beam is a temporary effect in every player's game, which has a shared limit; past 24 effects in one server frame the rest are skipped.",
+"example":{
+"caption":"When a round starts, Beam Between Entities runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.beam_ents",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"colour":"red",
+"secs":2,
+"width":10,
+"noise":0
+}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"a"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"b"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.icon_over":{
+"title":"Icon Over Player",
+"category":"Effects",
+"what":"A sprite floating over a player's head (the game's own, like sprites/iplayervip.spr, or your own), for some seconds or until removed (0), seen by everyone, a team or only Viewer. Remove takes the icons off that player.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"viewer",
+"dir":"in",
+"help":"Viewer: a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Show, Remove."
+},
+{
+"id":"sprite",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"secs",
+"help":"A number from 0 to 600."
+},
+{
+"id":"height",
+"help":"A number from 0 to 200."
+},
+{
+"id":"who",
+"help":"Pick one: Everyone, Terrorists, Counter-Terrorists, Only Viewer."
+}
+],
+"more":"The icon follows the player's head on everyone's screen who sees it. Seen by a team means the team at the moment it's shown. A sprite file that isn't on the server is left out (nothing shows).",
+"related":[
+"eng.score_tag",
+"fx.marker",
+"fx.beam_ents"
+],
+"example":{
+"caption":"When a player spawns, Icon Over Player runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.icon_over",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"show",
+"sprite":"sprites/iplayervip.spr",
+"secs":0,
+"height":45,
+"who":"all"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.sprite_at":{
+"title":"Sprite At",
+"category":"Effects",
+"what":"Shows a sprite once at a position or an entity (the game's own or your own), at a size and brightness.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at",
+"dir":"in",
+"help":"At: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"The position. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"sprite",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"scale",
+"help":"A number from 0.1 to 25."
+},
+{
+"id":"bright",
+"help":"A number from 0 to 255."
+}
+],
+"related":[
+"fx.icon_over",
+"fx.tracer",
+"fx.beam_ents"
+],
+"example":{
+"caption":"When a round starts, Sprite At runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.sprite_at",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"sprite":"sprites/glow01.spr",
+"scale":1,
+"bright":200
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.tracer":{
+"title":"Tracer",
+"category":"Effects",
+"what":"A bullet tracer streak from one position to another.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"from",
+"dir":"in",
+"help":"From: a position or direction (X, Y, Z). Needs a wire."
+},
+{
+"id":"to",
+"dir":"in",
+"help":"To: a position or direction (X, Y, Z). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"related":[
+"fx.sprite_at",
+"fx.icon_over",
+"fx.beam_ents"
+],
+"example":{
+"caption":"When a round starts, Tracer runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.tracer",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"vec",
+"type":"vec.make",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"x":0,
+"y":0,
+"z":64
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"from"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"to"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"hud.radar_blip":{
+"title":"Radar Blip",
+"category":"HUD & View",
+"what":"A dot on players' radar at a position or an entity (everyone's, a team's or only Viewer's), or takes it off. Hostage dots: four slots, each one dot (a hostage map's own hostages share the game's dots). Bomb dot: one, the dropped-bomb dot (the game moves it when the real bomb drops or is picked up).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at",
+"dir":"in",
+"help":"At: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"The position. Optional."
+},
+{
+"id":"viewer",
+"dir":"in",
+"help":"Viewer: a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Show, Take off."
+},
+{
+"id":"kind",
+"help":"Pick one: Hostage dot, Bomb dot."
+},
+{
+"id":"slot",
+"help":"Pick one: 1, 2, 3, 4."
+},
+{
+"id":"who",
+"help":"Pick one: Everyone, Terrorists, Counter-Terrorists, Only Viewer."
+}
+],
+"more":"The radar only has room for a few dots: four hostage dots (slots 1 to 4) and one dropped-bomb dot. On a hostage map the real hostages use the same kind of dots. The game redraws the bomb dot when the real bomb is dropped or picked up.",
+"related":[
+"hud.team_score",
+"eng.soundtrack",
+"eng.spectate"
+],
+"example":{
+"caption":"When a round starts, Radar Blip runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"hud.radar_blip",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"show",
+"kind":"hostage",
+"slot":"1",
+"who":"all"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"hud.team_score":{
+"title":"Show Team Score",
+"category":"HUD & View",
+"what":"Shows a team's score on everyone's scoreboard (the number only: the game's own count of rounds won is unchanged and is shown again when the next round ends).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"score",
+"dir":"in",
+"help":"Score: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"team",
+"help":"Pick one: Terrorists, Counter-Terrorists."
+},
+{
+"id":"score",
+"help":"A number from 0 to 32767. A wire into the pin of the same name is used instead."
+}
+],
+"more":"Only the number shown: the game keeps its own count of rounds won and shows it again at the next round's end.",
+"related":[
+"hud.radar_blip",
+"eng.soundtrack",
+"eng.spectate"
+],
+"example":{
+"caption":"When a round starts, Show Team Score runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"hud.team_score",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"team":"t",
+"score":0
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"world.weather":{
+"title":"Set Weather",
+"category":"World",
+"what":"Rain, snow or clear weather for everyone or one player, kept through respawns (Counter-Strike 1.6 and Condition Zero draw it; how much depends on the player's settings).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (empty: everyone): a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"kind",
+"help":"Pick one: Clear, Rain, Snow."
+}
+],
+"more":"Players with weather effects turned off in their options see nothing; it's only looks (no sounds, no slowdown).",
+"related":[
+"world.fog",
+"world.set_frag_limit",
+"world.frag_limit"
+],
+"example":{
+"caption":"When a round starts, Set Weather runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"world.weather",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"kind":"rain"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"world.fog":{
+"title":"Set Fog",
+"category":"World",
+"what":"Fog of a color and thickness for everyone or one player (0 thickness: none), kept through respawns. It depends on the player's renderer: OpenGL draws it, software mode doesn't.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (empty: everyone): a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"r",
+"help":"A number from 0 to 255."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255."
+},
+{
+"id":"density",
+"help":"A number from 0 to 0.05."
+}
+],
+"more":"OpenGL draws fog; the software renderer doesn't. Thickness 0.001 to 0.005 is a light haze; 0.02 and up hides things a short way off.",
+"related":[
+"world.weather",
+"world.set_frag_limit",
+"world.frag_limit"
+],
+"risk":"Thick fog hides players from people but not from bots.",
+"example":{
+"caption":"When a round starts, Set Fog runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"world.fog",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"r":128,
+"g":128,
+"b":128,
+"density":0.002
 }
 }
 ],

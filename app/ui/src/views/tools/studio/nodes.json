@@ -1996,7 +1996,7 @@
    "type": "player.set_armor",
    "title": "Set Armor",
    "category": "Players",
-   "help": "Sets a living player's armor (with a helmet).",
+   "help": "Sets a living player's armor: kevlar and a helmet, or kevlar only.",
    "inputs": [
     {
      "id": "exec",
@@ -2031,6 +2031,22 @@
      "default": 100,
      "min": 0,
      "max": 1000
+    },
+    {
+     "id": "type",
+     "label": "Type",
+     "kind": "choice",
+     "default": "vesthelm",
+     "choices": [
+      [
+       "vesthelm",
+       "Kevlar and helmet"
+      ],
+      [
+       "vest",
+       "Kevlar only"
+      ]
+     ]
     }
    ]
   },
@@ -25557,6 +25573,565 @@
     }
    ],
    "keywords": "bot kick remove quota"
+  },
+  {
+   "type": "fx.beam_ents",
+   "title": "Beam Between Entities",
+   "category": "Effects",
+   "help": "A beam from one player or entity to another that follows both as they move, for some seconds. Effects are skipped (and the debugger says so) past 24 in one server frame, so many at once can't flood players' games.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "From",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "To",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "colour",
+     "label": "Color",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "white",
+       "White"
+      ],
+      [
+       "gold",
+       "Gold"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 25
+    },
+    {
+     "id": "width",
+     "label": "Width",
+     "kind": "number",
+     "default": 10,
+     "min": 1,
+     "max": 100
+    },
+    {
+     "id": "noise",
+     "label": "Wobble",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 100
+    }
+   ],
+   "keywords": "beam laser link tether rope"
+  },
+  {
+   "type": "fx.icon_over",
+   "title": "Icon Over Player",
+   "category": "Effects",
+   "help": "A sprite floating over a player's head (the game's own, like sprites/iplayervip.spr, or your own), for some seconds or until removed (0), seen by everyone, a team or only Viewer. Remove takes the icons off that player.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "viewer",
+     "type": "player",
+     "label": "Viewer",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "show",
+     "choices": [
+      [
+       "show",
+       "Show"
+      ],
+      [
+       "remove",
+       "Remove"
+      ]
+     ]
+    },
+    {
+     "id": "sprite",
+     "label": "Sprite",
+     "kind": "path",
+     "default": "sprites/iplayervip.spr"
+    },
+    {
+     "id": "secs",
+     "label": "Seconds (0: until removed)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 600
+    },
+    {
+     "id": "height",
+     "label": "Height above",
+     "kind": "number",
+     "default": 45,
+     "min": 0,
+     "max": 200
+    },
+    {
+     "id": "who",
+     "label": "Seen by",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "player",
+       "Only Viewer"
+      ]
+     ]
+    }
+   ],
+   "keywords": "icon sprite over head marker attachment"
+  },
+  {
+   "type": "fx.sprite_at",
+   "title": "Sprite At",
+   "category": "Effects",
+   "help": "Shows a sprite once at a position or an entity (the game's own or your own), at a size and brightness.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "sprite",
+     "label": "Sprite",
+     "kind": "path",
+     "default": "sprites/glow01.spr"
+    },
+    {
+     "id": "scale",
+     "label": "Size",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 25
+    },
+    {
+     "id": "bright",
+     "label": "Brightness",
+     "kind": "number",
+     "default": 200,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "sprite flash glow effect"
+  },
+  {
+   "type": "fx.tracer",
+   "title": "Tracer",
+   "category": "Effects",
+   "help": "A bullet tracer streak from one position to another.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "from",
+     "type": "vector",
+     "label": "From",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "vector",
+     "label": "To",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "tracer bullet streak line"
+  },
+  {
+   "type": "hud.radar_blip",
+   "title": "Radar Blip",
+   "category": "HUD & View",
+   "help": "A dot on players' radar at a position or an entity (everyone's, a team's or only Viewer's), or takes it off. Hostage dots: four slots, each one dot (a hostage map's own hostages share the game's dots). Bomb dot: one, the dropped-bomb dot (the game moves it when the real bomb drops or is picked up).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    },
+    {
+     "id": "viewer",
+     "type": "player",
+     "label": "Viewer",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "show",
+     "choices": [
+      [
+       "show",
+       "Show"
+      ],
+      [
+       "clear",
+       "Take off"
+      ]
+     ]
+    },
+    {
+     "id": "kind",
+     "label": "Dot",
+     "kind": "choice",
+     "default": "hostage",
+     "choices": [
+      [
+       "hostage",
+       "Hostage dot"
+      ],
+      [
+       "bomb",
+       "Bomb dot"
+      ]
+     ]
+    },
+    {
+     "id": "slot",
+     "label": "Slot (hostage dots)",
+     "kind": "choice",
+     "default": "1",
+     "choices": [
+      [
+       "1",
+       "1"
+      ],
+      [
+       "2",
+       "2"
+      ],
+      [
+       "3",
+       "3"
+      ],
+      [
+       "4",
+       "4"
+      ]
+     ]
+    },
+    {
+     "id": "who",
+     "label": "Seen by",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "player",
+       "Only Viewer"
+      ]
+     ]
+    }
+   ],
+   "keywords": "radar dot blip map marker"
+  },
+  {
+   "type": "hud.team_score",
+   "title": "Show Team Score",
+   "category": "HUD & View",
+   "help": "Shows a team's score on everyone's scoreboard (the number only: the game's own count of rounds won is unchanged and is shown again when the next round ends).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "score",
+     "type": "number",
+     "label": "Score",
+     "param": "score"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "t",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "score",
+     "label": "Score",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 32767
+    }
+   ],
+   "keywords": "score scoreboard team points"
+  },
+  {
+   "type": "world.weather",
+   "title": "Set Weather",
+   "category": "World",
+   "help": "Rain, snow or clear weather for everyone or one player, kept through respawns (Counter-Strike 1.6 and Condition Zero draw it; how much depends on the player's settings).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Weather",
+     "kind": "choice",
+     "default": "rain",
+     "choices": [
+      [
+       "none",
+       "Clear"
+      ],
+      [
+       "rain",
+       "Rain"
+      ],
+      [
+       "snow",
+       "Snow"
+      ]
+     ]
+    }
+   ],
+   "keywords": "weather rain snow"
+  },
+  {
+   "type": "world.fog",
+   "title": "Set Fog",
+   "category": "World",
+   "help": "Fog of a color and thickness for everyone or one player (0 thickness: none), kept through respawns. It depends on the player's renderer: OpenGL draws it, software mode doesn't.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 128,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 128,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 128,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "density",
+     "label": "Thickness",
+     "kind": "number",
+     "default": 0.002,
+     "min": 0,
+     "max": 0.05
+    }
+   ],
+   "keywords": "fog mist haze"
   },
   {
    "type": "fx.dlight",
