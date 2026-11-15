@@ -162,7 +162,7 @@ test("a snippet with events goes onto the Event Graph", async ({ page }) => {
 });
 
 test("library: Export all, Import a whole library", async ({ page }, info) => {
-  const items = async () => (await (await page.request.get("/api/tools/studio/library")).json()).items as { id: string; name?: string }[];
+  const items = async () => (await (await page.request.get("/api/tools/studio/library")).json()).items as { id: string; name?: string; builtIn?: boolean }[];
   const del = (id: string) => page.request.post(`/api/tools/studio/library/${id}/delete`, { headers: H });
   // our two items have this project's names; any left by an earlier run that stopped half way go first
   // (a leftover "pw_one" made the new one "pw_one_2")
@@ -170,7 +170,8 @@ test("library: Export all, Import a whole library", async ({ page }, info) => {
   const names = [`PW one ${tag}`, `PW two ${tag}`];
   const mine = (x: { id: string }) => x.id.startsWith(`pw_one_${tag}`) || x.id.startsWith(`pw_two_${tag}`);
   for (const x of (await items()).filter(mine)) await del(x.id);
-  const had = new Set((await items()).map((x) => x.id));
+  // (the Starter library's built-in items aren't exported or imported: they come with the app)
+  const had = new Set((await items()).filter((x) => !x.builtIn).map((x) => x.id));
   const made = new Set<string>();
   try {
     await page.goto(`/tools-dev.html?open=studio:${ID}`);

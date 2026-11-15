@@ -214,10 +214,21 @@ test("QA4-B F6.1, F6.7: Mode settings shows the mode on a Timeline tab; an overs
 test("QA4-B F6.5: Shift-click adds a node to the selection", async ({ page }) => {
   await seed(page);
   await openIt(page);
-  await page.locator(".react-flow__controls-fitview").click();
   const a = page.locator('.react-flow__node[data-id="is_ct"] .st-node-title');
   const b = page.locator('.react-flow__node[data-id="give_m4"] .st-node-title');
+  // (only nodes in view are drawn: fit until both are, since a fit pressed before the nodes are
+  // measured, as on a cold first load, can leave one out)
+  await expect(async () => {
+    await page.locator(".react-flow__controls-fitview").click();
+    await expect(a).toBeVisible({ timeout: 1000 });
+    await expect(b).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   await a.click();
+  // (Fit again if the second one went out of view; it doesn't change the selection)
+  await expect(async () => {
+    if (!(await b.isVisible())) await page.locator(".react-flow__controls-fitview").click();
+    await expect(b).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   await b.click({ modifiers: ["Shift"] });
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
   // and again takes it out
