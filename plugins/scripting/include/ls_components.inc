@@ -755,6 +755,14 @@ native ls_interactable_spawn(const model[], const Float:origin[3], const prompt[
 /** The NPC a player is talking to now (0 none or a narrator). */
 native ls_npc_talking(id);
 /**
+ * After ls_npc_spawn / ls_interactable_spawn: how far the thing was moved from the spot asked
+ * for (0: it went there; -1: blocked and not made). Only the world blocks a spot (players, bots
+ * and creatures never do). The keys pick what happens on a blocked spot: blocked=near:N (the
+ * nearest free spot within N units; an NPC's default is near:128), blocked=fail (not made: a
+ * quest item that must be where it was put), blocked=here (unchecked; an interactable's default).
+ */
+native Float:ls_spawn_moved();
+/**
  * Bots may use this interactable (on) or not: while it's usable (cooldown over, not used up,
  * on, their team) bots get it as an errand (walk there, press USE). The map key bots=1 does the
  * same from the start.

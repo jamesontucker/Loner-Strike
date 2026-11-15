@@ -316,6 +316,29 @@ mod tests {
     /// gm_components (the plugin, read as source): an NPC's stand-in model is loaded with every
     /// map, and the log names the model that was asked for, not the stand-in twice (Y's check).
     #[test]
+    /// FX's sim: Spawn NPC and Spawn Interactable refused at spots right next to a bot. Only the
+    /// world blocks a spot now (players, bots and creatures never: the hull trace ignores them),
+    /// a blocked NPC goes to the nearest free spot within 128 by default, the keys can ask for
+    /// near:N or fail, and how far it moved is ls_spawn_moved().
+    fn npc_and_interactable_spawns_take_the_nearest_free_spot() {
+        let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/scripting/gm_components.sma")).unwrap();
+        let free = &src[src.find("stock bool:spawn_spot_free(").unwrap()..];
+        let free = &free[..free.find("\n}\n").unwrap()];
+        assert!(free.contains("IGNORE_MONSTERS, HULL_HUMAN") && !free.contains("DONT_IGNORE_MONSTERS"), "people never block a spot");
+        let pol = &src[src.find("stock Float:spawn_policy(").unwrap()..];
+        let pol = &pol[..pol.find("\n}\n").unwrap()];
+        assert!(pol.contains("\"fail\"") && pol.contains("\"near\"") && pol.contains("\"here\""));
+        for native in ["public n_npc_spawn(", "public n_interactable_spawn("] {
+            let body = &src[src.find(native).unwrap()..];
+            let body = &body[..body.find("\n}\n").unwrap()];
+            assert!(body.contains("spawn_place(o, extra, ") && body.contains("comp_make(") && body.contains(", at, keys, SRC_RUNTIME)"), "{native} places through the check");
+        }
+        assert!(src.contains("register_native(\"ls_spawn_moved\", \"n_spawn_moved\")") && src.contains("register_srvcmd(\"ls_npc_spawn_test\""));
+        let inc = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/scripting/include/ls_components.inc")).unwrap();
+        assert!(inc.contains("native Float:ls_spawn_moved();"));
+    }
+
+    #[test]
     fn npc_model_fallback_is_loaded_and_named_right() {
         let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/scripting/gm_components.sma")).unwrap();
         let block = &src[src.find("/* ==== NPCs and interactables (T1fix) ==== */").unwrap()..];

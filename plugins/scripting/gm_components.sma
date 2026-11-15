@@ -13468,6 +13468,7 @@ stock npc_natives()
 	register_native("ls_npc_precache", "n_npc_precache");
 	register_native("ls_interactable_spawn", "n_interactable_spawn");
 	register_native("ls_npc_talking", "n_npc_talking");
+	register_native("ls_spawn_moved", "n_spawn_moved"); /* T1fix */
 	register_native("ls_interactable_offer", "n_interactable_offer");
 	register_native("ls_bots_avoid", "n_bots_avoid");          /* W2 */
 	register_native("ls_bots_avoid_ent", "n_bots_avoid_ent");
@@ -13492,6 +13493,7 @@ stock npc_init()
 	/* rcon tests without a person: ls_npc_use <player> <entity>, ls_npc_pick <player> <reply 0-5> */
 	register_srvcmd("ls_npc_use", "cmd_npc_use");
 	register_srvcmd("ls_npc_pick", "cmd_npc_pick");
+	register_srvcmd("ls_npc_spawn_test", "cmd_npc_spawn_test"); /* T1fix */
 }
 
 /* barney -> models/barney.mdl; a path stays as it is */
@@ -14659,6 +14661,106 @@ stock npc_keyval(const in[], out[], len)
 	out[j] = EOS;
 }
 
+/* the spot a spawn asked for, checked: players, bots and creatures never block it (an NPC and
+   an interactable don't block them either: SOLID_NOT), only the world does. A blocked spot moves
+   to the nearest free one within near= units (blocked=near:N, default 128 for an NPC, 0 for an
+   interactable: as asked), or fails (blocked=fail). How far it moved: ls_spawn_moved(). */
+new Float:g_spawnMoved = 0.0;
+
+stock bool:spawn_spot_free(const Float:o[3], bool:npc)
+{
+	if (npc)
+	{
+		/* a person's hull standing on the spot (feet at o) */
+		new Float:c[3];
+		vcopy(o, c);
+		c[2] += 37.0;
+		engfunc(EngFunc_TraceHull, c, c, IGNORE_MONSTERS, HULL_HUMAN, 0, 0);
+		return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid);
+	}
+	new Float:c[3];
+	vcopy(o, c);
+	c[2] += 4.0;
+	return engfunc(EngFunc_PointContents, c) != CONTENTS_SOLID;
+}
+
+/* the nearest free spot within r (rings 16 units apart, 12 around, a step up or down), true when
+   there is one: out is it, moved how far */
+stock bool:spawn_spot_near(const Float:o[3], Float:r, bool:npc, Float:out[3])
+{
+	if (spawn_spot_free(o, npc))
+	{
+		vcopy(o, out);
+		return true;
+	}
+	for (new Float:d = 16.0; d <= r; d += 16.0)
+		for (new k = 0; k < 12; k++)
+			for (new z = 0; z < 3; z++)
+			{
+				new Float:p[3];
+				p[0] = o[0] + d * floatcos(30.0 * k, degrees);
+				p[1] = o[1] + d * floatsin(30.0 * k, degrees);
+				p[2] = o[2] + (z == 0 ? 0.0 : (z == 1 ? 18.0 : -18.0));
+				if (!spawn_spot_free(p, npc))
+					continue;
+				/* and the way there isn't through a wall */
+				new Float:a[3], Float:b[3];
+				vcopy(o, a);
+				vcopy(p, b);
+				a[2] += 24.0;
+				b[2] += 24.0;
+				engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, 0, 0);
+				new Float:f;
+				get_tr2(0, TR_flFraction, f);
+				if (f < 1.0 && spawn_spot_free(o, npc))
+					continue;
+				vcopy(p, out);
+				return true;
+			}
+	return false;
+}
+
+/* blocked= in a spawn's keys: -1 fail, else how far to look (0: as asked, unchecked) */
+stock Float:spawn_policy(const keys[], Float:dflt)
+{
+	new at = contain(keys, "blocked=");
+	if (at < 0)
+		return dflt;
+	new v[24];
+	copyc(v, charsmax(v), keys[at + 8], ' ');
+	if (equali(v, "fail"))
+		return -1.0;
+	if (equali(v, "near", 4))
+		return v[4] == ':' ? floatclamp(str_to_float(v[5]), 0.0, 1024.0) : 128.0;
+	if (equali(v, "here"))
+		return 0.0;
+	return dflt;
+}
+
+/* where a spawn goes: false = blocked and blocked=fail (or nothing free near) */
+stock bool:spawn_place(const Float:o[3], const keys[], bool:npc, Float:out[3])
+{
+	g_spawnMoved = 0.0;
+	new Float:r = spawn_policy(keys, npc ? 128.0 : 0.0);
+	if (r == 0.0)
+	{
+		vcopy(o, out);
+		return true;
+	}
+	if (spawn_spot_near(o, r < 0.0 ? 0.0 : r, npc, out))
+	{
+		g_spawnMoved = get_distance_f(o, out);
+		return true;
+	}
+	g_spawnMoved = -1.0;
+	return false;
+}
+
+public n_spawn_moved(plugin, params)
+{
+	return _:g_spawnMoved;
+}
+
 public n_npc_spawn(plugin, params)
 {
 	new want[96], m[96], name[64], extra[256], cn[64];
@@ -14675,7 +14777,13 @@ public n_npc_spawn(plugin, params)
 	new keys[512], cm[96];
 	npc_keyval(m, cm, charsmax(cm));
 	formatex(keys, charsmax(keys), "model=^"%s^" name=^"%s^" angle=%.0f %s", cm, cn, yaw, extra);
-	return comp_make(K_NPC, o, keys, SRC_RUNTIME);
+	new Float:at[3];
+	if (!spawn_place(o, extra, true, at))
+	{
+		log_amx("ls_npc_spawn: no room at %.0f %.0f %.0f (blocked=fail or nothing free near)", o[0], o[1], o[2]);
+		return 0;
+	}
+	return comp_make(K_NPC, at, keys, SRC_RUNTIME);
 }
 
 public n_npc_precache(plugin, params)
@@ -14698,7 +14806,13 @@ public n_interactable_spawn(plugin, params)
 	npc_keyval(prompt, cp, charsmax(cp));
 	new keys[512];
 	formatex(keys, charsmax(keys), "%s%s%s prompt=^"%s^" %s", cm[0] ? "model=^"" : "", cm, cm[0] ? "^"" : "", cp[0] ? cp : "Press E to use", extra);
-	return comp_make(K_INTERACT, o, keys, SRC_RUNTIME);
+	new Float:at[3];
+	if (!spawn_place(o, extra, false, at))
+	{
+		log_amx("ls_interactable_spawn: no room at %.0f %.0f %.0f (blocked=fail or nothing free near)", o[0], o[1], o[2]);
+		return 0;
+	}
+	return comp_make(K_INTERACT, at, keys, SRC_RUNTIME);
 }
 
 public n_npc_talking(plugin, params)
@@ -14742,6 +14856,51 @@ public cmd_npc_use()
 	npc_use(s, id);
 	server_print("ls_npc_use: %d used %d", id, g_ent[s]);
 	return PLUGIN_HANDLED;
+}
+
+/* ls_npc_spawn_test <player> [npc|use] [blocked]: an NPC (or an interactable) where the player
+   stands; prints its entity and how far it moved (blocked: "fail", "near:N", "here") */
+public cmd_npc_spawn_test()
+{
+	new a[8], k[8], b[24];
+	read_argv(1, a, charsmax(a));
+	read_argv(2, k, charsmax(k));
+	read_argv(3, b, charsmax(b));
+	new id = str_to_num(a);
+	if (!(1 <= id <= MaxClients) || !is_user_alive(id))
+	{
+		server_print("ls_npc_spawn_test: needs a living player");
+		return PLUGIN_HANDLED;
+	}
+	new Float:o[3];
+	pev(id, pev_origin, o);
+	o[2] -= 36.0;
+	new extra[40];
+	if (b[0])
+		formatex(extra, charsmax(extra), "blocked=%s", b);
+	new e = equali(k, "use") ? n_spawn_use_test(o, extra) : n_spawn_npc_test(o, extra);
+	server_print("ls_npc_spawn_test: %s %d at player %d, moved %.0f", equali(k, "use") ? "interactable" : "npc", e, id, g_spawnMoved);
+	return PLUGIN_HANDLED;
+}
+
+stock n_spawn_npc_test(const Float:o[3], const extra[])
+{
+	new keys[256];
+	formatex(keys, charsmax(keys), "model=^"models/barney.mdl^" name=^"Test^" %s", extra);
+	new Float:p[3];
+	if (!spawn_place(o, extra, true, p))
+		return 0;
+	return comp_make(K_NPC, p, keys, SRC_RUNTIME);
+}
+
+stock n_spawn_use_test(const Float:o[3], const extra[])
+{
+	new keys[256];
+	formatex(keys, charsmax(keys), "prompt=^"Press E^" %s", extra);
+	new Float:p[3];
+	if (!spawn_place(o, extra, false, p))
+		return 0;
+	return comp_make(K_INTERACT, p, keys, SRC_RUNTIME);
 }
 
 /* ls_npc_pick <player> <reply 0-5 | -1 timed out | -2 walked away>: answers the open conversation */
