@@ -9,6 +9,8 @@ export type Limit = { id: string; label: string; default: number; lagAbove: numb
 export const LIMITS: Limit[] = [
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
+  { id: "command_rate", label: "Player Command uses a second", default: 5, lagAbove: 20, max: 1000, kinds: ["in.command"] },
+  { id: "top_players", label: "Top Players places", default: 10, lagAbove: 50, max: 100, kinds: ["save.top"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
   { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn"] },
 ];

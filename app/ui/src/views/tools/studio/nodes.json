@@ -20911,7 +20911,7 @@
    "type": "in.command",
    "title": "Player Command",
    "category": "Events",
-   "help": "Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. At most Most per second for each player (a Limits setting you can raise).",
+   "help": "Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. Each player can use it at most a few times a second (Player Command uses a second, in the mode's Limits settings).",
    "inputs": [],
    "outputs": [
     {
@@ -20936,14 +20936,6 @@
      "label": "Command (ls_...)",
      "kind": "name",
      "default": "ls_dash"
-    },
-    {
-     "id": "rate",
-     "label": "Most per second (each player)",
-     "kind": "number",
-     "default": 5,
-     "min": 1,
-     "max": 1000
     }
    ],
    "keywords": "key bind console command keybind hotkey ability",
@@ -21637,7 +21629,7 @@
    "type": "save.top",
    "title": "Top Players",
    "category": "Saved",
-   "help": "The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. At most Most places (a Limits setting you can raise).",
+   "help": "The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. How many places: Top Players places, in the mode's Limits settings (10 to start).",
    "inputs": [
     {
      "id": "exec",
@@ -21694,14 +21686,6 @@
        "Lowest first"
       ]
      ]
-    },
-    {
-     "id": "count",
-     "label": "Most",
-     "kind": "number",
-     "default": 10,
-     "min": 1,
-     "max": 1000
     }
    ],
    "keywords": "leaderboard top best ranking scores highscore"

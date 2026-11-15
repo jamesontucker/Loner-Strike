@@ -27,6 +27,9 @@ pub struct Limit {
 pub const LIMITS: &[Limit] = &[
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
+    // P5: Player Command's uses a second per player, Top Players' places
+    Limit { id: "command_rate", label: "Player Command uses a second", default: 5, lag_above: 20, max: 1000, kinds: &["in.command"] },
+    Limit { id: "top_players", label: "Top Players places", default: 10, lag_above: 50, max: 100, kinds: &["save.top"] },
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
     // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
     // and kick players; gen.rs lsg_msg_room)

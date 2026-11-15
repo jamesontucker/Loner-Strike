@@ -231,7 +231,7 @@ pub(super) fn action(
             ex(b, "saved");
         }
         "save.top" => {
-            let most = (gen.num(n, def, "count").round() as i64).clamp(1, 1000);
+            let most = gen.limit_expr("top_players");
             let low = if gen.choice(n, def, "order") == "low" { "true" } else { "false" };
             b.line(format!("\tnew count = lsg_p5_top({}, {most}, {low})", key("key")));
             let set = |pin: &str, what: &str| -> String {
@@ -278,7 +278,8 @@ pub(super) fn helpers(g: &Graph, o: &mut Out) {
         o.line(PAWN_WEAPONS);
     }
     if uses_saved_text(g) {
-        let most = g.nodes.iter().filter(|n| n.kind == "save.top").map(|n| n.params.get("count").and_then(Value::as_f64).unwrap_or(10.0).round().clamp(1.0, 1000.0) as usize).max().unwrap_or(1);
+        // (Top Players' list holds what its Limits setting can be raised to)
+        let most = crate::tools::studio::limits::get("top_players").map(|l| l.max).unwrap_or(100);
         o.line(format!("#define LSG_P5TOP {most}"));
         o.line(PAWN_SAVED);
     }
@@ -337,12 +338,11 @@ pub(super) fn handlers(gen: &Gen, o: &mut Out) {
     }
     for id in of("in.command") {
         let (n, d) = gen.node(id);
-        let rate = gen.num(n, d, "rate").clamp(1.0, 1000.0);
-        let gap = float_lit(1.0 / rate);
+        // (uses a second per player: the Limits setting, else its default)
+        let rate = gen.limit_expr("command_rate");
         o.line(format!(
-            "// Player Command {}: the rest of the line is only ever text, never run; at most {} a second per player\npublic lsg_p5cmd{}(id)\n{{\n\tstatic Float:last[33]\n\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_HANDLED\n\tnew Float:t = get_gametime()\n\tif (t >= last[id] && t - last[id] < {gap})\n\t\treturn PLUGIN_HANDLED\n\tlast[id] = t\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\tread_args(g_lsgTxt[0], 63) // args\n\tremove_quotes(g_lsgTxt[0])\n\tlsg_p5_plain(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_HANDLED\n}}\n",
+            "// Player Command {}: the rest of the line is only ever text, never run; rate-limited per player\npublic lsg_p5cmd{}(id)\n{{\n\tstatic Float:last[33]\n\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_HANDLED\n\tnew Float:t = get_gametime()\n\tif (t >= last[id] && t - last[id] < 1.0 / float({rate}))\n\t\treturn PLUGIN_HANDLED\n\tlast[id] = t\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\tread_args(g_lsgTxt[0], 63) // args\n\tremove_quotes(g_lsgTxt[0])\n\tlsg_p5_plain(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_HANDLED\n}}\n",
             comment_text(&command_name(gen.text(n, d, "command"))),
-            rate.round() as i64,
             gen.index(id),
             gen.fname(id)
         ));
@@ -362,7 +362,7 @@ pub(super) fn handlers(gen: &Gen, o: &mut Out) {
             let cond = if gen.boolean(n, d, "death") { "is_user_connected(owner)" } else { "is_user_alive(owner)" };
             body.push_str(&format!("\n\tif ({cond})\n\t\tlsg_p5_drop_call(owner, w, {})", gen.index(id)));
         }
-        o.line(format!("// Dropped: a weaponbox gets its model with its owner set (G, Drop Weapon, a death)\npublic lsg_p5_setmodel(ent, const model[])\n{{\n\tif (!pev_valid(ent))\n\t\treturn FMRES_IGNORED\n\tnew cls[12]\n\tpev(ent, pev_classname, cls, charsmax(cls))\n\tif (!equal(cls, \"weaponbox\"))\n\t\treturn FMRES_IGNORED\n\tnew owner = pev(ent, pev_owner)\n\tif (owner < 1 || owner > MaxClients || !is_user_connected(owner) || !equal(model, \"models/w_\", 9))\n\t\treturn FMRES_IGNORED\n\tnew w[24]\n\tcopy(w, charsmax(w), model[9])\n\tnew dot = contain(w, \".\")\n\tif (dot > 0)\n\t\tw[dot] = 0\n\tif (equal(w, \"backpack\"))\n\t\tcopy(w, charsmax(w), \"c4\"){body}\n\treturn FMRES_IGNORED\n}}\n\nlsg_p5_drop_call(owner, const w[], node)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = owner\n\tcopy(g_lsgTxt[0], 63, w)\n\tswitch (node)\n\t{{{drop_cases}\n\t}}\n}}\n"));
+        o.line(format!("// Dropped: a weaponbox gets its model with its owner set (G, Drop Weapon, a death)\npublic lsg_p5_setmodel(ent, const model[])\n{{\n\tif (!pev_valid(ent))\n\t\treturn FMRES_IGNORED\n\tnew cls[12]\n\tpev(ent, pev_classname, cls, charsmax(cls))\n\tif (!equal(cls, \"weaponbox\"))\n\t\treturn FMRES_IGNORED\n\tnew owner = pev(ent, pev_owner)\n\tif (owner < 1 || owner > MaxClients || !is_user_connected(owner) || !equal(model, \"models/w_\", 9))\n\t\treturn FMRES_IGNORED\n\tnew w[24]\n\tcopy(w, charsmax(w), model[9])\n\tnew dot = contain(w, \".\")\n\tif (dot > 0)\n\t\tw[dot] = 0\n\t// (a dropped weapon's box gets the plain box model first, then the weapon's)\n\tif (equal(w, \"weaponbox\"))\n\t\treturn FMRES_IGNORED\n\tif (equal(w, \"backpack\"))\n\t\tcopy(w, charsmax(w), \"c4\"){body}\n\treturn FMRES_IGNORED\n}}\n\nlsg_p5_drop_call(owner, const w[], node)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = owner\n\tcopy(g_lsgTxt[0], 63, w)\n\tswitch (node)\n\t{{{drop_cases}\n\t}}\n}}\n"));
     }
     let g = g_of(gen);
     if !cooldowns(g).is_empty() || uses_weapons(g) {
@@ -733,10 +733,6 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                     p.push(problem("error", &n.id, "Command is ls_ and small letters only (like ls_dash), at most 31 characters: it can't be any of the game's own commands."));
                 }
                 if def.kind == "in.command" {
-                    let r = num(n, "rate", 5.0);
-                    if r > 20.0 {
-                        p.push(problem("warning", &n.id, &format!("Most per second is {r}: a player holding a key bound to it can run the flow that often. 5 is the usual; raise it only if the flow is cheap.")));
-                    }
                     if commands.iter().filter(|x| **x == c).count() > 1 {
                         p.push(problem("warning", &n.id, "Another Player Command has this command: both run each time."));
                     }
@@ -762,10 +758,6 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                 _ => {}
             },
             "save.top" => {
-                let most = num(n, "count", 10.0);
-                if most > 50.0 {
-                    p.push(problem("warning", &n.id, &format!("Most is {most}: Each runs that many times in one go, and the list is worked out from the whole save file. 10 is the usual.")));
-                }
                 let key = txt(n, "key", "wins");
                 if !g.nodes.iter().any(|m| matches!(m.kind.as_str(), "save.set" | "save.add") && m.params.get("key").and_then(Value::as_str).unwrap_or("wins") == key) {
                     p.push(problem("warning", &n.id, &format!("Nothing in this mode saves \"{key}\" (Save Value or Add To Saved with that name): the list stays empty.")));
@@ -850,5 +842,20 @@ mod tests {
         assert!(super::super::super::graph::validate(&g2).iter().any(|p| p.level == "error" && p.message.contains("ls_ and small letters")));
         let s2 = generate(&g2, false).source;
         assert!(!s2.contains("server_cmd(\"quit"));
+    }
+}
+
+#[cfg(test)]
+mod sim {
+    /// Writes the plugin of a graph for a sim run (P5_SIM_GRAPH in, P5_SIM_OUT out, with the
+    /// Studio's includes beside it). `cargo test -- --ignored write_sim_plugin`
+    #[test]
+    #[ignore]
+    fn write_sim_plugin() {
+        let (Ok(src), Ok(out)) = (std::env::var("P5_SIM_GRAPH"), std::env::var("P5_SIM_OUT")) else { return };
+        let g = crate::tools::studio::graph::parse(&std::fs::read_to_string(src).unwrap()).unwrap();
+        let p = crate::tools::studio::graph::validate(&g);
+        assert!(!p.iter().any(|x| x.level == "error"), "{p:#?}");
+        std::fs::write(&out, super::super::generate(&g, false).source).unwrap();
     }
 }

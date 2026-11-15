@@ -41531,7 +41531,7 @@
 "in.command":{
 "title":"Player Command",
 "category":"Events",
-"what":"Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. At most Most per second for each player (a Limits setting you can raise).",
+"what":"Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. Each player can use it at most a few times a second (Player Command uses a second, in the mode's Limits settings).",
 "pins":[
 {
 "id":"then",
@@ -41553,13 +41553,9 @@
 {
 "id":"command",
 "help":"A name, as the map or the game knows it (letters, digits, _ . -)."
-},
-{
-"id":"rate",
-"help":"A number from 1 to 1000."
 }
 ],
-"more":"A key the game has no button for (F, G, a mouse button) can still start a flow: name a command (ls_ and letters, like ls_dash), and players bind a key to it in their console (bind f \"ls_dash\"); Tell Player To Bind shows them the line. Arguments is whatever came after the command, as text only: the mode can read it, but it's never run as a command. Most per second keeps a held or scripted key from flooding the server; it's a Limits setting you can raise (the checks warn above 20).",
+"more":"A key the game has no button for (F, G, a mouse button) can still start a flow: name a command (ls_ and letters, like ls_dash), and players bind a key to it in their console (bind f \"ls_dash\"); Tell Player To Bind shows them the line. Arguments is whatever came after the command, as text only: the mode can read it, but it's never run as a command. Player Command uses a second (each player) keeps a held or scripted key from flooding the server: a setting in the mode's Limits group, 5 to start (the checks warn above 20).",
 "related":[
 "in.tell_bind",
 "in.pressed",
@@ -42877,7 +42873,7 @@
 "save.top":{
 "title":"Top Players",
 "category":"Saved",
-"what":"The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. At most Most places (a Limits setting you can raise).",
+"what":"The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. How many places: Top Players places, in the mode's Limits settings (10 to start).",
 "pins":[
 {
 "id":"exec",
@@ -42918,13 +42914,9 @@
 {
 "id":"order",
 "help":"Pick one: Highest first, Lowest first."
-},
-{
-"id":"count",
-"help":"A number from 1 to 1000."
 }
 ],
-"more":"Reads every player's value of one Saved Value (its name) from the save file, so players who aren't on the server count too, named as they were last seen. Each runs once per place, best first. Most is a Limits setting you can raise (the checks warn above 50).",
+"more":"Reads every player's value of one Saved Value (its name) from the save file, so players who aren't on the server count too, named as they were last seen. Each runs once per place, best first. How many places is Top Players places, a setting in the mode's Limits group, 10 to start (the checks warn above 50).",
 "related":[
 "save.get",
 "save.add",
@@ -42952,8 +42944,7 @@
 },
 "params":{
 "key":"wins",
-"order":"high",
-"count":10
+"order":"high"
 }
 },
 {
