@@ -186,11 +186,11 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
   }, on ? "Asking your router to open the port…" : "Closing the port on your router…");
 
   const title = server ? "Who can join" : "Play with friends";
-  if (missing) return <div className="stack"><SectionHead title={title} />{settings}<p className="muted">Sharing isn't in this version of the app yet.</p></div>;
+  if (missing) return <div className="stack"><SectionHead docs="friends" title={title} />{settings}<p className="muted">Sharing isn't in this version of the app yet.</p></div>;
   if (!sh)
     return (
       <div className="stack">
-        <SectionHead title={title} />
+        <SectionHead docs="friends" title={title} />
         {settings}
         {loadErr ? <LoadError text="Couldn't load how friends connect." onRetry={() => (setLoadErr(false), setTries((n) => n + 1))} /> : <Skeleton />}
       </div>
@@ -383,7 +383,7 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
     const invite = inviteText(serverName, password, at, [], false);
     return (
       <div className="stack">
-        <SectionHead title={title} note={`${vps.name} runs on ${serverHost(vps)}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
+        <SectionHead docs="friends" title={title} note={`${vps.name} runs on ${serverHost(vps)}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
         <div className="friends">
           <div className="panel">
             <span className={`live ${vps.state === "running" ? "on" : ""}`}>{vps.state === "running" ? "Friends can join now" : "Start the server and friends can join"}</span>
@@ -409,7 +409,7 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
 
   return (
     <div className="stack">
-      <SectionHead title={title} note={server ? `Friends join ${server.name}. They need Counter-Strike on Steam. Pick how they connect.` : "They need Counter-Strike on Steam. Pick how they connect."} />
+      <SectionHead docs="friends" title={title} note={server ? `Friends join ${server.name}. They need Counter-Strike on Steam. Pick how they connect.` : "They need Counter-Strike on Steam. Pick how they connect."} />
       {!server && <OwnGameNote />}
       {lanOnly && method !== "lan" && (
         <div className="banner"><div>This server only lets in people on your network. To use this, pick Anyone with the address or Listed on Steam under Who can join, then save.</div></div>

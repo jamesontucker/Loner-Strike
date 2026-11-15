@@ -230,7 +230,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           {pickingMode && (
             <Sheet label="Pick a mode" onClose={() => setPickingMode(false)} className="sheet wide switch-mode">
               <div className="sheet-body">
-                <SectionHead title="Pick a mode" note={MODES_NOTE}>{getMoreModes(() => setPickingMode(false))}</SectionHead>
+                <SectionHead docs="modes" title="Pick a mode" note={MODES_NOTE}>{getMoreModes(() => setPickingMode(false))}</SectionHead>
                 <ModeCards modes={modes} current={mode?.id} onPick={(id) => { pickMode(id); setPickingMode(false); }} />
                 {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link before={() => setPickingMode(false)} /></p>}{/* (community) */}
                 <div className="row">
@@ -367,7 +367,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
         </section>
       )}
       <section>
-        <SectionHead title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
+        <SectionHead docs="playing" title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
         <ModeCards modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
         {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link /></p>}{/* (community) */}
       </section>

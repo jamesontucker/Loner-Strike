@@ -180,7 +180,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
   if (!st || !form || !nums) {
     return (
       <div className="stack">
-        <SectionHead title="Spectators & demos" />
+        <SectionHead docs="hltv" title="Spectators & demos" />
         {failed ? <LoadError text={failed} onRetry={load} /> : <Skeleton rows={4} />}
       </div>
     );
@@ -193,6 +193,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
   return (
     <div className="stack hltv">
       <SectionHead
+        docs="hltv"
         title="Spectators & demos"
         note="HLTV lets people watch this server's matches live, a little behind the action, without taking a player slot. It can also record every map to a demo file you can replay later."
       />

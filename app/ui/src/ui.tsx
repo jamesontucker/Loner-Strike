@@ -1,6 +1,7 @@
 import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cmd, options, sameValue } from "./api";
+import { DocsLink } from "./views/DocsLink";
 
 // ---- dialogs -------------------------------------------------------------------------
 
@@ -591,12 +592,19 @@ export function BusyButton({ busy, label, busyLabel, className = "btn", disabled
   );
 }
 
-export function SectionHead({ title, note, children }: { title: string; note?: ReactNode; children?: ReactNode }) {
+/** A page or section's title row: its buttons at the right, and `docs` (a docs.html section id)
+ *  adds the Docs button there last, like the tools' headers. */
+export function SectionHead({ title, note, children, docs }: { title: string; note?: ReactNode; children?: ReactNode; docs?: string }) {
   return (
     <div className="section-head">
       <div className="section-title">
         <h2>{title}</h2>
-        {children && <div className="section-actions">{children}</div>}
+        {(children || docs) && (
+          <div className="section-actions">
+            {children}
+            {docs && <DocsLink to={docs} what={title} small={false} />}
+          </div>
+        )}
       </div>
       {note && <p>{note}</p>}
     </div>

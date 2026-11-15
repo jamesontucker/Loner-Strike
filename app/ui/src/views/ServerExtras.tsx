@@ -164,7 +164,7 @@ export function ServerExtras({ target }: { target: string }) {
   const saveSettings: SaveSettings = (s, done) =>
     d ? queue(d.settings, (cur) => ({ ...cur, ...(typeof s === "function" ? s(cur) : s) }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false);
 
-  const head = <SectionHead title="Rotation & extras" note="Map rotation, chat messages, away and ping kicks, joins and player votes, what happens when the server empties, and fast downloads." />;
+  const head = <SectionHead docs="rotation" title="Rotation & extras" note="Map rotation, chat messages, away and ping kicks, joins and player votes, what happens when the server empties, and fast downloads." />;
   if (error)
     return (
       <div className="stack narrow extras">
@@ -863,7 +863,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
   }, "Copying files for your web server…");
   return (
     <section>
-      <SectionHead title="Fast downloads" />
+      <SectionHead docs="fast-downloads" title="Fast downloads" />
       <div className="panel stack-tight">
         <p className="measure">
           Players who don't have a custom map, sound or model download it from the game server, which is slow. With fast downloads they get it from your web server over

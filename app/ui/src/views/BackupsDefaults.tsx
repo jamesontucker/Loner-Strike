@@ -48,7 +48,7 @@ export default function BackupsDefaults() {
 
   return (
     <section>
-      <SectionHead title="Backups & defaults" note="Each time Loner-Strike or one of its tools changes a file in your game, the version before is kept: the last 20, and always the first one. Here's everything that's different from Loner-Strike's defaults. Each tool's own History button has the rest." />
+      <SectionHead docs="backups" title="Backups & defaults" note="Each time Loner-Strike or one of its tools changes a file in your game, the version before is kept: the last 20, and always the first one. Here's everything that's different from Loner-Strike's defaults. Each tool's own History button has the rest." />
       <div className="panel settings-list">
         {q.isError && !q.data && <LoadError text="Couldn't read the backups." onRetry={() => q.refetch()} />}
         {q.isPending && (

@@ -7,7 +7,6 @@ import { TabLink } from "./goto";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
 import { LinkHelp, SupporterVip } from "./Roles"; // P5: community roles
-import { DocsLink } from "./DocsLink"; // P5
 import { useDirty, useNav } from "../store";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
@@ -203,9 +202,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
   return (
     <div className="stack narrow">
-      <SectionHead title="Admins" note={<>Who has admin powers or VIP perks, and what each role gets. Bans and everyone who has joined are under <TabLink tab="moderation" sub="bans">Moderation</TabLink>.</>}>
-        <DocsLink to="admins" what="admins and VIPs" />
-      </SectionHead>
+      <SectionHead docs="admins" title="Admins" note={<>Who has admin powers or VIP perks, and what each role gets. Bans and everyone who has joined are under <TabLink tab="moderation" sub="bans">Moderation</TabLink>.</>} />
       <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>

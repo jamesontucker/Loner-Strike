@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { DocsLink } from "./DocsLink";
 import { create } from "zustand";
 import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
 import { ownMaps, reloadServers } from "../queries";
@@ -262,7 +263,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
 
   return (
     <div className="stack">
-      <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
+      <SectionHead docs="servers" title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")} title="Paste a Moderator or Admin invite someone sent you">Join as moderator</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
@@ -368,7 +369,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
       <GoodPractice />
       {ON_THIS_COMPUTER && (
         <details className="where-to-host" ref={guide}>
-          <summary><h2>Setting up a Linux server</h2><span className="muted">Step by step, from renting a machine to the first game</span></summary>
+          <summary><h2>Setting up a Linux server</h2><span className="muted">Step by step, from renting a machine to the first game</span><DocsLink to="vps" what="setting up a Linux server" /></summary>
           <HostingGuide />
         </details>
       )}
@@ -772,6 +773,7 @@ export function ServerPage(props: {
             ) : (
               <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off || !!s.updating} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
             )}
+            <DocsLink to="server-tabs" what="your server" small={false} />
           </div>
         </div>
         <TabStrip label={`${s.name} sections`} tab={tab} shown={shown} allowed={allowed} onPick={pick} />
@@ -1233,7 +1235,7 @@ function HealthTab({ server, others, installed, act, rebuild, wipeRebuild, busy,
 }) {
   return (
     <div className="stack">
-      <SectionHead title="Health" note="Keeping the server up to date, safe and backed up, and repairing it when something's wrong." />
+      <SectionHead docs="server-upkeep" title="Health" note="Keeping the server up to date, safe and backed up, and repairing it when something's wrong." />
       {(server.loner || !server.imported) && <Updates server={server} act={act} busy={busy} onChanged={onChanged} />}
       {server.host && <SecurityPanel key={server.id} server={server} />}
       {!server.shared && <CrashPanel key={`crash-${server.id}`} server={server} />}
@@ -1967,7 +1969,7 @@ const GOOD_PRACTICE: { title: string; points: string[] }[] = [
 function GoodPractice() {
   return (
     <details className="where-to-host">
-      <summary><h2>Running a server well</h2><span className="muted">Keeping it safe, letting the right people in, sharing the work</span></summary>
+      <summary><h2>Running a server well</h2><span className="muted">Keeping it safe, letting the right people in, sharing the work</span><DocsLink to="running-a-server" what="running a server" /></summary>
       <section className="stack-tight">
         <div className="host-grid">
           {GOOD_PRACTICE.map((g) => (
@@ -1987,7 +1989,7 @@ function GoodPractice() {
 function WhereToHost() {
   return (
     <details className="where-to-host">
-      <summary><h2>Where to host</h2><span className="muted">Free and paid places, and how big a server you need</span></summary>
+      <summary><h2>Where to host</h2><span className="muted">Free and paid places, and how big a server you need</span><DocsLink to="vps-size" what="where to host" /></summary>
       <section className="stack-tight">
       <div className="host-grid">
         {HOSTS.map((h) => (

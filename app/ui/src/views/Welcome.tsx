@@ -71,14 +71,14 @@ export function Welcome({ target }: { target: string }) {
   if (error)
     return (
       <div className="stack">
-        <SectionHead title="Welcome page" />
+        <SectionHead docs="welcome-page" title="Welcome page" />
         <LoadError text={error} onRetry={() => setVersion((v) => v + 1)} />
       </div>
     );
   if (!d)
     return (
       <div className="stack">
-        <SectionHead title="Welcome page" />
+        <SectionHead docs="welcome-page" title="Welcome page" />
         <Skeleton />
       </div>
     );
@@ -108,6 +108,7 @@ export function Welcome({ target }: { target: string }) {
   return (
     <div className="stack">
       <SectionHead
+        docs="welcome-page"
         title="Welcome page"
         note={
           <>

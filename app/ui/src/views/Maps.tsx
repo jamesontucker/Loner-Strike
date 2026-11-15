@@ -276,7 +276,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Maps" note={live ? "Pick a map to play it in the current mode." : currentTarget() ? "Start the server to change maps." : "Pick a map to start a game on it."}>
+        <SectionHead docs="maps" title="Maps" note={live ? "Pick a map to play it in the current mode." : currentTarget() ? "Start the server to change maps." : "Pick a map to start a game on it."}>
           {canTeach && !picking && (
             <span className="row">
               <BusyButton busy={learning || busy(key("learn"))} label="Teach bots maps" busyLabel="Bots are learning…" onClick={() => setPicking(true)} />

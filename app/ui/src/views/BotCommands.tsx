@@ -16,6 +16,7 @@ export function BotCommands() {
   return (
     <section className="bot-commands">
       <SectionHead
+        docs="talking-to-bots"
         title="What you can tell the bots"
         note="Any wording close to these works, in team chat, with Bots answer you on. Start with a bot's name to ask just that one. Each bot decides by its personality: a lurker may ignore a call, a rich one may buy you that AWP, and most of the time somebody answers."
       />

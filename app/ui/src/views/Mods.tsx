@@ -161,7 +161,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
   };
   return (
     <div className="stack">
-      <SectionHead title="Mods" note={`Game modes and add-ons on ${where}. Everything is backed up, so removing something puts the original files back.`}>
+      <SectionHead docs="mods-page" title="Mods" note={`Game modes and add-ons on ${where}. Everything is backed up, so removing something puts the original files back.`}>
         {ON_THIS_COMPUTER && !game.dedicated && (
           <>
             <button className="btn" onClick={openSetup}>Run full setup</button>
@@ -313,7 +313,7 @@ function OwnPlugins() {
   };
   return (
     <section>
-      <SectionHead title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
+      <SectionHead docs="own-plugins" title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
         {ON_THIS_COMPUTER && <BusyButton busy={busy(key("add"))} label="Add a plugin" busyLabel="Adding…" onClick={add} />}
       </SectionHead>
       {list === null && failed ? (

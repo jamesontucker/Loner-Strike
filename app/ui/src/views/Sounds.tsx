@@ -260,7 +260,7 @@ export function Sounds({ target }: { target: string }) {
 
   return (
     <div className="stack sounds">
-      <SectionHead title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`}>
+      <SectionHead docs="sounds" title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`}>
         {/* (your own game: more from GameBanana, like Maps and Skins & models) */}
         {target === "local" && <button className="btn" onClick={() => useNav.getState().go("more", "sounds")}>Get sounds</button>}
       </SectionHead>
