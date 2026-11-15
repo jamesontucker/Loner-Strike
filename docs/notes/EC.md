@@ -33,5 +33,15 @@ ReGameDLL registers those messages in both games. But CS 1.6 ships none of the f
 (resource/TutorScheme.res, resource/UI/TutorTextWindow.res, gfx/career/*.tga: CZ has them), so on 1.6 it would need those
 sent as downloads. The visual can't be verified without a real client. Not built.
 
+## Sim (2026-11-14, one sim EC1, -insecure, de_dust2, 10 bots, 5 min)
+Brain: ls-next3 892b97a (run 43669651332, the branch head). Plugins: gm_components, gm_botnav, gm_pubserver, gamemodes
+compiled from tools HEAD; the test mode compiled from a graph (scratchpad ec_sim.graph.json) with the current generator.
+All seen in the console, no run time errors: the NPC was made, glowed (Get Entity Property read renderfx 19), walked to
+its point (Arrived), then ran a 2-point path (At point twice, Finished); Map Type "bomb"; Deal Damage (health 97 after
+3); Push (vertical speed 250); Weapon Switched (177); Entered/Left Map Zone (45/42); Grenade Thrown and Exploded (4/4,
+flashbangs); Start Vote with bots voting (yes 10, no, tie across rounds); Add Bots and Remove Bots. Not seen in the
+sim (no event on de_dust2 or no person to see it): On Map Entity Fired, Big HUD Text and Colored Chat on screen, Play
+Radio's sound, the info window, hostages, voice. Sim copy deleted.
+
 ## Requests
 None blocking.
