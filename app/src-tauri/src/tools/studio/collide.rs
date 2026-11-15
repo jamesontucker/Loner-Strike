@@ -813,11 +813,29 @@ mod tests {
     #[test]
     fn visible_spawns_are_counted_and_capped() {
         let h = super::super::HELPERS;
-        for want in ["#define LSG_VISIBLE_MOST 128", "stock lsg_vis_note(e)", "pev(e, pev_modelindex) && !(pev(e, pev_effects) & EF_NODRAW)", "g_lsgVisN--",
+        for want in ["g_lsgVisN < lsg_vis_most()", "stock lsg_vis_note(e)", "pev(e, pev_modelindex) && !(pev(e, pev_effects) & EF_NODRAW)", "g_lsgVisN--",
                      "stock bool:lsg_ent_room(const what[], bool:visible = true)", "if (lsg_vis_full(what, visible))"] {
             assert!(h.contains(want), "missing {want}");
         }
         assert!(include_str!("gen.rs").contains("g_lsgMk[slot] = lsg_vis_note(e)"), "markers are counted");
+        // the ceiling is the mode's Visible things at once (Limits): 128 by default, a host's setting
+        let lim = crate::tools::studio::limits::get("visible_things").expect("the setting");
+        assert_eq!((lim.default, lim.lag_above, lim.max), (128, 200, 1000));
+        let n = |id: &str, t: &str| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": {}});
+        let base = json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "vt", "name": "Visible"},
+            "nodes": [n("rs", "event.round_started"), n("sp", "ent.spawn_prop")],
+            "edges": [{"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "sp", "pin": "exec"}}]});
+        let plain = gen::generate(&graph::from_value(base.clone()).unwrap(), false).source;
+        assert!(plain.contains("stock lsg_vis_most()\n\treturn 128\n"), "the default without the setting");
+        let mut with = base.clone();
+        let mut var = crate::tools::studio::limits::var_json(lim);
+        var["default"] = json!(300);
+        with["variables"] = json!([var]);
+        let g = graph::from_value(with).unwrap();
+        let src = gen::generate(&g, false).source;
+        assert!(src.contains("stock lsg_vis_most()\n\treturn clamp(floatround("), "the host's setting");
+        let warn = crate::tools::studio::limits::problems(&g).into_iter().find(|p| p.message.contains("Visible things at once")).expect("the warning above 200");
+        assert!(warn.level == "warning" && warn.message.contains("pop"), "{}", warn.message);
         let fx = include_str!("gen/fx.rs");
         assert!(fx.contains("e = lsg_vis_note({create})"), "every spawn node's thing is counted");
         assert!(fx.contains("lsg_ent_room(\"Loop Sound\", false)") && super::PAWN.contains("lsg_ent_room(\"Spawn Trigger Volume\", false)"), "never-sent things aren't held back");

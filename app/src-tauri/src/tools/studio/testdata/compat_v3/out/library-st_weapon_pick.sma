@@ -302,8 +302,8 @@ stock lsg_skip_log(const cap[], const what[], const fmt[], any:...)
 // dropping and throwing). O(1) a call: a flood asks thousands of times a second (W2, P5's final check)
 #define LSG_EDICT_RESERVE 128
 stock Float:g_lsgEdAt = -1.0, g_lsgEdLive, g_lsgEdMade, g_lsgEdWin, g_lsgEdFreed, g_lsgEdFreedBefore, bool:g_lsgEdHooked
-// (what the mode has out that players see: lsg_vis_note, below)
-#define LSG_VISIBLE_MOST 128
+// (what the mode has out that players see: lsg_vis_note, below; at most its Visible things at once,
+// lsg_vis_most(), 128 unless the mode's Limits say)
 stock bool:g_lsgVis[2048], g_lsgVisN
 
 public lsg_ed_freed(ent)
@@ -320,7 +320,7 @@ public lsg_ed_freed(ent)
 // What players' games are sent: an entity with a model, not EF_NODRAW (ReGameDLL's AddToFullPack).
 // Old clients take 256 entities in a packet, players and the map's own included, and a final-check
 // player had 247 datagram overflows with hundreds of the mode's props and projectiles in sight. So
-// the mode keeps at most LSG_VISIBLE_MOST visible things of its own out at once (trigger volumes and
+// the mode keeps at most its Visible things at once (Limits, 128) of its own out (trigger volumes and
 // loop sounds are never sent, so they don't count). Counted as made (lsg_vis_note on what a spawn
 // returns) and freed (the free hook): O(1). W2
 stock lsg_vis_note(e)
@@ -391,12 +391,12 @@ stock bool:lsg_ent_room(const what[], bool:visible = true)
 	return false
 }
 
-// (a spawn that players see, when the mode already has LSG_VISIBLE_MOST of them out: lsg_ent_room)
+// (a spawn that players see, when the mode already has its Visible things at once out: lsg_ent_room)
 stock bool:lsg_vis_full(const what[], bool:visible)
 {
-	if (!visible || g_lsgVisN < LSG_VISIBLE_MOST)
+	if (!visible || g_lsgVisN < lsg_vis_most())
 		return false
-	lsg_skip_log("visible", what, "%s skipped: the mode has %d things players see out (their games are sent at most 256 at once)", what, g_lsgVisN)
+	lsg_skip_log("visible", what, "%s skipped: the mode has %d things players see out, as many as Visible things at once allows (Limits)", what, g_lsgVisN)
 	return true
 }
 
@@ -1419,6 +1419,9 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+stock lsg_vis_most()
+	return 128
+
 // one server command, only an allowed one (graph::cmd_rules: the app checks the same). The
 // engine splits words on spaces and on { } ( ) ' : , and drops quotes: none of those may be in
 // it, so the first word checked is the one that runs. amx: an AMX Mod X command instead.

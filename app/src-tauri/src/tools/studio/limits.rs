@@ -49,6 +49,9 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "trigger_volumes", label: "Trigger volumes at once", default: 32, lag_above: 64, max: 256, kinds: &["vol.spawn"] },
     Limit { id: "volume_members", label: "Things in one trigger volume", default: 32, lag_above: 48, max: 64, kinds: &["vol.spawn"] },
     Limit { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lag_above: 24, max: 32, kinds: &["bots.avoid"] },
+    // W2 (gen.rs lsg_vis_note): the mode's things players see (a model, not EF_NODRAW). Old clients
+    // take 256 entities a packet, but per player's sight: a big world can hold more out at once
+    Limit { id: "visible_things", label: "Visible things at once", default: 128, lag_above: 200, max: 1000, kinds: &["ent.spawn_prop", "ent.spawn_entity", "ent.spawn_weapon", "creature.spawn", "npc.spawn", "npc.spawn_use", "comp.create", "proj.spawn", "fx.marker"] },
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
     // (effects, HUD and chat sent in one server frame: at most 64, and every client's bytes a frame
     // are budgeted too, gen.rs lsg_msg_fits: 160 effects a frame overflowed a player's datagram in
@@ -103,7 +106,9 @@ pub fn problems(g: &Graph) -> Vec<Problem> {
         let Some(v) = var(g, l.id) else { continue };
         let n = v.default.as_f64().unwrap_or(l.default as f64);
         if n > l.lag_above as f64 {
-            p.push(Problem { level: "warning", node: None, pin: None, edge: None, message: format!("{} is set to {} (the default is {}): that may lag servers with many players.", l.label, n.round(), l.default) });
+            // (players' games are sent so many at once: many in sight lag or pop in)
+            let why = if l.id == "visible_things" { "if many are in sight at once, players may lag or see things pop in and out" } else { "that may lag servers with many players" };
+            p.push(Problem { level: "warning", node: None, pin: None, edge: None, message: format!("{} is set to {} (the default is {}): {why}.", l.label, n.round(), l.default) });
         }
     }
     p
