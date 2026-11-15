@@ -702,6 +702,8 @@ enum Cmd {
     /// P5: Hammer's Alt+right-click: the texture and the alignment of `from` onto `faces`
     WrapTexture { from: (u64, usize), faces: Vec<(u64, usize)>, texture: Option<String> },
     SetKey { entity: u64, key: String, value: String },
+    /// the Inspector's Paste: several keys on several entities, one undo step
+    SetKeys { sets: Vec<(u64, String, String)>, #[serde(default)] label: Option<String>, #[serde(default)] merge: Option<String> },
     AddEntity { classname: String, origin: P3, #[serde(default)] keys: Vec<(String, String)> },
     Tie { brushes: Vec<u64>, classname: String },
     ToWorld { entity: u64 },
@@ -1282,6 +1284,11 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 return Err("That key or value is too long.".into());
             }
             history::cmd_set_key(d, h, EntityId(entity), key.trim(), &value)?;
+        }
+        Cmd::SetKeys { sets, label, merge } => {
+            let sets: Vec<(EntityId, String, String)> = sets.into_iter().map(|(e, k, v)| (EntityId(e), k, v)).collect();
+            let label = label.filter(|l| l.len() <= 60 && !l.is_empty()).unwrap_or_else(|| "Paste".into());
+            crate::editor::bulk::cmd_set_keys(d, h, &sets, &label, merge.as_deref())?;
         }
         Cmd::AddEntity { classname, origin, keys } => {
             safe_key("classname", &classname)?;

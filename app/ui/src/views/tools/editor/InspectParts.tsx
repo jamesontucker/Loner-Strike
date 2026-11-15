@@ -12,6 +12,8 @@ import { alignOf, texUrl, type DocEntity, type MeshFace } from "./editorApi";
 import { selectionIds } from "./EditorScene";
 import { AXES } from "./AxisTriad";
 import { facesOf, keyOf, originOf, selectionBounds, useEditor } from "./store";
+import { openInspectMenu } from "./InspectMenu"; // right-click Copy / Paste
+import { transformItems } from "./inspectMenus";
 
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
 
@@ -192,10 +194,10 @@ export function TransformSection({ entity }: { entity?: DocEntity }) {
 
   return (
     <div className="p5-xf" role="group" aria-label="Transform">
-      <h4>
+      <h4 onContextMenu={(ev) => openInspectMenu(ev, transformItems())} title="Right-click: Copy / Paste the Transform">
         Transform <span className="muted small-note">Z up · X east · Y north</span>
       </h4>
-      <div className="p5-xf-row">
+      <div className="p5-xf-row" onContextMenu={(ev) => openInspectMenu(ev, transformItems("location"))}>
         <span className="p5-xf-label" title="Where it is: the middle of what's picked (a point entity's origin)">Location</span>
         {[0, 1, 2].map((i) => (
           <ScrubField
@@ -211,7 +213,7 @@ export function TransformSection({ entity }: { entity?: DocEntity }) {
           />
         ))}
       </div>
-      <div className="p5-xf-row">
+      <div className="p5-xf-row" onContextMenu={(ev) => openInspectMenu(ev, transformItems("rotation"))}>
         <span className="p5-xf-label" title={point ? "Its angles: roll round X, pitch round Y, yaw round Z (0 faces east)" : "Turn it round each axis by this many degrees (about its middle); drag a letter to turn it live"}>
           {point ? "Rotation" : "Turn by"}
         </span>
@@ -239,7 +241,7 @@ export function TransformSection({ entity }: { entity?: DocEntity }) {
         ))}
       </div>
       {size ? (
-        <div className="p5-xf-row">
+        <div className="p5-xf-row" onContextMenu={(ev) => openInspectMenu(ev, transformItems("size"))}>
           <span className="p5-xf-label" title="How big it is in units; type a size to stretch it to that, about its middle">Size</span>
           {[0, 1, 2].map((i) => (
             <ScrubField
@@ -254,7 +256,7 @@ export function TransformSection({ entity }: { entity?: DocEntity }) {
         </div>
       ) : null}
       {size ? (
-        <div className="p5-xf-row">
+        <div className="p5-xf-row" onContextMenu={(ev) => openInspectMenu(ev, transformItems("scale"))}>
           <span className="p5-xf-label" title="Stretch it by this much (1 is as it is, 2 twice as big, -1 mirrors)">Scale</span>
           {[0, 1, 2].map((i) => (
             <ScrubField
@@ -273,7 +275,7 @@ export function TransformSection({ entity }: { entity?: DocEntity }) {
           ))}
         </div>
       ) : point && (scaleKey !== undefined || /^env_sprite|^cycler|^env_model/.test(point.classname)) ? (
-        <div className="p5-xf-row">
+        <div className="p5-xf-row" onContextMenu={(ev) => openInspectMenu(ev, transformItems("scale"))}>
           <span className="p5-xf-label" title="The sprite's or model's scale key">Scale</span>
           <ScrubField axis={2} label="×" value={Number(scaleKey ?? 1) || 1} step={0.1} title="Scale (the scale key)" onSet={(v) => v > 0 && void s.cmd({ op: "set_key", entity: point.id, key: "scale", value: String(round(v, 3)) })} />
         </div>

@@ -18,6 +18,9 @@ type P5State = {
   /** locked for now: can't be picked in the views (this page only) */
   locked: { brushes: Set<number>; entities: Set<number> };
   showGrid: boolean;
+  /** game view (G, as in Unreal): the editor's helpers hidden - grid, target links, effect
+   *  and track previews, the flat views' crosshair and handles - to see the map as it plays */
+  gameView: boolean;
   /** degrees the rotate gizmo snaps to (0: free) */
   rotSnap: number;
   /** snap new points to corners/edges of brushes near the mouse */
@@ -60,6 +63,7 @@ export const useP5 = create<P5State>((set) => ({
   paletteText: "",
   locked: { brushes: new Set(), entities: new Set() },
   showGrid: num("ls.editor.showGrid", 1) !== 0,
+  gameView: false,
   rotSnap: num("ls.editor.rotSnap", 15),
   geoSnap: num("ls.editor.geoSnap", 0) !== 0,
   showModels: num("ls.editor.showModels", 1) !== 0,

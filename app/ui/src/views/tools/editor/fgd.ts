@@ -45,3 +45,6 @@ export function useFgd(): Map<string, FgdClass> | null {
   }, []);
   return m;
 }
+
+/** The definitions as last read (null until they arrive): for code outside React. */
+export const fgdNow = () => cache;

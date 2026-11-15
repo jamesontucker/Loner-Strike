@@ -112,6 +112,9 @@ type EditorState = {
   grid: number;
   /** held Alt: snapping off for now */
   alt: boolean;
+  /** an Alt-drag copy (the Loner-Strike keys, like Unreal): Alt made the copy, so it doesn't also
+   *  turn the snapping off for that drag */
+  altCopy: boolean;
   texture: string;
   boxHeight: number;
   sides: number;
@@ -233,6 +236,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   view: "3d",
   grid: saved("ls.editor.grid", 16),
   alt: false,
+  altCopy: false,
   texture: "OUT_WALL5",
   boxHeight: 128,
   sides: 12,
@@ -587,7 +591,7 @@ export { mergeState };
 /** Grid snapping (off while Alt is held). */
 export function snap(v: number, grid = useEditor.getState().grid) {
   const st = useEditor.getState();
-  return st.alt !== !!st.snapOff || grid <= 0 ? Math.round(v * 100) / 100 : Math.round(v / grid) * grid; // P5: snapOff toggle, Alt flips it
+  return (st.alt && !st.altCopy) !== !!st.snapOff || grid <= 0 ? Math.round(v * 100) / 100 : Math.round(v / grid) * grid; // P5: snapOff toggle, Alt flips it
 }
 
 /** The selection's bounds from what's drawn (brushes) and the doc (point entities). */
