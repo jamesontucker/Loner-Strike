@@ -77,6 +77,105 @@ pub fn status(local_game: &Path, server_game: &Path) -> Vec<Value> {
     out
 }
 
+// ---- modes that load only the types they list -----------------------------------------------------
+
+const GM: &str = "addons/amxmodx/configs/gamemodes";
+
+fn read_latin1(p: &Path) -> String {
+    std::fs::read(p).map(|b| b.iter().map(|c| *c as char).collect()).unwrap_or_default()
+}
+
+/// The server's modes (modes.ini): (id, shown name).
+fn modes(server_game: &Path) -> Vec<(String, String)> {
+    read_latin1(&server_game.join(GM).join("modes.ini"))
+        .lines()
+        .filter_map(|l| {
+            let t = l.trim();
+            if t.is_empty() || t.starts_with(';') || t.starts_with("//") {
+                return None;
+            }
+            let id = t.split_whitespace().next()?.trim_matches('"').to_ascii_lowercase();
+            let name = t.split('"').nth(1).filter(|n| !n.trim().is_empty()).map(|n| n.trim().to_string()).unwrap_or_else(|| id.clone());
+            (super::creatures::mode_ok(&id)).then_some((id, name))
+        })
+        .collect()
+}
+
+/// A mode cfg's `ls_creature_precache` list (None: it doesn't set one, or sets "all"/empty).
+fn cfg_list(text: &str) -> Option<Vec<String>> {
+    let v = text.lines().filter_map(|l| {
+        let t = l.trim();
+        let rest = t.strip_prefix("ls_creature_precache")?;
+        (rest.is_empty() || rest.starts_with(char::is_whitespace)).then(|| rest.split("//").next().unwrap_or("").trim().trim_matches('"').trim().to_string())
+    }).last()?;
+    let words: Vec<String> = v.split_whitespace().map(|w| w.to_ascii_lowercase()).collect();
+    (!words.is_empty() && !words.iter().any(|w| w == "all")).then_some(words)
+}
+
+/// The server's modes that load only the creature types they list, each with how ("waves": a
+/// waves.ini section, Last Stand's built-in table when it has none; "precache": its cfg's
+/// ls_creature_precache list) and what it lists. Modes that load every type aren't here.
+pub fn limiting_modes(server_game: &Path) -> Vec<Value> {
+    let waves = super::creatures::parse_waves(&read_latin1(&server_game.join(super::creatures::WAVES_REL)));
+    let mut out = Vec::new();
+    for (id, name) in modes(server_game) {
+        let section = waves.iter().find(|w| w.mode == id).cloned();
+        let set = section.or_else(|| (id == "laststand").then(super::creatures::laststand_default));
+        if let Some(w) = set {
+            out.push(json!({"id": id, "name": name, "how": "waves", "types": super::creatures::wave_types(&w, 1000)}));
+            continue;
+        }
+        if let Some(list) = cfg_list(&read_latin1(&server_game.join(GM).join(format!("{id}.cfg")))) {
+            out.push(json!({"id": id, "name": name, "how": "precache", "types": list}));
+        }
+    }
+    out
+}
+
+/// Adds `types` to one mode's list on a server, the way that mode reads it: its waves.ini rows
+/// (other types and other sections as they are; Last Stand with no section starts from its own
+/// lineup with the built-in boss, pack and heavy rounds kept, own_rounds), each new type a
+/// tenth of each row; or its cfg's ls_creature_precache list (the rest of the cfg as it is).
+/// Returns the types added (none: nothing written).
+pub fn add_to_mode(server_game: &Path, mode: &str, types: &[String]) -> Result<Vec<String>, String> {
+    let m = limiting_modes(server_game).into_iter().find(|m| m["id"] == mode).ok_or("That mode on the server loads every type already.")?;
+    // (in the mode's own order: a cfg list keeps its order)
+    let have: Vec<String> = m["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str().map(String::from)).collect();
+    let add: Vec<String> = types.iter().map(|t| t.to_ascii_lowercase()).filter(|t| !have.contains(t)).collect::<BTreeSet<_>>().into_iter().collect();
+    if add.is_empty() {
+        return Ok(add);
+    }
+    let (path, new) = if m["how"] == "waves" {
+        let path = server_game.join(super::creatures::WAVES_REL);
+        let old = read_latin1(&path);
+        let mut w = super::creatures::parse_waves(&old).into_iter().find(|w| w.mode == mode).unwrap_or_else(super::creatures::laststand_default);
+        for r in w.rows.iter_mut() {
+            let total: u32 = r.mix.iter().map(|(_, n)| *n).sum();
+            for t in &add {
+                r.mix.push((t.clone(), (total / 10).max(1)));
+            }
+        }
+        (path, super::creatures::write_waves(&old, &w))
+    } else {
+        let path = server_game.join(GM).join(format!("{mode}.cfg"));
+        let old = read_latin1(&path);
+        let mut list: Vec<String> = have.clone();
+        list.extend(add.iter().cloned());
+        let line = format!("ls_creature_precache \"{}\"", list.join(" "));
+        // the last line that sets it is the one the game keeps: that one is replaced
+        let at = old.split_inclusive('\n').enumerate().filter(|(_, l)| l.trim().strip_prefix("ls_creature_precache").is_some_and(|r| r.is_empty() || r.starts_with(char::is_whitespace))).map(|(i, _)| i).last();
+        let new: String = old.split_inclusive('\n').enumerate().map(|(i, l)| if Some(i) == at { format!("{line}{}", if l.ends_with("\r\n") { "\r\n" } else if l.ends_with('\n') { "\n" } else { "" }) } else { l.to_string() }).collect();
+        (path, new)
+    };
+    crate::safety::before("Creature Studio", &format!("Add your creatures to {}'s list on a server", m["name"].as_str().unwrap_or(mode)), &path);
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("Couldn't save it ({e})."))?;
+    }
+    crate::sys::make_writable(&path);
+    crate::sys::write_latin1_atomic(&path, &new).map_err(|e| format!("Couldn't save it ({e})."))?;
+    Ok(add)
+}
+
 /// Puts `add` on a server and takes `remove` off, keeping (and bringing up to date) the rest of
 /// what was sent before. Only the player's own types can be named; their custom bases come
 /// along. Returns creaturesrv's answer plus "sent" (the types asked for, now there).
@@ -135,7 +234,7 @@ fn targets(g: &crate::game::Game) -> Vec<crate::servers::Entry> {
 fn server_json(g: &crate::game::Game, e: &crate::servers::Entry) -> Value {
     let game_dir = e.dir.join(&e.game);
     let same_game = e.game == g.name;
-    json!({"id": e.id, "name": e.name, "remote": e.remote.is_some(), "game": e.game, "sameGame": same_game, "types": status(&g.dir, &game_dir)})
+    json!({"id": e.id, "name": e.name, "remote": e.remote.is_some(), "game": e.game, "sameGame": same_game, "limits": limiting_modes(&game_dir), "types": status(&g.dir, &game_dir)})
 }
 
 async fn api_servers(State(st): State<Shared>) -> Response {
@@ -219,8 +318,66 @@ async fn api_send(State(st): State<Shared>, h: HeaderMap, Json(r): Json<SendReq>
     )
 }
 
+#[derive(Deserialize)]
+struct ModesReq {
+    servers: Vec<String>,
+    /// the modes to add to on each server; empty: every mode there that limits its types
+    #[serde(default)]
+    modes: Vec<String>,
+    types: Vec<String>,
+}
+
+/// "Add to <Mode>'s creatures" / "Add to all of them": only the player's own types.
+async fn api_modes(State(st): State<Shared>, h: HeaderMap, Json(r): Json<ModesReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    json_answer(
+        blocking(move || {
+            let g = source(&st)?;
+            let mine = own_types(&g.dir);
+            if r.types.is_empty() || r.types.iter().any(|t| !mine.contains_key(&t.to_ascii_lowercase())) {
+                return Err(Fail::new(StatusCode::OK, "Pick your own creature types."));
+            }
+            let all = targets(&g);
+            let mut results: Vec<Value> = Vec::new();
+            let mut added_any = 0;
+            for id in &r.servers {
+                let Some(e) = all.iter().find(|e| e.id == *id) else { continue };
+                let game_dir = e.dir.join(&e.game);
+                let wanted: Vec<String> = if r.modes.is_empty() { limiting_modes(&game_dir).iter().filter_map(|m| m["id"].as_str().map(String::from)).collect() } else { r.modes.clone() };
+                let mut added: Vec<Value> = Vec::new();
+                let mut error: Option<String> = None;
+                for m in &wanted {
+                    match add_to_mode(&game_dir, m, &r.types) {
+                        Ok(a) if !a.is_empty() => added.push(json!({"mode": m, "types": a})),
+                        Ok(_) => {}
+                        Err(err) => error = Some(err),
+                    }
+                }
+                if !added.is_empty() {
+                    added_any += added.len();
+                    crate::servers::mark_changed(&e.id);
+                    if e.remote.is_some() {
+                        if let Err(err) = crate::servers::sync(e, false) {
+                            error = Some(format!("Saved in its copy here, but the upload failed ({err}). It goes up with the next upload."));
+                        }
+                    }
+                }
+                results.push(json!({"id": e.id, "name": e.name, "ok": error.is_none(), "error": error, "added": added, "limits": limiting_modes(&game_dir)}));
+            }
+            let message = if added_any == 0 { "They're in those lists already.".to_string() } else { "Added. The modes load them from the next map.".to_string() };
+            Ok(json!({"ok": results.iter().any(|x| x["ok"] == true), "message": message, "results": results}))
+        })
+        .await,
+    )
+}
+
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/tools/creatures/servers", get(api_servers)).route("/api/tools/creatures/send", post(api_send))
+    Router::new()
+        .route("/api/tools/creatures/servers", get(api_servers))
+        .route("/api/tools/creatures/send", post(api_send))
+        .route("/api/tools/creatures/send-modes", post(api_modes))
 }
 
 #[cfg(test)]
@@ -281,6 +438,43 @@ mod tests {
         send(&local, "cstrike", &server, &[], &["crawler".into()]).unwrap();
         assert_eq!(read_ini(&server), server_ini);
         assert!(status(&local, &server).contains(&json!({"name": "crawler", "state": "missing"})));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn modes_that_list_their_types_are_found_and_take_the_type() {
+        let root = std::env::temp_dir().join(format!("ls-creaturesend-modes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let server = game(&root, "srv", "");
+        let gm = server.join(GM);
+        std::fs::write(gm.join("modes.ini"), "; modes\nclassic \"Classic\" \"\" \"\" \"\"\nlaststand \"Last Stand\" \"\" \"\" \"\"\nzday \"Zombie Day\" \"\" \"\" \"\"\nopen \"Open Hunt\" \"\" \"\" \"\"\n").unwrap();
+        // Zombie Day lists its types in its cfg; Open Hunt loads all; Classic sets nothing
+        let zcfg = "// zday\nmp_roundtime 3\nls_creature_precache \"zombie runner\" // the list\nsv_gravity 800\n";
+        std::fs::write(gm.join("zday.cfg"), zcfg).unwrap();
+        std::fs::write(gm.join("open.cfg"), "ls_creature_precache all\n").unwrap();
+        let other = "; my notes\n[othermode]\nboss =\nwave 1 = zombie 1\n";
+        std::fs::write(server.join(super::super::creatures::WAVES_REL), other).unwrap();
+        let lim = limiting_modes(&server);
+        let names: Vec<&str> = lim.iter().map(|m| m["name"].as_str().unwrap()).collect();
+        assert_eq!(names, vec!["Last Stand", "Zombie Day"], "{lim:?}");
+        assert!(!lim[0]["types"].as_array().unwrap().contains(&json!("qa_crawler")));
+        // Last Stand with no section: its own lineup, own_rounds, other sections byte for byte
+        assert_eq!(add_to_mode(&server, "laststand", &["qa_crawler".into()]).unwrap(), vec!["qa_crawler"]);
+        let text = read_latin1(&server.join(super::super::creatures::WAVES_REL));
+        assert!(text.starts_with(other), "{text}");
+        let ls = super::super::creatures::parse_waves(&text).into_iter().find(|w| w.mode == "laststand").unwrap();
+        assert!(ls.own_rounds);
+        assert_eq!(ls.rows[0].mix, vec![("zombie".to_string(), 100), ("qa_crawler".into(), 10)]);
+        // the cfg list: only its line changes
+        assert_eq!(add_to_mode(&server, "zday", &["qa_crawler".into()]).unwrap(), vec!["qa_crawler"]);
+        assert_eq!(read_latin1(&gm.join("zday.cfg")), "// zday\nmp_roundtime 3\nls_creature_precache \"zombie runner qa_crawler\"\nsv_gravity 800\n");
+        // both list it now; again: nothing written
+        assert!(limiting_modes(&server).iter().all(|m| m["types"].as_array().unwrap().contains(&json!("qa_crawler"))));
+        assert!(add_to_mode(&server, "laststand", &["qa_crawler".into()]).unwrap().is_empty());
+        assert!(add_to_mode(&server, "zday", &["qa_crawler".into()]).unwrap().is_empty());
+        assert_eq!(read_latin1(&server.join(super::super::creatures::WAVES_REL)), text);
+        // a mode that loads everything isn't one to add to
+        assert!(add_to_mode(&server, "open", &["qa_crawler".into()]).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 

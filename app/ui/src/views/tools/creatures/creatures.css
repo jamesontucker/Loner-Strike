@@ -148,3 +148,5 @@
 .cs-send-server .row { gap: 8px; align-items: center; }
 .cs-send-name { min-width: 140px; }
 .cs-send-changed, .cs-send-gone { color: var(--danger); }
+.cs-send-waves { display: grid; gap: 6px; justify-items: start; margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--signal); }
+.cs-send-waves p { margin: 0; }

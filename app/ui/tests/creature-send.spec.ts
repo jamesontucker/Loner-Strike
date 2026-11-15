@@ -56,3 +56,66 @@ test("Send to servers: pick, send with a spinner, then Update and Remove per ser
   await expect(home).toContainText("Not there");
   expect(problems).toEqual([]);
 });
+
+test("Send to servers: modes that list their creature types say so, one click per mode or all", async ({ page }) => {
+  const problems: string[] = [];
+  page.on("pageerror", (e) => problems.push(e.message));
+  const listed: Record<string, string[]> = { laststand: ["zombie"], zday: ["zombie", "runner"] };
+  const calls: Record<string, unknown>[] = [];
+  // two modes that list their types (Last Stand's waves, Zombie Day's cfg list); one that loads all isn't listed
+  await page.route("**/api/tools/creatures/servers", (r) =>
+    json(r, {
+      servers: [
+        {
+          id: "s1",
+          name: "Stand server",
+          remote: false,
+          game: "cstrike",
+          sameGame: true,
+          limits: [
+            { id: "laststand", name: "Last Stand", how: "waves", types: listed.laststand },
+            { id: "zday", name: "Zombie Day", how: "precache", types: listed.zday },
+          ],
+          types: [{ name: "qa_crawler", state: "current" }],
+        },
+      ],
+    }),
+  );
+  await page.route("**/api/tools/creatures/send-modes", async (r) => {
+    const body = r.request().postDataJSON() as { servers: string[]; modes: string[]; types: string[] };
+    calls.push(body);
+    await new Promise((ok) => setTimeout(ok, 300));
+    for (const m of body.modes.length ? body.modes : Object.keys(listed)) listed[m] = [...listed[m], ...body.types];
+    return json(r, { ok: true, message: "Added. The modes load them from the next map.", results: [{ id: "s1", name: "Stand server", ok: true }] });
+  });
+  await page.goto("/tools-dev.html?open=creatures");
+  await page.getByRole("listbox", { name: "Creature types" }).getByRole("option", { name: /qa_crawler/ }).click();
+  await page.getByRole("button", { name: "Send to servers…" }).click();
+  const srv = page.getByRole("dialog", { name: "Send my creatures to…" }).getByRole("region", { name: "On Stand server" });
+  await expect(srv.getByRole("note")).toContainText("These modes on Stand server only load the creature types they list: Last Stand, Zombie Day. Add qa_crawler to their lists to use it there.");
+  await srv.getByRole("button", { name: "Add to Last Stand's creatures" }).click();
+  await expect(page.locator(".toast", { hasText: "Added. The modes load them" })).toBeVisible();
+  expect(calls[0]).toEqual({ servers: ["s1"], modes: ["laststand"], types: ["qa_crawler"] });
+  // only Zombie Day is left: no "all" button for one mode
+  await expect(srv.getByRole("note")).toContainText("only load the creature types they list: Zombie Day.");
+  await expect(srv.getByRole("button", { name: "Add to all of them" })).toHaveCount(0);
+  await srv.getByRole("button", { name: "Add to Zombie Day's creatures" }).click();
+  await expect.poll(() => calls.length).toBe(2);
+  await expect(srv.getByRole("note")).toHaveCount(0);
+  await expect(srv).toContainText("In their lists");
+  expect(problems).toEqual([]);
+});
+
+test("Send to servers: Add to all of them", async ({ page }) => {
+  const calls: Record<string, unknown>[] = [];
+  await page.route("**/api/tools/creatures/servers", (r) =>
+    json(r, { servers: [{ id: "s1", name: "Stand server", remote: false, game: "cstrike", sameGame: true, limits: [{ id: "laststand", name: "Last Stand", how: "waves", types: [] }, { id: "zday", name: "Zombie Day", how: "precache", types: ["zombie"] }], types: [{ name: "qa_crawler", state: "changed" }] }] }),
+  );
+  await page.route("**/api/tools/creatures/send-modes", (r) => (calls.push(r.request().postDataJSON() as Record<string, unknown>), json(r, { ok: true, message: "Added.", results: [] })));
+  await page.goto("/tools-dev.html?open=creatures");
+  await page.getByRole("listbox", { name: "Creature types" }).getByRole("option", { name: /qa_crawler/ }).click();
+  await page.getByRole("button", { name: "Send to servers…" }).click();
+  await page.getByRole("button", { name: "Add to all of them" }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual({ servers: ["s1"], modes: [], types: ["qa_crawler"] });
+});

@@ -6,7 +6,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { BusyButton, Sheet, useToast } from "../../../ui";
-import { creatureServers, sendCreatures, type SendResult, type ServerCreatures } from "./creaturesApi";
+import { addToServerModes, creatureServers, sendCreatures, type SendResult, type ServerCreatures } from "./creaturesApi";
 
 const STATE_WORDS: Record<string, string> = {
   current: "Up to date",
@@ -27,10 +27,10 @@ export function SendToServers({ own, start, onClose }: { own: string[]; start?: 
   const [summary, setSummary] = useState<SendResult | null>(null);
 
   const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
-  const run = async (label: string, ids: string[], add: string[], remove: string[]) => {
+  const run = async (label: string, ids: string[], add: string[], remove: string[], modes?: string[]) => {
     setBusy(label);
     try {
-      const r = await sendCreatures(ids, add, remove);
+      const r = modes ? await addToServerModes(ids, modes, add) : await sendCreatures(ids, add, remove);
       if (r.error) return toast(r.error, true);
       setSummary(r);
       toast(r.message || "Sent.", !r.ok);
@@ -38,6 +38,12 @@ export function SendToServers({ own, start, onClose }: { own: string[]; start?: 
     } finally {
       setBusy(null);
     }
+  };
+  // modes on a server that load only the types they list, and which of these types they leave out
+  const unlisted = (srv: ServerCreatures | undefined, names: string[]) => (srv?.limits ?? []).filter((m) => names.some((n) => !m.types.includes(n)));
+  const lsNote = (id: string, sentNames: string[]) => {
+    const modes = unlisted(servers.find((x) => x.id === id), sentNames);
+    return modes.length ? `${modes.map((m) => m.name).join(", ")} only load the types they list: add ${sentNames.join(", ")} (below)` : "";
   };
   const sending = `Sending to ${picked.length} server${picked.length === 1 ? "" : "s"}…`;
 
@@ -91,7 +97,7 @@ export function SendToServers({ own, start, onClose }: { own: string[]; start?: 
             {summary.results.map((r) => (
               <li key={r.id} className={r.ok ? "" : "cs-error"}>
                 <strong>{r.name ?? r.id}</strong>:{" "}
-                {r.error ?? [r.types?.length ? `sent ${(r.sent ?? []).join(", ") || "nothing new"}` : "nothing to send", r.skipped?.length ? `kept the server's own ${r.skipped.join(", ")}` : "", r.kept?.length ? `kept its own ${r.kept.join(", ")}` : ""].filter(Boolean).join("; ")}
+                {r.error ?? [r.types?.length ? `sent ${(r.sent ?? []).join(", ") || "nothing new"}` : "nothing to send", r.skipped?.length ? `kept the server's own ${r.skipped.join(", ")}` : "", r.kept?.length ? `kept its own ${r.kept.join(", ")}` : "", lsNote(r.id, r.sent ?? [])].filter(Boolean).join("; ")}
               </li>
             ))}
           </ul>
@@ -114,6 +120,7 @@ export function SendToServers({ own, start, onClose }: { own: string[]; start?: 
                     {t.state === "missing" && (
                       <BusyButton className="btn small" busy={busy === `add:${s.id}:${t.name}`} disabled={!!busy} label="Add" busyLabel="Adding…" onClick={() => void run(`add:${s.id}:${t.name}`, [s.id], [t.name], [])} />
                     )}
+                    {(s.limits?.length ?? 0) > 0 && (t.state === "current" || t.state === "changed") && s.limits!.every((m) => m.types.includes(t.name)) && <span className="cs-tag">In their lists</span>}
                     {(t.state === "current" || t.state === "changed" || t.state === "gone") && (
                       <BusyButton className="btn small" busy={busy === `rm:${s.id}:${t.name}`} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => void run(`rm:${s.id}:${t.name}`, [s.id], [], [t.name])} />
                     )}
@@ -121,6 +128,28 @@ export function SendToServers({ own, start, onClose }: { own: string[]; start?: 
                 ))}
               </ul>
             )}
+            {(() => {
+              // modes that load only the types they list: one sent there that isn't listed won't show
+              const sent = s.types.filter((t) => t.state === "current" || t.state === "changed").map((t) => t.name);
+              const modes = (s.limits ?? []).map((m) => ({ ...m, missing: sent.filter((n) => !m.types.includes(n)) })).filter((m) => m.missing.length);
+              if (!modes.length) return null;
+              const names = [...new Set(modes.flatMap((m) => m.missing))];
+              return (
+                <div className="cs-send-waves" role="note">
+                  <p>
+                    These modes on {s.name} only load the creature types they list: {modes.map((m) => m.name).join(", ")}. Add {names.join(", ")} to their lists to use {names.length === 1 ? "it" : "them"} there.
+                  </p>
+                  <div className="row">
+                    {modes.map((m) => (
+                      <BusyButton key={m.id} className="btn small" busy={busy === `mode:${s.id}:${m.id}`} disabled={!!busy} label={`Add to ${m.name}'s creatures`} busyLabel="Adding…" onClick={() => void run(`mode:${s.id}:${m.id}`, [s.id], m.missing, [], [m.id])} />
+                    ))}
+                    {modes.length > 1 && (
+                      <BusyButton className="btn small" busy={busy === `modes:${s.id}`} disabled={!!busy} label="Add to all of them" busyLabel="Adding…" onClick={() => void run(`modes:${s.id}`, [s.id], names, [], [])} />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </section>
         ))}
       </div>

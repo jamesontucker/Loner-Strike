@@ -123,8 +123,11 @@ export const soundUrl = (file: string) => `/api/tools/editor/sound?path=${encode
 /** Shared creatures: which of your maps, modes and waves use each type (base chains included). */
 export type TypeUser = { kind: "map" | "mode" | "waves"; name: string; id: string };
 /** "Send my creatures to…": your servers, and which of your types each has */
-export type ServerCreatures = { id: string; name: string; remote: boolean; game: string; sameGame: boolean; types: { name: string; state: "current" | "changed" | "missing" | "theirs" | "gone" }[] };
+/** limits: the server's modes that load only the creature types they list (waves or a precache list) */
+export type LimitMode = { id: string; name: string; how: "waves" | "precache"; types: string[] };
+export type ServerCreatures = { id: string; name: string; remote: boolean; game: string; sameGame: boolean; limits?: LimitMode[]; types: { name: string; state: "current" | "changed" | "missing" | "theirs" | "gone" }[] };
 export type SendResult = { ok?: boolean; error?: string; message?: string; results: { id: string; name?: string; ok: boolean; error?: string; types?: unknown[]; sent?: string[]; skipped?: string[]; kept?: string[] }[] };
 export const creatureServers = (signal?: AbortSignal) => get<{ servers: ServerCreatures[]; error?: string }>("/api/tools/creatures/servers", signal);
 export const sendCreatures = (servers: string[], types: string[], remove: string[]) => post<SendResult>("/api/tools/creatures/send", { servers, types, remove });
+export const addToServerModes = (servers: string[], modes: string[], types: string[]) => post<SendResult>("/api/tools/creatures/send-modes", { servers, modes, types });
 export const usedBy = (signal?: AbortSignal) => get<{ usedBy: Record<string, TypeUser[]> }>("/api/tools/creatures/used-by", signal);
