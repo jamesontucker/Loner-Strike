@@ -13,6 +13,7 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import * as api from "./compileApi";
 import { remixMap } from "../community/communityApi"; // Parity A: Remix it, from a Community map's clash
+import { saveSettings } from "./editorApi";
 import type { Job, Preset, Problem } from "./compileApi";
 import { originOf, useEditor } from "./store";
 import "./compile.css";
@@ -290,6 +291,10 @@ export function CompilePanel() {
     if (!c) return;
     setClash(null);
     setName(c.editName);
+    // kept in the project, so opening it again compiles to the new name (saved now when it has a file)
+    const sr = await saveSettings({ mapName: c.editName });
+    if (sr.error) toast(sr.error, true);
+    else if (useEditor.getState().doc?.saved) await useEditor.getState().file("save");
     toast(`Your version is ${c.editName}. ${c.map} stays as Community has it.`);
     setPlaying(true);
     try {

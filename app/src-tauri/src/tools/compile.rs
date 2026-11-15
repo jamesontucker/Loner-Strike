@@ -946,6 +946,12 @@ pub fn map_text(doc: &MapDocument, paths: &[String]) -> Result<String, String> {
 }
 
 /// A map file name from the document's name: lower case letters, digits, `_` and `-`.
+/// Parity A: the name a project compiles to: the one kept in it (Save as `<name>_edit`), else the
+/// project's own name made into a map name.
+pub fn project_map_name(doc: &crate::editor::doc::MapDocument, doc_name: &str) -> String {
+    doc.editor.map_name.clone().filter(|n| valid_map_name(n)).unwrap_or_else(|| map_name(doc_name))
+}
+
 pub fn map_name(doc_name: &str) -> String {
     let mut s: String = doc_name.trim().to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
     while s.contains("__") {
@@ -962,7 +968,7 @@ pub fn map_name(doc_name: &str) -> String {
     }
 }
 
-fn valid_map_name(n: &str) -> bool {
+pub(crate) fn valid_map_name(n: &str) -> bool {
     map_name_problem(n).is_none()
 }
 
@@ -1597,7 +1603,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     let name = match req.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()) {
         Some(n) if valid_map_name(&n) => n,
         Some(n) => return Err(map_name_problem(&n).unwrap_or("That isn't a map name.").into()),
-        None => map_name(&doc_name),
+        None => project_map_name(&doc, &doc_name),
     };
     let mut boxes = req.cordons.clone();
     boxes.extend(req.cordon);
@@ -1852,7 +1858,7 @@ fn start_compile(st: &Shared, req: StartReq) -> Result<Value, String> {
     // Parity A: a Community map's name, refused with the two ways on (your own copy under
     // another name, or a credited remix when the map was shared with its source)
     if req.install {
-        let want = req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).or_else(|| super::editor::open_document().map(|(_, n)| map_name(&n)));
+        let want = req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).or_else(|| super::editor::open_document().map(|(d, n)| project_map_name(&d, &n)));
         if let Some(want) = want {
             let lib = super::communitylib::lib_dir();
             if let Some(it) = super::communitylib::map_owner(&lib, &want) {
@@ -1886,7 +1892,7 @@ fn status(st: &Shared) -> Value {
         None => Err(NO_GAME.to_string()),
         Some(c) => layout_for(&c, &dir, false).map(|_| ()),
     };
-    let suggest = super::editor::open_document().map(|(_, n)| map_name(&n));
+    let suggest = super::editor::open_document().map(|(d, n)| project_map_name(&d, &n));
     json!({
         "installed": installed,
         "version": SDHLT_VERSION,

@@ -227,6 +227,10 @@ pub struct EditorSettings {
     /// list follow the project by it when it's renamed or moved
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uid: Option<String>,
+    /// Parity A: the name the map compiles to, when it isn't the project's own (Save as
+    /// `<name>_edit` for a map that came from Community)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map_name: Option<String>,
     /// P5: the community map this project was remixed from (Remix this map), credited when the
     /// remix is published
     #[serde(default, skip_serializing_if = "Option::is_none")]

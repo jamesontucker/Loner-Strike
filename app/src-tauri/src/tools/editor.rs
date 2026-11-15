@@ -2073,6 +2073,7 @@ fn settings_json(d: &MapDocument) -> Value {
         "fgd": e.fgd.as_deref().map(|p| Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()),
         "visSets": e.vis_sets.iter().map(|v| json!({"name": v.name, "brushes": v.brushes.iter().map(|b| b.0).collect::<Vec<_>>(), "entities": v.entities.iter().map(|x| x.0).collect::<Vec<_>>()})).collect::<Vec<_>>(),
         "cordon": {"boxes": e.cordon.boxes, "on": e.cordon.on, "seal": if e.cordon.seal == "black" { "black" } else { "sky" }, "keepLights": e.cordon.keep_lights},
+        "mapName": e.map_name,
     })
 }
 
@@ -2148,6 +2149,8 @@ struct CordonReq {
 struct SettingsReq {
     vis_sets: Option<Vec<VisReq>>,
     cordon: Option<CordonReq>,
+    /// Parity A: the name the map compiles to ("" goes back to the project's own)
+    map_name: Option<String>,
 }
 
 /// The editor's settings kept in the project (visibility sets, the cordon). Not undoable;
@@ -2181,6 +2184,13 @@ async fn api_settings(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Jso
                 }
             }
             next.cordon = crate::editor::doc::CordonSettings { boxes: c.boxes, on: c.on, seal: if c.seal == "black" { "black".into() } else { String::new() }, keep_lights: c.keep_lights };
+        }
+        if let Some(n) = req.map_name {
+            let n = n.trim().to_string();
+            if !n.is_empty() && !super::compile::valid_map_name(&n) {
+                return Err(super::compile::map_name_problem(&n).unwrap_or("That isn't a map name.").into());
+            }
+            next.map_name = (!n.is_empty()).then_some(n);
         }
         if next != s.doc.editor {
             s.doc.editor = next;
@@ -2656,6 +2666,17 @@ mod tests {
             assert_eq!(back.editor.cordon.boxes.len(), 1);
             assert!(back.editor.cordon.keep_lights);
         }
+        // Parity A: the name the map compiles to, kept in the project (Save as <name>_edit)
+        let v = t.post("/api/tools/editor/settings", json!({"mapName": "de_lonely_edit"})).await;
+        assert_eq!(v["editor"]["mapName"], "de_lonely_edit");
+        assert!(t.post("/api/tools/editor/settings", json!({"mapName": "con"})).await["error"].is_string());
+        {
+            let g = t.ed.lock();
+            let s = g.as_ref().unwrap();
+            let back = MapDocument::from_json(&s.doc.to_json()).unwrap();
+            assert_eq!(super::super::compile::project_map_name(&back, "Lonely Remix"), "de_lonely_edit");
+        }
+        assert_eq!(t.post("/api/tools/editor/settings", json!({"mapName": ""})).await["editor"]["mapName"], Value::Null);
         // sounds: only plain game paths
         assert_eq!(game_rel("ambience/wind1.wav", &[".wav"]).as_deref(), Some("ambience/wind1.wav"));
         assert_eq!(game_rel("!ambience\\x.wav", &[".wav"]).as_deref(), Some("ambience/x.wav"));

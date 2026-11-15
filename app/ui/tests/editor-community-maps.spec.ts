@@ -138,3 +138,32 @@ test("Teach bots and send to my servers can be cancelled", async ({ page }) => {
   await expect(page.locator(".compile-sendout-summary")).toContainText("Teaching bots was stopped.", { timeout: 20_000 });
   expect(calls.some((c) => c.startsWith("copy:")), "nothing sent after a cancel").toBe(false);
 });
+
+test("Save as <name>_edit is kept in the project: opened again, it compiles to the new name", async ({ page }) => {
+  let starts = 0;
+  await page.route(/\/api\/tools\/compile\/start/, (r: Route) => {
+    starts++;
+    if (starts === 1)
+      return r.fulfill({ json: { error: "ls_newmap came from Community. Its updates would replace your changes.", community: { map: "ls_newmap", name: "New", author: "jam", model: "Mod", gb: 4243, editName: "ls_newmap_edit", remixable: false } } });
+    return r.fulfill({ json: { error: "(stopped here by the test)" } });
+  });
+  await open(page);
+  await dock(page, "Compile");
+  const nameBox = page.locator(".compile-panel input").first();
+  await expect(nameBox).toHaveValue("ls_newmap");
+  await page.locator(".compile-playtest").getByRole("button", { name: "Playtest", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Save as ls_newmap_edit" }).click();
+  await expect.poll(() => starts).toBe(2);
+  // the project holds it (and counts as changed until saved)
+  const doc = await page.evaluate(async () => (await fetch("/api/tools/editor/doc")).json());
+  expect(doc.editor.mapName).toBe("ls_newmap_edit");
+  expect(doc.dirty).toBe(true);
+  // opened again: the compile name is the new one, and no refusal box
+  await page.reload();
+  const back = page.getByRole("button", { name: /^Back to/ });
+  if (await back.waitFor({ timeout: 5000 }).then(() => true, () => false)) await back.click();
+  await page.locator(".ed-pane").first().waitFor();
+  await dock(page, "Compile");
+  await expect(page.locator(".compile-panel input").first()).toHaveValue("ls_newmap_edit");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});

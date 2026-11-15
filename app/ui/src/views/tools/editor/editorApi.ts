@@ -17,7 +17,7 @@ export type CordonBox = { min: Vec3; max: Vec3 };
 export type Cordon = { boxes: CordonBox[]; on: boolean; seal: "sky" | "black"; keepLights: boolean };
 export type VisSet = { name: string; brushes: number[]; entities: number[] };
 /** The editor's settings kept in the project (not in the .map). */
-export type EditorSettings = { fgd: string | null; visSets: VisSet[]; cordon: Cordon };
+export type EditorSettings = { fgd: string | null; visSets: VisSet[]; cordon: Cordon; mapName?: string | null };
 
 export type Doc = DocState & {
   world: { wads: string[]; keys: [string, string][] };
@@ -215,7 +215,7 @@ export const getRecovery = () => getJson<Recovery>(`${E}/recovery`);
 export const recover = () => post<DocState>(`${E}/recover`);
 export const discardRecovery = () => post<{ discarded: boolean }>(`${E}/discard-recovery`);
 export const getState = () => getJson<DocState>(`${E}/state`);
-export const saveSettings = (body: { visSets?: VisSet[]; cordon?: Cordon }) => post<DocState & { editor: EditorSettings }>(`${E}/settings`, body);
+export const saveSettings = (body: { visSets?: VisSet[]; cordon?: Cordon; mapName?: string }) => post<DocState & { editor: EditorSettings }>(`${E}/settings`, body);
 export const pickFgd = () => post<DocState & { editor?: EditorSettings; cancelled?: boolean; classes?: number }>(`${E}/fgd/pick`);
 export const clearFgd = () => post<DocState & { editor: EditorSettings }>(`${E}/fgd/clear`);
 export const soundUrl = (path: string) => `${E}/sound?path=${encodeURIComponent(path)}`;
