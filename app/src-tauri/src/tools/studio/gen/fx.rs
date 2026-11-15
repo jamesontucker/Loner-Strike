@@ -404,7 +404,13 @@ pub(super) fn spawn_flow(
     if gen.debug {
         let mut words: Vec<(i64, String)> = pre.iter().map(|(_, w, m)| (*w, m.to_string())).collect();
         words.push((WHY_BAD, "No place: no such entity, or nothing wired into At.".into()));
-        words.push((WHY_BLOCKED, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.".into()));
+        // (only the nearby modes look for another spot; Don't spawn if blocked never does)
+        let blocked = if mode == 2 {
+            format!("The spot was blocked (a player, a wall or something solid there) and no free spot was found within {} units.", gen.num(n, def, "max_dist").clamp(16.0, 1024.0).round() as i64)
+        } else {
+            "The spot was blocked (a player, a wall or something solid there).".to_string()
+        };
+        words.push((WHY_BLOCKED, blocked));
         words.push((WHY_RETRIES, "The spot stayed blocked: every retry was used up.".into()));
         words.push((create_why.0, create_why.1.to_string()));
         let mut seen = std::collections::BTreeSet::new();
@@ -1469,6 +1475,18 @@ mod tests {
         // a sprite isn't solid: never moved; a non-solid prop neither
         assert!(c("se").contains("lsg_xf_free(o, -1, "), "{}", c("se"));
         assert!(c("pr").contains("lsg_xf_free(o, -1, "), "{}", c("pr"));
+    }
+
+    /// The debugger's Blocked words follow the mode: only the nearby modes searched.
+    #[test]
+    fn blocked_words_follow_the_mode() {
+        let g = crate::tools::studio::graph::parse(include_str!("../testdata/every_node_fx.graph.json")).unwrap();
+        let r = super::super::generate(&g, true);
+        let c = |id: &str| code_of(&r.source, &r.spans, id);
+        assert!(c("pfail").contains("\"The spot was blocked (a player, a wall or something solid there).\""), "{}", c("pfail"));
+        assert!(!c("pfail").contains("no free spot"), "{}", c("pfail"));
+        assert!(c("pnear").contains("no free spot was found within 96 units."), "{}", c("pnear"));
+        assert!(c("cretry").contains("every retry was used up") && !c("cretry").contains("no free spot"), "{}", c("cretry"));
     }
 
     /// The fallback chain: exactly at the bot, and on Failed at a point; the reason goes on.

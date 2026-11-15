@@ -3844,7 +3844,7 @@ lsg_n7(ctx[])
 		{
 			case 6: lsd_error(7, "gm_components isn't running on this server.")
 			case 2: lsd_error(7, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(7, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(7, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(7, "The spot stayed blocked: every retry was used up.")
 		}
 	}

@@ -6888,7 +6888,7 @@ lsg_n12(ctx[])
 		{
 			case 6: lsd_error(12, "gm_components isn't running on this server.")
 			case 2: lsd_error(12, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(12, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(12, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(12, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -6942,7 +6942,7 @@ lsg_n13(ctx[])
 		{
 			case 6: lsd_error(13, "gm_components isn't running on this server.")
 			case 2: lsd_error(13, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(13, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(13, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(13, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -7014,7 +7014,7 @@ lsg_n14(ctx[])
 			case 2: lsd_error(14, "Spawn Projectile skipped: the server is out of entity slots.")
 			case 3: lsd_error(14, "Not fired: as many projectiles fly as Projectiles at once allows (Limits).")
 			case 4: lsd_error(14, "Not fired: its model or sprite isn't loaded with this map.")
-			case 1: lsd_error(14, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(14, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(14, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -7840,7 +7840,7 @@ lsg_n60(ctx[])
 			case 4: lsd_error(60, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(60, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(60, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(60, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(60, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(60, "The spot stayed blocked: every retry was used up.")
 		}
 	}

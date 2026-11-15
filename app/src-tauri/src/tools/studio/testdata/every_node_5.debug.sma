@@ -4441,7 +4441,7 @@ lsg_n6(ctx[])
 			case 4: lsd_error(6, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(6, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(6, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(6, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(6, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(6, "The spot stayed blocked: every retry was used up.")
 		}
 	}

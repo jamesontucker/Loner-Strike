@@ -4475,7 +4475,7 @@ lsg_n22(ctx[])
 		{
 			case 6: lsd_error(22, "This server's bot brain has no creatures (ls_creature).")
 			case 2: lsd_error(22, "Not spawned: the server is out of entity slots.")
-			case 1: lsd_error(22, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(22, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(22, "The spot stayed blocked: every retry was used up.")
 			case 4: lsd_error(22, "Not spawned: that creature type isn't loaded on this map.")
 		}
@@ -5227,7 +5227,7 @@ lsg_n59(ctx[])
 		{
 			case 6: lsd_error(59, "gm_components isn't running on this server.")
 			case 2: lsd_error(59, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(59, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(59, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(59, "The spot stayed blocked: every retry was used up.")
 		}
 	}

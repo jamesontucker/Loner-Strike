@@ -4291,7 +4291,7 @@ lsg_n17(ctx[])
 			case 4: lsd_error(17, "Not made: a file it needs isn't loaded with the map.")
 			case 2: lsd_error(17, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(17, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(17, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(17, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(17, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4348,7 +4348,7 @@ lsg_n18(ctx[])
 			case 4: lsd_error(18, "Not made: a file it needs isn't loaded with the map.")
 			case 2: lsd_error(18, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(18, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(18, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(18, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(18, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4406,7 +4406,7 @@ lsg_n19(ctx[])
 			case 4: lsd_error(19, "Not made: a file it needs isn't loaded with the map.")
 			case 2: lsd_error(19, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(19, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(19, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(19, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(19, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4472,7 +4472,7 @@ lsg_n20(ctx[])
 			case 4: lsd_error(20, "Not made: its model isn't loaded with the map.")
 			case 2: lsd_error(20, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(20, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(20, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(20, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(20, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4536,7 +4536,7 @@ lsg_n21(ctx[])
 			case 4: lsd_error(21, "Not made: its model isn't loaded with the map.")
 			case 2: lsd_error(21, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(21, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(21, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(21, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(21, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4600,7 +4600,7 @@ lsg_n22(ctx[])
 			case 4: lsd_error(22, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(22, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(22, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(22, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(22, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(22, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4658,7 +4658,7 @@ lsg_n23(ctx[])
 			case 4: lsd_error(23, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(23, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(23, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(23, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(23, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(23, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4715,7 +4715,7 @@ lsg_n24(ctx[])
 			case 4: lsd_error(24, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(24, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(24, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(24, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(24, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(24, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4780,7 +4780,7 @@ lsg_n25(ctx[])
 		{
 			case 6: lsd_error(25, "This server's bot brain has no creatures (ls_creature).")
 			case 2: lsd_error(25, "Not spawned: the server is out of entity slots.")
-			case 1: lsd_error(25, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(25, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(25, "The spot stayed blocked: every retry was used up.")
 			case 4: lsd_error(25, "Not spawned: that creature type isn't loaded on this map.")
 		}
@@ -4840,7 +4840,7 @@ lsg_n26(ctx[])
 		{
 			case 6: lsd_error(26, "gm_components isn't running on this server.")
 			case 2: lsd_error(26, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(26, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(26, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(26, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4899,7 +4899,7 @@ lsg_n27(ctx[])
 		{
 			case 6: lsd_error(27, "gm_components isn't running on this server.")
 			case 2: lsd_error(27, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(27, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(27, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(27, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -4958,7 +4958,7 @@ lsg_n28(ctx[])
 		{
 			case 6: lsd_error(28, "gm_components isn't running on this server.")
 			case 2: lsd_error(28, "Not made: the server is out of entity slots.")
-			case 1: lsd_error(28, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(28, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(28, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5015,7 +5015,7 @@ lsg_n29(ctx[])
 			case 4: lsd_error(29, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(29, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(29, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(29, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(29, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(29, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5072,7 +5072,7 @@ lsg_n30(ctx[])
 			case 4: lsd_error(30, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(30, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(30, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(30, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(30, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(30, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5134,7 +5134,7 @@ lsg_n31(ctx[])
 			case 4: lsd_error(31, "Not made: its model isn't loaded with the map.")
 			case 2: lsd_error(31, "Not made: the server is out of entity slots.")
 			case 6: lsd_error(31, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(31, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(31, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 96 units.")
 			case 5: lsd_error(31, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5213,7 +5213,7 @@ lsg_n33(ctx[])
 			case 4: lsd_error(33, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(33, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(33, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(33, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(33, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(33, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5277,7 +5277,7 @@ lsg_n34(ctx[])
 			case 4: lsd_error(34, "No prop: its model isn't loaded with the map.")
 			case 2: lsd_error(34, "No prop: the server is out of entity slots.")
 			case 6: lsd_error(34, "No place: no such entity, or nothing wired into At.")
-			case 1: lsd_error(34, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(34, "The spot was blocked (a player, a wall or something solid there) and no free spot was found within 128 units.")
 			case 5: lsd_error(34, "The spot stayed blocked: every retry was used up.")
 		}
 	}
@@ -5394,7 +5394,7 @@ lsg_n36(ctx[])
 		{
 			case 6: lsd_error(36, "This server's bot brain has no creatures (ls_creature).")
 			case 2: lsd_error(36, "Not spawned: the server is out of entity slots.")
-			case 1: lsd_error(36, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 1: lsd_error(36, "The spot was blocked (a player, a wall or something solid there).")
 			case 5: lsd_error(36, "The spot stayed blocked: every retry was used up.")
 			case 4: lsd_error(36, "Not spawned: that creature type isn't loaded on this map.")
 		}
