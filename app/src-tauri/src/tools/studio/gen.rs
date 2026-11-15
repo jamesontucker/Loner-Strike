@@ -2180,25 +2180,23 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // At entity alone (no Position): it has to be there
             let need_at = v.data_source(id, "at_ent").is_some() && v.data_source(id, "pos").is_none();
             b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {}, {}, {}, {})", if sphere { 1 } else { 0 }, pawn_str(&name), gen.limit_expr("trigger_volumes"), gen.limit_expr("volume_members"), if need_at { 1 } else { 0 }));
-            // the spawn outcome (Entity, Success, Failure Reason)
-            if let Some(k) = gen.out_index(id, "volume") {
-                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}]"));
-            }
-            if let Some(k) = gen.out_index(id, "success") {
-                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}] ? 1 : 0"));
-            }
-            if let Some(t) = gen.tout_index(id, "reason") {
-                b.line(format!("\tcopy(g_lsgOT[{t}], 127, g_lsgVolWhy)"));
+            // the spawn outcome standard (docs/notes/FX.md): Entity, Success, Failure reason (the
+            // Spawn Failure enum); Spawned or Failed, then Then right away whatever happened
+            for (pin, val) in [("out", format!("g_lsgOut[{i}]")), ("ok", format!("g_lsgOut[{i}] ? 1 : 0")), ("reason", "g_lsgVolWhy".to_string())] {
+                if let Some(k) = gen.out_index(id, pin) {
+                    b.line(format!("\tg_lsgO[{k}] = {val}"));
+                }
             }
             if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\tlsd_error({i}, g_lsgVolWhy)\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))"));
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\tlsd_error({i}, g_lsgVolWhyName[clamp(g_lsgVolWhy, 0, 6)])\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))"));
             }
-            match (next("then"), next("failed")) {
+            match (next("spawned"), next("failed")) {
                 (Some(t), Some(f)) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}\n\telse\n\t\t{f}")),
                 (Some(t), None) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}")),
                 (None, Some(f)) => b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{f}")),
                 (None, None) => {}
             }
+            then_line(&mut b, "then");
         }
         "vol.remove" => {
             let call = format!("lsg_vol_remove({})", inp("volume", "entity"));
