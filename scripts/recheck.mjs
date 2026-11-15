@@ -67,7 +67,9 @@ const commit = execFileSync("git", ["-C", repo, "rev-parse", opt("--commit", "HE
 const TREE = join(OUT, "tree");
 const APP_DIR = join(OUT, "app-data");
 const GAME_CLONE = join(SIMS, "RECHECK-HL");
-const SIM = join(SIMS, "RECHECK");
+// (RECHECK_SIM_NAME: a second process running the sims beside the first's other steps)
+const SIM_NAME = (process.env.RECHECK_SIM_NAME || "RECHECK").replace(/[^A-Za-z0-9_-]/g, "");
+const SIM = join(SIMS, SIM_NAME);
 const rows = []; // {step, result, secs, detail}
 const simRows = [];
 let stopped = "";
@@ -199,42 +201,49 @@ function specFixtures() {
     writeFileSync(waves, text, "latin1");
   }
 }
+// Specs that need their own game state, run after the rest with it written into the clone (it
+// would change what other specs see: creatures-qa4 wants Last Stand's own lineup, no waves.ini)
+const FIXTURE_SPECS = ["creature-picker.spec.ts"];
 function ui() {
   cloneGame();
-  specFixtures();
   rmSync(APP_DIR, { recursive: true, force: true });
   mkdirSync(APP_DIR, { recursive: true });
-  const json = join(OUT, "playwright.json");
-  const env = {
-    ...rustEnv, LS_APP_DIR: APP_DIR, LS_TEST_GAME: GAME_CLONE, LS_DEV_PORT: DEV_PORT, LS_VITE_PORT: VITE_PORT,
-    LS_WEBKIT_ALL: "1", PLAYWRIGHT_JSON_OUTPUT_NAME: json, CI: "1",
-  };
+  const env = { ...rustEnv, LS_APP_DIR: APP_DIR, LS_TEST_GAME: GAME_CLONE, LS_DEV_PORT: DEV_PORT, LS_VITE_PORT: VITE_PORT, LS_WEBKIT_ALL: "1", CI: "1" };
   // a few at a time, at low priority: other agents' game servers share this machine, and a starved
   // one can freeze CrossOver's wineserver for everyone (RECHECK_WORKERS, default 1, at most 3)
   const workers = Math.min(3, Math.max(1, Number(process.env.RECHECK_WORKERS) || 1));
-  const r = run("ui", "nice", ["-n", "10", "npx", "playwright", "test", "--project", "large", "--project", "small", "--project", "webkit", `--workers=${workers}`, "--reporter=list,json"], { cwd: join(TREE, "app/ui"), env });
+  const specs = DRY ? [] : readdirSync(join(TREE, "app/ui/tests")).filter((f) => f.endsWith(".spec.ts"));
+  const pass = (name, files, json) =>
+    run(name, "nice", ["-n", "10", "npx", "playwright", "test", ...files.map((f) => `tests/${f}`), "--project", "large", "--project", "small", "--project", "webkit", `--workers=${workers}`, "--reporter=list,json"], { cwd: join(TREE, "app/ui"), env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: json } });
+  const jsons = [join(OUT, "playwright.json"), join(OUT, "playwright-fixtures.json")];
+  const r1 = pass("ui", specs.filter((f) => !FIXTURE_SPECS.includes(f)), jsons[0]);
+  specFixtures();
+  const r2 = pass("ui", specs.filter((f) => FIXTURE_SPECS.includes(f)), jsons[1]);
   if (DRY) return { ok: true, detail: "" };
+  const r = { code: r1.code || r2.code, out: r1.out + r2.out };
   let detail = `exit ${r.code}: ${r.out.trim().split("\n").filter((l) => /error|Error|failed/.test(l)).slice(-1)[0]?.slice(0, 160) ?? "see ui.log"}`;
-  try {
-    const rep = JSON.parse(readFileSync(json, "utf8"));
-    const by = {};
-    const failed = [];
-    const walk = (s) => {
-      for (const sp of s.specs ?? []) for (const t of sp.tests ?? []) {
-        const st = t.results?.at(-1)?.status ?? "skipped";
-        by[t.projectName] ??= { passed: 0, failed: 0, skipped: 0, flaky: 0 };
-        const k = t.status === "flaky" ? "flaky" : st === "passed" ? "passed" : st === "skipped" ? "skipped" : "failed";
-        by[t.projectName][k]++;
-        if (k === "failed") failed.push(`${t.projectName}: ${basename(sp.file)} › ${sp.title}`);
-      }
-      for (const c of s.suites ?? []) walk(c);
-    };
-    for (const s of rep.suites ?? []) walk(s);
-    writeFileSync(join(OUT, "ui-failed.txt"), failed.join("\n") + "\n");
-    if (Object.keys(by).length) detail = Object.entries(by).map(([p, c]) => `${p} ${c.passed}✓ ${c.failed}✗ ${c.flaky} flaky ${c.skipped} skipped`).join("; ") + (failed.length ? ` (failed list: ui-failed.txt)` : "");
-  } catch {
-    /* the list reporter's output is in ui.log */
+  const by = {};
+  const failed = [];
+  for (const json of jsons) {
+    try {
+      const rep = JSON.parse(readFileSync(json, "utf8"));
+      const walk = (s) => {
+        for (const sp of s.specs ?? []) for (const t of sp.tests ?? []) {
+          const st = t.results?.at(-1)?.status ?? "skipped";
+          by[t.projectName] ??= { passed: 0, failed: 0, skipped: 0, flaky: 0 };
+          const k = t.status === "flaky" ? "flaky" : st === "passed" ? "passed" : st === "skipped" ? "skipped" : "failed";
+          by[t.projectName][k]++;
+          if (k === "failed") failed.push(`${t.projectName}: ${basename(sp.file)} › ${sp.title}`);
+        }
+        for (const c of s.suites ?? []) walk(c);
+      };
+      for (const s of rep.suites ?? []) walk(s);
+    } catch {
+      /* the list reporter's output is in ui.log */
+    }
   }
+  writeFileSync(join(OUT, "ui-failed.txt"), failed.join("\n") + "\n");
+  if (Object.keys(by).length) detail = Object.entries(by).map(([p, c]) => `${p} ${c.passed}✓ ${c.failed}✗ ${c.flaky} flaky ${c.skipped} skipped`).join("; ") + (failed.length ? ` (failed list: ui-failed.txt)` : "");
   return { ok: r.code === 0, detail };
 }
 
@@ -272,7 +281,9 @@ const SIM_STEPS = [
   { id: "basebuilder", mode: "basebuilder", map: "bb_aztec", secs: 120, forbid: ["SQL-LOG", "syntax error"], why: "Base Builder saves on SQLite (ee9818d3)" },
   { id: "bb-precache", mode: "basebuilder", map: "bb_dust_iplay", secs: 90, alive: true, why: "a map over the model limit can't hang the server (56f3ca19)" },
   { id: "laststand", mode: "laststand", map: "ls_outpost", secs: 180, why: "Last Stand waves, creatures, turrets (QA4-C, W1)" },
-  { id: "br", mode: "br", map: "br_valley", secs: 180, kills: 1, why: "Battle Royale loot, knocks, squads out (QA4-D, W2)" },
+  { id: "br", mode: "br", map: "br_valley", secs: 180, expect: ["game starts"], why: "Battle Royale starts with bots (5 bots is too few for a fight in 3 minutes)" },
+  // W2's way: 16 bots in squads, up to 8 minutes, until someone is knocked down or out
+  { id: "br-squads16", mode: "br_squads", map: "br_valley", secs: 480, bots: 16, expect: ["game starts", "first contact at"], anyOf: ["knocked down at", " out at ", '" killed "'], until: true, why: "Battle Royale squads fight: first contact, knocks and kills (QA4-D, W2)" },
   { id: "deathrun", mode: "deathrun", map: "deathrun_temple", secs: 150, rounds: 1, why: "rounds end at time-up (584eb81d)" },
   { id: "zombie", mode: "zombie", map: "zm_deko2", secs: 120, rounds: 1, why: "Zombie Plague" },
   { id: "modevote", mode: "classic", map: "de_dust2", secs: 60, vote: true, expect: ["Map vote for"], why: "mode vote lists (a7ef360f)" },
@@ -280,7 +291,7 @@ const SIM_STEPS = [
 const FORBID = ["Run time error", "Host_Error", "Segmentation fault", "failed to load"];
 const winPath = (p) => (p.startsWith(BOTTLE) ? "C:" + p.slice(BOTTLE.length) : "Z:" + p).replace(/\//g, "\\");
 function hldsPids() {
-  const r = spawnSync("pgrep", ["-f", `^C:\\\\Loner-Strike\\\\Sim\\\\RECHECK\\\\hlds\\.exe`], { encoding: "utf8" });
+  const r = spawnSync("pgrep", ["-f", `^C:\\\\Loner-Strike\\\\Sim\\\\${SIM_NAME}\\\\hlds\\.exe`], { encoding: "utf8" });
   return (r.stdout ?? "").split("\n").filter(Boolean);
 }
 function stopSim() {
@@ -301,7 +312,7 @@ function rcon(cmd, timeout = 3000) {
         challenge = /challenge rcon (\d+)/.exec(text)?.[1];
         if (!challenge) return done(null);
         s.send(Buffer.concat([pre, Buffer.from(`rcon ${challenge} "${PW}" ${cmd}\n`, "latin1")]), SIM_PORT, "127.0.0.1");
-      } else done(text.slice(1));
+      } else done(/Bad rcon/i.test(text) ? null : text.slice(1));
     });
     s.send(Buffer.concat([pre, Buffer.from("challenge rcon\n")]), SIM_PORT, "127.0.0.1");
   });
@@ -311,6 +322,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, DRY ? 0 : ms));
 function prepareSim() {
   const base = join(SIMS, SIM_BASE);
   if (!existsSync(join(base, "hlds.exe"))) throw new Error(`no sim base ${base} (--sim-base)`);
+  // --reuse-sim: a clone an earlier run of the same commit left (--keep), plugins compiled
+  // already; only the settings below are written again
+  if (flag("--reuse-sim") && existsSync(join(SIM, "cstrike/recheck.cfg"))) {
+    log("   sim: reusing the clone (plugins compiled by an earlier run)");
+    return writeSimSettings(join(SIM, "cstrike/addons/amxmodx"), { built: 0, bad: [], reused: true });
+  }
   removeAll(SIM);
   execFileSync("cp", ["-c", "-R", base, SIM]);
   const am = join(SIM, "cstrike/addons/amxmodx");
@@ -321,42 +338,47 @@ function prepareSim() {
     for (const sub of ["data", "configs"]) copyOver(join(src, sub), join(am, sub), true);
   }
   copyOver(join(TREE, "plugins/configs/gamemodes"), join(am, "configs/gamemodes"), true);
-  // plugins: every .amxx this server has whose source is in the commit, compiled fresh
-  const sources = new Map();
-  const scan = (d) => {
-    if (!existsSync(d)) return;
-    for (const f of readdirSync(d)) {
-      const p = join(d, f);
-      if (statSync(p).isDirectory()) scan(p);
-      else if (f.endsWith(".sma")) sources.set(f.slice(0, -4).toLowerCase(), p);
+  // plugins: every .amxx this server has whose source is in the commit, compiled fresh the way
+  // setup does: a mod's from its catalog part (src and include folder under the mod's
+  // scripting), ours from plugins/scripting with its include folder
+  const jobs = new Map(); // out name (lower case) -> { src, include }
+  for (const f of readdirSync(join(TREE, "plugins/scripting")).filter((x) => x.endsWith(".sma"))) {
+    jobs.set(f.slice(0, -4).toLowerCase(), { src: join(TREE, "plugins/scripting", f), include: join(TREE, "plugins/scripting/include") });
+  }
+  for (const f of readdirSync(join(TREE, "catalog/parts")).filter((x) => x.endsWith(".json"))) {
+    const part = JSON.parse(readFileSync(join(TREE, "catalog/parts", f), "utf8"));
+    if (!part.vendor) continue;
+    const scripting = join(TREE, part.vendor, "addons/amxmodx/scripting");
+    for (const c of part.compile ?? []) {
+      if (!c.src || !c.out) continue;
+      jobs.set(String(c.out).toLowerCase(), { src: join(scripting, ...String(c.src).split("/")), include: c.include ? join(scripting, ...String(c.include).split("/")) : null });
     }
-  };
-  scan(join(TREE, "plugins/scripting"));
-  for (const mod of readdirSync(join(TREE, "mods"))) scan(join(TREE, "mods", mod, "addons/amxmodx/scripting"));
-  const includes = [join(am, "scripting/include"), join(TREE, "plugins/scripting/include")];
-  for (const mod of readdirSync(join(TREE, "mods"))) {
-    const s = join(TREE, "mods", mod, "addons/amxmodx/scripting");
-    if (existsSync(s)) includes.push(s, join(s, "include"));
   }
   const bad = [];
   let built = 0;
   for (const f of readdirSync(join(am, "plugins")).filter((x) => x.endsWith(".amxx"))) {
-    const src = sources.get(f.slice(0, -5).toLowerCase());
-    if (!src) continue;
-    const argv = ["--bottle", "Steam", "--workdir", winPath(dirname(src)), winPath(join(am, "scripting/amxxpc.exe")), winPath(src), ...includes.filter(existsSync).map((i) => `-i${winPath(i)}`), `-o${winPath(join(am, "plugins", f))}`];
-    const r = run("sims-compile", WINE, argv, { cwd: SIM, timeout: 120_000 });
+    const job = jobs.get(f.slice(0, -5).toLowerCase());
+    if (!job || !existsSync(job.src)) continue;
+    const inc = [job.include, join(am, "scripting/include")].filter((i) => i && existsSync(i));
+    const argv = ["--bottle", "Steam", "--workdir", winPath(dirname(job.src)), winPath(join(am, "scripting/amxxpc.exe")), winPath(job.src), ...inc.map((i) => `-i${winPath(i)}`), `-o${winPath(join(am, "plugins", f))}`];
+    const r = run("sims-compile", WINE, argv, { cwd: SIM, timeout: 300_000 });
     if (r.code !== 0 || !/Done\./.test(r.out)) bad.push(f);
     else built++;
   }
+  return writeSimSettings(am, { built, bad });
+}
+function writeSimSettings(am, result) {
   // the bot brain the commit pins (setup/foundation.rs REGAMEDLL), as setup would install it
   const brain = pinnedBrain();
   copyFileSync(brain.dll, join(SIM, "cstrike/dlls/mp.dll"));
   log(`   sim: bot brain ${brain.name} (sha256 checked)`);
   // bots only, logs to the console, our rcon password, after every map
   const friends = join(am, "data/gamemodes/friends.cfg");
-  writeFileSync(friends, `// recheck\nsv_lan 1\nbot_join_after_player 0\nbot_auto_vacate 0\nrcon_password "${PW}"\nlog on\nmp_logecho 1\nmp_logdetail 3\n`);
+  writeFileSync(friends, `// recheck\nsv_lan 1\nbot_join_after_player 0\nbot_auto_vacate 0\nrcon_password "${PW}"\nlog on\nmp_logecho 1\nmp_logdetail 3\n// Battle Royale starts with bots only (it waits for a person by default)\nbr_wait_human 0\n`);
+  // gamemodes.amxx sets rcon_password from panel_rcon.txt on every map: ours there too
+  writeFileSync(join(am, "data/gamemodes/panel_rcon.txt"), `${PW}\n`);
   writeFileSync(join(SIM, "cstrike/recheck.cfg"), `rcon_password "${PW}"\nsv_lan 1\nbot_quota 5\nlog on\nmp_logecho 1\n`);
-  return { built, bad };
+  return result;
 }
 /** The pinned ReGameDLL zip (RECHECK_BRAIN_ZIP, else the app's download cache, else downloaded),
  *  its SHA-256 checked against the pin, and its win32 mp.dll unpacked into <out>/brain. */
@@ -418,15 +440,22 @@ async function sims() {
     return { ok: true, detail: `${SIM_STEPS.length} steps` };
   }
   const { built, bad } = prepareSim();
-  const qlog = join(SIM, "cstrike/qconsole.log");
+  const qlog = join(SIM, "qconsole.log"); // (-condebug writes it beside hlds.exe)
   rmSync(qlog, { force: true });
   const am = join(SIM, "cstrike/addons/amxmodx");
   writeFileSync(join(am, "data/gamemodes/current.txt"), "classic\n");
-  const srv = spawn("nice", ["-n", "15", WINE, "--bottle", "Steam", "--workdir", winPath(SIM), winPath(join(SIM, "hlds.exe")), "-console", "-game", "cstrike", "-insecure", "-nomaster", "-condebug", "-port", String(SIM_PORT), "+maxplayers", "16", "+exec", "recheck.cfg", "+map", "de_dust2"], { cwd: SIM, stdio: "ignore", detached: false });
+  const srv = spawn("nice", ["-n", "15", WINE, "--bottle", "Steam", "--workdir", SIM, join(SIM, "hlds.exe"), "-console", "-game", "cstrike", "-insecure", "-nomaster", "-condebug", "-port", String(SIM_PORT), "+maxplayers", "20", "+exec", "recheck.cfg", "+map", "de_dust2"], { cwd: OUT, stdio: "ignore", detached: false });
+  // (cwd anywhere but the server's folder: there wine turns "-game cstrike" into a Windows path,
+  // and the server starts as Half-Life with no maps)
   srv.on("error", () => {});
   const up = async () => {
     for (let i = 0; i < 40; i++) {
-      if (await rcon("echo up")) return true;
+      if (await rcon("echo up")) {
+        // the first map loaded and its plugins up (a mode switch before that is lost)
+        for (let j = 0; j < 30 && !(existsSync(qlog) && /Started map "/.test(readFileSync(qlog, "latin1"))); j++) await sleep(2000);
+        await sleep(8000);
+        return true;
+      }
       await sleep(3000);
     }
     return false;
@@ -439,7 +468,8 @@ async function sims() {
   // what its .res lists), read only
   for (const s of SIM_STEPS) borrowMap(s.map);
   const maps = new Set(readdirSync(join(SIM, "cstrike/maps")).filter((f) => f.endsWith(".bsp")).map((f) => f.slice(0, -4).toLowerCase()));
-  for (const s of SIM_STEPS) {
+  const pickSteps = opt("--sim-steps", "") ? opt("--sim-steps", "").split(",") : null;
+  for (const s of SIM_STEPS.filter((x) => !pickSteps || pickSteps.includes(x.id))) {
     if (!diskOk(`sim ${s.id}`)) {
       simRows.push({ ...s, result: "SKIPPED", detail: stopped });
       continue;
@@ -453,19 +483,28 @@ async function sims() {
     if (s.vote) await rcon("gm_votemode");
     else {
       await rcon(`gm_mode ${s.mode} ${s.map}`);
+      // the mode's saved bot count, as the app's Bots page sets it (a plain bot_quota is held)
+      await sleep(5000);
+      await rcon(`gm_bots count ${s.bots ?? 5}`);
       for (let i = 0; i < 4; i++) {
         await sleep(10_000);
-        await rcon("bot_join_after_player 0;bot_quota 5");
+        await rcon(`bot_join_after_player 0;bot_quota ${s.bots ?? 5}`);
       }
     }
-    await sleep(Math.max(0, s.secs * 1000 - (Date.now() - t)));
+    // (until: stop early once everything it looks for is in the log)
+    while (Date.now() - t < s.secs * 1000) {
+      await sleep(Math.min(15_000, Math.max(0, s.secs * 1000 - (Date.now() - t))));
+      if (!s.until) continue;
+      const sofar = existsSync(qlog) ? readFileSync(qlog).subarray(from).toString("latin1") : "";
+      if ((s.expect ?? []).every((e) => sofar.includes(e)) && (s.anyOf ?? []).some((e) => sofar.includes(e))) break;
+    }
     const alive = !!(await rcon("echo alive", 5000));
     const text = existsSync(qlog) ? readFileSync(qlog).subarray(from).toString("latin1") : "";
     writeFileSync(join(OUT, `sim-${s.id}.log`), text);
     const kills = (text.match(/" killed "/g) ?? []).length;
     const rounds = (text.match(/World triggered "Round_End"/g) ?? []).length;
     const errs = [...FORBID, ...(s.forbid ?? [])].filter((f) => text.includes(f));
-    const missing = (s.expect ?? []).filter((e) => !text.includes(e));
+    const missing = [...(s.expect ?? []).filter((e) => !text.includes(e)), ...(s.anyOf && !s.anyOf.some((e) => text.includes(e)) ? [`any of ${s.anyOf.join(" / ")}`] : [])];
     const problems = [
       ...errs.map((e) => `"${e}" in the log`),
       ...missing.map((e) => `no "${e}"`),
@@ -478,13 +517,13 @@ async function sims() {
     if (!alive) {
       // a dead server: start it again for the next step
       stopSim();
-      spawn("nice", ["-n", "15", WINE, "--bottle", "Steam", "--workdir", winPath(SIM), winPath(join(SIM, "hlds.exe")), "-console", "-game", "cstrike", "-insecure", "-nomaster", "-condebug", "-port", String(SIM_PORT), "+maxplayers", "16", "+exec", "recheck.cfg", "+map", "de_dust2"], { cwd: SIM, stdio: "ignore" }).on("error", () => {});
+      spawn("nice", ["-n", "15", WINE, "--bottle", "Steam", "--workdir", SIM, join(SIM, "hlds.exe"), "-console", "-game", "cstrike", "-insecure", "-nomaster", "-condebug", "-port", String(SIM_PORT), "+maxplayers", "20", "+exec", "recheck.cfg", "+map", "de_dust2"], { cwd: OUT, stdio: "ignore" }).on("error", () => {});
       await up();
     }
   }
   stopSim();
   const failed = simRows.filter((r) => r.result === "FAIL").length;
-  return { ok: !failed && !bad.length, detail: `${built} plugins compiled${bad.length ? `, ${bad.length} didn't: ${bad.join(", ")}` : ""}; ${simRows.filter((r) => r.result === "PASS").length} pass, ${failed} fail, ${simRows.filter((r) => r.result === "SKIPPED").length} skipped` };
+  return { ok: !failed && !bad.length, detail: `${built ? `${built} plugins compiled` : "plugins from the kept clone"}${bad.length ? `, ${bad.length} didn't: ${bad.join(", ")}` : ""}; ${simRows.filter((r) => r.result === "PASS").length} pass, ${failed} fail, ${simRows.filter((r) => r.result === "SKIPPED").length} skipped` };
 }
 
 // ---- the run ------------------------------------------------------------------------------------
@@ -514,7 +553,7 @@ function cleanUp() {
   cleaning = true;
   if (!DRY) {
     stopSim();
-    if (!flag("--keep")) for (const p of [GAME_CLONE, SIM, APP_DIR]) removeAll(p);
+    if (!flag("--keep")) for (const p of [...(only.includes("ui") ? [GAME_CLONE] : []), SIM, APP_DIR]) removeAll(p);
   }
   try {
     dropTree();

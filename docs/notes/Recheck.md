@@ -41,7 +41,8 @@ node scripts/recheck.mjs                # HEAD; or --commit <sha>
 | basebuilder | basebuilder / bb_aztec, 120 s | No "SQL-LOG", no "syntax error" | ee9818d3 |
 | bb-precache | basebuilder / bb_dust_iplay, 90 s | The server still answers (no Host_Error over the 512 limit) | 56f3ca19 |
 | laststand | laststand / ls_outpost, 180 s | No errors, still answering | QA4-C and W1 fixes (waves, turrets, boss in the gateway) |
-| br | br / br_valley, 180 s | 1+ kill | QA4-D and W2 (squad out, revives, high ground) |
+| br | br / br_valley, 180 s | "game starts" | Battle Royale starts with bots (`br_wait_human 0` in the sim) |
+| br-squads16 | br_squads / br_valley, 16 bots asked, up to 8 min | "game starts", "first contact at", a knock-down, an out or a kill | QA4-D and W2 (first contact layers, fights) |
 | deathrun | deathrun / deathrun_temple, 150 s | 1+ round ended | 584eb81d (time-up ends the round) |
 | zombie | zombie / zm_deko2, 120 s | 1+ round ended | Zombie Plague |
 | modevote | `gm_votemode`, 60 s | "Map vote for" in the log | a7ef360f (mode vote map lists) |
@@ -72,6 +73,64 @@ sims (`~/loner-strike-sim`), not this re-check.
   - The re-check's sims install the brain the commit pins. If a newer green ls-next3 has to go
     in before the re-check: `RUN=<id> scripts/fork-release.sh regamedll 5.30.0.814-ls22`, then
     the pin, then `scripts/r2-sync.sh`.
+
+## Results: combined re-check, 2026-11-14
+Main run on **ca97852d**; sims beside it (a second process, its own clone and port); the final
+pass on **HEAD e5701a83** (18 commits later: the creature test fix cae00c24, the server-name test
+9b4c53cc, the site's f2b8c7e1 and e7a5baff, and Studio nodes). One build per commit, ls21 pinned,
+run outside the sandbox, RECHECK_WORKERS=1.
+
+| Step | Commit | Result | Details |
+|---|---|---|---|
+| UI build | ca97852d | PASS | app/ui/dist |
+| Rust suite | ca97852d | FAIL | 1002 passed, 1 failed (community `maps_and_modes_carry_their_custom_creatures`, from 2e6b662b; fixed in cae00c24) |
+| Rust suite | e5701a83 | FAIL | 1011 passed, 1 failed: `mcp::e2e_tests::an_agent_builds_checks_compiles_a_map_and_makes_a_mode` ("the plugin says it": the generated plugin lacks "Nice shot!"), reproduced alone; new since ca97852d (Studio nodes 4fa4349e / 7429fa68) |
+| Typecheck and node tests | ca97852d | PASS | tsc, 9 scripts |
+| Playwright (full game clone) | ca97852d | FAIL | large 490 passed / 2 failed, small 486 / 6, WebKit 486 / 3 (26-29 skipped each); see below |
+| List service | ca97852d | PASS | 263 tests |
+| mod-files-check | ca97852d | PASS | |
+| US English check | both | SKIPPED (user) | (it ran clean on ca97852d) |
+| gitleaks | both | SKIPPED (user) | (it ran clean on ca97852d); the release recipe's own scan stays |
+| Site spec (`tests/site.config.ts`) | e5701a83 | PASS | 10 passed, Chromium and WebKit (docs navigation, Something's wrong?) |
+| Sims | ca97852d | PASS | 11 of 11 after the runner fixes; table below |
+
+Playwright failures:
+- **Runner (fixed, not product):** creatures-qa4 "Waves start from Last Stand's own lineup" (all
+  three: creature-picker's fixture's waves.ini hid the lineup; passes on a clean clone; the runner
+  now runs fixture specs last).
+- **field-look "map editor and its dialogs"** (all three; Parity A's new spec, 9a380f44): the
+  editor sweep sees 0 text fields.
+- **studio-npc** "the NPC nodes come from the palette…" and "The Quest Giver opens…" (small only;
+  910cf03b): pass in the large window.
+- **editor-coverage-keys "clip tool: Tab picks the side that stays"** (small only): 1 brush, not 2.
+- Flaky, passed alone: editor-coverage-panels "tools in the views" (small), editor-coverage-map
+  "Publish…" (WebKit, frame load interrupted).
+- "L1: one click on Fix N is one Undo step" and "map workspaces" pass on the full clone (all three).
+
+| Sim step | Result | Log |
+|---|---|---|
+| classic / de_dust2 | PASS | 3 kills, 3 rounds |
+| csdm / de_dust2 | PASS | 8 kills |
+| gungame / de_dust2 | PASS | 12 kills, no "Invalid multi-lingual line" |
+| basebuilder / bb_aztec | PASS | no SQL-LOG or syntax error |
+| bb-precache / bb_dust_iplay | PASS | the server kept answering, no Host_Error |
+| laststand / ls_outpost | PASS | no errors, 1 round |
+| br / br_valley | PASS | game starts |
+| br-squads16 / br_valley | PASS (see note) | lobby, game starts, first contact at 281 s, a kill at 285 s, won |
+| deathrun / deathrun_temple | PASS | a round ended |
+| zombie / zm_deko2 | PASS | 3 kills, 2 rounds |
+| modevote | PASS | "Map vote for" logged |
+
+Note on br-squads16: the game started with 5 players, not 16 (`gm_bots count 16` didn't raise the
+count in Battle Royale), so it passed with 5 bots in 2 squads. Bot counts for BR on the sim server
+need a look before W2-style 16-bot checks rely on this runner.
+
+Runner fixes found by the run (in scripts/recheck.mjs): the server log is beside hlds.exe; wine
+gets the Unix work folder and a launch folder outside the server's (else `-game cstrike` turns
+into a Windows path); RCON uses our password in panel_rcon.txt and "Bad rcon" isn't an answer;
+mod plugins compile from their catalog parts with their include folders; the first step waits for
+the first map; `br_wait_human 0`; `gm_bots count`; `--reuse-sim`, `--sim-steps`, RECHECK_SIM_NAME;
+fixture specs last.
 
 ## Only the user can check these (the real client, accounts, hardware)
 - **The game itself:** starting a game from Play and playing a first match. Seeing in the client
