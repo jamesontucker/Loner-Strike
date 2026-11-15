@@ -760,6 +760,18 @@ native ls_npc_talking(id);
  * same from the start.
  */
 native bool:ls_interactable_offer(ent, bool:on);
+
+/* ==== bots avoid places (W2; the brain from ls_mode_ver 4) ==== */
+/**
+ * Bots keep away from a spot (radius r): strength 1-10 (5 and up they won't stand in it, below they
+ * only path round it), seconds (0: till ls_bots_avoid_stop), team 0 every bot, 1 T bots, 2 CT bots.
+ * The same tag again moves or changes it. At most 32 at once (the brain's).
+ */
+native ls_bots_avoid(const tag[], const Float:origin[3], Float:radius, Float:strength = 5.0, Float:seconds = 0.0, team = 0);
+/** The same, riding on an entity (a carrier, a burning player, a trigger volume); it ends with it. */
+native ls_bots_avoid_ent(const tag[], ent, Float:radius, Float:strength = 5.0, Float:seconds = 0.0, team = 0);
+/** Bots stop avoiding the place with this tag. */
+native ls_bots_avoid_stop(const tag[]);
 /**
  * Bots may shoot this killable NPC (on) or not (the default; unkillable ones never). The map
  * key bots_attack=1 does the same. Players on its team side hurt it only with mp_friendlyfire.

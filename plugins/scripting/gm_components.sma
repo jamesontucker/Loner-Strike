@@ -9644,6 +9644,7 @@ new bool:g_upCreatures;
 /* pickup */
 #define PU_UNTIL    0
 #define PU_RADIUS   1
+#define PU_OFFERED  2   /* W2: offered to bots (key bots, default 1) */
 /* the paid timed trap (slots after the trap's own T_*) */
 #define T_UNTIL     5
 #define T_NEXTHIT   6
@@ -10802,9 +10803,82 @@ stock up_pickup_tick(s)
 		if (ret == PLUGIN_HANDLED)
 			continue;
 		emit_sound(p, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		if (g_pf[s][PU_OFFERED] != 0.0)
+			hint("offer_clear all %d", e);
 		comp_remove(s);
 		return;
 	}
+}
+
+/* W2: a pickup offers itself to bots (key bots, default 1): the brain's "pickup" errand - health
+   when they're hurt, a weapon without a main gun, anything else by bot_weight (0-100, 50) */
+stock pickup_offers()
+{
+	if (get_cvar_num("ls_mode_ver") < 4)
+		return;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || g_kind[s] != K_PICKUP || !ki(s, "bots", 1) || g_pf[s][PU_OFFERED] != 0.0)
+			continue;
+		g_pf[s][PU_OFFERED] = 1.0;
+		new kind[32], what = 0;
+		ks(s, "kind", kind, charsmax(kind));
+		if (containi(kind, "health") != -1 || containi(kind, "medkit") != -1 || containi(kind, "heal") != -1)
+			what = 2;
+		else if (containi(kind, "weapon") != -1 || containi(kind, "gun") != -1)
+			what = 1;
+		new Float:o[3];
+		pev(g_ent[s], pev_origin, o);
+		new w = clamp(ki(s, "bot_weight", 50), 0, 100);
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_connected(p) && is_user_bot(p) && (!g_team[s] || get_user_team(p) == g_team[s]))
+				hint("offer %d pickup %.0f %.0f %.0f %d %d %d", p, o[0], o[1], o[2], g_ent[s], w, what);
+	}
+}
+
+/* W2: places bots keep away from: ls_bots_avoid (a spot), ls_bots_avoid_ent (riding on an entity: a
+   carrier, a burning player, a trigger volume), ls_bots_avoid_stop. Strength 1-10 (5 and up: they
+   won't stand in it, below: they only path round it), seconds 0 = till stopped, team 0 every bot,
+   1 T bots, 2 CT bots. The brain keeps 32 at once */
+stock avoid_tag(const tag[], out[], len)
+{
+	new n = 0;
+	for (new i = 0; tag[i] && n < len; i++)
+		if (isalnum(tag[i]) || tag[i] == '_' || tag[i] == '-')
+			out[n++] = tag[i];
+	out[n] = EOS;
+	if (!n)
+		copy(out, len, "avoid");
+}
+
+public n_bots_avoid(plugin, params)
+{
+	new tag[24], t[24], Float:o[3];
+	get_string(1, tag, charsmax(tag));
+	avoid_tag(tag, t, charsmax(t));
+	get_array_f(2, o, 3);
+	hint("avoid %s %.0f %.0f %.0f %.0f %.1f %.1f %d", t, o[0], o[1], o[2], floatclamp(get_param_f(3), 16.0, 4096.0), floatclamp(get_param_f(4), 0.5, 10.0), floatmax(get_param_f(5), 0.0), clamp(get_param(6), 0, 2));
+	return 1;
+}
+
+public n_bots_avoid_ent(plugin, params)
+{
+	new tag[24], t[24], e = get_param(2);
+	if (e <= 0 || !pev_valid(e))
+		return 0;
+	get_string(1, tag, charsmax(tag));
+	avoid_tag(tag, t, charsmax(t));
+	hint("avoid_ent %s %d %.0f %.1f %.1f %d", t, e, floatclamp(get_param_f(3), 16.0, 4096.0), floatclamp(get_param_f(4), 0.5, 10.0), floatmax(get_param_f(5), 0.0), clamp(get_param(6), 0, 2));
+	return 1;
+}
+
+public n_bots_avoid_stop(plugin, params)
+{
+	new tag[24], t[24];
+	get_string(1, tag, charsmax(tag));
+	avoid_tag(tag, t, charsmax(t));
+	hint("forget %s", t);
+	return 1;
 }
 
 /* ---- the downed state ---- */
@@ -13395,6 +13469,9 @@ stock npc_natives()
 	register_native("ls_interactable_spawn", "n_interactable_spawn");
 	register_native("ls_npc_talking", "n_npc_talking");
 	register_native("ls_interactable_offer", "n_interactable_offer");
+	register_native("ls_bots_avoid", "n_bots_avoid");          /* W2 */
+	register_native("ls_bots_avoid_ent", "n_bots_avoid_ent");
+	register_native("ls_bots_avoid_stop", "n_bots_avoid_stop");
 	register_native("ls_npc_targetable", "n_npc_targetable");
 	register_native("ls_npc_move", "n_npc_move"); /* EC */
 	register_native("ls_npc_move_path", "n_npc_move_path");
@@ -14242,6 +14319,8 @@ stock npc_tick(bool:sec)
 	npc_hints();
 	if (sec)
 		interact_offers();
+	if (sec)
+		pickup_offers();  /* W2 */
 }
 
 /* bots may use it (bots=1, or ls_interactable_offer): offered to them while it's usable (the
