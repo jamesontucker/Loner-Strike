@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 pub mod fixes;
+pub mod logic;
 pub mod scan;
 pub mod surfaces;
 pub mod things;
@@ -370,8 +371,11 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
             out.push(Issue { entity: eid, ..issue(Level::Error, "extra-worldspawn", "There's a second worldspawn.".into()) });
         }
         // trigger_relay, trigger_auto, trigger_camera and trigger_changetarget are point entities
-        let point_trigger = matches!(cls, "trigger_relay" | "trigger_auto" | "trigger_camera" | "trigger_changetarget");
-        let needs_brushes = ((cls.starts_with("func_") || cls.starts_with("trigger_")) && !point_trigger) || cls == "momentary_rot_button";
+        let point_trigger = matches!(
+            cls,
+            "trigger_relay" | "trigger_auto" | "trigger_camera" | "trigger_changetarget" | "trigger_random" | "trigger_random_time" | "trigger_random_unique" | "trigger_setorigin"
+        );
+        let needs_brushes = ((cls.starts_with("func_") || cls.starts_with("trigger_")) && !point_trigger) || matches!(cls, "momentary_rot_button" | "momentary_door" | "button_target" | "game_zone_player");
         let has_brushes = with_brushes.contains(id);
         if needs_brushes && !has_brushes {
             out.push(Issue { entity: eid, ..issue(Level::Error, "empty-brush-entity", format!("{cls} has no brushes.")) });
@@ -404,6 +408,9 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
     if entstring > limits::MAX_ENTSTRING {
         out.push(issue(Level::Warning, "entstring", format!("About {} KB of entity text; older tools stop at 128 KB.", entstring / 1024)));
     }
+
+    // the stock entities' own needs (random triggers, game_ rules, trains, turrets)
+    logic::stock(doc, &mut out);
 
     // Spawns (Counter-Strike: CTs use info_player_start, Ts info_player_deathmatch).
     let count = |c: &str| doc.entities.values().filter(|e| e.classname() == c).count();

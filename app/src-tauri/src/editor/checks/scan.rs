@@ -99,6 +99,11 @@ pub fn solid_class(class: &str) -> bool {
             | "func_tankmortar"
             | "func_tanklaser"
             | "func_tankrocket"
+            | "button_target"
+            | "func_healthcharger"
+            | "func_recharge"
+            | "func_trackchange"
+            | "func_trackautochange"
     ) || merged_into_world(class)
 }
 
@@ -113,7 +118,7 @@ pub fn invisible_class(class: &str, e: Option<&Entity>) -> bool {
     if class.starts_with("trigger_")
         || matches!(
             class,
-            "func_buyzone" | "func_bomb_target" | "func_hostage_rescue" | "func_vip_safetyzone" | "func_escapezone" | "func_ladder" | "func_mortar_field" | "func_monsterclip" | "func_traincontrols" | "env_bubbles"
+            "func_buyzone" | "func_bomb_target" | "func_hostage_rescue" | "func_vip_safetyzone" | "func_escapezone" | "func_ladder" | "func_mortar_field" | "func_monsterclip" | "func_traincontrols" | "env_bubbles" | "func_tankcontrols" | "func_vehiclecontrols" | "game_zone_player"
         )
     {
         return true;

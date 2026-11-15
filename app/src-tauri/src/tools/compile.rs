@@ -2779,6 +2779,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Opt-in (EngineCoverage item 9): the stock entities test room (editor/checks/logic.rs)
+    /// through the editor's own compile, the BSP copied to LS_STOCK_OUT for a sim:
+    /// `LS_TEST_GAME=<Half-Life folder> LS_TEST_SDHLT_DIR=<.../tools/sdhlt/v1.3.1> LS_STOCK_OUT=<file.bsp>
+    /// cargo test real_compile_of_the_stock_entities -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_compile_of_the_stock_entities() {
+        let (Ok(hl), Ok(install), Ok(out)) = (std::env::var("LS_TEST_GAME"), std::env::var("LS_TEST_SDHLT_DIR"), std::env::var("LS_STOCK_OUT")) else {
+            println!("set LS_TEST_GAME, LS_TEST_SDHLT_DIR and LS_STOCK_OUT to run this");
+            return;
+        };
+        let (hl, install) = (PathBuf::from(hl), PathBuf::from(install));
+        assert!(is_installed(&install));
+        let s = hl.to_string_lossy().to_string();
+        let bottle = s.find("/Bottles/").map(|i| s[i + 9..].split('/').next().unwrap().to_string());
+        let client = crate::steam::Install { hl: hl.clone(), kind: if bottle.is_some() { "crossover".into() } else { "windows".into() }, bottle, games: vec!["cstrike".into()], dedicated: false };
+        let mut layout = layout_for(&client, &install, true).unwrap();
+        layout.work = layout.work.join(format!("test-stock-{}", std::process::id()));
+        layout.threads = Some(4);
+        let doc = crate::editor::checks::logic::stock_test_map();
+        let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
+        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "stk_test".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![], folder: None, assets: None };
+        begin("compile", "test").unwrap();
+        let r = run_compile(p);
+        let (log, problems) = with_job(|j| (j.log.join("\n"), j.problems.clone())).unwrap();
+        finish(r.clone());
+        println!("{log}");
+        let v = r.unwrap_or_else(|e| panic!("{e}\n{problems:#?}")).unwrap();
+        let bsp = PathBuf::from(v["bsp"].as_str().unwrap());
+        assert!(crate::goldsrc::bsp::Bsp::open(&bsp, false).is_ok());
+        assert!(problems.iter().all(|p| p.level != "error"), "{problems:#?}");
+        std::fs::copy(&bsp, &out).unwrap();
+        let _ = std::fs::remove_dir_all(&layout.work);
+    }
+
     /// Opt-in: a real compile of the editor's starter room. Needs the game and SDHLT:
     /// `LS_TEST_GAME=<Half-Life folder> LS_TEST_SDHLT=<sdhlt-v1.3.1.zip> cargo test real_compile -- --ignored --nocapture`.
     /// On a Mac the game must be in a CrossOver bottle (the compile runs there).
