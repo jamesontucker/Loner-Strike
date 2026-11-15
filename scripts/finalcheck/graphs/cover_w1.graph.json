@@ -1,0 +1,4344 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_cover_w1",
+  "name": "FC cover w1",
+  "description": "Final check: every_node_w1.graph.json in a game"
+ },
+ "variables": [
+  {
+   "id": "flag",
+   "name": "Flag",
+   "type": "bool",
+   "scope": "mode",
+   "default": false
+  },
+  {
+   "id": "pflag",
+   "name": "Player flag",
+   "type": "bool",
+   "scope": "player",
+   "default": false
+  },
+  {
+   "id": "tflag",
+   "name": "Team flag",
+   "type": "bool",
+   "scope": "team",
+   "default": true
+  }
+ ],
+ "nodes": [
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "vec",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {
+    "x": 0,
+    "y": 0,
+    "z": 64
+   }
+  },
+  {
+   "id": "vec2",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {
+    "x": 100,
+    "y": 50,
+    "z": 0
+   }
+  },
+  {
+   "id": "txt",
+   "type": "text.literal",
+   "pos": {
+    "x": 0,
+    "y": 880
+   },
+   "params": {
+    "value": "  Hello, World,  again  "
+   }
+  },
+  {
+   "id": "n1",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {
+    "value": 3
+   }
+  },
+  {
+   "id": "n2",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 1320
+   },
+   "params": {
+    "value": 1
+   }
+  },
+  {
+   "id": "nums",
+   "type": "array.make",
+   "pos": {
+    "x": 0,
+    "y": 1540
+   },
+   "params": {
+    "of": "number",
+    "count": 2
+   }
+  },
+  {
+   "id": "team",
+   "type": "player.get_team",
+   "pos": {
+    "x": 0,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "ent",
+   "type": "spatial.nearest_entity",
+   "pos": {
+    "x": 0,
+    "y": 1980
+   },
+   "params": {
+    "class": "info_player_start",
+    "max": 4096
+   }
+  },
+  {
+   "id": "pir",
+   "type": "spatial.players_in_radius",
+   "pos": {
+    "x": 260,
+    "y": 2420
+   },
+   "params": {
+    "radius": 500,
+    "alive": true,
+    "team": "any"
+   }
+  },
+  {
+   "id": "p1",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "np",
+   "type": "spatial.nearest_player",
+   "pos": {
+    "x": 260,
+    "y": 2420
+   },
+   "params": {
+    "max": 2048,
+    "team": "ct",
+    "bots": "bots",
+    "alive": true
+   }
+  },
+  {
+   "id": "p2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p3",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "eir",
+   "type": "spatial.entities_in_radius",
+   "pos": {
+    "x": 260,
+    "y": 2640
+   },
+   "params": {
+    "radius": 800,
+    "class": "info_player_start"
+   }
+  },
+  {
+   "id": "p4",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "eir2",
+   "type": "spatial.entities_in_radius",
+   "pos": {
+    "x": 260,
+    "y": 2640
+   },
+   "params": {
+    "radius": 300,
+    "class": ""
+   }
+  },
+  {
+   "id": "p5",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p6",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p7",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "los",
+   "type": "spatial.line_of_sight",
+   "pos": {
+    "x": 260,
+    "y": 2860
+   },
+   "params": {
+    "monsters": true
+   }
+  },
+  {
+   "id": "p8",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p9",
+   "type": "debug.print",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rc",
+   "type": "random.chance",
+   "pos": {
+    "x": 260,
+    "y": 2860
+   },
+   "params": {
+    "pct": 30
+   }
+  },
+  {
+   "id": "p10",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rb",
+   "type": "random.bool",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p11",
+   "type": "debug.print",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "wp",
+   "type": "random.weighted",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {
+    "of": "text"
+   }
+  },
+  {
+   "id": "p12",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p13",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "mr",
+   "type": "math.map_range",
+   "pos": {
+    "x": 260,
+    "y": 3300
+   },
+   "params": {
+    "a": 5,
+    "in_min": 0,
+    "in_max": 10,
+    "out_min": 100,
+    "out_max": 200,
+    "clamp": true
+   }
+  },
+  {
+   "id": "p14",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "sin",
+   "type": "math.trig",
+   "pos": {
+    "x": 260,
+    "y": 3300
+   },
+   "params": {
+    "a": 30,
+    "op": "sin",
+    "unit": "deg"
+   }
+  },
+  {
+   "id": "p15",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "tan",
+   "type": "math.trig",
+   "pos": {
+    "x": 260,
+    "y": 3300
+   },
+   "params": {
+    "a": 0.5,
+    "op": "tan",
+    "unit": "rad"
+   }
+  },
+  {
+   "id": "p16",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "at2",
+   "type": "math.atan2",
+   "pos": {
+    "x": 260,
+    "y": 3520
+   },
+   "params": {
+    "y": 1,
+    "x": -1,
+    "unit": "deg"
+   }
+  },
+  {
+   "id": "p17",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "ac",
+   "type": "math.angle_convert",
+   "pos": {
+    "x": 260,
+    "y": 3520
+   },
+   "params": {
+    "a": 3.14159,
+    "op": "to_deg"
+   }
+  },
+  {
+   "id": "p18",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "tr",
+   "type": "math.fn",
+   "pos": {
+    "x": 260,
+    "y": 3520
+   },
+   "params": {
+    "a": -2.7,
+    "op": "trunc"
+   }
+  },
+  {
+   "id": "p19",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "ne",
+   "type": "flow.nearly_equal",
+   "pos": {
+    "x": 260,
+    "y": 3740
+   },
+   "params": {
+    "a": 0.1,
+    "b": 0.10001,
+    "tol": 0.001
+   }
+  },
+  {
+   "id": "p20",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "split",
+   "type": "text.split",
+   "pos": {
+    "x": 260,
+    "y": 3740
+   },
+   "params": {
+    "sep": ","
+   }
+  },
+  {
+   "id": "p21",
+   "type": "debug.print",
+   "pos": {
+    "x": 2860,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rep",
+   "type": "text.replace",
+   "pos": {
+    "x": 260,
+    "y": 3740
+   },
+   "params": {
+    "find": "World",
+    "with": "There"
+   }
+  },
+  {
+   "id": "p22",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "sub",
+   "type": "text.substring",
+   "pos": {
+    "x": 260,
+    "y": 3960
+   },
+   "params": {
+    "start": 2,
+    "len": 5
+   }
+  },
+  {
+   "id": "p23",
+   "type": "debug.print",
+   "pos": {
+    "x": 3380,
+    "y": 220
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "up",
+   "type": "text.upper",
+   "pos": {
+    "x": 260,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "p24",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lo",
+   "type": "text.lower",
+   "pos": {
+    "x": 260,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "p25",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "trim",
+   "type": "text.trim",
+   "pos": {
+    "x": 260,
+    "y": 4180
+   },
+   "params": {}
+  },
+  {
+   "id": "p26",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "sw",
+   "type": "text.starts_with",
+   "pos": {
+    "x": 260,
+    "y": 4180
+   },
+   "params": {
+    "b": "  hel"
+   }
+  },
+  {
+   "id": "p27",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "ew",
+   "type": "text.ends_with",
+   "pos": {
+    "x": 260,
+    "y": 4180
+   },
+   "params": {
+    "b": "AIN  "
+   }
+  },
+  {
+   "id": "p28",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "join",
+   "type": "text.join",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "sep": " - "
+   }
+  },
+  {
+   "id": "p29",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "ft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "style": "auto"
+   }
+  },
+  {
+   "id": "p30",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "fn",
+   "type": "text.format_number",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "decimals": 2,
+    "thousands": true
+   }
+  },
+  {
+   "id": "p31",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "sum",
+   "type": "array.sum",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "p32",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "amin",
+   "type": "array.min",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "p33",
+   "type": "debug.print",
+   "pos": {
+    "x": 2860,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p34",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "amax",
+   "type": "array.max",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "p35",
+   "type": "debug.print",
+   "pos": {
+    "x": 3380,
+    "y": 440
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p36",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "avg",
+   "type": "array.average",
+   "pos": {
+    "x": 260,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "p37",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "sl",
+   "type": "array.slice",
+   "pos": {
+    "x": 260,
+    "y": 4840
+   },
+   "params": {
+    "of": "text",
+    "start": 1,
+    "count": 2
+   }
+  },
+  {
+   "id": "p38",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "dot",
+   "type": "vec.dot",
+   "pos": {
+    "x": 260,
+    "y": 5060
+   },
+   "params": {}
+  },
+  {
+   "id": "p39",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "cross",
+   "type": "vec.cross",
+   "pos": {
+    "x": 260,
+    "y": 5060
+   },
+   "params": {}
+  },
+  {
+   "id": "p40",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rnd",
+   "type": "vec.random_in_radius",
+   "pos": {
+    "x": 260,
+    "y": 5060
+   },
+   "params": {
+    "radius": 200,
+    "mode": "3d"
+   }
+  },
+  {
+   "id": "p41",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rot",
+   "type": "vec.rotate",
+   "pos": {
+    "x": 260,
+    "y": 5280
+   },
+   "params": {
+    "yaw": 90,
+    "pitch": 10
+   }
+  },
+  {
+   "id": "p42",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lerp",
+   "type": "vec.lerp",
+   "pos": {
+    "x": 260,
+    "y": 5280
+   },
+   "params": {
+    "alpha": 0.25
+   }
+  },
+  {
+   "id": "p43",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "toang",
+   "type": "vec.to_angles",
+   "pos": {
+    "x": 260,
+    "y": 5280
+   },
+   "params": {}
+  },
+  {
+   "id": "p44",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "fwd",
+   "type": "vec.forward",
+   "pos": {
+    "x": 260,
+    "y": 5500
+   },
+   "params": {}
+  },
+  {
+   "id": "p45",
+   "type": "debug.print",
+   "pos": {
+    "x": 2860,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "loc",
+   "type": "rel.to_local",
+   "pos": {
+    "x": 260,
+    "y": 5500
+   },
+   "params": {}
+  },
+  {
+   "id": "p46",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "wor",
+   "type": "rel.to_world",
+   "pos": {
+    "x": 260,
+    "y": 5500
+   },
+   "params": {}
+  },
+  {
+   "id": "p47",
+   "type": "debug.print",
+   "pos": {
+    "x": 3380,
+    "y": 660
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rp",
+   "type": "rel.position_of",
+   "pos": {
+    "x": 260,
+    "y": 5720
+   },
+   "params": {}
+  },
+  {
+   "id": "p48",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p49",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p50",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "ang",
+   "type": "rel.angle_to",
+   "pos": {
+    "x": 260,
+    "y": 5720
+   },
+   "params": {}
+  },
+  {
+   "id": "p51",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "front",
+   "type": "rel.is_in_front",
+   "pos": {
+    "x": 260,
+    "y": 5940
+   },
+   "params": {
+    "cone": 90
+   }
+  },
+  {
+   "id": "p52",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "behind",
+   "type": "rel.is_behind",
+   "pos": {
+    "x": 260,
+    "y": 5940
+   },
+   "params": {
+    "cone": 120
+   }
+  },
+  {
+   "id": "p53",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "eye",
+   "type": "aim.eye_pos",
+   "pos": {
+    "x": 260,
+    "y": 5940
+   },
+   "params": {}
+  },
+  {
+   "id": "p54",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "dir",
+   "type": "aim.dir",
+   "pos": {
+    "x": 260,
+    "y": 6160
+   },
+   "params": {}
+  },
+  {
+   "id": "p55",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "aim",
+   "type": "aim.point",
+   "pos": {
+    "x": 260,
+    "y": 6160
+   },
+   "params": {
+    "max": 2048
+   }
+  },
+  {
+   "id": "p56",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p57",
+   "type": "debug.print",
+   "pos": {
+    "x": 2860,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p58",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p59",
+   "type": "debug.print",
+   "pos": {
+    "x": 3380,
+    "y": 880
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "bits",
+   "type": "math.bitwise",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "a": 12,
+    "b": 2,
+    "op": "shl"
+   }
+  },
+  {
+   "id": "p60",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "bnot",
+   "type": "math.bitwise",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "a": 5,
+    "op": "not",
+    "b": 3
+   }
+  },
+  {
+   "id": "p61",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "free",
+   "type": "spatial.free_spot",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "hull": "stand",
+    "max": 256
+   }
+  },
+  {
+   "id": "p62",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p63",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lang",
+   "type": "player.language",
+   "pos": {
+    "x": 260,
+    "y": 6600
+   },
+   "params": {
+    "source": "game"
+   }
+  },
+  {
+   "id": "p64",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lang2",
+   "type": "player.language",
+   "pos": {
+    "x": 260,
+    "y": 6600
+   },
+   "params": {
+    "source": "amxx"
+   }
+  },
+  {
+   "id": "p65",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "dl",
+   "type": "debug.draw_line",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "color": "green",
+    "secs": 3
+   }
+  },
+  {
+   "id": "db",
+   "type": "debug.draw_box",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "color": "yellow",
+    "secs": 2
+   }
+  },
+  {
+   "id": "dp",
+   "type": "debug.draw_point",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "size": 16,
+    "color": "red",
+    "secs": 2
+   }
+  },
+  {
+   "id": "log",
+   "type": "debug.log_line",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "text": "every node w1",
+    "most": 5
+   }
+  },
+  {
+   "id": "tg",
+   "type": "var.toggle",
+   "pos": {
+    "x": 260,
+    "y": 8800
+   },
+   "params": {
+    "var": "flag"
+   }
+  },
+  {
+   "id": "p66",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "tgp",
+   "type": "var.toggle",
+   "pos": {
+    "x": 520,
+    "y": 8800
+   },
+   "params": {
+    "var": "pflag"
+   }
+  },
+  {
+   "id": "tgt",
+   "type": "var.toggle",
+   "pos": {
+    "x": 780,
+    "y": 8800
+   },
+   "params": {
+    "var": "tflag"
+   }
+  },
+  {
+   "id": "p67",
+   "type": "debug.print",
+   "pos": {
+    "x": 2340,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "rev",
+   "type": "array.reverse",
+   "pos": {
+    "x": 1040,
+    "y": 8800
+   },
+   "params": {
+    "of": "number"
+   }
+  },
+  {
+   "id": "seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 1300,
+    "y": 9020
+   },
+   "params": {
+    "count": 3
+   }
+  },
+  {
+   "id": "dopp",
+   "type": "flow.do_once_per_player",
+   "pos": {
+    "x": 1300,
+    "y": 8800
+   },
+   "params": {}
+  },
+  {
+   "id": "mg",
+   "type": "flow.multi_gate",
+   "pos": {
+    "x": 1560,
+    "y": 8800
+   },
+   "params": {
+    "count": 3,
+    "random": false,
+    "loop": true,
+    "start": 1
+   }
+  },
+  {
+   "id": "mgp0",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 8800
+   },
+   "params": {
+    "text": "gate 0",
+    "chat": false
+   }
+  },
+  {
+   "id": "mgp1",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 9020
+   },
+   "params": {
+    "text": "gate 1",
+    "chat": false
+   }
+  },
+  {
+   "id": "mgp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 9240
+   },
+   "params": {
+    "text": "gate 2",
+    "chat": false
+   }
+  },
+  {
+   "id": "mgr",
+   "type": "flow.multi_gate",
+   "pos": {
+    "x": 1560,
+    "y": 9680
+   },
+   "params": {
+    "count": 2,
+    "random": true,
+    "loop": false,
+    "start": 0
+   }
+  },
+  {
+   "id": "mgrp",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 9680
+   },
+   "params": {
+    "text": "random gate",
+    "chat": false
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 10120
+   },
+   "params": {}
+  },
+  {
+   "id": "tick",
+   "type": "event.on_tick",
+   "pos": {
+    "x": 0,
+    "y": 11000
+   },
+   "params": {
+    "interval": 0.1
+   }
+  },
+  {
+   "id": "tnp",
+   "type": "spatial.nearest_player",
+   "pos": {
+    "x": 260,
+    "y": 11220
+   },
+   "params": {
+    "max": 8192,
+    "alive": true,
+    "team": "any",
+    "bots": "all"
+   }
+  },
+  {
+   "id": "taim",
+   "type": "aim.point",
+   "pos": {
+    "x": 520,
+    "y": 11220
+   },
+   "params": {
+    "max": 4096
+   }
+  },
+  {
+   "id": "tft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 520,
+    "y": 11440
+   },
+   "params": {
+    "style": "hms"
+   }
+  },
+  {
+   "id": "tp1",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 11000
+   },
+   "params": {
+    "text": "tick [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "tp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 11000
+   },
+   "params": {
+    "text": "delta [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "fast",
+   "type": "event.on_tick",
+   "pos": {
+    "x": 0,
+    "y": 11880
+   },
+   "params": {
+    "interval": 0.02
+   }
+  },
+  {
+   "id": "flos",
+   "type": "spatial.line_of_sight",
+   "pos": {
+    "x": 260,
+    "y": 12100
+   },
+   "params": {
+    "monsters": false
+   }
+  },
+  {
+   "id": "fp",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 11880
+   },
+   "params": {
+    "text": "fast [0]",
+    "chat": false
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "n1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "nums",
+    "pin": "i0"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "n2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "nums",
+    "pin": "i1"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ent",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pir",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "pir",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "np",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "p1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "np",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "p2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "np",
+    "pin": "dist"
+   },
+   "to": {
+    "node": "p3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "eir",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "p3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "eir",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "eir2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "p4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "eir2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p5",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "p5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p6",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "p6",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "ent",
+    "pin": "dist"
+   },
+   "to": {
+    "node": "p7",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "los",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "los",
+    "pin": "b_pos"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "p7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p8",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "los",
+    "pin": "clear"
+   },
+   "to": {
+    "node": "p8",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "p8",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p9",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "los",
+    "pin": "hit"
+   },
+   "to": {
+    "node": "p9",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "p9",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "rc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p10",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "p10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p11",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "rb",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p11",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wp",
+    "pin": "weights"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "split",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wp",
+    "pin": "items"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "p11",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p12",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "wp",
+    "pin": "index"
+   },
+   "to": {
+    "node": "p12",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "p12",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p13",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "wp",
+    "pin": "item"
+   },
+   "to": {
+    "node": "p13",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "p13",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p14",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "mr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p14",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "p14",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p15",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "sin",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p15",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "p15",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p16",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "tan",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p16",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "p16",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p17",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "at2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p17",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "p17",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p18",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "ac",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p18",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "p18",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p19",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "tr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p19",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "p19",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p20",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "ne",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p20",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "split",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "p20",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p21",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "split",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p21",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rep",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "p21",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p22",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "rep",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p22",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sub",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "p22",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p23",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "sub",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p23",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "up",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "p23",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p24",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "up",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p24",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lo",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "p24",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p25",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "lo",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p25",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "trim",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "p25",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p26",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "trim",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p26",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "p26",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p27",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "sw",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p27",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ew",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "p27",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p28",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "ew",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p28",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "split",
+    "pin": "out"
+   },
+   "to": {
+    "node": "join",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "p28",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p29",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "join",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p29",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "n1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "p29",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p30",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "ft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p30",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "mr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fn",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "p30",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p31",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "fn",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p31",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sum",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "p31",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p32",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "sum",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p32",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "amin",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "p32",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p33",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "amin",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p33",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "p33",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p34",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "amin",
+    "pin": "index"
+   },
+   "to": {
+    "node": "p34",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "amax",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "p34",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p35",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "amax",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p35",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "p35",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p36",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "amax",
+    "pin": "index"
+   },
+   "to": {
+    "node": "p36",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "avg",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "p36",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p37",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "avg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p37",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "split",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sl",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "p37",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p38",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "sl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p38",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dot",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dot",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "p38",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p39",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "dot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p39",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cross",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cross",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "p39",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p40",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "cross",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p40",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rnd",
+    "pin": "c"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "p40",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p41",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "rnd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p41",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w116",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rot",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w117",
+   "from": {
+    "node": "p41",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p42",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w118",
+   "from": {
+    "node": "rot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p42",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w119",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lerp",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lerp",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "p42",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p43",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w122",
+   "from": {
+    "node": "lerp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p43",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w123",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "toang",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w124",
+   "from": {
+    "node": "p43",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p44",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w125",
+   "from": {
+    "node": "toang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p44",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w126",
+   "from": {
+    "node": "toang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fwd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w127",
+   "from": {
+    "node": "p44",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p45",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w128",
+   "from": {
+    "node": "fwd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p45",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w129",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "loc",
+    "pin": "thing"
+   }
+  },
+  {
+   "id": "w130",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "loc",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w131",
+   "from": {
+    "node": "p45",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p46",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w132",
+   "from": {
+    "node": "loc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p46",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w133",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wor",
+    "pin": "thing"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wor",
+    "pin": "off"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "p46",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p47",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "wor",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p47",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rp",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rp",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "p47",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p48",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "rp",
+    "pin": "forward"
+   },
+   "to": {
+    "node": "p48",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "p48",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p49",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "rp",
+    "pin": "right"
+   },
+   "to": {
+    "node": "p49",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "p49",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p50",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "rp",
+    "pin": "up"
+   },
+   "to": {
+    "node": "p50",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ang",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ang",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "p50",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p51",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "ang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p51",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "front",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "front",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "p51",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p52",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "front",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p52",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "behind",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "behind",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "p52",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p53",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "behind",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p53",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w157",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "eye",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w158",
+   "from": {
+    "node": "p53",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p54",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w159",
+   "from": {
+    "node": "eye",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p54",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w160",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "dir",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w161",
+   "from": {
+    "node": "p54",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p55",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w162",
+   "from": {
+    "node": "dir",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p55",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w163",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "aim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w164",
+   "from": {
+    "node": "p55",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p56",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w165",
+   "from": {
+    "node": "aim",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "p56",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w166",
+   "from": {
+    "node": "p56",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p57",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w167",
+   "from": {
+    "node": "aim",
+    "pin": "ent"
+   },
+   "to": {
+    "node": "p57",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w168",
+   "from": {
+    "node": "p57",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p58",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w169",
+   "from": {
+    "node": "aim",
+    "pin": "normal"
+   },
+   "to": {
+    "node": "p58",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w170",
+   "from": {
+    "node": "p58",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p59",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w171",
+   "from": {
+    "node": "aim",
+    "pin": "hit"
+   },
+   "to": {
+    "node": "p59",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w172",
+   "from": {
+    "node": "p59",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p60",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w173",
+   "from": {
+    "node": "bits",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p60",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w174",
+   "from": {
+    "node": "p60",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p61",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w175",
+   "from": {
+    "node": "bnot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p61",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w176",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "free",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w177",
+   "from": {
+    "node": "p61",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p62",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w178",
+   "from": {
+    "node": "free",
+    "pin": "found"
+   },
+   "to": {
+    "node": "p62",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w179",
+   "from": {
+    "node": "p62",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p63",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w180",
+   "from": {
+    "node": "free",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p63",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w181",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lang",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w182",
+   "from": {
+    "node": "p63",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p64",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w183",
+   "from": {
+    "node": "lang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p64",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w184",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lang2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w185",
+   "from": {
+    "node": "p64",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p65",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w186",
+   "from": {
+    "node": "lang2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p65",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w187",
+   "from": {
+    "node": "p65",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w188",
+   "from": {
+    "node": "eye",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w189",
+   "from": {
+    "node": "aim",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w190",
+   "from": {
+    "node": "dl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "db",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w191",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "db",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w192",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "db",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w193",
+   "from": {
+    "node": "db",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w194",
+   "from": {
+    "node": "free",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dp",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w195",
+   "from": {
+    "node": "dp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "log",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w196",
+   "from": {
+    "node": "lang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "log",
+    "pin": "text"
+   }
+  },
+  {
+   "id": "w197",
+   "from": {
+    "node": "log",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w198",
+   "from": {
+    "node": "tg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p66",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w199",
+   "from": {
+    "node": "tg",
+    "pin": "value"
+   },
+   "to": {
+    "node": "p66",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w200",
+   "from": {
+    "node": "p66",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tgp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w201",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tgp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w202",
+   "from": {
+    "node": "tgp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tgt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w203",
+   "from": {
+    "node": "team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tgt",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w204",
+   "from": {
+    "node": "tgt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p67",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w205",
+   "from": {
+    "node": "tgt",
+    "pin": "value"
+   },
+   "to": {
+    "node": "p67",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w206",
+   "from": {
+    "node": "p67",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rev",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w207",
+   "from": {
+    "node": "nums",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rev",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w208",
+   "from": {
+    "node": "rev",
+    "pin": "then"
+   },
+   "to": {
+    "node": "seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w209",
+   "from": {
+    "node": "seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "dopp",
+    "pin": "reset"
+   }
+  },
+  {
+   "id": "w210",
+   "from": {
+    "node": "seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "dopp",
+    "pin": "reset_player"
+   }
+  },
+  {
+   "id": "w211",
+   "from": {
+    "node": "seq",
+    "pin": "then2"
+   },
+   "to": {
+    "node": "dopp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w212",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "dopp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w213",
+   "from": {
+    "node": "dopp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w214",
+   "from": {
+    "node": "mg",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "mgp0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w215",
+   "from": {
+    "node": "mg",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "mgp1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w216",
+   "from": {
+    "node": "mg",
+    "pin": "then2"
+   },
+   "to": {
+    "node": "mgp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w217",
+   "from": {
+    "node": "mgp0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mgr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w218",
+   "from": {
+    "node": "mgr",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "mgrp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w219",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mg",
+    "pin": "reset"
+   }
+  },
+  {
+   "id": "w220",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tnp",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w221",
+   "from": {
+    "node": "tnp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "taim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w222",
+   "from": {
+    "node": "tick",
+    "pin": "delta"
+   },
+   "to": {
+    "node": "tft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w223",
+   "from": {
+    "node": "tick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w224",
+   "from": {
+    "node": "taim",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "tp1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w225",
+   "from": {
+    "node": "tp1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w226",
+   "from": {
+    "node": "tft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w227",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "flos",
+    "pin": "a_pos"
+   }
+  },
+  {
+   "id": "w228",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "flos",
+    "pin": "b_pos"
+   }
+  },
+  {
+   "id": "w229",
+   "from": {
+    "node": "fast",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w230",
+   "from": {
+    "node": "flos",
+    "pin": "clear"
+   },
+   "to": {
+    "node": "fp",
+    "pin": "value"
+   }
+  }
+ ]
+}

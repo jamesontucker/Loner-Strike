@@ -1,0 +1,1613 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_cover_fx",
+  "name": "FC cover fx",
+  "description": "Final check: every_node_fx.graph.json in a game"
+ },
+ "variables": [],
+ "nodes": [
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "v1",
+   "type": "vec.make",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "x": 0,
+    "y": 0,
+    "z": 40
+   }
+  },
+  {
+   "id": "vofs",
+   "type": "vec.make",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "x": 32,
+    "y": 0,
+    "z": 8
+   }
+  },
+  {
+   "id": "vrot",
+   "type": "vec.make",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+   }
+  },
+  {
+   "id": "vvel",
+   "type": "vec.make",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "x": 0,
+    "y": 0,
+    "z": 300
+   }
+  },
+  {
+   "id": "dl",
+   "type": "fx.dlight",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "r": 255,
+    "g": 80,
+    "b": 40,
+    "radius": 300,
+    "life": 2,
+    "decay": 50
+   }
+  },
+  {
+   "id": "dl2",
+   "type": "fx.dlight",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "r": 255,
+    "g": 200,
+    "b": 120,
+    "radius": 200,
+    "life": 1,
+    "decay": 0
+   }
+  },
+  {
+   "id": "dc",
+   "type": "fx.decal",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "decal": "blood",
+    "reach": 128
+   }
+  },
+  {
+   "id": "gb",
+   "type": "fx.gibs",
+   "pos": {
+    "x": 0,
+    "y": 220
+   },
+   "params": {
+    "model": "glass",
+    "material": "glass",
+    "count": 12,
+    "speed": 200,
+    "life": 2.5,
+    "size": 16
+   }
+  },
+  {
+   "id": "gb2",
+   "type": "fx.gibs",
+   "pos": {
+    "x": 260,
+    "y": 220
+   },
+   "params": {
+    "custom": "models/hgibs.mdl",
+    "material": "flesh",
+    "model": "wood",
+    "count": 8,
+    "speed": 200,
+    "life": 2.5,
+    "size": 16
+   }
+  },
+  {
+   "id": "rg",
+   "type": "fx.ring",
+   "pos": {
+    "x": 520,
+    "y": 220
+   },
+   "params": {
+    "r": 80,
+    "g": 160,
+    "b": 255,
+    "radius": 400,
+    "life": 0.5,
+    "width": 16
+   }
+  },
+  {
+   "id": "s2",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "who": "player",
+    "sound": "buttons/bell1.wav",
+    "volume": 0.6,
+    "pitch": 120
+   }
+  },
+  {
+   "id": "s2b",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1040,
+    "y": 220
+   },
+   "params": {
+    "who": "ct",
+    "sound": "custom/fx_sting.wav",
+    "volume": 1,
+    "pitch": 100
+   }
+  },
+  {
+   "id": "sa",
+   "type": "snd.play_at",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {
+    "sound": "ambience/thunder_clap.wav",
+    "falloff": "large",
+    "volume": 1,
+    "pitch": 100
+   }
+  },
+  {
+   "id": "sa2",
+   "type": "snd.play_at",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {
+    "falloff": "everywhere",
+    "sound": "ambience/thunder_clap.wav",
+    "volume": 1,
+    "pitch": 100
+   }
+  },
+  {
+   "id": "so",
+   "type": "snd.play_on",
+   "pos": {
+    "x": 1820,
+    "y": 220
+   },
+   "params": {
+    "channel": "voice",
+    "falloff": "small",
+    "pitch": 80,
+    "sound": "items/gunpickup2.wav",
+    "volume": 1
+   }
+  },
+  {
+   "id": "lp",
+   "type": "snd.loop",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {
+    "every": 2,
+    "sound": "ambience/wind1.wav",
+    "volume": 1,
+    "pitch": 100,
+    "falloff": "normal"
+   }
+  },
+  {
+   "id": "lp2",
+   "type": "snd.loop",
+   "pos": {
+    "x": 260,
+    "y": 440
+   },
+   "params": {
+    "sound": "ambience/drips.wav",
+    "volume": 1,
+    "pitch": 100,
+    "falloff": "normal",
+    "every": 0
+   }
+  },
+  {
+   "id": "st",
+   "type": "snd.stop",
+   "pos": {
+    "x": 520,
+    "y": 440
+   },
+   "params": {
+    "what": "loop",
+    "channel": "auto"
+   }
+  },
+  {
+   "id": "st2",
+   "type": "snd.stop",
+   "pos": {
+    "x": 780,
+    "y": 440
+   },
+   "params": {
+    "what": "entity",
+    "channel": "voice"
+   }
+  },
+  {
+   "id": "st3",
+   "type": "snd.stop",
+   "pos": {
+    "x": 1040,
+    "y": 440
+   },
+   "params": {
+    "what": "player",
+    "channel": "auto"
+   }
+  },
+  {
+   "id": "se",
+   "type": "ent.spawn_entity",
+   "pos": {
+    "x": 1300,
+    "y": 440
+   },
+   "params": {
+    "class": "env_sprite",
+    "keys": "model=sprites/glow01.spr|rendermode=5|renderamt=200",
+    "scale": 2,
+    "copy_rot": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "se2",
+   "type": "ent.spawn_entity",
+   "pos": {
+    "x": 1560,
+    "y": 440
+   },
+   "params": {
+    "class": "env_beam",
+    "keys": "texture=sprites/laserbeam.spr|LightningStart=x|renderamt=200",
+    "copy_rot": true,
+    "scale": 1,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "se3",
+   "type": "ent.spawn_entity",
+   "pos": {
+    "x": 1820,
+    "y": 440
+   },
+   "params": {
+    "class": "env_spark",
+    "keys": "MaxDelay=1",
+    "copy_rot": true,
+    "scale": 1,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "sw",
+   "type": "ent.spawn_weapon",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {
+    "item": "awp",
+    "ammo": 30,
+    "respawn": 10,
+    "copy_rot": true,
+    "scale": 1,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "sw2",
+   "type": "ent.spawn_weapon",
+   "pos": {
+    "x": 260,
+    "y": 660
+   },
+   "params": {
+    "item": "kevlar",
+    "ammo": -1,
+    "respawn": 0,
+    "copy_rot": true,
+    "scale": 1,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "pr",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": false,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "pr2",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 780,
+    "y": 660
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "scale": 1.5,
+    "solid": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true
+   }
+  },
+  {
+   "id": "pr3",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1040,
+    "y": 660
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "cr",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 1300,
+    "y": 660
+   },
+   "params": {
+    "kind": "zombie",
+    "at": "spot1",
+    "health": 0,
+    "tier": "0",
+    "pay": 0,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "np",
+   "type": "npc.spawn",
+   "pos": {
+    "x": 1560,
+    "y": 660
+   },
+   "params": {
+    "name": "Guide",
+    "yaw": 45,
+    "copy_rot": true,
+    "model": "models/barney.mdl",
+    "behavior": "stand",
+    "unkillable": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "scale": 1
+   }
+  },
+  {
+   "id": "iu",
+   "type": "npc.spawn_use",
+   "pos": {
+    "x": 1820,
+    "y": 660
+   },
+   "params": {
+    "model": "models/w_weaponbox.mdl",
+    "prompt": "Press E to use",
+    "once": true,
+    "hide": false,
+    "bots": false,
+    "blocked": "exact",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "cc",
+   "type": "comp.create",
+   "pos": {
+    "x": 0,
+    "y": 880
+   },
+   "params": {
+    "kind": "ls_capture_point",
+    "at": "spot1",
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true
+   }
+  },
+  {
+   "id": "pforce",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 260,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "force",
+    "solid": true,
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "palways",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "nearby_always",
+    "max_dist": 64,
+    "solid": true,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "pnear",
+   "type": "ent.spawn_weapon",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {
+    "item": "deagle",
+    "blocked": "nearby",
+    "max_dist": 96,
+    "ammo": -1,
+    "respawn": 0,
+    "copy_rot": true,
+    "scale": 1,
+    "retry_every": 1,
+    "retry_tries": 10
+   }
+  },
+  {
+   "id": "br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 880
+   },
+   "params": {
+    "cond": true
+   }
+  },
+  {
+   "id": "pfail",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1300,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "exact",
+    "solid": true,
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "pB",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1560,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "why",
+   "type": "flow.switch_enum",
+   "pos": {
+    "x": 1820,
+    "y": 880
+   },
+   "params": {
+    "enum": "ls_spawn_fail"
+   }
+  },
+  {
+   "id": "cretry",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {
+    "kind": "zombie",
+    "blocked": "retry",
+    "retry_every": 1,
+    "retry_tries": 0,
+    "at": "spot1",
+    "health": 0,
+    "tier": "0",
+    "pay": 0,
+    "max_dist": 128,
+    "copy_rot": true,
+    "scale": 1
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "follow"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dl2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dc",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "gb",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "gb2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rg",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "s2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sa",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sa2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "so",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lp",
+    "pin": "on"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lp2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "lp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st",
+    "pin": "loop"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "st2",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "st3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "se",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "se",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "vrot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "se",
+    "pin": "angles_offset"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "vvel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "se",
+    "pin": "vel"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "se2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "se3",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "vvel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "vel"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "vrot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw2",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "vrot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "vvel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "vel"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pr3",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cr",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cr",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "vvel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cr",
+    "pin": "vel"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "np",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "np",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "iu",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "vrot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "iu",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "vofs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "vrot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pforce",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "palways",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pnear",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "pnear",
+    "pin": "spawned"
+   },
+   "to": {
+    "node": "br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "pnear",
+    "pin": "moved"
+   },
+   "to": {
+    "node": "br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pfail",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "pfail",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "pB",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pB",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "pB",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "why",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "pfail",
+    "pin": "reason"
+   },
+   "to": {
+    "node": "why",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cretry",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "dl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "dl2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "dc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "gb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gb2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "gb2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "rg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "s2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "s2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "s2b",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "s2b",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sa",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "sa",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sa2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "sa2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "so",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "so",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "lp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "lp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "st2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "st3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "se",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "se",
+    "pin": "then"
+   },
+   "to": {
+    "node": "se2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "se2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "se3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "se3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "sw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sw2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "sw2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "pr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "pr2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "pr3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "cr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "np",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "np",
+    "pin": "then"
+   },
+   "to": {
+    "node": "iu",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "iu",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "cc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pforce",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "pforce",
+    "pin": "then"
+   },
+   "to": {
+    "node": "palways",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "palways",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pnear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "pnear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pfail",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "pfail",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cretry",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "functions": []
+}

@@ -46,6 +46,8 @@ mod compat_tests; // the 1.0 compatibility suite (docs/notes/StudioCompat.md)
 #[cfg(test)]
 mod timeline_tests;
 #[cfg(test)]
+mod finalcheck_tests; // P5: the final check's installer (docs/notes/FinalCheck.md)
+#[cfg(test)]
 mod proj_tests; // T1fix: projectiles
 
 use crate::server::Shared;

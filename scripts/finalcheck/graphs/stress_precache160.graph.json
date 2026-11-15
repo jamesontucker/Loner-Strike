@@ -1,0 +1,4025 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_st_pre160",
+  "name": "FC precache 160",
+  "description": "Final check: 160 files of its own"
+ },
+ "variables": [
+  {
+   "id": "lim_search_found",
+   "name": "Entities one search keeps",
+   "type": "number",
+   "scope": "mode",
+   "default": 2048,
+   "setting": {
+    "label": "Entities one search keeps",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 2048,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_free_spot_tries",
+   "name": "Tries finding a free spot",
+   "type": "number",
+   "scope": "mode",
+   "default": 1024,
+   "setting": {
+    "label": "Tries finding a free spot",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1024,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_aim_trace",
+   "name": "Aim Point's longest trace",
+   "type": "number",
+   "scope": "mode",
+   "default": 32768,
+   "setting": {
+    "label": "Aim Point's longest trace",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32768,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_tick_rate",
+   "name": "On Tick runs a second at most",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "On Tick runs a second at most",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_markers",
+   "name": "Objective markers at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Objective markers at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trails",
+   "name": "Trails at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trails at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_loop_sounds",
+   "name": "Loop sounds at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Loop sounds at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_attach",
+   "name": "Attached things at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Attached things at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_anim_loops",
+   "name": "Looping animations at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Looping animations at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_npc_moves",
+   "name": "NPC moves at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "NPC moves at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_map_hooks",
+   "name": "Map entity kinds heard",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Map entity kinds heard",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_command_rate",
+   "name": "Player Command uses a second",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "Player Command uses a second",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_top_players",
+   "name": "Top Players places",
+   "type": "number",
+   "scope": "mode",
+   "default": 100,
+   "setting": {
+    "label": "Top Players places",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 100,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trigger_volumes",
+   "name": "Trigger volumes at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trigger volumes at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_volume_members",
+   "name": "Things inside one trigger volu",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "Things inside one trigger volu",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_avoid_areas",
+   "name": "Areas bots avoid at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 32,
+   "setting": {
+    "label": "Areas bots avoid at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_projectiles",
+   "name": "Projectiles at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 512,
+   "setting": {
+    "label": "Projectiles at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 512,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_messages",
+   "name": "Effect messages a frame",
+   "type": "number",
+   "scope": "mode",
+   "default": 160,
+   "setting": {
+    "label": "Effect messages a frame",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 160,
+    "step": 1,
+    "group": "Limits"
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": "n1",
+   "type": "event.round_started",
+   "pos": {
+    "x": 320,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "n2",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "UI/buttonclick.wav"
+   }
+  },
+  {
+   "id": "n3",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "agrunt/ag_die5.wav"
+   }
+  },
+  {
+   "id": "n4",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/alien_hollow.wav"
+   }
+  },
+  {
+   "id": "n5",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/biggun3.wav"
+   }
+  },
+  {
+   "id": "n6",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/distantmortar3.wav"
+   }
+  },
+  {
+   "id": "n7",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/mechwhine.wav"
+   }
+  },
+  {
+   "id": "n8",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/rotormachine.wav"
+   }
+  },
+  {
+   "id": "n9",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "ambience/the_horror2.wav"
+   }
+  },
+  {
+   "id": "n10",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "apache/ap_rotor3.wav"
+   }
+  },
+  {
+   "id": "n11",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "barnacle/bcl_chew3.wav"
+   }
+  },
+  {
+   "id": "n12",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/ba_endline.wav"
+   }
+  },
+  {
+   "id": "n13",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/beertopside.wav"
+   }
+  },
+  {
+   "id": "n14",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/c1a4_ba_octo3.wav"
+   }
+  },
+  {
+   "id": "n15",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/c2a_ba_hub1a.wav"
+   }
+  },
+  {
+   "id": "n16",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/getanyworse.wav"
+   }
+  },
+  {
+   "id": "n17",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/imwithyou.wav"
+   }
+  },
+  {
+   "id": "n18",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/somethingdied.wav"
+   }
+  },
+  {
+   "id": "n19",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "barney/yessir.wav"
+   }
+  },
+  {
+   "id": "n20",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "bullchicken/bc_bite2.wav"
+   }
+  },
+  {
+   "id": "n21",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "buttons/button11.wav"
+   }
+  },
+  {
+   "id": "n22",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "buttons/spark3.wav"
+   }
+  },
+  {
+   "id": "n23",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 260
+   },
+   "params": {
+    "who": "all",
+    "sound": "common/npc_step4.wav"
+   }
+  },
+  {
+   "id": "n24",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "controller/con_pain3.wav"
+   }
+  },
+  {
+   "id": "n25",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "debris/bustglass1.wav"
+   }
+  },
+  {
+   "id": "n26",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "debris/metal4.wav"
+   }
+  },
+  {
+   "id": "n27",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "doors/aliendoor5.wav"
+   }
+  },
+  {
+   "id": "n28",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fans/fan2.wav"
+   }
+  },
+  {
+   "id": "n29",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/antidote_shot.wav"
+   }
+  },
+  {
+   "id": "n30",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/east.wav"
+   }
+  },
+  {
+   "id": "n31",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/get_buckshot.wav"
+   }
+  },
+  {
+   "id": "n32",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/hiss.wav"
+   }
+  },
+  {
+   "id": "n33",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/pain_block.wav"
+   }
+  },
+  {
+   "id": "n34",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/sixteen.wav"
+   }
+  },
+  {
+   "id": "n35",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 520
+   },
+   "params": {
+    "who": "all",
+    "sound": "fvox/wound_sterilized.wav"
+   }
+  },
+  {
+   "id": "n36",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "garg/gar_pain2.wav"
+   }
+  },
+  {
+   "id": "n37",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "gman/gman_wise.wav"
+   }
+  },
+  {
+   "id": "n38",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "gonarch/gon_step2.wav"
+   }
+  },
+  {
+   "id": "n39",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "headcrab/hc_pain1.wav"
+   }
+  },
+  {
+   "id": "n40",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/c2a2_hg_chat5a.wav"
+   }
+  },
+  {
+   "id": "n41",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/down.wav"
+   }
+  },
+  {
+   "id": "n42",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/gr_alert1.wav"
+   }
+  },
+  {
+   "id": "n43",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/have.wav"
+   }
+  },
+  {
+   "id": "n44",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/movement.wav"
+   }
+  },
+  {
+   "id": "n45",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/radio.wav"
+   }
+  },
+  {
+   "id": "n46",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/tango.wav"
+   }
+  },
+  {
+   "id": "n47",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 780
+   },
+   "params": {
+    "who": "all",
+    "sound": "hgrunt/yeah.wav"
+   }
+  },
+  {
+   "id": "n48",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "holo/tr_holo_fantastic.wav"
+   }
+  },
+  {
+   "id": "n49",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "holo/tr_holo_radiation.wav"
+   }
+  },
+  {
+   "id": "n50",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "houndeye/he_alert2.wav"
+   }
+  },
+  {
+   "id": "n51",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "houndeye/he_pain4.wav"
+   }
+  },
+  {
+   "id": "n52",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "items/9mmclip2.wav"
+   }
+  },
+  {
+   "id": "n53",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "leech/leech_alert1.wav"
+   }
+  },
+  {
+   "id": "n54",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "plats/bigmove2.wav"
+   }
+  },
+  {
+   "id": "n55",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "plats/talkmove2.wav"
+   }
+  },
+  {
+   "id": "n56",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "player/breathe1.wav"
+   }
+  },
+  {
+   "id": "n57",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "player/pl_grate3.wav"
+   }
+  },
+  {
+   "id": "n58",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "player/pl_slosh1.wav"
+   }
+  },
+  {
+   "id": "n59",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 1040
+   },
+   "params": {
+    "who": "all",
+    "sound": "roach/rch_die.wav"
+   }
+  },
+  {
+   "id": "n60",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c1a0_sci_crit1a.wav"
+   }
+  },
+  {
+   "id": "n61",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c1a0_sci_dis4a.wav"
+   }
+  },
+  {
+   "id": "n62",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c1a0_sci_stall.wav"
+   }
+  },
+  {
+   "id": "n63",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c1a3_sci_thankgod.wav"
+   }
+  },
+  {
+   "id": "n64",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c2a5_sci_lebuz.wav"
+   }
+  },
+  {
+   "id": "n65",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/c3a2_sci_position.wav"
+   }
+  },
+  {
+   "id": "n66",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/donuteater.wav"
+   }
+  },
+  {
+   "id": "n67",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/heal3.wav"
+   }
+  },
+  {
+   "id": "n68",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/imsure.wav"
+   }
+  },
+  {
+   "id": "n69",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/neverseen.wav"
+   }
+  },
+  {
+   "id": "n70",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/perfectday.wav"
+   }
+  },
+  {
+   "id": "n71",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 1300
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/sci_alone.wav"
+   }
+  },
+  {
+   "id": "n72",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/sci_fear9.wav"
+   }
+  },
+  {
+   "id": "n73",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/scream1.wav"
+   }
+  },
+  {
+   "id": "n74",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/scream7.wav"
+   }
+  },
+  {
+   "id": "n75",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/startle9.wav"
+   }
+  },
+  {
+   "id": "n76",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "scientist/whatyoudoing.wav"
+   }
+  },
+  {
+   "id": "n77",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "squeek/sqk_hunt1.wav"
+   }
+  },
+  {
+   "id": "n78",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "tride/c0a0_tr_emerg.wav"
+   }
+  },
+  {
+   "id": "n79",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/_period.wav"
+   }
+  },
+  {
+   "id": "n80",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/aligned.wav"
+   }
+  },
+  {
+   "id": "n81",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/ass.wav"
+   }
+  },
+  {
+   "id": "n82",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/biological.wav"
+   }
+  },
+  {
+   "id": "n83",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 1560
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/called.wav"
+   }
+  },
+  {
+   "id": "n84",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/command.wav"
+   }
+  },
+  {
+   "id": "n85",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/day.wav"
+   }
+  },
+  {
+   "id": "n86",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/dish.wav"
+   }
+  },
+  {
+   "id": "n87",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/elevator.wav"
+   }
+  },
+  {
+   "id": "n88",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/exterminate.wav"
+   }
+  },
+  {
+   "id": "n89",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/flooding.wav"
+   }
+  },
+  {
+   "id": "n90",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/good.wav"
+   }
+  },
+  {
+   "id": "n91",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/helium.wav"
+   }
+  },
+  {
+   "id": "n92",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/inches.wav"
+   }
+  },
+  {
+   "id": "n93",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/laser.wav"
+   }
+  },
+  {
+   "id": "n94",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/lockout.wav"
+   }
+  },
+  {
+   "id": "n95",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 1820
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/military.wav"
+   }
+  },
+  {
+   "id": "n96",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/now.wav"
+   }
+  },
+  {
+   "id": "n97",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/override.wav"
+   }
+  },
+  {
+   "id": "n98",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/proper.wav"
+   }
+  },
+  {
+   "id": "n99",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/renegade.wav"
+   }
+  },
+  {
+   "id": "n100",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1280,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/screen.wav"
+   }
+  },
+  {
+   "id": "n101",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/shoot.wav"
+   }
+  },
+  {
+   "id": "n102",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1920,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/status.wav"
+   }
+  },
+  {
+   "id": "n103",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2240,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/tank.wav"
+   }
+  },
+  {
+   "id": "n104",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2560,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/through.wav"
+   }
+  },
+  {
+   "id": "n105",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 2880,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/until.wav"
+   }
+  },
+  {
+   "id": "n106",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3200,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/wanted.wav"
+   }
+  },
+  {
+   "id": "n107",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 3520,
+    "y": 2080
+   },
+   "params": {
+    "who": "all",
+    "sound": "vox/you.wav"
+   }
+  },
+  {
+   "id": "n108",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 0,
+    "y": 2340
+   },
+   "params": {
+    "who": "all",
+    "sound": "weapons/dryfire1.wav"
+   }
+  },
+  {
+   "id": "n109",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 320,
+    "y": 2340
+   },
+   "params": {
+    "who": "all",
+    "sound": "weapons/grenade_hit3.wav"
+   }
+  },
+  {
+   "id": "n110",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 640,
+    "y": 2340
+   },
+   "params": {
+    "who": "all",
+    "sound": "weapons/sbarrel1.wav"
+   }
+  },
+  {
+   "id": "n111",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 960,
+    "y": 2340
+   },
+   "params": {
+    "who": "all",
+    "sound": "x/x_pain3.wav"
+   }
+  },
+  {
+   "id": "n112",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1280,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/abone_template1.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n113",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/apache.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n114",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1920,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/barney.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n115",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2240,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/big_rock.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n116",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2560,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/bm_sack.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n117",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2880,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/bookgibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n118",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3200,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/cactusgibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n119",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3520,
+    "y": 2340
+   },
+   "params": {
+    "model": "models/chromegibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n120",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 0,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/cindergibs_green.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n121",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 320,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/concretegibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n122",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 640,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/dead_osprey.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n123",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 960,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/floater.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n124",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1280,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/garg.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n125",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/gib_legbone.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n126",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1920,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/gman.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n127",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2240,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/hassassin.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n128",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2560,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/houndeye.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n129",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2880,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/islave_gibs1.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n130",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3200,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/loader.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n131",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3520,
+    "y": 2600
+   },
+   "params": {
+    "model": "models/metalgibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n132",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 0,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/mil_crate.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n133",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 320,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/osprey.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n134",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 640,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/osprey_tailgibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n135",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 960,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/p_crowbar.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n136",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1280,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/p_grenade.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n137",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/p_satchel_radio.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n138",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1920,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/p_tripmine.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n139",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2240,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/protozoa.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n140",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2560,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/rip.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n141",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2880,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/sat_globe.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n142",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3200,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/sentry.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n143",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3520,
+    "y": 2860
+   },
+   "params": {
+    "model": "models/skeleton.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n144",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 0,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/stick.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n145",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 320,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/tech_crategibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n146",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 640,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/testsphere.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n147",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 960,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/uplant3.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n148",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1280,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/v_chub.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n149",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/v_gauss.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n150",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1920,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/v_satchel.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n151",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2240,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/v_tripmine.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n152",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2560,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/w_357ammobox.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n153",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2880,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/w_9mmhandgun.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n154",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3200,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/w_battery.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n155",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 3520,
+    "y": 3120
+   },
+   "params": {
+    "model": "models/w_crossbow_clip.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n156",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 0,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/w_gauss.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n157",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 320,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/w_isotopebox.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n158",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 640,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/w_rpg.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n159",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 960,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/w_security.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n160",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1280,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/w_silencer.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n161",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 3380
+   },
+   "params": {
+    "model": "models/wetfloorsign_gibs.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "n1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "n2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "n3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "n4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "n5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "n6",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "n7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n8",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "n8",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n9",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "n9",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "n10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n11",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "n11",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n12",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "n12",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n13",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "n13",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n14",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "n14",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n15",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "n15",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n16",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "n16",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n17",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "n17",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n18",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "n18",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n19",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "n19",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n20",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "n20",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n21",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "n21",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n22",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "n22",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n23",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "n23",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n24",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "n24",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n25",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "n25",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n26",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "n26",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n27",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "n27",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n28",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "n28",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n29",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "n29",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n30",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "n30",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n31",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "n31",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n32",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "n32",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n33",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "n33",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n34",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "n34",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n35",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "n35",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n36",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "n36",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n37",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "n37",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n38",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "n38",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n39",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "n39",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n40",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "n40",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n41",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "n41",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n42",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "n42",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n43",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "n43",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n44",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "n44",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n45",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "n45",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n46",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "n46",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n47",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "n47",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n48",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "n48",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n49",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "n49",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n50",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "n50",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n51",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "n51",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n52",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "n52",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n53",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "n53",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n54",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "n54",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n55",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "n55",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n56",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "n56",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n57",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "n57",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n58",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "n58",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n59",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "n59",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n60",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "n60",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n61",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "n61",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n62",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "n62",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n63",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "n63",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n64",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "n64",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n65",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "n65",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n66",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "n66",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n67",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "n67",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n68",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "n68",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n69",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "n69",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n70",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "n70",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n71",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "n71",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n72",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "n72",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n73",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "n73",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n74",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "n74",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n75",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "n75",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n76",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "n76",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n77",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "n77",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n78",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "n78",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n79",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "n79",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n80",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "n80",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n81",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "n81",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n82",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "n82",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n83",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "n83",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n84",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "n84",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n85",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "n85",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n86",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "n86",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n87",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "n87",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n88",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "n88",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n89",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "n89",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n90",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "n90",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n91",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "n91",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n92",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "n92",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n93",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "n93",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n94",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "n94",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n95",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "n95",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n96",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "n96",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n97",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "n97",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n98",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "n98",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n99",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "n99",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n100",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "n100",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n101",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "n101",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n102",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "n102",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n103",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "n103",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n104",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "n104",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n105",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "n105",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n106",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "n106",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n107",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "n107",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n108",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "n108",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n109",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "n109",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n110",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "n110",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n111",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "n111",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n112",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "n112",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n113",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "n113",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n114",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "n114",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n115",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "n115",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n116",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w116",
+   "from": {
+    "node": "n116",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n117",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w117",
+   "from": {
+    "node": "n117",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n118",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w118",
+   "from": {
+    "node": "n118",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n119",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w119",
+   "from": {
+    "node": "n119",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n120",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "n120",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n121",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "n121",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n122",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w122",
+   "from": {
+    "node": "n122",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n123",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w123",
+   "from": {
+    "node": "n123",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n124",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w124",
+   "from": {
+    "node": "n124",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n125",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w125",
+   "from": {
+    "node": "n125",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n126",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w126",
+   "from": {
+    "node": "n126",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n127",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w127",
+   "from": {
+    "node": "n127",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n128",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w128",
+   "from": {
+    "node": "n128",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n129",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w129",
+   "from": {
+    "node": "n129",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n130",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w130",
+   "from": {
+    "node": "n130",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n131",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w131",
+   "from": {
+    "node": "n131",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n132",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w132",
+   "from": {
+    "node": "n132",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n133",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w133",
+   "from": {
+    "node": "n133",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n134",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "n134",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n135",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "n135",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n136",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "n136",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n137",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "n137",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n138",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "n138",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n139",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "n139",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n140",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "n140",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n141",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "n141",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n142",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "n142",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n143",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "n143",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n144",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "n144",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n145",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "n145",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n146",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "n146",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n147",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "n147",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n148",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "n148",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n149",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "n149",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n150",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "n150",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n151",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "n151",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n152",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "n152",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n153",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "n153",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n154",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "n154",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n155",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "n155",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n156",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "n156",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n157",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w157",
+   "from": {
+    "node": "n157",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n158",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w158",
+   "from": {
+    "node": "n158",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n159",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w159",
+   "from": {
+    "node": "n159",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n160",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w160",
+   "from": {
+    "node": "n160",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n161",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": []
+}

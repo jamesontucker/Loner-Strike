@@ -1,0 +1,575 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_st_spawn",
+  "name": "FC spawn flood",
+  "description": "Final check: spawns every tick until the caps"
+ },
+ "variables": [
+  {
+   "id": "lim_search_found",
+   "name": "Entities one search keeps",
+   "type": "number",
+   "scope": "mode",
+   "default": 2048,
+   "setting": {
+    "label": "Entities one search keeps",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 2048,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_free_spot_tries",
+   "name": "Tries finding a free spot",
+   "type": "number",
+   "scope": "mode",
+   "default": 1024,
+   "setting": {
+    "label": "Tries finding a free spot",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1024,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_aim_trace",
+   "name": "Aim Point's longest trace",
+   "type": "number",
+   "scope": "mode",
+   "default": 32768,
+   "setting": {
+    "label": "Aim Point's longest trace",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32768,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_tick_rate",
+   "name": "On Tick runs a second at most",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "On Tick runs a second at most",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_markers",
+   "name": "Objective markers at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Objective markers at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trails",
+   "name": "Trails at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trails at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_loop_sounds",
+   "name": "Loop sounds at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Loop sounds at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_attach",
+   "name": "Attached things at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Attached things at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_anim_loops",
+   "name": "Looping animations at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Looping animations at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_npc_moves",
+   "name": "NPC moves at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "NPC moves at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_map_hooks",
+   "name": "Map entity kinds heard",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Map entity kinds heard",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_command_rate",
+   "name": "Player Command uses a second",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "Player Command uses a second",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_top_players",
+   "name": "Top Players places",
+   "type": "number",
+   "scope": "mode",
+   "default": 100,
+   "setting": {
+    "label": "Top Players places",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 100,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trigger_volumes",
+   "name": "Trigger volumes at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trigger volumes at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_volume_members",
+   "name": "Things inside one trigger volu",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "Things inside one trigger volu",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_avoid_areas",
+   "name": "Areas bots avoid at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 32,
+   "setting": {
+    "label": "Areas bots avoid at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_projectiles",
+   "name": "Projectiles at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 512,
+   "setting": {
+    "label": "Projectiles at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 512,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_messages",
+   "name": "Effect messages a frame",
+   "type": "number",
+   "scope": "mode",
+   "default": 160,
+   "setting": {
+    "label": "Effect messages a frame",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 160,
+    "step": 1,
+    "group": "Limits"
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": "n1",
+   "type": "event.on_tick",
+   "pos": {
+    "x": 320,
+    "y": 0
+   },
+   "params": {
+    "interval": 0
+   }
+  },
+  {
+   "id": "n2",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 640,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "n3",
+   "type": "ent.position",
+   "pos": {
+    "x": 960,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "n4",
+   "type": "ent.spawn_entity",
+   "pos": {
+    "x": 1280,
+    "y": 0
+   },
+   "params": {
+    "class": "env_sprite",
+    "keys": "model=sprites/glow01.spr|rendermode=5|renderamt=255",
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n5",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1600,
+    "y": 0
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": false,
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "n6",
+   "type": "proj.spawn",
+   "pos": {
+    "x": 1920,
+    "y": 0
+   },
+   "params": {
+    "model": "models/w_hegrenade.mdl",
+    "life": 60,
+    "speed": 50,
+    "trail": true
+   }
+  },
+  {
+   "id": "n7",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 2240,
+    "y": 0
+   },
+   "params": {
+    "shape": "box"
+   }
+  },
+  {
+   "id": "n8",
+   "type": "fx.marker",
+   "pos": {
+    "x": 2560,
+    "y": 0
+   },
+   "params": {
+    "who": "all"
+   }
+  },
+  {
+   "id": "n9",
+   "type": "snd.loop",
+   "pos": {
+    "x": 2880,
+    "y": 0
+   },
+   "params": {
+    "sound": "ambience/wind1.wav"
+   }
+  },
+  {
+   "id": "n10",
+   "type": "fun.trail",
+   "pos": {
+    "x": 3200,
+    "y": 0
+   },
+   "params": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "n1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "n2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "n3",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "n2",
+    "pin": "each"
+   },
+   "to": {
+    "node": "n4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "n4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "n5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "n6",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "n7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n8",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "n8",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n9",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n4",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n6",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n7",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n8",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "n3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n9",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "n9",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "n5",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n10",
+    "pin": "ent"
+   }
+  }
+ ],
+ "comments": []
+}

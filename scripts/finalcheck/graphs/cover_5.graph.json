@@ -1,0 +1,978 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_cover_5",
+  "name": "FC cover 5",
+  "description": "Final check: every_node_5.graph.json in a game"
+ },
+ "variables": [],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "pk",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 240,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "semi",
+   "type": "col.semiclip",
+   "pos": {
+    "x": 480,
+    "y": 0
+   },
+   "params": {
+    "mode": "team",
+    "on": true
+   }
+  },
+  {
+   "id": "semi2",
+   "type": "col.semiclip",
+   "pos": {
+    "x": 720,
+    "y": 0
+   },
+   "params": {
+    "mode": "chosen",
+    "on": true
+   }
+  },
+  {
+   "id": "vm",
+   "type": "vec.make",
+   "pos": {
+    "x": 960,
+    "y": 200
+   },
+   "params": {
+    "x": 0,
+    "y": 0,
+    "z": 36
+   }
+  },
+  {
+   "id": "va",
+   "type": "vec.make",
+   "pos": {
+    "x": 960,
+    "y": 300
+   },
+   "params": {
+    "x": 0,
+    "y": 45,
+    "z": 0
+   }
+  },
+  {
+   "id": "vo",
+   "type": "vec.make",
+   "pos": {
+    "x": 960,
+    "y": 400
+   },
+   "params": {
+    "x": 64,
+    "y": 0,
+    "z": 0
+   }
+  },
+  {
+   "id": "vs",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 960,
+    "y": 0
+   },
+   "params": {
+    "shape": "box",
+    "sx": 256,
+    "sy": 256,
+    "sz": 128,
+    "filter": "players",
+    "name": "zone",
+    "radius": 96
+   }
+  },
+  {
+   "id": "vs2",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 128,
+    "filter": "any",
+    "name": "near",
+    "sx": 128,
+    "sy": 128,
+    "sz": 96
+   }
+  },
+  {
+   "id": "prop",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1440,
+    "y": 0
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": true,
+    "blocked": "nearby",
+    "max_dist": 128,
+    "retry_every": 1,
+    "retry_tries": 10,
+    "copy_rot": true,
+    "scale": 1
+   }
+  },
+  {
+   "id": "solid",
+   "type": "col.set_solid",
+   "pos": {
+    "x": 1680,
+    "y": 0
+   },
+   "params": {
+    "kind": "trigger"
+   }
+  },
+  {
+   "id": "size",
+   "type": "col.set_size",
+   "pos": {
+    "x": 1920,
+    "y": 0
+   },
+   "params": {
+    "minx": -8,
+    "miny": -8,
+    "minz": 0,
+    "maxx": 8,
+    "maxy": 8,
+    "maxz": 16
+   }
+  },
+  {
+   "id": "dmg",
+   "type": "col.takes_damage",
+   "pos": {
+    "x": 2160,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "hp",
+   "type": "col.set_health",
+   "pos": {
+    "x": 2400,
+    "y": 0
+   },
+   "params": {
+    "hp": 250
+   }
+  },
+  {
+   "id": "hpr",
+   "type": "col.health",
+   "pos": {
+    "x": 2640,
+    "y": 200
+   },
+   "params": {}
+  },
+  {
+   "id": "phpr",
+   "type": "debug.print",
+   "pos": {
+    "x": 2640,
+    "y": 0
+   },
+   "params": {
+    "text": "prop health",
+    "chat": false
+   }
+  },
+  {
+   "id": "ovl",
+   "type": "vol.is_overlapping",
+   "pos": {
+    "x": 2880,
+    "y": 200
+   },
+   "params": {}
+  },
+  {
+   "id": "povl",
+   "type": "debug.print",
+   "pos": {
+    "x": 2880,
+    "y": 0
+   },
+   "params": {
+    "text": "picked player in zone",
+    "chat": false
+   }
+  },
+  {
+   "id": "rm",
+   "type": "vol.remove",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "av",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 3360,
+    "y": 0
+   },
+   "params": {
+    "tag": "carrier",
+    "radius": 200,
+    "strength": 7,
+    "secs": 0,
+    "team": "t"
+   }
+  },
+  {
+   "id": "av2",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 3600,
+    "y": 0
+   },
+   "params": {
+    "tag": "spot",
+    "radius": 128,
+    "strength": 3,
+    "secs": 30,
+    "team": "all"
+   }
+  },
+  {
+   "id": "avs",
+   "type": "bots.avoid_stop",
+   "pos": {
+    "x": 3840,
+    "y": 0
+   },
+   "params": {
+    "tag": "spot"
+   }
+  },
+  {
+   "id": "ob",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 0,
+    "y": 600
+   },
+   "params": {
+    "name": "zone"
+   }
+  },
+  {
+   "id": "pob",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 600
+   },
+   "params": {
+    "text": "begin overlap",
+    "chat": false
+   }
+  },
+  {
+   "id": "oe",
+   "type": "vol.on_end",
+   "pos": {
+    "x": 0,
+    "y": 800
+   },
+   "params": {
+    "name": ""
+   }
+  },
+  {
+   "id": "poe",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 800
+   },
+   "params": {
+    "text": "end overlap",
+    "chat": false
+   }
+  },
+  {
+   "id": "ot",
+   "type": "col.on_touch",
+   "pos": {
+    "x": 0,
+    "y": 1000
+   },
+   "params": {
+    "name": "",
+    "secs": 1
+   }
+  },
+  {
+   "id": "pot",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 1000
+   },
+   "params": {
+    "text": "touched",
+    "chat": false
+   }
+  },
+  {
+   "id": "bh",
+   "type": "col.on_bullet",
+   "pos": {
+    "x": 0,
+    "y": 1200
+   },
+   "params": {
+    "secs": 0.2
+   }
+  },
+  {
+   "id": "pbh",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 1200
+   },
+   "params": {
+    "text": "bullet hit",
+    "chat": false
+   }
+  },
+  {
+   "id": "ld",
+   "type": "col.on_landed",
+   "pos": {
+    "x": 0,
+    "y": 1400
+   },
+   "params": {
+    "min": 250
+   }
+  },
+  {
+   "id": "pld",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 1400
+   },
+   "params": {
+    "text": "landed",
+    "chat": false
+   }
+  },
+  {
+   "id": "ah",
+   "type": "event.player_about_hurt",
+   "pos": {
+    "x": 0,
+    "y": 1600
+   },
+   "params": {}
+  },
+  {
+   "id": "pah",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 1600
+   },
+   "params": {
+    "text": "about to be hurt",
+    "chat": false
+   }
+  },
+  {
+   "id": "pt",
+   "type": "event.player_touched",
+   "pos": {
+    "x": 0,
+    "y": 1800
+   },
+   "params": {
+    "name": "zone"
+   }
+  },
+  {
+   "id": "ppt",
+   "type": "debug.print",
+   "pos": {
+    "x": 240,
+    "y": 1800
+   },
+   "params": {
+    "text": "player touched",
+    "chat": false
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w0",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w1",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "semi",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "semi",
+    "pin": "then"
+   },
+   "to": {
+    "node": "semi2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "semi2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "vs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vs2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "vs2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "prop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "solid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "solid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "size",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "size",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dmg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "dmg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "hp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "phpr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "phpr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "povl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "povl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "rm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "av",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "av",
+    "pin": "then"
+   },
+   "to": {
+    "node": "av2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "av2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "avs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "pk",
+    "pin": "player"
+   },
+   "to": {
+    "node": "semi2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "vm",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vs",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "va",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vs",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vs2",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "vo",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vs2",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "pk",
+    "pin": "player"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "solid",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "size",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dmg",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hpr",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "hpr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "phpr",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "vs",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ovl",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ovl",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "ovl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "povl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "vs2",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "rm",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "pk",
+    "pin": "player"
+   },
+   "to": {
+    "node": "av",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "vm",
+    "pin": "out"
+   },
+   "to": {
+    "node": "av2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ob",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pob",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "ob",
+    "pin": "who"
+   },
+   "to": {
+    "node": "pob",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "oe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "poe",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "oe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "poe",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "ot",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pot",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "ot",
+    "pin": "other"
+   },
+   "to": {
+    "node": "pot",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "bh",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pbh",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "bh",
+    "pin": "hitgroup"
+   },
+   "to": {
+    "node": "pbh",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ld",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pld",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ld",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "pld",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "ah",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pah",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "ah",
+    "pin": "hitgroup"
+   },
+   "to": {
+    "node": "pah",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "pt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ppt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "pt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ppt",
+    "pin": "value"
+   }
+  }
+ ]
+}

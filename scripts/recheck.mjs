@@ -25,7 +25,8 @@
 // clones, servers (by their own hlds.exe PID) and worktree at the end, keeping the logs.
 //
 // RECHECK_BRAIN_ZIP=path: the pinned bot brain's zip when it isn't released yet (checked against
-// the pin's SHA-256 either way); the sims always run the brain the commit pins.
+// the pin's SHA-256 either way); the sims run the brain the commit pins, unless RECHECK_BRAIN_DLL
+// names another mp.dll (the final check: the next pin's candidate). The log says its ls_mode_ver.
 // GITLEAKS=path picks gitleaks (else the one on the PATH). Run it outside a sandbox: a sandboxed
 // shell can't stop CrossOver processes (the sim's hlds.exe), and says nothing when it fails.
 // RECHECK_WORKERS=n: Playwright workers (default 1, at most 3; low priority either way).
@@ -369,7 +370,9 @@ function prepareSim() {
 }
 function writeSimSettings(am, result) {
   // the bot brain the commit pins (setup/foundation.rs REGAMEDLL), as setup would install it
-  const brain = pinnedBrain();
+  // (RECHECK_BRAIN_DLL: another brain's mp.dll, not checked against the pin: the final check
+  // runs the next pin's candidate)
+  const brain = process.env.RECHECK_BRAIN_DLL ? { name: `${process.env.RECHECK_BRAIN_DLL} (RECHECK_BRAIN_DLL)`, dll: process.env.RECHECK_BRAIN_DLL } : pinnedBrain();
   copyFileSync(brain.dll, join(SIM, "cstrike/dlls/mp.dll"));
   log(`   sim: bot brain ${brain.name} (sha256 checked)`);
   // bots only, logs to the console, our rcon password, after every map
@@ -464,6 +467,9 @@ async function sims() {
     stopSim();
     return { ok: false, detail: "the sim server didn't answer RCON in 2 minutes (sims.log)" };
   }
+  // the brain the server runs (an older one prints its usage list for newer ls_mode commands)
+  const modeVer = /"ls_mode_ver" is "(\d+)"/.exec((await rcon("ls_mode_ver")) ?? "")?.[1] ?? "missing";
+  log(`   sim: ls_mode_ver ${modeVer}`);
   // a step's map the sim doesn't have comes from the game (APFS clones of the .bsp, its nav and
   // what its .res lists), read only
   for (const s of SIM_STEPS) borrowMap(s.map);
@@ -507,6 +513,9 @@ async function sims() {
       if ((s.expect ?? []).every((e) => sofar.includes(e)) && (s.anyOf ?? []).some((e) => sofar.includes(e))) break;
     }
     const alive = !!(await rcon("echo alive", 5000));
+    // (the switch took: gm_mode writes current.txt with the mode's plugin list; a mode left over
+    // from the clone's own saved state played instead once, with 0 kills)
+    const cur = s.vote ? s.mode : (existsSync(join(am, "data/gamemodes/current.txt")) ? readFileSync(join(am, "data/gamemodes/current.txt"), "latin1").trim() : "");
     const text = existsSync(qlog) ? readFileSync(qlog).subarray(from).toString("latin1") : "";
     writeFileSync(join(OUT, `sim-${s.id}.log`), text);
     const kills = (text.match(/" killed "/g) ?? []).length;
@@ -519,6 +528,7 @@ async function sims() {
       ...(s.kills && kills < s.kills ? [`${kills} kills (wanted ${s.kills}+)`] : []),
       ...(s.rounds && rounds < s.rounds ? [`${rounds} rounds ended (wanted ${s.rounds}+)`] : []),
       ...(!alive ? ["the server stopped answering"] : []),
+      ...(cur !== s.mode ? [`the mode didn't switch (current.txt says ${cur || "nothing"})`] : []),
     ];
     simRows.push({ ...s, result: problems.length ? "FAIL" : "PASS", detail: `${kills} kills, ${rounds} rounds${problems.length ? `; ${problems.join("; ")}` : ""}` });
     log(`   sim ${s.id}: ${simRows.at(-1).result} ${simRows.at(-1).detail}`);
