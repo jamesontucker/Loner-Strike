@@ -727,7 +727,9 @@ function guideSections(body) {
   }
   if (last) last.html = body.slice(last.end);
   for (const x of out) {
-    x.text = strip(x.html);
+    // (its text without the h3 headings, so a summary never runs a heading into the next sentence;
+    // the headings are in its search words below)
+    x.text = strip(x.html.replace(/<h3[^>]*>[\s\S]*?<\/h3>/g, " "));
     // (its search words: the nodes it names and its own headings)
     x.words = [...new Set([...x.html.matchAll(/<a class="node"[^>]*>([^<]+)<\/a>|<h3[^>]*>([\s\S]*?)<\/h3>/g)].map((m) => strip(m[1] || m[2])))].join(" ");
   }
