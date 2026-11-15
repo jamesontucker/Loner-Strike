@@ -916,7 +916,7 @@ A wire joins the same type, or a narrower into a wider one (Goes into); the othe
 - env_fog: Fog for the whole map. Keys: targetname, startdist, density.
 - env_funnel: A funnel of glowing particles pulled in to this spot (or pushed out) when set off; goes once. Keys: targetname, spawnflags.
 - env_global: Sets a named global switch when set off. A multisource with the same Global state only works while the switch is on. Keys: targetname, globalstate, initialstate, spawnflags.
-- env_glow: A glow sprite that fades out when you can't see its middle. Keys: targetname, rendermode, renderamt, renderfx, model.
+- env_glow: A glow sprite that fades out when you can't see its middle. Keys: targetname, rendermode, renderamt, renderfx, model, scale.
 - env_laser: A straight laser from here to a named entity, with an optional sprite where it hits. Keys: targetname, LaserTarget, EndSprite, rendercolor, NoiseAmplitude, framestart, spawnflags.
 - env_message: Shows a message from the map's titles.txt when set off, with an optional sound. Keys: targetname, target, message, messagevolume, spawnflags.
 - env_rain: Rain on the whole map (players see it outdoors). Keys: none.
@@ -926,7 +926,7 @@ A wire joins the same type, or a narrower into a wider one (Goes into); the othe
 - env_snow: Snow on the whole map (players see it outdoors). Keys: none.
 - env_sound: Changes how sounds echo for players near it. Keys: radius.
 - env_spark: Sparks, now and then or when set off. Keys: targetname, MaxDelay.
-- env_sprite: Shows a sprite (a flat picture, often glowing). Keys: targetname, rendermode, renderamt, renderfx, angles, model, framerate.
+- env_sprite: Shows a sprite (a flat picture, often glowing). Keys: targetname, rendermode, renderamt, renderfx, angles, model, scale, spawnflags.
 - game_counter: Counts: up each time it's set off (down when set off as Off). At the limit it sets off its target. game_counter_set and game_zone_player can set its count. Keys: targetname, target, master, frags, spawnflags.
 - game_counter_set: Sets a game_counter (its target) to a number when set off. Keys: targetname, target, master, frags.
 - game_end: Warning: ends the map for everyone when set off: the scoreboard shows, then the server changes to the next map. Give it a master to limit who can. Keys: targetname, master.
