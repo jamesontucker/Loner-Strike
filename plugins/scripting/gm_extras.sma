@@ -1126,6 +1126,9 @@ apply_fastdl()
 	if (url[0])
 	{
 		set_cvar_string("sv_downloadurl", url)
+		// players may download at all (a server.cfg that turned it off would leave the
+		// address unused)
+		set_cvar_num("sv_allowdownload", 1)
 		set_localinfo("gm_fastdl", "1")
 	}
 	else if (was[0] == '1')

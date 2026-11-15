@@ -299,6 +299,11 @@ fn save(data: &Path, s: &Settings) -> Result<(), String> {
     crate::sys::write_latin1(&data.join("ads.txt"), &ads_txt(s)).map_err(|e| format!("Couldn't write the chat messages ({e})."))
 }
 
+/// The download address a game or server has set (sv_downloadurl through gm_extras).
+pub fn fastdl_url_of(g: &Game) -> String {
+    load(&g.data).fastdl
+}
+
 /// Website status's fast downloads: sets the download address to `url`, or with None
 /// clears it, but only when it's still `was` (one the host typed in stays).
 pub fn set_fastdl(g: &Game, url: Option<&str>, was: Option<&str>) -> Result<(), String> {
@@ -530,7 +535,7 @@ pub(crate) const STOCK_WADS: &[&str] = &[
 const DL_EXT: &[&str] = &["bsp", "res", "wad", "wav", "mp3", "mdl", "spr", "tga", "bmp", "txt"];
 const DL_DIRS: &[&str] = &["maps/", "sound/", "models/", "sprites/", "gfx/", "overviews/"];
 
-fn downloadable(rel: &str) -> bool {
+pub(crate) fn downloadable(rel: &str) -> bool {
     let r = rel.replace('\\', "/").to_lowercase();
     let ext = r.rsplit('.').next().unwrap_or("");
     DL_EXT.contains(&ext) && (DL_DIRS.iter().any(|d| r.starts_with(d)) || (ext == "wad" && !r.contains('/'))) && !crate::maps::is_stock_file(&r)

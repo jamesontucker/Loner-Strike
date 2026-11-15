@@ -21,6 +21,7 @@ mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local
 mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
 mod extras;
+mod fastdl; // W2: fast downloads from Loner-Strike's mirror (dl.lonerstrike.com/fastdl/<server>)
 mod game;
 mod gamebanana;
 mod hltv;

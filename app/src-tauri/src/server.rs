@@ -342,6 +342,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::plugins::local_routes())
             .merge(crate::sounds::local_routes())
             .merge(crate::extras::local_routes())
+            .merge(crate::fastdl::local_routes())
             .merge(crate::browser::routes())
             .merge(crate::smartchat::local_routes())
             .merge(crate::control::local_routes())
