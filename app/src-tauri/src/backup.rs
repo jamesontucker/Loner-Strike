@@ -1797,7 +1797,7 @@ impl Restore {
             if matches!(self.target, Target::NewRemote(_)) {
                 job.run(&step("srv-service"), || {
                     let mut failed = String::new();
-                    let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &servers::launch_args(&e)).as_bytes(), |line| {
+                    let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &servers::launch_args(&e), &e.connect()).as_bytes(), |line| {
                         if !line.starts_with("@@") && !line.trim().is_empty() {
                             failed = line.trim().to_string();
                         }

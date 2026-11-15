@@ -471,6 +471,51 @@ pub fn register(address: &str) -> Result<(), String> {
     }
 }
 
+/// A running server that should be listed but isn't (it fell off: a machine restarted, the list
+/// lost it): asked to be listed again. At most once every 10 minutes for each address, in the
+/// background; the list is read first, so a listed server costs one GET.
+pub fn ensure_listed(address: &str) {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use std::time::Instant;
+    static LAST: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+    {
+        let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+        let m = last.get_or_insert_with(HashMap::new);
+        if m.get(address).is_some_and(|t| t.elapsed() < Duration::from_secs(600)) {
+            return;
+        }
+        m.insert(address.to_string(), Instant::now());
+    }
+    let address = address.to_string();
+    std::thread::spawn(move || {
+        let listed = crate::sys::http()
+            .get(format!("{LIST_URL}/servers"))
+            .timeout(Duration::from_secs(15))
+            .send()
+            .ok()
+            .and_then(|r| crate::caps::read_up_to(r, "server list", 4 << 20).ok())
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .map(|v| on_list(&v, &address));
+        // (couldn't read the list: try again next time, not a register in the dark)
+        if listed == Some(false) {
+            if let Err(why) = register(&address) {
+                crate::diagnostics::log_error("server list", &why);
+            }
+        }
+    });
+}
+
+/// Is `address` (as the app knows it: no port means 27015) among the list's servers?
+fn on_list(list: &Value, address: &str) -> bool {
+    let norm = |a: &str| {
+        let a = a.trim().to_lowercase();
+        if a.rsplit_once(':').is_some_and(|(_, p)| p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty()) { a } else { format!("{a}:27015") }
+    };
+    let want = norm(address);
+    list["servers"].as_array().into_iter().flatten().filter_map(|s| s["address"].as_str()).any(|a| norm(a) == want)
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/browser/list", get(api_list))
@@ -481,6 +526,16 @@ pub fn routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn on_list_matches_the_address_as_the_list_writes_it() {
+        let list = json!({"servers": [{"address": "178.156.241.180:27015"}, {"address": "play.example.com:27016"}]});
+        assert!(on_list(&list, "178.156.241.180"), "no port: 27015");
+        assert!(on_list(&list, "178.156.241.180:27015"));
+        assert!(on_list(&list, "Play.Example.com:27016"));
+        assert!(!on_list(&list, "play.example.com"), "another port");
+        assert!(!on_list(&json!({"servers": []}), "178.156.241.180"));
+    }
     use super::*;
 
     const INFO_I: &[u8] = b"I\x30Pub \xc3\xa9\x00de_dust2\x00cstrike\x00Counter-Strike\x00\x0a\x00\x05\x20\x03dl\x01\x01\x01";

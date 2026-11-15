@@ -1785,7 +1785,7 @@ pub fn write_service(e: &Entry) -> Result<(), String> {
     };
     // (from the list as it is now: the start options may have changed since `e` was read)
     let now = get(&e.id).unwrap_or_else(|| e.clone());
-    let ok = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&now.id, &now.game, &launch_args(&now)).as_bytes(), |_| {});
+    let ok = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&now.id, &now.game, &launch_args(&now), &now.connect()).as_bytes(), |_| {});
     match ok {
         Ok(0) => {
             set(false);
@@ -1968,7 +1968,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
         job.run(&format!("{g}/srv-upload"), || upload(&entry).map(|n| setup::Progress::detail(job, &format!("{n} files uploaded"))))?;
         job.run(&format!("{g}/srv-service"), || {
             let mut failed = String::new();
-            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &entry.game, &launch_args(&entry)).as_bytes(), |line| {
+            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &entry.game, &launch_args(&entry), &entry.connect()).as_bytes(), |line| {
                 if !line.starts_with("@@") && !line.trim().is_empty() {
                     failed = line.trim().to_string();
                 }
@@ -2349,6 +2349,10 @@ fn remote_state(e: &Entry) -> (bool, u64) {
     match state {
         Ok(state) => {
             SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
+            // running and meant to be listed: back on the server list if it fell off (W2)
+            if state.0 && e.ls_listed {
+                crate::browser::ensure_listed(&e.connect());
+            }
             if let Some(m) = UNREACHABLE.lock().unwrap().as_mut() {
                 m.remove(&e.id);
             }

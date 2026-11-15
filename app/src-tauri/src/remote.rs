@@ -977,8 +977,12 @@ fn watch_address(args: &[String]) -> String {
 }
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
-pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
+/// `list`: the address the Loner-Strike server list knows the server by (its public one): after
+/// every start the unit puts it back on the list (lsregister), when its friends.cfg says ls_list
+/// 1, so a restart on the machine (a reboot, a crash, lsctl) never leaves it off. Empty: none.
+pub fn service_sh(id: &str, game: &str, args: &[String], list: &str) -> String {
     let unit = unit(id);
+    let list_line = if list.is_empty() { String::new() } else { format!("ExecStartPost=-/usr/local/bin/lsregister {} $SRV/{game}\n", shell_quote(list)) };
     let dir = server_dir(id);
     // the game's port, for the watchdog to knock on
     let port = args.iter().position(|a| a == "-port").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u16>().ok()).unwrap_or(27015);
@@ -1025,7 +1029,7 @@ Environment=LD_LIBRARY_PATH=$SRV
 ExecStartPre=-/bin/sh -c 'f="$HOME/loner-strike/bin/hamsandwich_fixed_i386.so"; m="$SRV/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so"; if [ -f "\$\$f" ] && [ -f "\$\$m" ] && ! cmp -s "\$\$f" "\$\$m"; then cp "\$\$f" "\$\$m.new" && mv -f "\$\$m.new" "\$\$m"; fi'
 ExecStartPre=-/usr/local/bin/lscrashinfo start $SRV {game} {unit}
 ExecStopPost=-/usr/local/bin/lscrashinfo stop $SRV {game} {unit}
-ExecStart=$SRV/hlds_linux {args}
+{list_line}ExecStart=$SRV/hlds_linux {args}
 Restart=always
 RestartSec=5
 {sandbox}
@@ -1258,6 +1262,35 @@ for old in sorted(glob.glob(os.path.join(out, "2*.json")))[:-100]:
 LSCRASH
 sudo sed -i "s/HAMSHA_FIXED/{ham_sha}/" /usr/local/bin/lscrashinfo
 sudo chmod 755 /usr/local/bin/lscrashinfo
+sudo tee /usr/local/bin/lsregister >/dev/null <<'LSREG'
+#!/usr/bin/env python3
+# lsregister <address> <game folder>: after a start (the unit's ExecStartPost), puts the server
+# back on the Loner-Strike server list, when its friends.cfg says ls_list 1. Returns at once and
+# asks in the background while the map loads (the list checks the server itself).
+import json, os, sys, time, urllib.request
+addr, game = sys.argv[1], sys.argv[2]
+try:
+    with open(os.path.join(game, "addons/amxmodx/data/gamemodes/friends.cfg"), encoding="latin-1") as f:
+        listed = any(line.split()[:2] == ["ls_list", "1"] for line in f)
+except OSError:
+    listed = False
+if not listed or os.fork():
+    sys.exit(0)
+os.setsid()
+time.sleep(45)
+for _ in range(10):
+    try:
+        req = urllib.request.Request("https://list.lonerstrike.com/register", data=json.dumps(dict(address=addr)).encode(), headers=dict([("Content-Type", "application/json")]))
+        with urllib.request.urlopen(req, timeout=20) as r:
+            if json.load(r).get("ok"):
+                print("lsregister: %s is on the Loner-Strike server list" % addr, flush=True)
+                sys.exit(0)
+    except Exception:
+        pass
+    time.sleep(30)
+print("lsregister: %s couldn't be put on the list (the app asks again when it sees it running)" % addr, flush=True)
+LSREG
+sudo chmod 755 /usr/local/bin/lsregister
 sudo tee /etc/systemd/system/{unit}-watchdog.service >/dev/null <<EOF
 [Unit]
 Description=Loner-Strike server {id} watchdog (starts it again if it freezes)
@@ -1286,7 +1319,7 @@ echo "@@STEP ready"
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 8";
+pub const SERVICE_REV: &str = "loner-strike unit 9";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).
@@ -1661,7 +1694,11 @@ mod tests {
         assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()], "play.example.com:27016");
+        // W2: back on the server list after every start (lsregister, when friends.cfg says so)
+        assert!(svc.contains("ExecStartPost=-/usr/local/bin/lsregister 'play.example.com:27016' $SRV/cstrike\nExecStart="), "{svc}");
+        assert!(svc.contains("sudo tee /usr/local/bin/lsregister") && svc.contains("[\"ls_list\", \"1\"]") && svc.contains("os.fork()"));
+        assert!(!service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "").contains("ExecStartPost=-/usr/local/bin/lsregister"), "no address: no line");
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x") && svc.contains("print(f\"{unit} hasn't"));
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
         // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
@@ -1678,7 +1715,7 @@ mod tests {
         assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+maxplayers", "20"])), "10.0.0.5");
         assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+ip", "192.168.1.9"])), "192.168.1.9");
         assert_eq!(watch_address(&a(&["+ip", "not;an ip"])), "127.0.0.1");
-        let svc = service_sh("x", "cstrike", &a(&["-game", "cstrike", "-port", "27016", "+ip", "10.0.0.5"]));
+        let svc = service_sh("x", "cstrike", &a(&["-game", "cstrike", "-port", "27016", "+ip", "10.0.0.5"]), "");
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x 10.0.0.5\n"));
     }
 
@@ -1687,7 +1724,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn lsctl_lists_only_servers() {
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "");
         let line = svc.lines().find(|l| l.starts_with("units() {")).unwrap();
         let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "units-").unwrap();
         let unit = |name: &str, exec: &str| std::fs::write(dir.join(format!("{name}.service")), format!("[Service]\nExecStart={exec}\n")).unwrap();
@@ -1709,7 +1746,7 @@ mod tests {
     #[cfg(unix)]
     fn scripts_parse() {
         use std::io::Write;
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "");
         for sh in [SETUP_SH.to_string(), svc] {
             let mut p = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
             p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
