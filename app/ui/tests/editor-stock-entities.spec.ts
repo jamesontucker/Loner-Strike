@@ -85,7 +85,9 @@ test("the inspector, the checks and the previews for a turret and a track", asyn
   const panel = page.locator(".tools-panel", { has: page.locator("h3", { hasText: /^trigger_random$/ }) });
   await expect(panel).toContainText("Sets off one of its targets at random");
   await expect(panel.locator('label[title^="target_count: Picks among the first"]')).toHaveCount(1);
-  await expect(panel.getByText("Target 16", { exact: true })).toHaveCount(1);
+  // (a key with help has a "What's this?" button in its label, so its text isn't the name alone)
+  await expect(panel.locator('label[title^="target15: Another name it can pick from"]')).toContainText("Target 16");
+  await expect(panel.getByRole("combobox", { name: /^Target 16\b/ })).toHaveCount(1);
   // the previews: the track's arrow and the turret's arc are drawn
   const segs = (await page.evaluate(`(async () => {
     const m = await import("/src/views/tools/editor/StockPreviews.tsx");
