@@ -9,6 +9,8 @@ import { BusyButton, Info, LoadError, Segmented, Skeleton, useToast } from "../.
 import { Row, Rows } from "../common";
 import { exportPng, mapTextureUrl, pickPicture, previewTexture, saveTexture, useUsage, useWads, useWadTextures, wadTextureUrl, type ExportSource, type WadInfo, type WadTexture } from "./assetsApi";
 import { matches, searchWords } from "../common/search";
+import { useAssetImport } from "../common/AssetImport";
+import { MakeSpriteButton } from "../common/SpriteMaker";
 
 /** "all", "maps" (textures inside maps) or "folder/name.wad" */
 type Source = string;
@@ -88,6 +90,7 @@ export function Textures() {
             ))}
           </select>
           <button className="btn" onClick={() => setMaking((v) => !v)} aria-expanded={making}>Make your own…</button>
+          <MakeSpriteIntoGame />
         </div>
         {one?.error && <p className="muted">{one.error}</p>}
         {unreadable.length > 0 && (
@@ -224,6 +227,13 @@ function describe(name: string): string | null {
 const SIZES = ["64", "128", "256", "512"];
 
 /** Your own picture as a texture in a WAD of yours. */
+/** T1fix: "Make sprite…": the sprite goes into the game's own sprites (the pickers' Import, checked). */
+function MakeSpriteIntoGame() {
+  // (the import says where it went)
+  const imp = useAssetImport("sprite", () => undefined);
+  return <MakeSpriteButton className="btn" onMade={async (f) => { await imp.importFile(f); return true; }} />;
+}
+
 function MakeTexture({ onDone }: { onDone: (wad: string | null) => void }) {
   const toast = useToast();
   const qc = useQueryClient();

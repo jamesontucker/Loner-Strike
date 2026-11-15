@@ -169,7 +169,7 @@ pub fn make(src: &RgbaImage, opts: &Options) -> Spray {
 }
 
 /// The picture scaled to fit inside `w` x `h`, centred on a clear background.
-fn fit_into(src: &RgbaImage, w: u32, h: u32) -> RgbaImage {
+pub(crate) fn fit_into(src: &RgbaImage, w: u32, h: u32) -> RgbaImage {
     let scale = (w as f64 / src.width().max(1) as f64).min(h as f64 / src.height().max(1) as f64);
     let nw = ((src.width() as f64 * scale).round() as u32).clamp(1, w);
     let nh = ((src.height() as f64 * scale).round() as u32).clamp(1, h);
@@ -276,7 +276,7 @@ fn dist(a: [u8; 3], b: [u8; 3]) -> u32 {
     2 * d(0) + 4 * d(1) + 3 * d(2)
 }
 
-fn nearest_index(palette: &[[u8; 3]], c: [u8; 3]) -> u8 {
+pub(crate) fn nearest_index(palette: &[[u8; 3]], c: [u8; 3]) -> u8 {
     let mut best = (0usize, u32::MAX);
     for (i, &p) in palette.iter().enumerate() {
         let d = dist(p, c);

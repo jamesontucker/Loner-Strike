@@ -1,0 +1,21 @@
+/* The Sprite maker (T1fix) */
+.sm-sheet .sm { display: grid; gap: 12px; }
+.sm-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); gap: 16px; align-items: start; }
+@media (max-width: 720px) { .sm-grid { grid-template-columns: minmax(0, 1fr); } }
+.sm-drop { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px dashed var(--bevel-hi); border-radius: 4px; }
+.sm-drop.hot { border-color: var(--signal); background: color-mix(in srgb, var(--signal) 12%, transparent); }
+.sm-frames { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow: auto; }
+.sm-frames li { position: relative; }
+.sm-frames img { width: 56px; height: 56px; object-fit: contain; background: #1b1d17; border: 1px solid var(--line); }
+.sm-frames button { position: absolute; top: 0; right: 0; min-height: 0; padding: 0 5px; }
+.sm-preview { position: relative; display: grid; place-items: center; min-height: 200px; margin-top: 10px; background: repeating-conic-gradient(#222 0 25%, #2c2c2c 0 50%) 0 0 / 16px 16px; border: 1px solid var(--line); }
+.sm-busy { position: absolute; top: 8px; right: 8px; }
+.sm-facts { margin: 6px 0 0; }
+.sm-fps { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.sm-right { display: grid; gap: 10px; }
+.sm-field { display: grid; gap: 4px; }
+.sm-field > span:first-child { font-weight: 600; font-size: 13px; }
+.sm-note { margin: -4px 0 0; font-size: 12px; }
+.sm-crop-row { display: grid; grid-template-columns: 80px 1fr 40px; gap: 6px; align-items: center; font-size: 13px; }
+.sm-key { display: flex; gap: 8px; align-items: center; }
+.sm-actions { gap: 8px; }

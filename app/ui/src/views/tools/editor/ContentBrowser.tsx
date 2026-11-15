@@ -44,6 +44,7 @@ import { keyOf, originOf, useEditor } from "./store";
 import { useTools } from "../../../stores/tools";
 import { useNav } from "../../../store";
 import type { Vec3 } from "../viewer/coords";
+import { MakeSpriteButton } from "../common/SpriteMaker"; // T1fix
 import "./p5.css";
 
 const GetMore = lazy(() => import("../../GetMore").then((m) => ({ default: m.GetMore })));
@@ -311,6 +312,8 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
             <button type="button" className="btn small" disabled={importing} title="Copy your own models, sprites, sounds or texture files (.mdl .spr .wav .wad) into the project's folder. You can also drop them here." onClick={() => picker.current?.click()}>
               {importing ? <><span className="spinner" aria-hidden="true" /> Importing…</> : "Import…"}
             </button>
+            {/* T1fix: a sprite made from pictures goes in like an imported one */}
+            <MakeSpriteButton onMade={async (f) => { await runImport([f]); return true; }} />
           </>
         )}
       </div>

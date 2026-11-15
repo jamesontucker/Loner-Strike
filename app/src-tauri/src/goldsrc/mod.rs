@@ -14,6 +14,7 @@ pub mod mdl;
 pub mod mesh;
 pub mod nav;
 pub mod spr; // P5: sprites for the editor's Content Browser
+pub mod sprwrite; // T1fix: the Sprite maker
 pub mod wad;
 pub mod wadwrite;
 

@@ -13,6 +13,7 @@ import { post, tryGet } from "./api";
 import { matches, searchWords } from "./search";
 import { fileData } from "../editor/contentApi";
 import { MakeSpriteButton } from "./SpriteMaker"; // T1fix: the Sprite maker
+import { MakeSpriteButton } from "./SpriteMaker"; // T1fix: the Sprite maker
 import "./assetImport.css";
 
 export type ImportKind = "model" | "sprite" | "sound";
@@ -137,6 +138,14 @@ export function ImportBar({ kind, imp, onRefresh, refreshing }: { kind: ImportKi
   return (
     <div className="ai-bar">
       <BusyButton className="btn small" busy={imp.busy === "import"} disabled={!!imp.busy} label="Import…" busyLabel="Importing…" onClick={() => void imp.importFile()} title={`Add a ${EXT[kind]} file from your computer (or drop one here)`} />
+      {kind === "sprite" && (
+        <MakeSpriteButton
+          onMade={async (f) => {
+            await imp.importFile(f);
+            return true;
+          }}
+        />
+      )}
       {kind === "sprite" && (
         <MakeSpriteButton
           onMade={async (f) => {
