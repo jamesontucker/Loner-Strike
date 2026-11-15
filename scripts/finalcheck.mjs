@@ -455,7 +455,10 @@ async function install() {
   for (const f of ["lastpreset.txt", "premode.txt", "crashmap.txt"]) rmSync(join(AM, "data/gamemodes", f), { force: true });
   // the graphs: cover with the debugger (node runs), the rest plain
   const files = [...graphFiles("cover_"), ...graphFiles("perf_"), ...graphFiles("stress_")];
-  const lines = installGraphs(files, graphFiles("cover_").length ? "all" : "");
+  // (the debugger only in the cover modes: it writes node runs down, which the stress and cost runs
+  // mustn't pay for; --plain: none, as for a live server)
+  const coverIds = graphFiles("cover_").map((f) => `fc_cover_${f.slice(6, -11)}`).join(",");
+  const lines = installGraphs(files, flag("--plain") ? "" : coverIds);
   results.install = lines.map((l) => ({ graph: basename(l.graph), id: l.id, version: l.version, installed: l.installed, compiled: l.compiled ?? false, errors: l.errors, warnings: (l.warnings ?? []).length, precache: l.precache, nodes: l.nodes }));
   version("Studio plugins (the generator)", `${results.install.filter((l) => l.compiled).length} made by ${results.commit}'s generator`, true);
   const broken = results.install.filter((l) => !l.graph.startsWith("stress_precache170") && !(l.installed && l.compiled));
