@@ -23,14 +23,14 @@ const CREATURE_PARAMS = ["creature.spawn:kind", "turret.setup:type", "creature.f
 
 type PV = string | number | boolean;
 
-function NumberField({ value, min, max, onChange }: { value: number; min?: number; max?: number; onChange: (v: number) => void }) {
+function NumberField({ value, min, max, whole, onChange }: { value: number; min?: number; max?: number; /** a whole number: steps by 1 */ whole?: boolean; onChange: (v: number) => void }) {
   return (
     <input
       className="st-field st-field-num"
       type="number"
       min={min}
       max={max}
-      step="any"
+      step={whole ? 1 : "any"}
       value={Number(value)}
       onChange={(e) => {
         const n = Number(e.target.value);
@@ -153,7 +153,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
         ))}
       </select>
     );
-  if (p.kind === "number") return <NumberField value={Number(value)} min={p.min} max={p.max} onChange={onChange} />;
+  if (p.kind === "number") return <NumberField value={Number(value)} min={p.min} max={p.max} whole={(p as { whole?: boolean }).whole} onChange={onChange} />;
   if (p.kind === "color") return <ColorField value={value} onChange={onChange} label={p.label} />;
   if (p.kind === "bool")
     return (

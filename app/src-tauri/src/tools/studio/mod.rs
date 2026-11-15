@@ -1614,6 +1614,21 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// One Number type with whole-number marks: counts, ammo, money... are marked (#) in the
+    /// registry, and a constant with a fraction there is rounded, with a warning (never an error).
+    #[test]
+    fn whole_number_pins_are_marked_and_fractions_warned() {
+        let r = graph::registry();
+        let give = r.get("player.give_weapon").unwrap();
+        assert!(give.param("ammo").is_some_and(|p| p.whole) && give.inputs.iter().any(|p| p.id == "ammo" && p.whole));
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "whole", "name": "Whole"},
+            "nodes": [{"id": "sp", "type": "event.player_spawned"}, {"id": "give", "type": "player.give_weapon", "params": {"weapon": "ak47", "ammo": 2.5}}],
+            "edges": [{"id": "w1", "from": {"node": "sp", "pin": "then"}, "to": {"node": "give", "pin": "exec"}}, {"id": "w2", "from": {"node": "sp", "pin": "player"}, "to": {"node": "give", "pin": "player"}}]})).unwrap();
+        let p = graph::validate(&g);
+        assert!(p.iter().any(|p| p.level == "warning" && p.message.contains("is a whole number: 2.5 becomes 3")), "{p:#?}");
+        assert!(!graph::has_errors(&p));
+    }
+
     /// The entity handles: typed outputs that still go into Entity pins, and the casts back
     /// (Success with the narrower kind, Failed otherwise), into variables of each kind.
     pub fn handles_mode() -> Graph {

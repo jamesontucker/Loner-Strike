@@ -107,6 +107,9 @@ pub struct PinDef {
     pub id: String,
     #[serde(rename = "type")]
     pub ty: String,
+    /// a whole number (the # mark): a constant with a fraction is rounded, and Problems says so
+    #[serde(default)]
+    pub whole: bool,
     #[serde(default)]
     pub label: String,
     #[serde(default)]
@@ -123,6 +126,9 @@ pub struct PinDef {
 pub struct ParamDef {
     pub id: String,
     pub label: String,
+    /// a whole number (the # mark)
+    #[serde(default)]
+    pub whole: bool,
     /// choice | number | text | bool | name (an entity's name) | keys (component keys) |
     /// var (one of the graph's variables) | varvalue (a value of that variable's type)
     pub kind: String,
@@ -1201,11 +1207,11 @@ pub struct Pins {
 }
 
 fn exec_pin(id: &str, label: &str) -> PinDef {
-    PinDef { id: id.into(), ty: "exec".into(), label: label.into(), required: false, optional: false, param: None }
+    PinDef { id: id.into(), ty: "exec".into(), label: label.into(), required: false, optional: false, param: None, whole: false }
 }
 
 fn member_pin(m: &Member, required: bool) -> PinDef {
-    PinDef { id: m.id.clone(), ty: m.ty.clone(), label: m.name.clone(), required: required && m.ty != "exec", optional: !required, param: None }
+    PinDef { id: m.id.clone(), ty: m.ty.clone(), label: m.name.clone(), required: required && m.ty != "exec", optional: !required, param: None, whole: false }
 }
 
 /// A count setting of a node (Sequence's outputs, Make Array's items), clamped.
@@ -1329,7 +1335,7 @@ impl<'a> View<'a> {
             }
             "table.get_row" | "table.for_each" | "table.get_cell" | "table.find" | "table.keys" => {
                 if let Some((_, t)) = super::tables::table_of(&self.g.data_tables, n) {
-                    let col_pin = |c: &super::tables::Column| PinDef { id: c.id.clone(), ty: c.pin_type(), label: c.name.clone(), required: false, optional: true, param: None };
+                    let col_pin = |c: &super::tables::Column| PinDef { id: c.id.clone(), ty: c.pin_type(), label: c.name.clone(), required: false, optional: true, param: None, whole: false };
                     let key_ty = t.key_col().map(|(_, c)| c.pin_type()).unwrap_or_else(|| "any".into());
                     let picked = n.params.get("column").and_then(Value::as_str).and_then(|c| t.col(c)).map(|(_, c)| c.pin_type()).unwrap_or_else(|| "any".into());
                     match def.kind.as_str() {
@@ -1358,7 +1364,7 @@ impl<'a> View<'a> {
             "timeline.play" => {
                 let tl = n.params.get("timeline").and_then(Value::as_str).and_then(|c| self.g.timelines.iter().find(|x| x.id == c));
                 if let Some(t) = tl {
-                    p.outputs.extend(t.tracks.iter().map(|tr| PinDef { id: tr.id.clone(), ty: tr.pin_type().into(), label: tr.name.clone(), required: false, optional: true, param: None }));
+                    p.outputs.extend(t.tracks.iter().map(|tr| PinDef { id: tr.id.clone(), ty: tr.pin_type().into(), label: tr.name.clone(), required: false, optional: true, param: None, whole: false }));
                 }
             }
             "event.custom" | "event.call" => {
@@ -2117,6 +2123,12 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
             k if def.event && !home.is_empty() => p.push(Problem::err(Some(&n.id), format!("{} goes on the Event Graph, not in a Function or Macro.", reg.get(k).map_or("An event", |d| d.title.as_str())))),
             k if in_fn && latent(k) => p.push(Problem::err(Some(&n.id), format!("{} waits, and a Function runs straight through: use it on the Event Graph or in a Macro.", def.title))),
             _ => {}
+        }
+        // (a whole-number setting with a fraction: rounded where it's used, said here)
+        for prm in def.params.iter().filter(|p| p.whole) {
+            if let Some(x) = n.params.get(&prm.id).and_then(Value::as_f64).filter(|x| x.fract() != 0.0) {
+                p.push(Problem::warn(Some(&n.id), format!("{} is a whole number: {x} becomes {}.", prm.label, x.round())).pin(&prm.id));
+            }
         }
         if let Some(instead) = &def.deprecated {
             p.push(Problem { level: "info", node: Some(n.id.clone()), pin: None, edge: None, message: format!("{} is from an older version and still works; {instead} does it now.", def.title) });

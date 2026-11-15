@@ -1277,6 +1277,19 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== types: whole numbers (X) ====
+# one Number type; pins and settings the game takes as whole numbers (counts, ammo, money, slots,
+# rounds...) get a # mark, and Problems says when a constant there has a fraction (it's rounded)
+WHOLE_IDS = {"count", "ammo", "clip", "reserve", "money", "amount_money", "slot", "index", "tier", "times", "round", "rounds", "lives", "frags", "deaths", "kills", "places", "wave", "level", "max_count", "n"}
+_scale = lambda p: any(w in p["label"].lower() for w in ("times", "scale", "multiplier", "×"))
+for d in nodes:
+    for p in d["inputs"] + d["outputs"]:
+        if p["type"] == "number" and p["id"] in WHOLE_IDS and not _scale(p):
+            p["whole"] = True
+    for p in d["params"]:
+        if p["kind"] == "number" and p["id"] in WHOLE_IDS and not _scale(p):
+            p["whole"] = True
+
 # ==== types: handles (X) ====
 # the entity handles: what the spawn and cast nodes make is typed (an NPC, a Creature...) and still
 # goes into every Entity pin (upcast); inputs stay Entity (StudioCompat.md: never narrow one)
