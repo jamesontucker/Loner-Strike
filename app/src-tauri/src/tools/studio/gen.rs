@@ -7945,6 +7945,10 @@ mod tests {
         let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).chain(g5.nodes.iter()).map(|n| n.kind.as_str()).collect();
         // W1: the utility nodes are in every_node_w1.graph.json (w1_nodes.rs tests it)
         let mut used = used;
+        // T1fix: the projectile nodes are in proj_tests.rs (their own graph, generated and compiled there)
+        for k in super::super::proj_tests::KINDS {
+            used.insert(k);
+        }
         for k in w1::PURE.iter().chain(w1::FLOW) {
             used.insert(k);
         }

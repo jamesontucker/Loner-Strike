@@ -7,6 +7,9 @@ use super::{gen, graph, parse_compiler, run_amxxpc, write_includes};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
+/// Every projectile node (the every-node check counts them as covered by this file's graph).
+pub const KINDS: [&str; 5] = ["proj.spawn", "proj.on_hit", "proj.remove", "proj.velocity", "proj.set_velocity"];
+
 fn proj_graph() -> graph::Graph {
     let e = |id: &str, a: &str, ap: &str, b: &str, bp: &str| json!({"id": id, "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
     graph::parse(
@@ -75,6 +78,11 @@ fn projectiles_generate_with_their_own_callbacks() {
 
 #[test]
 fn spawn_projectile_waits_like_say_and_choose() {
+    // (the graph above uses every one of them)
+    let g = proj_graph();
+    for k in KINDS {
+        assert!(g.nodes.iter().any(|n| n.kind == k), "{k}");
+    }
     assert!(graph::latent("proj.spawn"));
     assert!(graph::deferred("proj.spawn", "on_hit") && graph::deferred("proj.spawn", "on_expire") && !graph::deferred("proj.spawn", "then"));
 }
