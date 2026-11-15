@@ -6,7 +6,8 @@ import { create } from "zustand";
 import { Sheet, useConfirm } from "../../../ui";
 import { useStudio } from "./store";
 import { COLUMN_TYPES, LIMITS, WEAPONS, addColumn, blank, importCsv, readCell, refusedCsv, type RefusedRow, removeColumn, removeTable, retypeColumn, tableProblems, toCsv, updateTable, type Cell, type DataTable, type TableColumn } from "./tables";
-import { LABEL_CHARS } from "./schema";
+import { LABEL_CHARS, isAssetType } from "./schema";
+import { AssetDefaultField } from "./AssetDefaultField"; // assets (X-fx)
 import { useFreshFocus } from "./freshFocus";
 
 const useOpen = create<{ id: string | null; set: (id: string | null) => void }>((set) => ({ id: null, set: (id) => set({ id }) }));
@@ -25,6 +26,8 @@ function CellField({ col, value, onChange, label }: { col: TableColumn; value: C
         ))}
       </select>
     );
+  // assets (X-fx): the file picker with its preview
+  if (isAssetType(col.type)) return <AssetDefaultField kind={col.type} value={String(value)} label={label} onChange={onChange} />;
   if (col.type.startsWith("enum:")) {
     const en = graph?.enums?.find((e) => `enum:${e.id}` === col.type);
     return (

@@ -1,3 +1,4 @@
+import { isAssetType, validAsset } from "./schema"; // assets (X-fx)
 // Data tables in the page: the pins the Data table nodes get from their table (the same as
 // tables.rs / graph.rs), the edits the grid editor makes, and CSV in and out.
 
@@ -15,6 +16,10 @@ export const COLUMN_TYPES: [string, string][] = [
   ["bool", "Yes/No"],
   ["weapon", "Weapon"],
   ["entname", "Entity name"],
+  // assets (X-fx): a file per row
+  ["model", "Model"],
+  ["sprite", "Sprite"],
+  ["sound", "Sound"],
 ];
 export const WEAPONS = ["ak47", "m4a1", "awp", "scout", "famas", "galil", "aug", "sg552", "mp5navy", "p90", "ump45", "mac10", "tmp", "m3", "xm1014", "m249", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "hegrenade", "flashbang", "smokegrenade", "knife", "c4"];
 export const LIMITS = { tables: 16, columns: 16, rows: 256, text: 48, cells: 6000 };
@@ -103,6 +108,8 @@ export function readCell(c: TableColumn, text: string): Cell {
     const w = s.toLowerCase().replace(/^weapon_/, "");
     return WEAPONS.includes(w) ? w : "knife";
   }
+  // assets (X-fx): a file of the column's kind, else none
+  if (isAssetType(c.type)) return validAsset(c.type, s) ? s : "";
   // text: the label characters only, at most 48
   return [...s].filter((ch) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(ch)).join("").slice(0, LIMITS.text);
 }
@@ -162,6 +169,7 @@ export function cellProblem(c: TableColumn, text: string, values?: string[]): st
     return `“${s}” isn't one of ${values?.length ? values.join(", ") : "its values"}`;
   }
   if (c.type === "weapon") return WEAPONS.includes(s.toLowerCase().replace(/^weapon_/, "")) ? null : `“${s}” isn't a weapon name (ak47, awp, knife...)`;
+  if (isAssetType(c.type)) return validAsset(c.type, s) ? null : `“${s}” isn't ${c.type === "sound" ? "a sound (a .wav from inside sound/)" : c.type === "sprite" ? "a sprite (sprites/….spr)" : "a model (models/….mdl)"}`;
   if ([...s].length > LIMITS.text) return `is longer than ${LIMITS.text} letters`;
   const bad = [...new Set([...s].filter((ch) => !/[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(ch)))];
   return bad.length ? `has ${bad.map((ch) => `“${ch}”`).join(" ")}, which a table can't hold` : null;

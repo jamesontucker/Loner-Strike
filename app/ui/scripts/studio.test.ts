@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assetValuesRaw from "../../src-tauri/src/tools/studio/testdata/asset_values.json?raw";
 import { validAsset } from "../src/views/tools/studio/schema";
+import { readCell as tableCell } from "../src/views/tools/studio/tables";
 import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
@@ -719,4 +720,12 @@ test("a graph at the node cap round-trips; over it, save refuses with the size a
   assert.match(sizeError(over) ?? "", new RegExp(`too big to save.*at most ${MAX_NODES} nodes`));
   const opened = parseGraph(JSON.parse(JSON.stringify(over)));
   assert.ok("error" in opened && /too big to open/.test(opened.error) && !/damaged/.test(opened.error));
+});
+
+test("file columns: a file of the column's kind, else none", () => {
+  const col = (type: string) => ({ id: "m", name: "M", type });
+  assert.equal(tableCell(col("model"), " models/w_c4.mdl "), "models/w_c4.mdl");
+  assert.equal(tableCell(col("model"), "sprites/a.spr"), "");
+  assert.equal(tableCell(col("sound"), "items/ammopickup2.wav"), "items/ammopickup2.wav");
+  assert.equal(tableCell(col("sound"), "../x.wav"), "");
 });

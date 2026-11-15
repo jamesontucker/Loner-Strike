@@ -1614,24 +1614,30 @@ fn value_words(v: &str) -> Vec<&str> {
 /// Function locals' start values (Model, Sprite and Sound variables) and data table cells (Model,
 /// Sprite and Sound columns), as JSON pointers' parents and keys.
 fn file_value_sites(v: &Value) -> Vec<&Value> {
+    // (only values typed as a file: a text variable or text cell is never taken for one)
+    let file = |t: &Value| matches!(t.as_str(), Some("model" | "sprite" | "sound"));
     let mut out: Vec<&Value> = Vec::new();
     for n in v["nodes"].as_array().into_iter().flatten().filter(|n| npc_node(n)) {
         out.extend(n["params"].as_object().into_iter().flatten().map(|(_, pv)| pv));
     }
-    for x in v["variables"].as_array().into_iter().flatten() {
+    for x in v["variables"].as_array().into_iter().flatten().filter(|x| file(&x["type"])) {
         out.push(&x["default"]);
     }
     for f in v["functions"].as_array().into_iter().flatten() {
-        out.extend(f["locals"].as_array().into_iter().flatten().map(|x| &x["default"]));
+        out.extend(f["locals"].as_array().into_iter().flatten().filter(|x| file(&x["type"])).map(|x| &x["default"]));
     }
     for t in v["dataTables"].as_array().into_iter().flatten() {
-        out.extend(t["rows"].as_array().into_iter().flatten().flat_map(|r| r.as_array().into_iter().flatten()));
+        let cols: Vec<bool> = t["columns"].as_array().into_iter().flatten().map(|c| file(&c["type"])).collect();
+        for r in t["rows"].as_array().into_iter().flatten() {
+            out.extend(r.as_array().into_iter().flatten().enumerate().filter(|(k, _)| cols.get(*k) == Some(&true)).map(|(_, c)| c));
+        }
     }
     out
 }
 
 /// The same places, to change in place.
 fn file_value_sites_mut(v: &mut Value, mut f: impl FnMut(&mut Value)) {
+    let file = |t: &Value| matches!(t.as_str(), Some("model" | "sprite" | "sound"));
     for n in v["nodes"].as_array_mut().into_iter().flatten() {
         if !npc_node(n) {
             continue;
@@ -1641,20 +1647,29 @@ fn file_value_sites_mut(v: &mut Value, mut f: impl FnMut(&mut Value)) {
         }
     }
     for x in v["variables"].as_array_mut().into_iter().flatten() {
-        if let Some(d) = x.get_mut("default") {
-            f(d);
-        }
-    }
-    for fun in v["functions"].as_array_mut().into_iter().flatten() {
-        for x in fun["locals"].as_array_mut().into_iter().flatten() {
+        if file(&x["type"]) {
             if let Some(d) = x.get_mut("default") {
                 f(d);
             }
         }
     }
+    for fun in v["functions"].as_array_mut().into_iter().flatten() {
+        for x in fun["locals"].as_array_mut().into_iter().flatten() {
+            if file(&x["type"]) {
+                if let Some(d) = x.get_mut("default") {
+                    f(d);
+                }
+            }
+        }
+    }
     for t in v["dataTables"].as_array_mut().into_iter().flatten() {
+        let cols: Vec<bool> = t["columns"].as_array().into_iter().flatten().map(|c| file(&c["type"])).collect();
         for r in t["rows"].as_array_mut().into_iter().flatten() {
-            r.as_array_mut().into_iter().flatten().for_each(&mut f);
+            for (k, c) in r.as_array_mut().into_iter().flatten().enumerate() {
+                if cols.get(k) == Some(&true) {
+                    f(c);
+                }
+            }
         }
     }
 }
@@ -2517,6 +2532,11 @@ mod tests {
         });
         let found: Vec<String> = npc_files_in_graph_json(&g).into_iter().collect();
         assert_eq!(found, vec!["models/qa/cell.mdl", "models/qa/local.mdl", "sound/qa/node.wav", "sound/qa/var.wav", "sprites/qa/cell.spr"]);
+        // (a value not typed as a file is never taken for one: a text variable, a text column)
+        let mut t2 = g.clone();
+        t2["variables"][1] = serde_json::json!({"id": "v3", "name": "T", "type": "text", "scope": "mode", "default": "models/qa/other.mdl"});
+        t2["dataTables"][0]["rows"][0][0] = Value::String("models/qa/other.mdl".into());
+        assert!(!npc_files_in_graph_json(&t2).contains("models/qa/other.mdl"));
         let (hl, gd) = game("");
         for f in &found {
             std::fs::create_dir_all(gd.join(f).parent().unwrap()).unwrap();

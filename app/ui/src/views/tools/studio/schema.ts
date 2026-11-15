@@ -233,8 +233,9 @@ export const graphSchema = z.object({
         id,
         name: label(30),
         key: id,
-        columns: z.array(z.object({ id, name: label(30), type: z.string().regex(/^(number|text|bool|weapon|entname|enum:[A-Za-z0-9_]{1,24})$/) })).min(1).max(16),
-        rows: z.array(z.array(z.union([z.number().finite(), z.string().max(48), z.boolean()])).max(16)).max(256).default([]),
+        columns: z.array(z.object({ id, name: label(30), type: z.string().regex(/^(number|text|bool|weapon|entname|model|sprite|sound|enum:[A-Za-z0-9_]{1,24})$/) })).min(1).max(16),
+        // (a file cell is up to 64: assets (X-fx); text cells are held to 48 by the table checks)
+        rows: z.array(z.array(z.union([z.number().finite(), z.string().max(64), z.boolean()])).max(16)).max(256).default([]),
       }),
     )
     .max(16)

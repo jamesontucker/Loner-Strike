@@ -127,6 +127,18 @@ pub(crate) fn table(g: &Graph) -> Vec<String> {
     for x in g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())) {
         add(&x.ty, &x.default);
     }
+    // (data table cells of Model / Sprite / Sound columns)
+    for t in &g.data_tables {
+        for (k, c) in t.columns.iter().enumerate() {
+            if is_type(&c.ty) {
+                for row in &t.rows {
+                    if let Some(v) = row.get(k) {
+                        add(&c.ty, v);
+                    }
+                }
+            }
+        }
+    }
     for n in &g.nodes {
         match n.kind.as_str() {
             "asset.model" => add("model", n.params.get("file").unwrap_or(&Value::Null)),
@@ -374,6 +386,25 @@ mod tests {
             assert!(check_param("sound", "Sound", &Value::String(v.into()), false).unwrap().is_err(), "{v}");
             assert!(!valid_asset("sound", v) && !valid_asset("model", v), "{v}");
         }
+    }
+
+    /// A Model column: each row's file is in the table and loaded; a cell is its index; a cell of
+    /// the wrong kind is a problem.
+    #[test]
+    fn table_columns_hold_files() {
+        let g = with(|x| {
+            x["dataTables"] = serde_json::json!([{"id": "loot", "name": "Loot", "key": "k", "columns": [{"id": "k", "name": "Kind", "type": "text"}, {"id": "m", "name": "Model", "type": "model"}, {"id": "s", "name": "Pickup", "type": "sound"}],
+                "rows": [["box", "models/w_battery.mdl", "items/ammopickup2.wav"], ["none", "", ""]]}]);
+            x["nodes"].as_array_mut().unwrap().push(serde_json::json!({"id": "cell", "type": "table.get_cell", "pos": {"x": 0, "y": 0}, "params": {"table": "loot", "column": "m", "row": 0}}));
+            x["nodes"].as_array_mut().unwrap().push(serde_json::json!({"id": "cn", "type": "asset.file_name", "pos": {"x": 0, "y": 0}, "params": {}}));
+            x["edges"].as_array_mut().unwrap().push(serde_json::json!({"id": "wc", "from": {"node": "cell", "pin": "out"}, "to": {"node": "cn", "pin": "file"}}));
+        });
+        let p = validate(&g);
+        assert!(!p.iter().any(|x| x.level == "error"), "{p:#?}");
+        let src = generate(&g, false).source;
+        assert!(src.contains("\"models/w_battery.mdl\"") && src.contains("\"items/ammopickup2.wav\""), "in the file table: {src}");
+        let bad = with(|x| x["dataTables"] = serde_json::json!([{"id": "loot", "name": "Loot", "key": "k", "columns": [{"id": "k", "name": "Kind", "type": "text"}, {"id": "m", "name": "Model", "type": "model"}], "rows": [["box", "sprites/a.spr"]]}]));
+        assert!(validate(&bad).iter().any(|x| x.level == "error" && x.message.contains("models/")), "{:#?}", validate(&bad));
     }
 
     /// A mode with no file values gets none of it (old plugins stay the same).

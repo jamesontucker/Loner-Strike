@@ -30,7 +30,8 @@ pub struct DataTable {
 pub struct Column {
     pub id: String,
     pub name: String,
-    /// number | text | bool | enum:<id> | weapon | entname
+    /// number | text | bool | enum:<id> | weapon | entname | model | sprite | sound (X-fx: a file
+    /// per row, an index into the plugin's file table like any file value)
     #[serde(rename = "type")]
     pub ty: String,
 }
@@ -89,7 +90,7 @@ pub fn validate(tables: &[DataTable], enums: &[(String, usize)]) -> Vec<Problem>
             if !valid_id(&c.id) || c.name.trim().is_empty() || c.name.chars().count() > 30 || !c.name.chars().all(label_char) {
                 p.push(err(format!("A column of \u{201c}{name}\u{201d} needs a name of up to 30 letters, digits, spaces or plain punctuation.")));
             }
-            if !(matches!(c.ty.as_str(), "number" | "text" | "bool" | "weapon" | "entname") || enum_ok == Some(true)) {
+            if !(matches!(c.ty.as_str(), "number" | "text" | "bool" | "weapon" | "entname") || super::gen::assets::is_type(&c.ty) || enum_ok == Some(true)) {
                 p.push(err(format!("The column \u{201c}{}\u{201d} of \u{201c}{name}\u{201d} has a type that isn't there (an enum that was removed?).", c.name)));
             }
         }
@@ -154,6 +155,11 @@ fn cell_problem(c: &Column, v: &Value, enums: &[(String, usize)]) -> Option<Stri
             Some(w) if WEAPONS.contains(&w) => None,
             _ => Some("a weapon name (ak47, deagle, knife...) goes here.".into()),
         },
+        // assets (X-fx): a file of the column's kind, or empty (none)
+        t if super::gen::assets::is_type(t) => match v.as_str() {
+            Some(s) if super::gen::assets::valid_asset(t, s) => None,
+            _ => Some(format!("{} goes here (or nothing).", super::gen::assets::asset_rule(t))),
+        },
         t if t.starts_with("enum:") => {
             let n = enums.iter().find(|(id, _)| Some(id.as_str()) == t.strip_prefix("enum:")).map(|(_, n)| *n).unwrap_or(0);
             v.as_u64().filter(|i| (*i as usize) < n).map(|_| None).unwrap_or(Some("one of the enum's values goes here.".into()))
@@ -171,6 +177,8 @@ fn lit(c: &Column, v: &Value) -> String {
         "number" => super::gen::float_lit(v.as_f64().unwrap_or(0.0)),
         "bool" => if v.as_bool().unwrap_or(false) { "1".into() } else { "0".into() },
         t if t.starts_with("enum:") => v.as_u64().unwrap_or(0).to_string(),
+        // (X-fx: the file's index in the plugin's file table)
+        t if super::gen::assets::is_type(t) => super::gen::assets::lit(Some(v)),
         _ => super::gen::pawn_str(v.as_str().unwrap_or("")),
     }
 }
