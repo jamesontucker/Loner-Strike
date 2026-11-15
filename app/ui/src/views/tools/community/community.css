@@ -171,3 +171,6 @@
 .cm-checklist { margin: 4px 0 10px; padding-left: 22px; display: grid; gap: 3px; font-size: 14px; color: var(--bone-dim); }
 .cm-checklist b { color: var(--bone); }
 #cm-needs { margin: 2px 0 0; }
+/* Editable source: the checkbox and the project picker each on a row of their own, with room between */
+.cm-source > label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cm-source > label > input[type="checkbox"] { margin: 0; }

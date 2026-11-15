@@ -454,7 +454,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
   return (
     <section className="tools-panel editor-outline ed-outline">
       <div className="ed-ol-top">
-        <input type="search" placeholder="Find by name, type, texture or number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find in the map" />
+        <input type="search" placeholder="Find a name, type or texture" title="Find by name, type, texture or number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find in the map" />
         <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Show only" title="Show only one kind">
           {FILTERS.map(([id, l]) => (
             <option key={id} value={id}>
