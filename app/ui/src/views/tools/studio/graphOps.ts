@@ -2,6 +2,7 @@
 // and the rules are testable without React (studio.test.ts). The app checks the same rules
 // again before compiling (tools/studio/graph.rs).
 
+import { withLimitVars } from "./limits";
 import { parseGraph, type GComment, type GEdge, type GFunction, type GMacro, type GMarker, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { compatible, defaultParams, nodeDef, type PinDef, type PinType } from "./registry";
 import { adaptTo, allVariables, pinsOf, typeLabel } from "./pins";
@@ -142,7 +143,8 @@ export function addNode(g: Graph, type: string, pos: { x: number; y: number }, h
   if (!def) throw new Error(`unknown node ${type}`);
   const id = freshId(g, "n");
   const node: GNode = { id, type, pos: { x: Math.round(pos.x), y: Math.round(pos.y) }, params: { ...defaultParams(def), ...params }, ...(home ? { graph: home } : {}) };
-  return { graph: { ...g, nodes: [...g.nodes, node] }, id };
+  // (a node with a comfort limit brings its mode setting: limits.ts)
+  return { graph: withLimitVars({ ...g, nodes: [...g.nodes, node] }, type), id };
 }
 
 export function addComment(g: Graph, around: { x: number; y: number; w: number; h: number }, text = "Comment", home?: string): { graph: Graph; id: string } {

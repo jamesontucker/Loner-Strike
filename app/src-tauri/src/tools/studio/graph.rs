@@ -1611,6 +1611,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     p.extend(nothing_happens(g));
     p.extend(bot_awareness(g, &View::new(g)));
     p.extend(w1_checks::problems(g, &View::new(g))); // W1
+    p.extend(super::limits::problems(g));
     p
 }
 
@@ -2878,7 +2879,8 @@ mod tests {
                 }
             }
             for pin in n.inputs.iter().chain(&n.outputs) {
-                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<player>" || pin.ty == "array<entity>" || pin.ty == "array<$K>", "{} {} {}", n.kind, pin.id, pin.ty);
+                // (fixed arrays: of any plain item type, as type_ok allows)
+                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<$K>" || pin.ty.strip_prefix("array<").and_then(|t| t.strip_suffix('>')).is_some_and(|t| ["player", "entity", "number", "text", "vector", "bool", "team"].contains(&t)), "{} {} {}", n.kind, pin.id, pin.ty);
                 if let Some(pp) = &pin.param {
                     assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }

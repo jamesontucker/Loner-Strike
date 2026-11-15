@@ -596,3 +596,15 @@ test("casting: an Entity into a Player pin gets As Player put between, in the fl
   const g3 = { ...g2, nodes: g2.nodes.map((x) => (x.id === "sw" ? { ...x, params: { enum: "ls_kind" } } : x)) };
   assert.deepEqual(pinsOf(g3, g3.nodes.find((x) => x.id === "sw")!).outputs.map((p) => p.label), ["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]);
 });
+
+test("a node with a comfort limit brings its Limits setting once (limits.ts)", () => {
+  let g = emptyGraph("lim", "Lim");
+  g = addNode(g, "fx.marker", { x: 0, y: 0 }).graph;
+  g = addNode(g, "fx.marker", { x: 0, y: 200 }).graph;
+  const lim = g.variables.filter((v) => v.id === "lim_markers");
+  assert.equal(lim.length, 1);
+  assert.equal(lim[0].default, 32);
+  assert.equal(lim[0].setting?.group, "Limits");
+  assert.ok(!addNode(emptyGraph("x", "X"), "debug.print", { x: 0, y: 0 }).graph.variables.length, "others bring nothing");
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(g))));
+});

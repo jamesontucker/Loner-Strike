@@ -22,6 +22,7 @@ pub mod debug;
 pub mod gen;
 pub mod expand;
 pub mod graph;
+pub mod limits;
 pub mod kit;
 pub mod testrun;
 pub mod tables;
@@ -1564,6 +1565,33 @@ mod tests {
         // saved: the app's own enums stay out of the file
         let saved = serde_json::to_value(&g).unwrap();
         assert!(saved.get("enums").is_none(), "{:?}", saved.get("enums"));
+    }
+
+    /// Comfort limits (limits.rs): the plugin reads the mode's Limits setting when it has one
+    /// (hosts can change it), else the default; a big raise is a warning, never an error; and the
+    /// spawners keep the entity-slot reserve.
+    #[test]
+    fn limits_are_settings_and_spawns_keep_a_reserve() {
+        let base = ui_nodes_mode();
+        let src = gen::generate(&base, false).source;
+        assert!(src.contains(", 32)\n") || src.contains(", 32)"), "no setting: the default");
+        assert!(src.contains("stock bool:lsg_ent_room(const what[])") && src.contains("lsg_ent_room(\"Objective Marker\")"));
+        let mut g = base.clone();
+        let l = limits::get("markers").unwrap();
+        let mut v: graph::Variable = serde_json::from_value(limits::var_json(l)).unwrap();
+        v.default = json!(50);
+        g.variables.push(v.clone());
+        assert!(!graph::validate(&g).iter().any(|p| p.message.contains("may lag")), "50: fine");
+        let src = gen::generate(&g, false).source;
+        assert!(src.contains("clamp(floatround(") && src.contains(", 1, 256))"), "the setting's value, clamped");
+        let mut big = g.clone();
+        big.variables.last_mut().unwrap().default = json!(200);
+        let p = graph::validate(&big);
+        assert!(p.iter().any(|p| p.level == "warning" && p.message.contains("Objective markers at once is set to 200") && p.message.contains("may lag")), "{p:#?}");
+        assert!(!p.iter().any(|p| p.level == "error"));
+        // the setting itself is a mode setting in the Limits group
+        assert_eq!(v.setting.as_ref().unwrap().group, "Limits");
+        assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {

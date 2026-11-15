@@ -1108,6 +1108,17 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
+// room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
+// a mode's spawn that would eat into them is skipped, and the server log says what and why
+#define LSG_EDICT_RESERVE 96
+stock bool:lsg_ent_room(const what[])
+{
+	if (engfunc(EngFunc_NumberOfEntities) < global_get(glb_maxEntities) - LSG_EDICT_RESERVE)
+		return true
+	log_amx("[%s] %s skipped: the server is out of entity slots", LSG_MODE, what)
+	return false
+}
+
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
 stock bool:lsg_have(const p[])
 	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)
@@ -2170,16 +2181,16 @@ stock lsg_icon_clear(id)
 }
 
 // markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
-#define LSG_MKS 32
+#define LSG_MKS 256
 stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
 
-stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp, lim = 32)
 {
 	// (a sprite that wasn't there when the map loaded: no marker)
 	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
 		return 0
 	new slot = -1
-	for (new k = 0; k < LSG_MKS; k++)
+	for (new k = 0; k < min(lim, LSG_MKS); k++)
 	{
 		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
 			g_lsgMk[k] = 0
@@ -2189,7 +2200,7 @@ stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:s
 			break
 		}
 	}
-	if (slot < 0)
+	if (slot < 0 || !lsg_ent_room("Objective Marker"))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)
@@ -2315,7 +2326,8 @@ stock lsg_killfeed(killer, victim, hs, const w[])
 stock g_lsgSprFire, g_lsgSprSmoke, g_lsgSprBlood, g_lsgSprSpray
 stock Float:g_lsgBurnTill[33], Float:g_lsgBurnDps[33], Float:g_lsgBurnNext[33], g_lsgBurnBy[33], g_lsgBurnFx[33]
 stock bool:g_lsgBuried[33], g_lsgCam[33], g_lsgCamKeep[33], Float:g_lsgDrunkTill[33], Float:g_lsgDrunk[33], g_lsgFunN
-stock g_lsgTrail[32], g_lsgTrailC[32][5], bool:g_lsgTrailStill[32]
+#define LSG_TRAILS 256
+stock g_lsgTrail[LSG_TRAILS], g_lsgTrailC[LSG_TRAILS][5], bool:g_lsgTrailStill[LSG_TRAILS]
 
 stock lsg_burn(id, by, Float:secs, Float:dps)
 {
@@ -2328,7 +2340,7 @@ stock lsg_burn(id, by, Float:secs, Float:dps)
 	if (g_lsgBurnNext[id] < now)
 		g_lsgBurnNext[id] = now + 1.0
 	// flames on them: a sprite that rides along (the engine moves it: MOVETYPE_FOLLOW)
-	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])))
+	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])) && lsg_ent_room("Set On Fire's flames"))
 	{
 		new e = create_entity("info_target")
 		if (e > 0)
@@ -2392,12 +2404,12 @@ stock lsg_trail_send(k)
 	message_end()
 }
 
-stock lsg_trail(e, on, r, g, b, width, life)
+stock lsg_trail(e, on, r, g, b, width, life, lim = 32)
 {
 	if (e <= 0 || !pev_valid(e))
 		return 0
 	new k = -1
-	for (new i = 0; i < 32; i++)
+	for (new i = 0; i < LSG_TRAILS; i++)
 		if (g_lsgTrail[i] == e)
 			k = i
 	if (!on)
@@ -2412,7 +2424,7 @@ stock lsg_trail(e, on, r, g, b, width, life)
 		}
 		return 1
 	}
-	for (new i = 0; i < 32 && k < 0; i++)
+	for (new i = 0; i < min(lim, LSG_TRAILS) && k < 0; i++)
 		if (!g_lsgTrail[i] || !pev_valid(g_lsgTrail[i]))
 			k = i
 	if (k < 0)
@@ -2431,7 +2443,7 @@ stock lsg_trail(e, on, r, g, b, width, life)
 // a trail dies with a teleport, a respawn or a long stop: sent again when they move once more
 stock lsg_trail_check()
 {
-	for (new k = 0; k < 32; k++)
+	for (new k = 0; k < LSG_TRAILS; k++)
 	{
 		new e = g_lsgTrail[k]
 		if (!e)
@@ -2738,6 +2750,8 @@ stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, c
 	if (from <= 0 && !hasA)
 		return 0
 	if (from > 0 && !pev_valid(from))
+		return 0
+	if (!lsg_ent_room("View From"))
 		return 0
 	new cam = create_entity("info_target")
 	if (cam <= 0)
@@ -4242,6 +4256,9 @@ stock const g_lsgVmList[LSG_VMN + 1][] = { "", "" }
 stock g_lsgHud[33], g_lsgHudSet[33], bool:g_lsgHudKeep[33], g_lsgFov[33], bool:g_lsgFovKeep[33]
 stock g_lsgVm[33][33], g_lsgPm[33][33], bool:g_lsgNoLight[33], bool:g_lsgQuiet[33]
 stock g_lsgTag[33], bool:g_lsgTagKeep[33], g_lsgShowTeam[33], g_lsgSpec[33]
+// when a node last set something for the player: a Player Spawned that sets it isn't undone by
+// the same spawn's "back to normal"
+stock Float:g_lsgEngAt[33]
 stock const g_lsgTeamWord[][] = { "UNASSIGNED", "TERRORIST", "CT", "SPECTATOR" }
 
 // Hide HUD Parts: our bits in the game's m_iHideHUD (it sends HideWeapon and the crosshair itself)
@@ -4249,6 +4266,7 @@ stock lsg_eng_hud(id, mask, bool:keep)
 {
 	g_lsgHud[id] = mask
 	g_lsgHudKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	lsg_eng_hud_put(id)
 }
 
@@ -4267,6 +4285,7 @@ stock lsg_eng_fov(id, fov, bool:keep)
 {
 	g_lsgFov[id] = fov == 90 ? 0 : fov
 	g_lsgFovKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	lsg_eng_fov_put(id, true)
 }
 
@@ -4404,6 +4423,7 @@ stock lsg_eng_tag(id, tag, bool:keep)
 {
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
 	write_byte(lsg_eng_real_attr(id) | tag)
@@ -4484,13 +4504,16 @@ stock lsg_eng_cd(id, track, bool:loop)
 		client_cmd(id, "cd %s %d", loop ? "loop" : "play", track)
 }
 
-// a quarter second: the field of view after a scope; the spectated stay on their target
+// a quarter second: the HUD parts the game shows again (it clears some itself: the timer, the
+// weapon panel on a pickup), the field of view after a scope; the spectated stay on their target
 public lsg_eng_tick()
 {
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p))
 			continue
+		if (g_lsgHud[p])
+			lsg_eng_hud_put(p)
 		if (g_lsgFov[p] && is_user_alive(p))
 			lsg_eng_fov_put(p, false)
 		if (g_lsgSpec[p])
@@ -4515,7 +4538,9 @@ public lsg_eng_spawn(id)
 {
 	if (!is_user_alive(id))
 		return
-	lsg_eng_ends(id)
+	// (set by this same spawn's Player Spawned: kept)
+	if (id >= 1 && id <= 32 && get_gametime() - g_lsgEngAt[id] > 0.1)
+		lsg_eng_ends(id)
 	if (g_lsgHud[id])
 		lsg_eng_hud_put(id)
 	if (g_lsgFov[id])
@@ -6715,9 +6740,9 @@ lsg_n71(ctx[])
 	if (lsd_enter(71, ctx))
 		return
 	new Float:lsgAt[3]
-	g_lsgOut[71] = lsg_marker("sprites/arrow1.spr", 0, lsgAt, 0, 48.0, 0.5, 255, 200, 0, 1, 0, 0)
+	g_lsgOut[71] = lsg_marker("sprites/arrow1.spr", 0, lsgAt, 0, 48.0, 0.5, 255, 200, 0, 1, 0, 0, 32)
 	if (!g_lsgOut[71])
-		lsd_error(71, "No marker: its sprite isn't loaded, nothing to follow or no position, or 32 are up already.")
+		lsd_error(71, "No marker: its sprite isn't loaded, nothing to follow or no position, as many are up as Objective markers at once allows (Limits), or the server is out of entity slots.")
 	else
 		lsd_exit(71, "made")
 	lsg_n72(ctx)
@@ -6802,8 +6827,8 @@ lsg_n76(ctx[])
 	}
 	if (lsd_enter(76, ctx))
 		return
-	if (!lsg_trail(lsi0, 1, 0, 160, 255, 6, 20))
-		lsd_error(76, "No trail: nothing there, or 32 trails are on already.")
+	if (!lsg_trail(lsi0, 1, 0, 160, 255, 6, 20, 32))
+		lsd_error(76, "No trail: nothing there, or as many trails are on as Trails at once allows (Limits).")
 	else
 		lsd_exit(76, "done")
 	lsg_n77(ctx)

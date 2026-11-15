@@ -60,6 +60,17 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
+// room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
+// a mode's spawn that would eat into them is skipped, and the server log says what and why
+#define LSG_EDICT_RESERVE 96
+stock bool:lsg_ent_room(const what[])
+{
+	if (engfunc(EngFunc_NumberOfEntities) < global_get(glb_maxEntities) - LSG_EDICT_RESERVE)
+		return true
+	log_amx("[%s] %s skipped: the server is out of entity slots", LSG_MODE, what)
+	return false
+}
+
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
 stock bool:lsg_have(const p[])
 	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)

@@ -501,6 +501,15 @@ impl<'a> Gen<'a> {
     fn report_id(&self, id: &str) -> String {
         id_text(self.origin.get(id).map(String::as_str).unwrap_or(id))
     }
+    /// A comfort limit's value in the plugin (limits.rs): its mode-setting variable when the mode
+    /// has it (hosts can change it), else the default; clamped to what the plugin can hold.
+    pub fn limit_expr(&self, id: &str) -> String {
+        let l = super::limits::get(id).expect("a limit in limits.rs");
+        match super::limits::var(self.v.g, id) {
+            Some(v) => format!("clamp(floatround({}), 1, {})", self.var_ref(v, "0", "0"), l.max),
+            None => l.default.to_string(),
+        }
+    }
     fn var_index(&self, id: &str) -> usize {
         self.vars.iter().position(|x| x.id == id).unwrap_or(0)
     }
@@ -3196,17 +3205,18 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "fun.trail" => {
             let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
             let call = format!(
-                "lsg_trail({}, {}, {}, {}, {}, {}, {})",
+                "lsg_trail({}, {}, {}, {}, {}, {}, {}, {})",
                 inp("ent", "entity"),
                 if gen.boolean(n, def, "on") { 1 } else { 0 },
                 c("r"),
                 c("g"),
                 c("b"),
                 gen.num(n, def, "width").round().clamp(1.0, 50.0) as i64,
-                (gen.num(n, def, "life") * 10.0).round().clamp(1.0, 250.0) as i64
+                (gen.num(n, def, "life") * 10.0).round().clamp(1.0, 250.0) as i64,
+                gen.limit_expr("trails")
             );
             if debug {
-                b.line(format!("\tif (!{call})\n\t\t{}\n\telse\n\t{}", err("No trail: nothing there, or 32 trails are on already."), exit("done")));
+                b.line(format!("\tif (!{call})\n\t\t{}\n\telse\n\t{}", err("No trail: nothing there, or as many trails are on as Trails at once allows (Limits)."), exit("done")));
             } else {
                 b.line(format!("\t{call}"));
             }
@@ -3268,7 +3278,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let forp = if who == 3 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
             let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
             b.line(format!(
-                "\tg_lsgOut[{i}] = lsg_marker({}, {follow}, lsgAt, {}, {}, {}, {}, {}, {}, {}, {who}, {forp})",
+                "\tg_lsgOut[{i}] = lsg_marker({}, {follow}, lsgAt, {}, {}, {}, {}, {}, {}, {}, {who}, {forp}, {})",
                 pawn_str(&sprite_text(gen.text(n, def, "sprite"))),
                 if pos { 1 } else { 0 },
                 float_lit(gen.num(n, def, "height").clamp(0.0, 512.0)),
@@ -3276,10 +3286,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 c("r"),
                 c("g"),
                 c("b"),
-                if gen.boolean(n, def, "pulse") { 1 } else { 0 }
+                if gen.boolean(n, def, "pulse") { 1 } else { 0 },
+                gen.limit_expr("markers")
             ));
             if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No marker: its sprite isn't loaded, nothing to follow or no position, or 32 are up already."), exit("made")));
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No marker: its sprite isn't loaded, nothing to follow or no position, as many are up as Objective markers at once allows (Limits), or the server is out of entity slots."), exit("made")));
             }
             then_line(&mut b, "then");
         }
@@ -5357,6 +5368,17 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
+// room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
+// a mode's spawn that would eat into them is skipped, and the server log says what and why
+#define LSG_EDICT_RESERVE 96
+stock bool:lsg_ent_room(const what[])
+{
+	if (engfunc(EngFunc_NumberOfEntities) < global_get(glb_maxEntities) - LSG_EDICT_RESERVE)
+		return true
+	log_amx("[%s] %s skipped: the server is out of entity slots", LSG_MODE, what)
+	return false
+}
+
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
 stock bool:lsg_have(const p[])
 	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)
@@ -6421,16 +6443,16 @@ stock lsg_icon_clear(id)
 }
 
 // markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
-#define LSG_MKS 32
+#define LSG_MKS 256
 stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
 
-stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp, lim = 32)
 {
 	// (a sprite that wasn't there when the map loaded: no marker)
 	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
 		return 0
 	new slot = -1
-	for (new k = 0; k < LSG_MKS; k++)
+	for (new k = 0; k < min(lim, LSG_MKS); k++)
 	{
 		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
 			g_lsgMk[k] = 0
@@ -6440,7 +6462,7 @@ stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:s
 			break
 		}
 	}
-	if (slot < 0)
+	if (slot < 0 || !lsg_ent_room("Objective Marker"))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)
@@ -6569,7 +6591,8 @@ const FUN_HELPERS: &str = r##"// ---- fun: fire, trails, bursts, swaps, burying,
 stock g_lsgSprFire, g_lsgSprSmoke, g_lsgSprBlood, g_lsgSprSpray
 stock Float:g_lsgBurnTill[33], Float:g_lsgBurnDps[33], Float:g_lsgBurnNext[33], g_lsgBurnBy[33], g_lsgBurnFx[33]
 stock bool:g_lsgBuried[33], g_lsgCam[33], g_lsgCamKeep[33], Float:g_lsgDrunkTill[33], Float:g_lsgDrunk[33], g_lsgFunN
-stock g_lsgTrail[32], g_lsgTrailC[32][5], bool:g_lsgTrailStill[32]
+#define LSG_TRAILS 256
+stock g_lsgTrail[LSG_TRAILS], g_lsgTrailC[LSG_TRAILS][5], bool:g_lsgTrailStill[LSG_TRAILS]
 
 stock lsg_burn(id, by, Float:secs, Float:dps)
 {
@@ -6582,7 +6605,7 @@ stock lsg_burn(id, by, Float:secs, Float:dps)
 	if (g_lsgBurnNext[id] < now)
 		g_lsgBurnNext[id] = now + 1.0
 	// flames on them: a sprite that rides along (the engine moves it: MOVETYPE_FOLLOW)
-	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])))
+	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])) && lsg_ent_room("Set On Fire's flames"))
 	{
 		new e = create_entity("info_target")
 		if (e > 0)
@@ -6646,12 +6669,12 @@ stock lsg_trail_send(k)
 	message_end()
 }
 
-stock lsg_trail(e, on, r, g, b, width, life)
+stock lsg_trail(e, on, r, g, b, width, life, lim = 32)
 {
 	if (e <= 0 || !pev_valid(e))
 		return 0
 	new k = -1
-	for (new i = 0; i < 32; i++)
+	for (new i = 0; i < LSG_TRAILS; i++)
 		if (g_lsgTrail[i] == e)
 			k = i
 	if (!on)
@@ -6666,7 +6689,7 @@ stock lsg_trail(e, on, r, g, b, width, life)
 		}
 		return 1
 	}
-	for (new i = 0; i < 32 && k < 0; i++)
+	for (new i = 0; i < min(lim, LSG_TRAILS) && k < 0; i++)
 		if (!g_lsgTrail[i] || !pev_valid(g_lsgTrail[i]))
 			k = i
 	if (k < 0)
@@ -6685,7 +6708,7 @@ stock lsg_trail(e, on, r, g, b, width, life)
 // a trail dies with a teleport, a respawn or a long stop: sent again when they move once more
 stock lsg_trail_check()
 {
-	for (new k = 0; k < 32; k++)
+	for (new k = 0; k < LSG_TRAILS; k++)
 	{
 		new e = g_lsgTrail[k]
 		if (!e)
@@ -6992,6 +7015,8 @@ stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, c
 	if (from <= 0 && !hasA)
 		return 0
 	if (from > 0 && !pev_valid(from))
+		return 0
+	if (!lsg_ent_room("View From"))
 		return 0
 	new cam = create_entity("info_target")
 	if (cam <= 0)
