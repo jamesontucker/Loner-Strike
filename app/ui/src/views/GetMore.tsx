@@ -214,7 +214,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
   return (
     <div className="stack">
       <div>
-        <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
+        <SectionHead docs="get-more" title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
           {back && <button className="btn" onClick={back.go}>{back.label}</button>}
           {!server && <CommunityLink kind={COMMUNITY_KIND[section] ?? "all"} label="Made with Loner-Strike: Community" />}{/* (community) */}
           {ON_THIS_COMPUTER && !isSharedId(targetKey()) && (
@@ -531,7 +531,7 @@ export function ServerSkins() {
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Skins & models" note="Weapon skins and player models this server uses. Players download them when they join. Changes apply from the next map.">
+        <SectionHead docs="skins" title="Skins & models" note="Weapon skins and player models this server uses. Players download them when they join. Changes apply from the next map.">
           <span className="row">
             <button className="btn" onClick={() => setShop("skins")}>Get weapon skins</button>
             <button className="btn" onClick={() => setShop("players")}>Get player models</button>

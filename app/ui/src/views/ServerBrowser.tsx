@@ -141,6 +141,7 @@ export function ServerBrowser() {
   return (
     <div className="stack browser">
       <SectionHead
+        docs="find-servers"
         title="Find servers"
         note="Servers other Loner-Strike players share, your favorites and the ones you've played on, and games on your own network. Double-click a server to join it."
       >

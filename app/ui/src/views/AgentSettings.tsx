@@ -96,7 +96,7 @@ export function AgentSettings() {
 
   return (
     <section>
-      <SectionHead title="AI agents" note="Let coding agents like Claude Code use Loner-Strike's Tools (Beta): read maps, check them for bots, build in the map editor, fix navs, run your servers. Only programs on this computer with the token can connect." />
+      <SectionHead docs="mcp" title="AI agents" note="Let coding agents like Claude Code use Loner-Strike's Tools (Beta): read maps, check them for bots, build in the map editor, fix navs, run your servers. Only programs on this computer with the token can connect." />
       <div className="panel settings-list agent-settings">
         {q.isError && !a && <LoadError text="Couldn't load this setting." onRetry={() => q.refetch()} />}
         <div className="row between setting-line toggle">

@@ -403,6 +403,7 @@ export function SettingsPage({
   children,
   pickMode = false,
   saved,
+  docs,
 }: {
   title: string;
   note: string;
@@ -414,6 +415,8 @@ export function SettingsPage({
   pickMode?: boolean;
   /** no game running: the next game's settings */
   saved?: Saved;
+  /** the docs.html section for the Docs button */
+  docs?: string;
 }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
@@ -459,7 +462,7 @@ export function SettingsPage({
   return (
     <div className="stack">
       <div>
-        <SectionHead title={title} note={editing ? `Saved for ${editing.mode.name}: used the next time it starts. Ones marked "Every mode" are shared by all modes and change straight away.` : saved ? `${SAVED_NOTE} ${note}`.trim() : note} />
+        <SectionHead docs={docs} title={title} note={editing ? `Saved for ${editing.mode.name}: used the next time it starts. Ones marked "Every mode" are shared by all modes and change straight away.` : saved ? `${SAVED_NOTE} ${note}`.trim() : note} />
         {children}
       </div>
       <div className="stack-tight">

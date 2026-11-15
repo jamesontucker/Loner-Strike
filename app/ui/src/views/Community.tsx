@@ -152,7 +152,7 @@ export function Community({ target, part = "all" }: { target: string; part?: Com
   }, [target, reload]);
 
   // a failed reload keeps the page; the error only replaces it before anything loaded
-  const head = <SectionHead title={HEAD[part][0]} note={HEAD[part][1]} />;
+  const head = <SectionHead docs="moderation" title={HEAD[part][0]} note={HEAD[part][1]} />;
   if (!d)
     return (
       <div className="stack narrow community">

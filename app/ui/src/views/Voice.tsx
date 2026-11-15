@@ -100,6 +100,7 @@ export function Voice({ server }: { server: ServerInfo }) {
   return (
     <div className="voice-addon">
       <SectionHead
+        docs="voice"
         title="Bot voice commands"
         note={'The bots hear what people say on voice chat and answer, the same way as typed team chat: "rush b", "two long", "flash for me", "someone buy me an AWP".'}
       />

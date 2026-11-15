@@ -6,7 +6,7 @@
 // Studio's node help and the AI connection's studio_node_help say (all three read nodehelp.json).
 //   npx playwright test -c tests/site.config.ts site-reference
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error (a plain .mjs script, no types)
@@ -269,4 +269,28 @@ test("the map editor reference: every card says what it does and where it is; me
   // search finds a card
   await page.locator("#ref-q").fill("pointfile");
   await expect(page.locator("#ref-results li").first()).toContainText("Leaks");
+});
+
+test("every Docs button and docs link in the app points at a section docs.html has", () => {
+  // DocsLink to="…", SectionHead docs="…", TOOL_DOCS values, and plain lonerstrike.com/docs#… links
+  const src = join(here, "../src");
+  const files: string[] = [];
+  const walk = (d: string) => {
+    for (const f of readdirSync(d, { withFileTypes: true })) {
+      if (f.isDirectory()) walk(join(d, f.name));
+      else if (/\.tsx?$/.test(f.name)) files.push(join(d, f.name));
+    }
+  };
+  walk(src);
+  const ids = new Set([...readFileSync(join(here, "../../../site/docs.html"), "utf8").matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  const used = new Map<string, string>();
+  for (const f of files) {
+    const t = readFileSync(f, "utf8");
+    const rel = f.slice(src.length + 1);
+    for (const m of t.matchAll(/<DocsLink[^>]*\bto="([^"]+)"|<SectionHead[^>]*?\bdocs="([^"]+)"|\bdocs="([a-z0-9-]+)"|lonerstrike\.com\/docs#([a-z0-9-]+)/g)) used.set(m[1] || m[2] || m[3] || m[4], rel);
+    if (rel.endsWith("DocsLink.tsx")) for (const m of t.slice(t.indexOf("TOOL_DOCS"), t.indexOf("};", t.indexOf("TOOL_DOCS"))).matchAll(/:\s*"([^"]+)"/g)) used.set(m[1], rel);
+  }
+  expect(used.size, "docs links found").toBeGreaterThan(30);
+  const missing = [...used].filter(([id]) => !ids.has(id)).map(([id, f]) => `${id} (${f})`);
+  expect(missing, "docs links whose section docs.html doesn't have").toEqual([]);
 });

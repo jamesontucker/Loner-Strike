@@ -32,7 +32,7 @@ function AddonsPage({ data, refresh, saved }: { data: Online; refresh: () => voi
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Add-ons" note={saved ? `Add-ons work in every mode. ${SAVED_NOTE}` : "Add-ons work in every mode. Turning one on or off needs a map restart."} />
+        <SectionHead docs="mods-and-sounds" title="Add-ons" note={saved ? `Add-ons work in every mode. ${SAVED_NOTE}` : "Add-ons work in every mode. Turning one on or off needs a map restart."} />
         {needsRestart && (
           <Banner action={<BusyButton className="btn primary" busy={busy("restartmap")} label="Restart map" busyLabel="Restarting…" onClick={() => once(key("restartmap"), () => run("gm_restartmap"), "Restarting the map…")} />}>
             Restart the map to apply your add-on changes.

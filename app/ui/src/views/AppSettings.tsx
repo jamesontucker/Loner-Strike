@@ -214,7 +214,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
   const updates = (
     <section ref={updatesRef} className={litClass("updates")}>
-      <SectionHead title="Updates" />
+      <SectionHead docs="updates" title="Updates" />
       <div className="panel settings-list">
         <div className="row between setting-line">
           <div>
@@ -258,7 +258,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       {updates}
 
       <section>
-        <SectionHead title="Use on your phone" note="Control the game from your phone on the same Wi-Fi." />
+        <SectionHead docs="phone" title="Use on your phone" note="Control the game from your phone on the same Wi-Fi." />
         {ON_THIS_COMPUTER ? (
           <div className="panel phone">
             <div className="row between setting-line toggle">
@@ -320,7 +320,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       <section>
-        <SectionHead title="Notifications" note="Shown on the computer running Loner-Strike while the app is in the background. Each dedicated server has its own: on its Overview tab (joins) and its Shared control tab (helpers). Player reports (say /report) always notify." />
+        <SectionHead docs="notifications" title="Notifications" note="Shown on the computer running Loner-Strike while the app is in the background. Each dedicated server has its own: on its Overview tab (joins) and its Shared control tab (helpers). Player reports (say /report) always notify." />
         <div className="panel settings-list">
           <div className="row between setting-line toggle">
             <div>

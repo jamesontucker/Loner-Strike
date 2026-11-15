@@ -156,7 +156,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   if (!st || !form) {
     return (
       <div className="stack">
-        <SectionHead title="Website status" />
+        <SectionHead docs="website-status" title="Website status" />
         {failed ? <LoadError text={failed} onRetry={load} /> : <Skeleton rows={4} />}
       </div>
     );
@@ -172,6 +172,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   return (
     <div className="stack hltv">
       <SectionHead
+        docs="website-status"
         title="Website status"
         note="A small service on the server that tells your website this server's name, map and players, so the site can show them live. It can also count visits, without cookies and without keeping anyone's address."
       />

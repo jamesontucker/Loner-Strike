@@ -30,9 +30,11 @@ export const ExternalIcon = () => (
   </svg>
 );
 
-export function DocsLink({ to, what }: { to: string; what: string }) {
+/** `small`: the tools' header size (the default); a page's title row passes false to match its
+ *  full-size buttons. */
+export function DocsLink({ to, what, small = true }: { to: string; what: string; small?: boolean }) {
   return (
-    <a className="btn small docs-link" href={`${DOCS_URL}#${encodeURIComponent(to)}`} target="_blank" rel="noreferrer" title={`Open the docs about ${what} in your browser`}>
+    <a className={`btn${small ? " small" : ""} docs-link`} href={`${DOCS_URL}#${encodeURIComponent(to)}`} target="_blank" rel="noreferrer" title={`Open the docs about ${what} in your browser`}>
       <ExternalIcon />
       Docs
     </a>
