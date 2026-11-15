@@ -224,7 +224,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 			v = i
 	if (v < 0)
 	{
-		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
+		lsg_skip_log("trigger_volumes", "Spawn Trigger Volume", "Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", cap)
 		g_lsgVolWhy = 3
 		return 0
 	}
@@ -402,7 +402,7 @@ stock bool:lsg_avoid_room(const tag[], cap)
 			return true
 	if (g_lsgAvoidN >= min(cap, sizeof g_lsgAvoidTag))
 	{
-		log_amx("[%s] Bots Avoid Area %s skipped: as many are out as Areas bots avoid at once allows (%d, Limits)", LSG_MODE, tag, cap)
+		lsg_skip_log("avoid_areas", tag, "Bots Avoid Area %s skipped: as many are out as Areas bots avoid at once allows (%d, Limits)", tag, cap)
 		return false
 	}
 	copy(g_lsgAvoidTag[g_lsgAvoidN++], 23, tag)
@@ -753,6 +753,46 @@ mod tests {
             assert!(!body.contains("\tif (lsg_named(vol"), "a bare name check reads a freed volume: {body}");
         }
         assert!(src.contains("stock bool:lsg_vol_live(vol)"));
+    }
+
+    /// P5's final check: every cap's "skipped" line goes through the once-a-second lsg_skip_log
+    /// (Spawn Trigger Volume, Bots Avoid Area, Loop Sound, out of entity slots), never a bare
+    /// log_amx that would write every frame.
+    #[test]
+    fn cap_skip_lines_are_rate_limited() {
+        for (what, src) in [("collide.rs", super::PAWN), ("gen.rs", super::super::HELPERS), ("fx.rs", include_str!("gen/fx.rs"))] {
+            for l in src.lines().filter(|l| l.contains("skipped") && l.contains("log_amx")) {
+                // (the helper's own lines, and the effects cap that already says it once a second)
+                assert!(l.contains("too many effects this frame") || l.contains("LSG_MODE, msg"), "{what}: a skip line straight to the log: {l}");
+            }
+        }
+        for pawn in [super::PAWN, include_str!("gen/fx.rs")] {
+            assert!(pawn.contains("lsg_skip_log("));
+        }
+        let h = super::super::HELPERS;
+        let at = h.find("stock lsg_skip_log(").expect("the helper");
+        let body = &h[at..at + h[at..].find("\n}").unwrap()];
+        assert!(body.contains("< 1.0") && body.contains("times in the last second") && body.contains("now >= g_lsgSkipAt[k]"), "{body}");
+    }
+
+    /// Every limit's setting label fits a setting label (30): a longer one failed every mode using it.
+    #[test]
+    fn limit_labels_fit_their_settings() {
+        for l in crate::tools::studio::limits::LIMITS {
+            assert!(l.label.chars().count() <= 30, "{} is {} letters: {:?}", l.id, l.label.chars().count(), l.label);
+            let v = crate::tools::studio::limits::var_json(l);
+            assert_eq!(v["setting"]["label"], l.label);
+        }
+        // a mode with Spawn Trigger Volume and its limit settings passes its check
+        let mut g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "lm", "name": "Limits"},
+            "nodes": [{"id": "rs", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}}, {"id": "vm", "type": "vec.make", "pos": {"x": 0, "y": 0}, "params": {}},
+                      {"id": "vs", "type": "vol.spawn", "pos": {"x": 0, "y": 0}, "params": {}}],
+            "edges": [{"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "vs", "pin": "exec"}}, {"id": "w2", "from": {"node": "vm", "pin": "out"}, "to": {"node": "vs", "pin": "pos"}}]})).unwrap();
+        let mut v: serde_json::Value = serde_json::to_value(&g).unwrap();
+        v["variables"] = json!(crate::tools::studio::limits::LIMITS.iter().filter(|l| l.kinds.contains(&"vol.spawn")).map(crate::tools::studio::limits::var_json).collect::<Vec<_>>());
+        g = graph::from_value(v).unwrap();
+        let errs: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level == "error").collect();
+        assert!(errs.is_empty(), "{errs:#?}");
     }
 
     /// None of it in a mode without these nodes (other modes' plugins stay as they were).

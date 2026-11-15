@@ -1096,7 +1096,7 @@ stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:eve
 		return 0
 	if (g_lsgLoops >= most)
 	{
-		log_amx("[%s] Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", LSG_MODE, most)
+		lsg_skip_log("loop_sounds", "Loop Sound", "Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", most)
 		return 0
 	}
 	new Float:o[3]

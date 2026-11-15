@@ -240,6 +240,43 @@ public lsg_msg_flush()
 	}
 }
 
+// a cap's "skipped" line in the server log: at most once a second for each cap and what it skipped,
+// with how many times since (P5's final check: a mode spawning past a cap every frame wrote 75 lines
+// a second for each, enough to take the server down to 4 fps). Every cap uses it (W2).
+#define LSG_SKIPN 24
+stock g_lsgSkipKey[LSG_SKIPN][48], Float:g_lsgSkipAt[LSG_SKIPN], g_lsgSkipN[LSG_SKIPN], g_lsgSkipUsed
+stock lsg_skip_log(const cap[], const what[], const fmt[], any:...)
+{
+	new key[48], k = -1
+	formatex(key, charsmax(key), "%s|%s", cap, what)
+	for (new i = 0; i < g_lsgSkipUsed && k < 0; i++)
+		if (equal(g_lsgSkipKey[i], key))
+			k = i
+	if (k < 0)
+	{
+		k = g_lsgSkipUsed < LSG_SKIPN ? g_lsgSkipUsed++ : LSG_SKIPN - 1
+		copy(g_lsgSkipKey[k], charsmax(g_lsgSkipKey[]), key)
+		g_lsgSkipAt[k] = -10.0
+		g_lsgSkipN[k] = 0
+	}
+	g_lsgSkipN[k]++
+	// (the game's clock starts again on a new map)
+	new Float:now = get_gametime()
+	if (now >= g_lsgSkipAt[k] && now - g_lsgSkipAt[k] < 1.0)
+		return
+	new msg[192]
+	vformat(msg, charsmax(msg), fmt, 4)
+	new Float:since = now - g_lsgSkipAt[k]
+	if (g_lsgSkipN[k] > 1 && since <= 2.0)
+		log_amx("[%s] %s (skipped %d times in the last second)", LSG_MODE, msg, g_lsgSkipN[k])
+	else if (g_lsgSkipN[k] > 1)
+		log_amx("[%s] %s (skipped %d times in the last %d seconds)", LSG_MODE, msg, g_lsgSkipN[k], floatround(since))
+	else
+		log_amx("[%s] %s", LSG_MODE, msg)
+	g_lsgSkipAt[k] = now
+	g_lsgSkipN[k] = 0
+}
+
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
 // a mode's spawn that would eat into them is skipped, and the server log says what and why
 #define LSG_EDICT_RESERVE 96
@@ -247,7 +284,7 @@ stock bool:lsg_ent_room(const what[])
 {
 	if (engfunc(EngFunc_NumberOfEntities) < global_get(glb_maxEntities) - LSG_EDICT_RESERVE)
 		return true
-	log_amx("[%s] %s skipped: the server is out of entity slots", LSG_MODE, what)
+	lsg_skip_log("slots", what, "%s skipped: the server is out of entity slots", what)
 	return false
 }
 
@@ -3155,7 +3192,7 @@ stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:eve
 		return 0
 	if (g_lsgLoops >= most)
 	{
-		log_amx("[%s] Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", LSG_MODE, most)
+		lsg_skip_log("loop_sounds", "Loop Sound", "Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", most)
 		return 0
 	}
 	new Float:o[3]
