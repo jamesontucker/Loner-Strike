@@ -766,3 +766,31 @@ native bool:ls_interactable_offer(ent, bool:on);
  */
 native bool:ls_npc_targetable(npc, bool:on);
 /* ==== end NPCs and interactables ==== */
+
+/* ==== Projectiles (T1fix) ==== */
+/**
+ * A projectile hit something: where, the surface's normal there, what it hit (0 for the world)
+ * and, for a player, the hitgroup (1 head ... 7 right leg; 0 when unknown). Its damage and
+ * explosion follow; it's removed after (unless it bounced off the world).
+ */
+forward ls_on_proj_hit(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup);
+/** Loads a projectile's model or sprite with the map: call it from plugin_precache (models/...mdl or sprites/...spr). */
+native bool:ls_proj_precache(const model[]);
+/**
+ * A projectile (0 if none could be made). model: loaded with the map (else a grenade flies);
+ * dir needn't be normalized; gravity 0 flies straight, 1 falls like a grenade; life in seconds.
+ * keys: trail=1 spin=1 bounce=N (bounces off the world) damage=N radius=N (0: only what it hits)
+ * falloff=0|1 explode=1 dangerous=1 (noted for bots; they don't dodge yet) scale=N (a sprite's).
+ * Kills go to owner. At most 64 fly at once (the oldest goes); all go at a new round.
+ */
+native ls_proj_spawn(owner, const model[], const Float:origin[3], const Float:dir[3], Float:speed = 1000.0, Float:gravity = 0.0, Float:life = 5.0, const keys[] = "");
+/** A player's eyes (a little in front) and the way they aim; false when they aren't alive. */
+native bool:ls_proj_aim(id, Float:origin[3], Float:dir[3]);
+native bool:ls_proj_remove(proj);
+native bool:ls_proj_velocity(proj, Float:velocity[3]);
+native bool:ls_proj_set_velocity(proj, const Float:velocity[3]);
+/** Its owner (0 none, or not a projectile). */
+native ls_proj_owner(proj);
+/** How many fly now. */
+native ls_proj_count();
+/* ==== end Projectiles ==== */

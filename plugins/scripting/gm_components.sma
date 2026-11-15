@@ -331,6 +331,7 @@ public plugin_precache()
 	g_mdlGibs = precache_model("models/woodgibs.mdl");
 	up_precache(); /* W1 */
 	npc_precache(); /* T1fix */
+	proj_precache(); /* T1fix: projectiles */
 	precache_model_once(DEFAULT_CRATE);
 	precache_model_once(DEFAULT_BOX);
 	precache_model_once("models/w_kevlar.mdl");
@@ -441,6 +442,7 @@ public plugin_natives()
 	w3_natives(); /* W3 */
 	up_natives(); /* W1 */
 	npc_natives(); /* T1fix */
+	proj_natives(); /* T1fix: projectiles */
 }
 
 public plugin_init()
@@ -538,6 +540,7 @@ public plugin_init()
 	w3_init(); /* W3 */
 	up_plugin_init(); /* W1 */
 	npc_init(); /* T1fix */
+	proj_init(); /* T1fix: projectiles */
 }
 
 public plugin_cfg()
@@ -1350,6 +1353,7 @@ stock barricade_adopt(s, const name[])
 public ev_new_round()
 {
 	g_now = get_gametime();
+	proj_round_reset(); /* T1fix: projectiles */
 	g_roundStart = 0.0;
 	meeting_finish(false);
 	g_wave = 0;
@@ -14465,3 +14469,452 @@ public cmd_npc_pick()
 	return PLUGIN_HANDLED;
 }
 /* ==== end NPCs and interactables ==== */
+
+/* ==== Projectiles (T1fix) ==== */
+/* Anything a mode throws or fires: a model or a sprite flying on the engine's own movement
+   (straight, falling, or bouncing), with a touch for the hit and one think for its lifetime.
+   On a hit: ls_on_proj_hit (where, the surface's normal, what it hit, a player's hitgroup),
+   then its damage (straight on the thing hit, or in a radius, with or without falloff) and an
+   explosion if asked; the kill goes to its owner. At most PJ_MAX at once (the oldest goes),
+   all gone at a new round. Models must be loaded with the map: ls_proj_precache from a
+   plugin's plugin_precache, or the ls_proj_models cvar; anything else flies as the fallback. */
+#define PJ_MAX 64
+#define PJ_CLASS "ls_projectile"
+#define PJ_FALLBACK "models/w_hegrenade.mdl"
+
+new g_pjEnt[PJ_MAX], g_pjOwner[PJ_MAX], g_pjBounce[PJ_MAX], Float:g_pjDmg[PJ_MAX], Float:g_pjRad[PJ_MAX];
+new bool:g_pjFall[PJ_MAX], bool:g_pjBoom[PJ_MAX], bool:g_pjTest[PJ_MAX], bool:g_pjDanger[PJ_MAX], Float:g_pjBorn[PJ_MAX];
+new g_fwProjHit, g_sprPjExplode, g_pjTrailSpr;
+
+stock proj_precache()
+{
+	register_cvar("ls_proj_models", "");
+	precache_model_once(PJ_FALLBACK);
+	g_sprPjExplode = precache_model("sprites/zerogxplode.spr");
+	g_pjTrailSpr = g_sprBeam;
+	new list[192], tok[64], at = 0;
+	get_cvar_string("ls_proj_models", list, charsmax(list));
+	for (;;)
+	{
+		new n = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += n;
+		if (proj_path_ok(tok))
+			usable_model(tok);
+	}
+}
+
+stock proj_natives()
+{
+	register_native("ls_proj_precache", "n_proj_precache");
+	register_native("ls_proj_spawn", "n_proj_spawn");
+	register_native("ls_proj_aim", "n_proj_aim");
+	register_native("ls_proj_remove", "n_proj_remove");
+	register_native("ls_proj_velocity", "n_proj_velocity");
+	register_native("ls_proj_set_velocity", "n_proj_set_velocity");
+	register_native("ls_proj_owner", "n_proj_owner");
+	register_native("ls_proj_count", "n_proj_count");
+}
+
+stock proj_init()
+{
+	g_fwProjHit = CreateMultiForward("ls_on_proj_hit", ET_IGNORE, FP_CELL, FP_CELL, FP_ARRAY, FP_ARRAY, FP_CELL, FP_CELL);
+	register_touch(PJ_CLASS, "*", "proj_touch");
+	register_think(PJ_CLASS, "proj_think");
+	/* rcon tests without a person: ls_proj_test <owner> <x y z> <dx dy dz> <speed> <damage> [radius]
+	   or ls_proj_test <owner> at <player> <speed> <damage> [radius] (from the owner's eyes at them) */
+	register_srvcmd("ls_proj_test", "cmd_proj_test");
+}
+
+/* models/....mdl or sprites/....spr, nothing climbing out */
+stock bool:proj_path_ok(const p[])
+{
+	new n = strlen(p);
+	if (n < 12 || n > 95 || contain(p, "..") >= 0 || contain(p, "\") >= 0 || contain(p, ":") >= 0)
+		return false;
+	if (equal(p, "models/", 7) && equali(p[n - 4], ".mdl"))
+		return true;
+	return equal(p, "sprites/", 8) && equali(p[n - 4], ".spr");
+}
+
+stock proj_slot(ent)
+{
+	if (ent <= 0)
+		return -1;
+	for (new s = 0; s < PJ_MAX; s++)
+		if (g_pjEnt[s] == ent)
+			return s;
+	return -1;
+}
+
+stock proj_free(s)
+{
+	new e = g_pjEnt[s];
+	g_pjEnt[s] = 0;
+	if (e > 0 && pev_valid(e))
+	{
+		set_pev(e, pev_flags, pev(e, pev_flags) | FL_KILLME);
+		set_pev(e, pev_solid, SOLID_NOT);
+	}
+}
+
+/* a new round: none left flying */
+stock proj_round_reset()
+{
+	for (new s = 0; s < PJ_MAX; s++)
+		if (g_pjEnt[s])
+			proj_free(s);
+}
+
+/* key=value words (trail=1 spin=1 bounce=2 damage=50 radius=128 falloff=1 explode=1 dangerous=1 scale=0.5) */
+stock Float:proj_key(const keys[], const key[], Float:def)
+{
+	new pat[24];
+	formatex(pat, charsmax(pat), "%s=", key);
+	new at = containi(keys, pat);
+	if (at < 0 || (at > 0 && keys[at - 1] != ' '))
+		return def;
+	return str_to_float(keys[at + strlen(pat)]);
+}
+
+stock proj_spawn(owner, const model[], const Float:o[3], const Float:dir[3], Float:speed, Float:gravity, Float:life, const keys[], bool:test)
+{
+	/* a slot: a free one, else the oldest goes */
+	new s = -1, old = 0;
+	for (new k = 0; k < PJ_MAX; k++)
+	{
+		if (g_pjEnt[k] && !pev_valid(g_pjEnt[k]))
+			g_pjEnt[k] = 0;
+		if (!g_pjEnt[k])
+		{
+			s = k;
+			break;
+		}
+		if (g_pjBorn[k] < g_pjBorn[old])
+			old = k;
+	}
+	if (s < 0)
+	{
+		proj_free(old);
+		s = old;
+	}
+	new e = create_entity("info_target");
+	if (!e || !pev_valid(e))
+		return 0;
+	set_pev(e, pev_classname, PJ_CLASS);
+	new m[96];
+	copy(m, charsmax(m), model);
+	if (!proj_path_ok(m) || !TrieKeyExists(g_models, m))
+		copy(m, charsmax(m), PJ_FALLBACK);
+	engfunc(EngFunc_SetModel, e, m);
+	engfunc(EngFunc_SetSize, e, Float:{-2.0, -2.0, -2.0}, Float:{2.0, 2.0, 2.0});
+	new bool:spr = equal(m, "sprites/", 8) != 0;
+	if (spr)
+	{
+		set_pev(e, pev_rendermode, kRenderTransAdd);
+		set_pev(e, pev_renderamt, 255.0);
+		set_pev(e, pev_scale, floatclamp(proj_key(keys, "scale", 0.5), 0.05, 4.0));
+		set_pev(e, pev_framerate, 10.0);
+	}
+	new bounce = clamp(floatround(proj_key(keys, "bounce", 0.0)), 0, 10);
+	gravity = floatclamp(gravity, 0.0, 4.0);
+	set_pev(e, pev_movetype, bounce > 0 ? MOVETYPE_BOUNCE : (gravity > 0.0 ? MOVETYPE_TOSS : MOVETYPE_FLY));
+	set_pev(e, pev_gravity, gravity > 0.0 ? gravity : 1.0);
+	set_pev(e, pev_solid, SOLID_BBOX);
+	if (1 <= owner <= MaxClients && is_user_connected(owner))
+		set_pev(e, pev_owner, owner);
+	else
+		owner = 0;
+	engfunc(EngFunc_SetOrigin, e, o);
+	new Float:d[3], Float:len = floatsqroot(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+	if (len < 0.001)
+		d[0] = 1.0;
+	else
+		for (new k = 0; k < 3; k++)
+			d[k] = dir[k] / len;
+	speed = floatclamp(speed, 1.0, 5000.0);
+	new Float:v[3];
+	for (new k = 0; k < 3; k++)
+		v[k] = d[k] * speed;
+	set_pev(e, pev_velocity, v);
+	new Float:ang[3];
+	vector_to_angle(v, ang);
+	set_pev(e, pev_angles, ang);
+	if (proj_key(keys, "spin", 0.0) != 0.0)
+		set_pev(e, pev_avelocity, Float:{0.0, 0.0, 720.0});
+	set_pev(e, pev_nextthink, get_gametime() + floatclamp(life, 0.1, 60.0));
+	g_pjEnt[s] = e;
+	g_pjOwner[s] = owner;
+	g_pjBounce[s] = bounce;
+	g_pjDmg[s] = floatclamp(proj_key(keys, "damage", 0.0), 0.0, 5000.0);
+	g_pjRad[s] = floatclamp(proj_key(keys, "radius", 0.0), 0.0, 2000.0);
+	g_pjFall[s] = proj_key(keys, "falloff", 1.0) != 0.0;
+	g_pjBoom[s] = proj_key(keys, "explode", 0.0) != 0.0;
+	g_pjDanger[s] = proj_key(keys, "dangerous", 0.0) != 0.0;
+	g_pjTest[s] = test;
+	g_pjBorn[s] = get_gametime();
+	if (proj_key(keys, "trail", 0.0) != 0.0 && g_pjTrailSpr)
+	{
+		message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
+		write_byte(TE_BEAMFOLLOW);
+		write_short(e);
+		write_short(g_pjTrailSpr);
+		write_byte(10);
+		write_byte(3);
+		write_byte(255);
+		write_byte(220);
+		write_byte(160);
+		write_byte(160);
+		message_end();
+	}
+	return e;
+}
+
+public proj_think(e)
+{
+	new s = proj_slot(e);
+	if (s >= 0)
+		proj_free(s);
+	else if (pev_valid(e))
+		set_pev(e, pev_flags, pev(e, pev_flags) | FL_KILLME);
+}
+
+public proj_touch(e, other)
+{
+	new s = proj_slot(e);
+	if (s < 0 || !pev_valid(e))
+		return PLUGIN_CONTINUE;
+	new owner = g_pjOwner[s];
+	/* (its owner, and triggers it flies through, aren't hits) */
+	if (other > 0 && (other == owner || pev(other, pev_solid) == SOLID_TRIGGER))
+		return PLUGIN_CONTINUE;
+	new Float:o[3], Float:v[3], Float:a[3], Float:b[3], Float:n[3];
+	pev(e, pev_origin, o);
+	pev(e, pev_velocity, v);
+	/* the surface's normal and a player's hitgroup: one short trace along the way it flew */
+	new Float:sp = floatsqroot(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	for (new k = 0; k < 3; k++)
+	{
+		new Float:u = sp > 0.001 ? v[k] / sp : 0.0;
+		a[k] = o[k] - u * 16.0;
+		b[k] = o[k] + u * 32.0;
+	}
+	new tr = create_tr2();
+	engfunc(EngFunc_TraceLine, a, b, DONT_IGNORE_MONSTERS, e, tr);
+	get_tr2(tr, TR_vecPlaneNormal, n);
+	new group = 0, hit = other > 0 ? other : 0;
+	if (1 <= hit <= MaxClients)
+		group = get_tr2(tr, TR_pHit) == hit ? get_tr2(tr, TR_iHitgroup) : 0;
+	free_tr2(tr);
+	new bool:damageable = hit > 0 && pev(hit, pev_takedamage) != DAMAGE_NO;
+	new ret;
+	ExecuteForward(g_fwProjHit, ret, e, owner, PrepareArray(_:o, 3), PrepareArray(_:n, 3), hit, group);
+	if (g_pjTest[s])
+	{
+		new what[32];
+		if (hit > 0)
+			pev(hit, pev_classname, what, charsmax(what));
+		else
+			copy(what, charsmax(what), "world");
+		server_print("ls_proj hit: proj %d owner %d at %.0f %.0f %.0f normal %.2f %.2f %.2f hit %d (%s) hitgroup %d", e, owner, o[0], o[1], o[2], n[0], n[1], n[2], hit, what, group);
+	}
+	/* a bounce off the world (or anything that can't be hurt) while it has bounces left */
+	if (g_pjBounce[s] > 0 && !damageable)
+	{
+		g_pjBounce[s]--;
+		return PLUGIN_CONTINUE;
+	}
+	proj_impact(s, e, owner, o, hit);
+	proj_free(s);
+	return PLUGIN_CONTINUE;
+}
+
+/* damage (the kill goes to the owner) and the explosion */
+stock proj_impact(s, e, owner, const Float:o[3], hit)
+{
+	new attacker = owner > 0 && is_user_connected(owner) ? owner : e;
+	new Float:dmg = g_pjDmg[s];
+	if (dmg > 0.0)
+	{
+		if (g_pjRad[s] <= 0.0)
+		{
+			if (hit > 0 && pev_valid(hit) && pev(hit, pev_takedamage) != DAMAGE_NO)
+				ExecuteHamB(Ham_TakeDamage, hit, e, attacker, dmg, DMG_BULLET | DMG_NEVERGIB);
+		}
+		else
+		{
+			new Float:r = g_pjRad[s], t = -1;
+			while ((t = engfunc(EngFunc_FindEntityInSphere, t, o, r)) > 0)
+			{
+				if (t == e || !pev_valid(t) || pev(t, pev_takedamage) == DAMAGE_NO)
+					continue;
+				if (1 <= t <= MaxClients && !is_user_alive(t))
+					continue;
+				new Float:to[3];
+				pev(t, pev_origin, to);
+				new Float:d = get_distance_f(o, to);
+				new Float:amount = g_pjFall[s] ? dmg * floatmax(1.0 - d / r, 0.0) : dmg;
+				if (t == hit)
+					amount = dmg;
+				if (amount >= 1.0)
+					ExecuteHamB(Ham_TakeDamage, t, e, attacker, amount, DMG_BLAST);
+			}
+		}
+	}
+	if (g_pjBoom[s] && g_sprPjExplode)
+	{
+		message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
+		write_byte(TE_EXPLOSION);
+		engfunc(EngFunc_WriteCoord, o[0]);
+		engfunc(EngFunc_WriteCoord, o[1]);
+		engfunc(EngFunc_WriteCoord, o[2] + 16.0);
+		write_short(g_sprPjExplode);
+		write_byte(20);
+		write_byte(15);
+		write_byte(0);
+		message_end();
+	}
+}
+
+/* where a player's eyes are and the way they aim */
+stock bool:proj_aim(id, Float:o[3], Float:d[3])
+{
+	if (!(1 <= id <= MaxClients) || !is_user_alive(id))
+		return false;
+	new Float:ofs[3], Float:ang[3];
+	pev(id, pev_origin, o);
+	pev(id, pev_view_ofs, ofs);
+	for (new k = 0; k < 3; k++)
+		o[k] += ofs[k];
+	pev(id, pev_v_angle, ang);
+	angle_vector(ang, ANGLEVECTOR_FORWARD, d);
+	/* start a little in front, out of the player's own box */
+	for (new k = 0; k < 3; k++)
+		o[k] += d[k] * 24.0;
+	return true;
+}
+
+public n_proj_precache(plugin, params)
+{
+	new m[96];
+	get_string(1, m, charsmax(m));
+	return proj_path_ok(m) && usable_model(m);
+}
+
+/* ls_proj_spawn(owner, model[], Float:origin[3], Float:dir[3], Float:speed, Float:gravity, Float:life, keys[]) */
+public n_proj_spawn(plugin, params)
+{
+	new m[96], keys[160], Float:o[3], Float:d[3];
+	get_string(2, m, charsmax(m));
+	get_array_f(3, o, 3);
+	get_array_f(4, d, 3);
+	get_string(8, keys, charsmax(keys));
+	return proj_spawn(get_param(1), m, o, d, get_param_f(5), get_param_f(6), get_param_f(7), keys, false);
+}
+
+public n_proj_aim(plugin, params)
+{
+	new Float:o[3], Float:d[3];
+	if (!proj_aim(get_param(1), o, d))
+		return 0;
+	set_array_f(2, o, 3);
+	set_array_f(3, d, 3);
+	return 1;
+}
+
+public n_proj_remove(plugin, params)
+{
+	new s = proj_slot(get_param(1));
+	if (s < 0)
+		return 0;
+	proj_free(s);
+	return 1;
+}
+
+public n_proj_velocity(plugin, params)
+{
+	new e = get_param(1), Float:v[3];
+	if (proj_slot(e) < 0 || !pev_valid(e))
+		return 0;
+	pev(e, pev_velocity, v);
+	set_array_f(2, v, 3);
+	return 1;
+}
+
+public n_proj_set_velocity(plugin, params)
+{
+	new e = get_param(1), Float:v[3];
+	if (proj_slot(e) < 0 || !pev_valid(e))
+		return 0;
+	get_array_f(2, v, 3);
+	for (new k = 0; k < 3; k++)
+		v[k] = floatclamp(v[k], -5000.0, 5000.0);
+	set_pev(e, pev_velocity, v);
+	new Float:ang[3];
+	vector_to_angle(v, ang);
+	set_pev(e, pev_angles, ang);
+	return 1;
+}
+
+public n_proj_owner(plugin, params)
+{
+	new s = proj_slot(get_param(1));
+	return s < 0 ? 0 : g_pjOwner[s];
+}
+
+public n_proj_count(plugin, params)
+{
+	new n = 0;
+	for (new s = 0; s < PJ_MAX; s++)
+		if (g_pjEnt[s] && pev_valid(g_pjEnt[s]))
+			n++;
+	return n;
+}
+
+public cmd_proj_test()
+{
+	new a[16];
+	read_argv(1, a, charsmax(a));
+	new owner = str_to_num(a);
+	new Float:o[3], Float:d[3], Float:speed, Float:dmg, Float:rad, next;
+	read_argv(2, a, charsmax(a));
+	if (equali(a, "at"))
+	{
+		read_argv(3, a, charsmax(a));
+		new t = str_to_num(a);
+		if (!proj_aim(owner, o, d) || !(1 <= t <= MaxClients) || !is_user_alive(t))
+		{
+			server_print("ls_proj_test: needs a living owner and a living target");
+			return PLUGIN_HANDLED;
+		}
+		new Float:to[3];
+		pev(t, pev_origin, to);
+		for (new k = 0; k < 3; k++)
+			d[k] = to[k] - o[k];
+		next = 4;
+	}
+	else
+	{
+		for (new k = 0; k < 3; k++)
+		{
+			read_argv(2 + k, a, charsmax(a));
+			o[k] = str_to_float(a);
+			read_argv(5 + k, a, charsmax(a));
+			d[k] = str_to_float(a);
+		}
+		next = 8;
+	}
+	read_argv(next, a, charsmax(a));
+	speed = str_to_float(a);
+	read_argv(next + 1, a, charsmax(a));
+	dmg = str_to_float(a);
+	read_argv(next + 2, a, charsmax(a));
+	rad = str_to_float(a);
+	new keys[96];
+	formatex(keys, charsmax(keys), "damage=%.0f radius=%.0f trail=1", dmg, rad);
+	new e = proj_spawn(owner, PJ_FALLBACK, o, d, speed > 0.0 ? speed : 1000.0, 0.0, 5.0, keys, true);
+	server_print("ls_proj_test: projectile %d from %.0f %.0f %.0f owner %d", e, o[0], o[1], o[2], owner);
+	return PLUGIN_HANDLED;
+}
+/* ==== end Projectiles ==== */
