@@ -293,7 +293,7 @@ One line each: Title (type, category): what it does. In: inputs. Out: outputs.
 - Rarity Glow (br.glow, Battle Royale): Makes an entity glow in a rarity's color (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold). In: Entity Entity, Rarity Number.
 - Match HUD (br.hud, Battle Royale): Turns the match HUD on or off (players left, kills, the zone's timer, armor, healing items, the kill feed and the squad).
 - Match HUD Words (br.hud_text, Battle Royale): The mode's words in the match HUD in place of the zone's timer (empty: the zone again). In: Text Text.
-- Kill Feed Line (br.feed, Battle Royale): Adds a line to the match HUD's kill feed. In: Text Text.
+- Match Feed Line (br.feed, Battle Royale): Adds a text line to Battle Royale's match HUD feed (eliminations, zone news). Not the top-right kill notice: that's Kill Feed Line (Messages). In: Text Text.
 - Match Kills (br.kills, Battle Royale): A player's kills this round (counted while the match HUD is on). In: Player Player. Out: Kills Number.
 - Drop In (br.drop_in, Battle Royale): Drops a player in from high over a spot (an entity wired into At, else a spread-out landing spot: the map's br_drop markers); they fall slowly and take no damage until they land. In: Player Player, At Entity.
 - Landed (br.on_landed, Battle Royale): A player who dropped in is down on the ground. Out: Player Player.

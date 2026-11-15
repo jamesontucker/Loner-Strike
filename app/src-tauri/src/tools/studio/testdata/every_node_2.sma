@@ -3168,7 +3168,7 @@ lsg_n66(ctx[])
 	lsg_n67(ctx)
 }
 
-// Kill Feed Line (feed)
+// Match Feed Line (feed)
 lsg_n67(ctx[])
 {
 	if (!(!ls_components_running()))

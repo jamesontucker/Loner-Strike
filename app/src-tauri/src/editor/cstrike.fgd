@@ -63,7 +63,7 @@
 	wait(float) : "Wait before closing" : 4 : "Seconds before it goes back; -1 stays open."
 	lip(integer) : "Lip" : 0 : "How much of it stays showing when fully open."
 	dmg(integer) : "Crush damage" : 0 : "Damage to someone blocking it."
-	movesnd(choices) : "Moving sound" : 0 =
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
 	[
 		0 : "None"
 		1 : "Servo (pneumatic)"
@@ -77,7 +77,7 @@
 		9 : "Metal rattle"
 		10 : "Squeaky pneumatic"
 	]
-	stopsnd(choices) : "Stopping sound" : 0 =
+	stopsnd(choices) : "Stopping sound" : 0 : "The sound it makes when it stops." =
 	[
 		0 : "None"
 		1 : "Clang with brake"
@@ -117,7 +117,7 @@
 		7 : "Unbreakable glass"
 		8 : "Rocks"
 	]
-	explosion(choices) : "Pieces fly" : 0 =
+	explosion(choices) : "Pieces fly" : 0 : "Which way the pieces fly when it breaks: random, or away from the attack." =
 	[
 		0 : "Away from the hit"
 		1 : "Randomly"
@@ -185,7 +185,7 @@
 ]
 @PointClass size(-16 -16 -16, 16 16 16) color(220 180 80) = info_map_parameters : "Map rules: who may buy, how big the bomb blast is."
 [
-	buying(choices) : "Buying" : 0 =
+	buying(choices) : "Buying" : 0 : "Who can buy on this map." =
 	[
 		0 : "Both teams can buy"
 		1 : "Only Counter-Terrorists can buy"
@@ -196,15 +196,15 @@
 ]
 @PointClass base(Targetname, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_player_equip : "Gives every player these items when they spawn (or when set off, if it has a name)."
 [
-	weapon_knife(integer) : "Knife" : 0
+	weapon_knife(integer) : "Knife" : 0 : "How many knives to give (1 for one)."
 	weapon_usp(integer) : "USP" : 0
-	weapon_glock18(integer) : "Glock" : 0
+	weapon_glock18(integer) : "Glock" : 0 : "How many Glocks to give."
 	weapon_deagle(integer) : "Desert Eagle" : 0
-	weapon_ak47(integer) : "AK-47" : 0
+	weapon_ak47(integer) : "AK-47" : 0 : "How many AK-47s to give."
 	weapon_m4a1(integer) : "M4A1" : 0
-	weapon_awp(integer) : "AWP" : 0
+	weapon_awp(integer) : "AWP" : 0 : "How many AWPs to give."
 	weapon_hegrenade(integer) : "HE grenade" : 0
-	item_kevlar(integer) : "Kevlar" : 0
+	item_kevlar(integer) : "Kevlar" : 0 : "How many vests to give."
 	item_assaultsuit(integer) : "Kevlar and helmet" : 0
 	spawnflags(flags) =
 	[
@@ -220,7 +220,7 @@
 
 @PointClass base(Angle) size(-16 -16 0, 16 16 16) color(255 200 0) = armoury_entity : "A weapon or item lying on the floor for players to pick up."
 [
-	item(choices) : "Item" : 0 =
+	item(choices) : "Item" : 0 : "Which weapon or item lies here." =
 	[
 		0 : "MP5"
 		1 : "TMP"
@@ -268,7 +268,7 @@
 	]
 	pattern(string) : "Custom pattern" : : "Letters a (dark) to z (bright), played 10 a second. Overrides the style."
 	_fade(string) : "Fade" : "1.0" : "How quickly the light fades with distance (bigger is faster)."
-	_falloff(choices) : "Falloff" : 0 =
+	_falloff(choices) : "Falloff" : 0 : "How its light fades with distance, for the light compiler: 0 the compiler's default, 1 inverse, 2 inverse square." =
 	[
 		0 : "Compiler default"
 		1 : "Straight line"
@@ -288,7 +288,7 @@
 	pitch(integer) : "Pitch" : -90 : "How far down it points (-90 is straight down)."
 	_cone(integer) : "Inner cone" : 30 : "Degrees of full brightness."
 	_cone2(integer) : "Outer cone" : 45 : "Degrees where the light fades to nothing."
-	_sky(choices) : "Is the sky" : 0 =
+	_sky(choices) : "Is the sky" : 0 : "1 lights the map like sunlight coming through sky brushes (the light compiler's sun)." =
 	[
 		0 : "No"
 		1 : "Yes"
@@ -321,7 +321,7 @@
 ]
 @PointClass size(-8 -8 -8, 8 8 8) color(150 100 255) = env_sound : "Changes how sounds echo for players near it."
 [
-	radius(integer) : "Radius" : 128
+	radius(integer) : "Radius" : 128 : "How close a player must be for its echo to apply (units)."
 	roomtype(choices) : "Room type" : 0 =
 	[
 		0 : "Normal (off)"
@@ -339,9 +339,9 @@
 ]
 @PointClass base(Targetname, RenderFields, Angles) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_sprite : "Shows a sprite (a flat picture, often glowing)."
 [
-	model(sprite) : "Sprite" : "sprites/glow01.spr"
-	scale(float) : "Size" : 1
-	framerate(float) : "Frames a second" : 10
+	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The sprite it shows."
+	scale(float) : "Size" : 1 : "Prices go up by this much each wave."
+	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
 	spawnflags(flags) =
 	[
 		1 : "Starts on" : 0
@@ -350,8 +350,8 @@
 ]
 @PointClass base(Targetname, RenderFields) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_glow : "A glow sprite that fades out when you can't see its middle."
 [
-	model(sprite) : "Sprite" : "sprites/glow01.spr"
-	scale(float) : "Size" : 1
+	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The glow sprite."
+	scale(float) : "Size" : 1 : "Prices go up by this much each wave."
 ]
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_explosion : "An explosion when set off."
 [
@@ -368,7 +368,7 @@
 ]
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 255 0) = env_spark : "Sparks, now and then or when set off."
 [
-	MaxDelay(float) : "Most seconds between sparks" : 0
+	MaxDelay(float) : "Most seconds between sparks" : 0 : "The most seconds between sparks."
 	spawnflags(flags) =
 	[
 		32 : "Can be switched" : 0
@@ -378,8 +378,8 @@
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 100 0) = env_shake : "Shakes players' screens when set off."
 [
 	amplitude(float) : "Strength" : 4 : "0 to 16."
-	radius(integer) : "Radius" : 500
-	duration(float) : "Seconds" : 1
+	radius(integer) : "Radius" : 500 : "How far from it the effect reaches (units)."
+	duration(float) : "Seconds" : 1 : "How long it shakes (seconds)."
 	frequency(float) : "Shakiness" : 2.5
 	spawnflags(flags) =
 	[
@@ -388,10 +388,10 @@
 ]
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(0 200 255) = env_fade : "Fades players' screens to a color."
 [
-	duration(float) : "Fade seconds" : 2
-	holdtime(float) : "Hold seconds" : 0
-	renderamt(integer) : "Strength" : 255
-	rendercolor(color255) : "Color" : "0 0 0"
+	duration(float) : "Fade seconds" : 2 : "How long the fade takes (seconds)."
+	holdtime(float) : "Hold seconds" : 0 : "Seconds the text stays."
+	renderamt(integer) : "Strength" : 255 : "How dark the fade gets: 255 fully."
+	rendercolor(color255) : "Color" : "0 0 0" : "The color (red green blue, 0 to 255 each)."
 	spawnflags(flags) =
 	[
 		1 : "Fade in (from the color)" : 0
@@ -400,10 +400,10 @@
 ]
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(180 180 255) = env_fog : "Fog for the whole map."
 [
-	startdist(integer) : "Starts at" : 0
+	startdist(integer) : "Starts at" : 0 : "How far from the player the fog starts (units)."
 	enddist(integer) : "Thick at" : 1000
 	density(string) : "Density" : "0.001" : "How thick the fog is (0.0005 light to 0.003 thick)."
-	rendercolor(color255) : "Color" : "128 128 128"
+	rendercolor(color255) : "Color" : "128 128 128" : "The color (red green blue, 0 to 255 each)."
 ]
 @PointClass size(-8 -8 -8, 8 8 8) color(160 200 255) = env_rain : "Rain on the whole map (players see it outdoors)." []
 @PointClass size(-8 -8 -8, 8 8 8) color(255 255 255) = env_snow : "Snow on the whole map (players see it outdoors)." []
@@ -414,13 +414,13 @@
 	LightningEnd(target_destination) : "Ends at" : : "The entity the beam ends at (blank: a random spot within the radius)."
 	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the beam removes itself."
 	renderamt(integer) : "Brightness" : 100 : "0 to 255."
-	rendercolor(color255) : "Color" : "255 255 255"
+	rendercolor(color255) : "Color" : "255 255 255" : "The color (red green blue, 0 to 255 each)."
 	Radius(integer) : "Radius" : 256 : "How far a random end can be (no Ends at)."
 	life(float) : "Seconds each strike lasts" : 1 : "0: always on."
 	BoltWidth(integer) : "Width" : 20 : "1 to 255."
 	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
 	TextureScroll(integer) : "Scroll speed" : 35
-	framestart(integer) : "First frame" : 0
+	framestart(integer) : "First frame" : 0 : "The frame of the beam's texture it starts on."
 	StrikeTime(string) : "Seconds between strikes" : "1" : "A negative number picks a random time up to that."
 	damage(float) : "Damage a second" : 0 : "To anything the beam touches."
 	spawnflags(flags) =
@@ -440,13 +440,13 @@
 [
 	LaserTarget(target_destination) : "Points at" : : "The entity the laser goes to (a random one of them if several share the name)."
 	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the laser removes itself."
-	EndSprite(sprite) : "Sprite where it hits" : ""
+	EndSprite(sprite) : "Sprite where it hits" : "" : "A sprite drawn where the beam ends."
 	renderamt(integer) : "Brightness" : 100 : "0 to 255."
-	rendercolor(color255) : "Color" : "255 0 0"
+	rendercolor(color255) : "Color" : "255 0 0" : "The color (red green blue, 0 to 255 each)."
 	width(integer) : "Width" : 20 : "1 to 255."
 	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
 	TextureScroll(integer) : "Scroll speed" : 35
-	framestart(integer) : "First frame" : 0
+	framestart(integer) : "First frame" : 0 : "The frame of the beam's texture it starts on."
 	damage(float) : "Damage a second" : 0 : "To anything the laser touches."
 	spawnflags(flags) =
 	[
@@ -458,9 +458,9 @@
 ]
 @PointClass base(Targetname, Angles) size(-8 -8 -8, 8 8 8) color(200 120 60) = gibshooter : "Throws gibs (body pieces) the way it faces when set off."
 [
-	m_iGibs(integer) : "How many" : 3
+	m_iGibs(integer) : "How many" : 3 : "How many pieces it throws."
 	delay(float) : "Seconds between gibs" : "0" : "0: a tenth of a second."
-	m_flVelocity(integer) : "Speed" : 200
+	m_flVelocity(integer) : "Speed" : 200 : "How fast the pieces fly (units a second)."
 	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
 	m_flGibLife(float) : "Seconds a gib stays" : 4 : "0: 25 seconds."
 	spawnflags(flags) =
@@ -480,13 +480,13 @@
 		3 : "Flesh"
 		4 : "Concrete"
 	]
-	m_iGibs(integer) : "How many" : 3
+	m_iGibs(integer) : "How many" : 3 : "How many pieces it throws."
 	delay(float) : "Seconds between pieces" : "0" : "0: a tenth of a second."
-	m_flVelocity(integer) : "Speed" : 200
+	m_flVelocity(integer) : "Speed" : 200 : "How fast the pieces fly (units a second)."
 	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
 	m_flGibLife(float) : "Seconds a piece stays" : 4 : "0: 25 seconds."
 	scale(float) : "Size" : 1 : "For a sprite."
-	skin(integer) : "Skin" : 0
+	skin(integer) : "Skin" : 0 : "The model's skin number."
 	spawnflags(flags) =
 	[
 		1 : "Can be set off again" : 0
@@ -495,12 +495,12 @@
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_blood : "Sprays blood the way it faces when set off."
 [
 	angles(string) : "Spray direction (pitch yaw roll)" : "0 0 0"
-	color(choices) : "Blood color" : 0 =
+	color(choices) : "Blood color" : 0 : "The text's color (red green blue)." =
 	[
 		0 : "Red (people)"
 		1 : "Yellow (creatures)"
 	]
-	amount(integer) : "Amount" : 100
+	amount(integer) : "Amount" : 100 : "How much blood (1 to 255)."
 	spawnflags(flags) =
 	[
 		1 : "Random direction" : 0
@@ -519,7 +519,7 @@
 @PointClass base(Targetname, Angle) size(-8 -8 -8, 8 8 8) color(0 160 255) = env_beverage : "A drinks machine's chute: drops a soda can each time it's set off (a can gives a little health)."
 [
 	health(integer) : "Cans" : 10 : "How many it can give."
-	skin(choices) : "Can" : 0 =
+	skin(choices) : "Can" : 0 : "The skin number (for a func_illusionary: -3 water, -4 slime, -5 lava)." =
 	[
 		0 : "Coca-Cola"
 		1 : "Sprite"
@@ -585,13 +585,13 @@
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(128 255 128) iconsprite("sprites/speaker.spr") = target_cdaudio : "Plays a CD track (game music) when a player comes within its radius, or when set off; goes once."
 [
 	health(integer) : "Track" : 1 : "-1 stops the music."
-	radius(integer) : "Radius" : 128
+	radius(integer) : "Radius" : 128 : "How far from it the effect reaches (units)."
 ]
 @SolidClass base(Targetname) = env_bubbles : "Bubbles rising from inside the brush."
 [
-	density(integer) : "How many" : 2
+	density(integer) : "How many" : 2 : "How many bubbles at once."
 	frequency(integer) : "How often" : 2
-	current(integer) : "Drift speed" : 0
+	current(integer) : "Drift speed" : 0 : "How fast the bubbles drift (units a second)."
 	spawnflags(flags) =
 	[
 		1 : "Starts off" : 0
@@ -599,7 +599,7 @@
 ]
 @PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 0 255) = env_render : "Changes the draw settings of its target when set off."
 [
-	rendermode(choices) : "Draw mode" : 0 =
+	rendermode(choices) : "Draw mode" : 0 : "How it's drawn: normal, color, texture, glow, solid or additive." =
 	[
 		0 : "Normal"
 		1 : "Color"
@@ -608,8 +608,8 @@
 		4 : "Solid"
 		5 : "Additive"
 	]
-	renderamt(integer) : "See-through amount" : 255
-	rendercolor(color255) : "Tint color" : "0 0 0"
+	renderamt(integer) : "See-through amount" : 255 : "How see-through the targets become: 0 invisible, 255 solid."
+	rendercolor(color255) : "Tint color" : "0 0 0" : "The color (red green blue, 0 to 255 each)."
 ]
 @PointClass base(Targetname, Angles) size(-4 -4 -4, 4 4 4) decal() = infodecal : "A decal (a painted-on picture like a crack or blood) on the nearest wall."
 [
@@ -621,8 +621,8 @@
 ]
 @PointClass base(Targetname, Angles, RenderFields) size(-8 -8 -8, 8 8 8) = cycler_sprite : "A sprite or model that animates."
 [
-	model(sprite) : "Sprite or model"
-	framerate(float) : "Frames a second" : 10
+	model(sprite) : "Sprite or model" : : "The model or sprite it shows."
+	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
 ]
 
 // ---- logic ------------------------------------------------------------------------------
@@ -636,11 +636,11 @@
 ]
 @PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 128 0) = multisource : "On only while everything that targets it is on (an AND gate). Use as a master."
 [
-	globalstate(string) : "Global state" : ""
+	globalstate(string) : "Global state" : "" : "A global state name that must be on before it lets things through."
 ]
 @PointClass base(Targetname, Target, KillTarget, Delay) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_relay : "Passes a signal on: sets off its target, maybe later, maybe as on or off."
 [
-	triggerstate(choices) : "Sends" : 0 =
+	triggerstate(choices) : "Sends" : 0 : "What it sends to its target: off, on or toggle." =
 	[
 		0 : "Off"
 		1 : "On"
@@ -653,7 +653,7 @@
 ]
 @PointClass base(Target, Delay) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_auto : "Sets off its target when the round starts."
 [
-	triggerstate(choices) : "Sends" : 0 =
+	triggerstate(choices) : "Sends" : 0 : "What it sends to its target: off, on or toggle." =
 	[
 		0 : "Off"
 		1 : "On"
@@ -666,13 +666,13 @@
 ]
 @PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_changetarget : "Changes what another entity sets off."
 [
-	m_iszNewTarget(target_destination) : "New target"
+	m_iszNewTarget(target_destination) : "New target" : : "The new target name to give the entity it changes."
 ]
 @PointClass base(Targetname, Target) size(-16 -16 -16, 16 16 16) color(255 0 255) = trigger_camera : "Shows players the view from here for a while when set off."
 [
-	wait(integer) : "Seconds" : 10
+	wait(integer) : "Seconds" : 10 : "How long the view stays on the camera (seconds)."
 	moveto(target_destination) : "First path corner"
-	speed(integer) : "Speed" : 0
+	speed(integer) : "Speed" : 0 : "How fast the camera moves along its path (units a second)."
 	spawnflags(flags) =
 	[
 		1 : "Starts at the player" : 0
@@ -684,20 +684,20 @@
 [
 	message(string) : "Text" : : "Up to 512 letters; \n starts a new line."
 	x(string) : "Across (0-1, -1 center)" : "-1"
-	y(string) : "Down (0-1, -1 center)" : "-1"
+	y(string) : "Down (0-1, -1 center)" : "-1" : "Where on the screen, top to bottom (0 top, 1 bottom, -1 centered)."
 	effect(choices) : "Effect" : 0 =
 	[
 		0 : "Fade in and out"
 		1 : "Credits (flicker)"
 		2 : "Typed out"
 	]
-	color(color255) : "Color" : "100 100 100"
+	color(color255) : "Color" : "100 100 100" : "The text's color (red green blue)."
 	color2(color255) : "Highlight color" : "240 110 0"
-	fadein(string) : "Fade in seconds" : "1.5"
+	fadein(string) : "Fade in seconds" : "1.5" : "Seconds to fade in."
 	fadeout(string) : "Fade out seconds" : "0.5"
-	holdtime(string) : "Seconds on screen" : "1.2"
+	holdtime(string) : "Seconds on screen" : "1.2" : "Seconds the text stays."
 	fxtime(string) : "Highlight seconds" : "0.25" : "Typed out: how long each letter shows in the highlight color."
-	channel(choices) : "Text line" : 1 =
+	channel(choices) : "Text line" : 1 : "The text channel (1 to 4): a new message on the same channel replaces the old one." =
 	[
 		1 : "1"
 		2 : "2"
@@ -718,7 +718,7 @@
 @PointClass base(Targetname, Angle) size(-16 -16 0, 16 16 72) color(0 255 255) = info_teleport_destination : "Where a trigger_teleport sends players." []
 @PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 0 0) = path_corner : "A stop on a path for trains and cameras."
 [
-	wait(integer) : "Wait here (seconds)" : 0
+	wait(integer) : "Wait here (seconds)" : 0 : "Seconds a train waits here (-1: until set off again)."
 	speed(integer) : "New speed from here" : 0
 	message(target_destination) : "Fires when passed" : : "What to set off when a func_train or func_guntarget reaches this stop."
 	spawnflags(flags) =
@@ -741,7 +741,7 @@
 ]
 @SolidClass base(Targetname, RenderFields, ZHLT) = func_illusionary : "Looks solid but you walk through it (leaves, fences, light shafts)."
 [
-	skin(choices) : "Contents" : -1 =
+	skin(choices) : "Contents" : -1 : "What it is for the player: -3 water, -4 slime, -5 lava; 0 nothing." =
 	[
 		-1 : "Empty"
 		-3 : "Water"
@@ -764,7 +764,7 @@
 [
 	friction(integer) : "Friction" : 50 : "0 to 400; higher is harder to push."
 	buoyancy(integer) : "Floats" : 20
-	size(choices) : "Collision size" : 0 =
+	size(choices) : "Collision size" : 0 : "How big a push it needs to move." =
 	[
 		0 : "Point"
 		1 : "Player"
@@ -782,7 +782,7 @@
 ]
 @SolidClass base(Door) = func_door_rotating : "A door that swings round an origin brush."
 [
-	distance(integer) : "Turns (degrees)" : 90
+	distance(integer) : "Turns (degrees)" : 90 : "How far it swings open (degrees)."
 	angles(string) : "Turn (pitch yaw roll)" : "0 0 0"
 	spawnflags(flags) =
 	[
@@ -797,11 +797,11 @@
 ]
 @SolidClass base(Targetname, Target, RenderFields, ZHLT, Master, KillTarget, Delay, Angle) = func_button : "A button players press (or shoot) to set something off."
 [
-	speed(integer) : "Speed" : 5
+	speed(integer) : "Speed" : 5 : "How fast it moves in when pressed (units a second)."
 	health(integer) : "Health (shoot to press)" : 0
-	lip(integer) : "Lip" : 0
+	lip(integer) : "Lip" : 0 : "How much of it stays showing when it's pressed in (units)."
 	wait(integer) : "Seconds before it pops back" : 3 : "-1 stays pressed."
-	sounds(choices) : "Sound" : 0 =
+	sounds(choices) : "Sound" : 0 : "The sound it makes when pressed." =
 	[
 		0 : "None"
 		1 : "Big zap and warm up"
@@ -820,9 +820,9 @@
 ]
 @SolidClass base(Targetname, Target, RenderFields, ZHLT, Master, Delay) = func_rot_button : "A button that turns (a valve or wheel)."
 [
-	speed(integer) : "Speed" : 50
+	speed(integer) : "Speed" : 50 : "How fast it turns (degrees a second)."
 	wait(integer) : "Seconds before it turns back" : 3
-	distance(integer) : "Turns (degrees)" : 90
+	distance(integer) : "Turns (degrees)" : 90 : "How far it turns when pressed (degrees)."
 	spawnflags(flags) =
 	[
 		1 : "Not solid" : 0
@@ -835,7 +835,7 @@
 ]
 @SolidClass base(Targetname, RenderFields, ZHLT, Angles) = func_rotating : "Spins all the time (fans, wheels). Needs an origin brush."
 [
-	speed(integer) : "Speed" : 100
+	speed(integer) : "Speed" : 100 : "How fast it turns (degrees a second)."
 	dmg(integer) : "Damage when blocked" : 0
 	spawnflags(flags) =
 	[
@@ -850,7 +850,7 @@
 [
 	target(target_destination) : "First stop" : : "The path_corner it starts at."
 	speed(integer) : "Speed" : 100
-	dmg(integer) : "Crush damage" : 2
+	dmg(integer) : "Crush damage" : 2 : "Damage to a player it runs into."
 	spawnflags(flags) =
 	[
 		8 : "Not solid" : 0
@@ -867,7 +867,7 @@
 ]
 @SolidClass base(Targetname, RenderFields, ZHLT) = func_conveyor : "A conveyor belt: moves what stands on it and scrolls its texture."
 [
-	speed(integer) : "Speed" : 100
+	speed(integer) : "Speed" : 100 : "How fast it carries things (units a second)."
 	angle(angle) : "Moves toward" : 0
 	spawnflags(flags) =
 	[
@@ -877,8 +877,8 @@
 ]
 @SolidClass base(Targetname, RenderFields) = func_water : "Water players can swim in. Use a water texture (starting with !)."
 [
-	WaveHeight(integer) : "Wave height" : 0
-	skin(choices) : "Contents" : -3 =
+	WaveHeight(integer) : "Wave height" : 0 : "How high its surface ripples (0: flat)."
+	skin(choices) : "Contents" : -3 : "The skin number (for a func_illusionary: -3 water, -4 slime, -5 lava)." =
 	[
 		-3 : "Water"
 		-4 : "Slime"
@@ -892,7 +892,7 @@
 ]
 @SolidClass base(Target) = func_buyzone : "Where a team can buy. If a map has none, spawns get buy zones."
 [
-	team(choices) : "Team" : 0 =
+	team(choices) : "Team" : 0 : "Which team can buy here." =
 	[
 		0 : "Both"
 		1 : "Terrorists"
@@ -905,7 +905,7 @@
 @SolidClass = func_escapezone : "Where Terrorists escape to on an es_ map." []
 @SolidClass base(Targetname, Target) = func_grencatch : "Sets something off when a grenade lands inside."
 [
-	triggerongrenade(target_destination) : "Sets off"
+	triggerongrenade(target_destination) : "Sets off" : : "Fires its target when a grenade lands in it."
 	grenadetype(choices) : "Grenade" : "flash" =
 	[
 		"flash" : "Flashbang"
@@ -917,15 +917,15 @@
 [
 	target(target_destination) : "First stop"
 	speed(integer) : "Top speed" : 0
-	length(integer) : "Length" : 256
+	length(integer) : "Length" : 256 : "How long the vehicle is, front to back (units)."
 	width(integer) : "Width" : 128
-	height(integer) : "Height" : 4
+	height(integer) : "Height" : 4 : "How tall the vehicle is (units)."
 ]
 @SolidClass base(Targetname, RenderFields, ZHLT) = func_pendulum : "Swings back and forth."
 [
-	speed(integer) : "Speed" : 100
+	speed(integer) : "Speed" : 100 : "How fast it swings (degrees a second)."
 	distance(integer) : "Swing (degrees)" : 90
-	damp(integer) : "Slowing" : 0
+	damp(integer) : "Slowing" : 0 : "How much it slows each swing (0: never)."
 	dmg(integer) : "Damage when blocked" : 0
 	spawnflags(flags) =
 	[
@@ -950,12 +950,12 @@
 ]
 @SolidClass base(Trigger) = trigger_multiple : "Sets off its target whenever someone walks in."
 [
-	wait(integer) : "Seconds before it works again" : 1
+	wait(integer) : "Seconds before it works again" : 1 : "Seconds before it can fire again."
 ]
 @SolidClass base(Trigger) = trigger_once : "Sets off its target the first time someone walks in, then is gone." []
 @SolidClass base(Targetname, Target, Master) = trigger_hurt : "Hurts (or heals, with negative damage) whoever is inside."
 [
-	dmg(integer) : "Damage a second" : 10
+	dmg(integer) : "Damage a second" : 10 : "Damage a second while someone is inside (negative heals)."
 	damagetype(choices) : "Kind of damage" : 0 =
 	[
 		0 : "Generic"
@@ -980,7 +980,7 @@
 ]
 @SolidClass base(Targetname, Angles) = trigger_push : "Pushes whoever is inside (jump pads, wind, currents)."
 [
-	speed(integer) : "Push speed" : 100
+	speed(integer) : "Push speed" : 100 : "How hard it pushes (units a second)."
 	spawnflags(flags) =
 	[
 		1 : "Only once" : 0
@@ -994,7 +994,7 @@
 ]
 @SolidClass base(Trigger) = trigger_counter : "Sets off its target after being set off a number of times."
 [
-	count(integer) : "Times needed" : 2
+	count(integer) : "Times needed" : 2 : "How many times it must be set off before it fires its target."
 ]
 
 // ---- more stock entities: random logic, game rules, trains, turrets, chargers, pickups ------
@@ -1006,21 +1006,21 @@
 [
 	target_count(integer) : "How many targets" : 0 : "Picks among the first this many targets (at most 16). With 3 it picks Target 1, 2 or 3."
 	target0(target_destination) : "Target 1"
-	target1(target_destination) : "Target 2"
+	target1(target_destination) : "Target 2" : : "The first name it can pick from (the even keys hold the others, up to 16)."
 	target2(target_destination) : "Target 3"
-	target3(target_destination) : "Target 4"
+	target3(target_destination) : "Target 4" : : "Another name it can pick from."
 	target4(target_destination) : "Target 5"
-	target5(target_destination) : "Target 6"
+	target5(target_destination) : "Target 6" : : "Another name it can pick from."
 	target6(target_destination) : "Target 7"
-	target7(target_destination) : "Target 8"
+	target7(target_destination) : "Target 8" : : "Another name it can pick from."
 	target8(target_destination) : "Target 9"
-	target9(target_destination) : "Target 10"
+	target9(target_destination) : "Target 10" : : "Another name it can pick from."
 	target10(target_destination) : "Target 11"
-	target11(target_destination) : "Target 12"
+	target11(target_destination) : "Target 12" : : "Another name it can pick from."
 	target12(target_destination) : "Target 13"
-	target13(target_destination) : "Target 14"
+	target13(target_destination) : "Target 14" : : "Another name it can pick from."
 	target14(target_destination) : "Target 15"
-	target15(target_destination) : "Target 16"
+	target15(target_destination) : "Target 16" : : "Another name it can pick from."
 ]
 @BaseClass = RandomWait
 [
@@ -1059,9 +1059,9 @@
 	copypointer(target_destination) : "Moves them to" : : "The entity whose position (and turn, if asked) they copy."
 	offset(string) : "Offset (x y z)" : "0 0 0" : "Added to the copied position."
 	angleoffset(string) : "Turn offset (pitch yaw roll)" : "0 0 0" : "Added to the copied turn."
-	invert_x(choices) : "Flip pitch" : 0 = [ 0 : "No" 1 : "Yes" ]
-	invert_y(choices) : "Flip yaw" : 0 = [ 0 : "No" 1 : "Yes" ]
-	invert_z(choices) : "Flip roll" : 0 = [ 0 : "No" 1 : "Yes" ]
+	invert_x(choices) : "Flip pitch" : 0 : "Mirror the movement on X." = [ 0 : "No" 1 : "Yes" ]
+	invert_y(choices) : "Flip yaw" : 0 : "Mirror the movement on Y." = [ 0 : "No" 1 : "Yes" ]
+	invert_z(choices) : "Flip roll" : 0 : "Mirror the movement on Z." = [ 0 : "No" 1 : "Yes" ]
 	spawnflags(flags) =
 	[
 		1 : "Keep following (set off again to stop)" : 0
@@ -1086,7 +1086,7 @@
 		2 : "Dead"
 		3 : "Toggle"
 	]
-	initialstate(choices) : "Starts" : 0 =
+	initialstate(choices) : "Starts" : 0 : "Whether the global state starts on or off." =
 	[
 		0 : "Off"
 		1 : "On"
@@ -1112,7 +1112,7 @@
 ]
 @PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_counter : "Counts: up each time it's set off (down when set off as Off). At the limit it sets off its target. game_counter_set and game_zone_player can set its count."
 [
-	frags(integer) : "Starting count" : 0
+	frags(integer) : "Starting count" : 0 : "The number to count to."
 	health(integer) : "Limit" : 0 : "Sets off its target when the count reaches this."
 	spawnflags(flags) =
 	[
@@ -1123,7 +1123,7 @@
 ]
 @PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_counter_set : "Sets a game_counter (its target) to a number when set off."
 [
-	frags(integer) : "Set it to" : 0
+	frags(integer) : "Set it to" : 0 : "The number to count to."
 	spawnflags(flags) =
 	[
 		1 : "Remove after use" : 0
@@ -1194,7 +1194,7 @@
 	angle(angle) : "Opens toward" : 0 : "Seen from above (0 east, 90 north); -1 up, -2 down."
 	speed(integer) : "Speed" : 100
 	lip(integer) : "Lip" : 0 : "How much of it stays in view when fully open."
-	movesnd(choices) : "Moving sound" : 0 =
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
 	[
 		0 : "None"
 		1 : "Servo"
@@ -1217,7 +1217,7 @@
 	speed(integer) : "Turn speed" : 100
 	distance(integer) : "Turns (degrees)" : 0 : "How far it turns from start to end. Negative turns the other way."
 	returnspeed(integer) : "Turn back speed" : 0 : "With Turns back when let go."
-	sounds(choices) : "Sound" : 0 =
+	sounds(choices) : "Sound" : 0 : "The sound it makes while it turns." =
 	[
 		0 : "None"
 		1 : "Big zap and warm up"
@@ -1269,7 +1269,7 @@
 	wheels(integer) : "Wheel distance" : 0 : "How far ahead it looks along the track to turn (about its length)."
 	bank(integer) : "Lean on turns (degrees)" : 0
 	dmg(integer) : "Crush damage" : 0 : "Damage to whoever blocks it (0: just pushes)."
-	sounds(choices) : "Sound" : 0 =
+	sounds(choices) : "Sound" : 0 : "The sound it makes when used." =
 	[
 		0 : "None"
 		1 : "Rail 1"
@@ -1298,7 +1298,7 @@
 ]
 @BaseClass = PlatSounds
 [
-	movesnd(choices) : "Moving sound" : 0 =
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
 	[
 		0 : "None"
 		1 : "Big 1"
@@ -1315,7 +1315,7 @@
 		12 : "Odd 1"
 		13 : "Odd 2"
 	]
-	stopsnd(choices) : "Stopping sound" : 0 =
+	stopsnd(choices) : "Stopping sound" : 0 : "The sound it makes when it stops." =
 	[
 		0 : "None"
 		1 : "Big 1"
@@ -1383,7 +1383,7 @@
 	yawrate(integer) : "Turn speed (degrees a second)" : 0 : "0 never turns: 30 is usual."
 	yawrange(integer) : "Turns left and right (degrees)" : 0 : "How far either way from the middle of its aim. 180 all the way round."
 	yawtolerance(integer) : "Fires within (yaw degrees)" : 0 : "How close its aim must be before it fires: 15 is usual."
-	pitchrate(integer) : "Tilt speed (degrees a second)" : 0
+	pitchrate(integer) : "Tilt speed (degrees a second)" : 0 : "How fast the gun aims up and down (degrees a second)."
 	pitchrange(integer) : "Tilts up and down (degrees)" : 0
 	pitchtolerance(integer) : "Fires within (pitch degrees)" : 0 : "5 is usual."
 	firerate(float) : "Shots a second" : 1
@@ -1400,11 +1400,11 @@
 	]
 	barrel(integer) : "Barrel length (x)" : 0 : "Where the shots start, from its origin brush, forward."
 	barrely(integer) : "Barrel side (y)" : 0
-	barrelz(integer) : "Barrel height (z)" : 0
+	barrelz(integer) : "Barrel height (z)" : 0 : "How high the end of the barrel is above the gun's middle (units), where shots start."
 	spriteflash(sprite) : "Muzzle flash sprite"
-	spritesmoke(sprite) : "Smoke sprite"
+	spritesmoke(sprite) : "Smoke sprite" : : "The smoke sprite shown at the barrel when it fires."
 	spritescale(float) : "Sprite size" : 1
-	rotatesound(sound) : "Turning sound"
+	rotatesound(sound) : "Turning sound" : : "The sound it makes while it turns."
 	master(target_destination) : "Master" : : "While this multisource (or game_team_master) is off, players can't take control."
 	spawnflags(flags) =
 	[

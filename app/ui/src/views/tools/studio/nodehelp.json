@@ -14324,9 +14324,9 @@
 }
 },
 "br.feed":{
-"title":"Kill Feed Line",
+"title":"Match Feed Line",
 "category":"Battle Royale",
-"what":"Adds a line to the match HUD's kill feed.",
+"what":"Adds a text line to Battle Royale's match HUD feed (eliminations, zone news). Not the top-right kill notice: that's Kill Feed Line (Messages).",
 "pins":[
 {
 "id":"exec",

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Numbers · Loner-Strike docs</title>
+<meta name="description" content="Game Mode Studio's Numbers nodes (15): what each does, its inputs and outputs, settings, limits and related nodes.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("../../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root {
+  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
+  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
+  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
+  --signal: #c4b550; --ink: #26240f;
+  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+  --stencil: "Counter-Strike", Impact, sans-serif;
+  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --top: 58px;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--top) + 16px); }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
+a { color: var(--signal); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
+
+/* top bar, as on the home page */
+.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
+.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
+.brand .here { color: var(--faint); font-weight: 600; }
+.top nav { display: flex; gap: 22px; align-items: center; }
+.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
+.top nav a:hover { color: var(--bone); }
+.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.top nav a.btn:hover { background: #d4c55d; }
+
+/* the topic list on the left (sticky), one topic at a time on the right */
+.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
+.rail { align-self: stretch; }
+.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
+  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.search { margin: 0 12px 6px; }
+.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
+.search input::placeholder { color: var(--faint); opacity: .85; }
+.group { margin-top: 8px; }
+.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
+.side ul { list-style: none; margin: 0; padding: 0; }
+.side li + li { margin-top: 0; }
+.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
+.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
+.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
+.side .sub { display: none; padding: 2px 0 6px; }
+.side a[aria-current="page"] + .sub { display: block; }
+.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
+.side .sub a:hover, .side .sub a.on { color: var(--bone); }
+/* search results: one per heading, the topic above it, a snippet with the match marked */
+.results ul { list-style: none; margin: 0; padding: 0; }
+.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
+.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
+.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
+.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
+.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
+.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
+.flash { animation: flash 2.2s ease-out; }
+@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.wrong-link { margin: 0 12px 4px; }
+.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
+/* collapsible groups */
+.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
+.group-btn:hover { color: var(--bone); }
+.group-btn .chev { transition: transform .15s; font-size: 12px; }
+.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.group-btn[aria-expanded="false"] + ul { display: none; }
+/* on this page (wide screens) */
+.toc { display: none; }
+@media (min-width: 1200px) {
+  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
+  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
+  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
+  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
+  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
+  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
+  .toc a:hover { color: var(--bone); }
+  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
+html:not(.js) .search { display: none; }
+html:not(.js) .side .sub { display: block; }
+
+.menu-btn { display: none; }
+
+article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
+.topic + .topic { margin-top: 56px; }
+.js .topic { display: none; }
+.js .topic + .topic { margin-top: 0; }
+.js .topic.on { display: block; }
+.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
+h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
+h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
+h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
+h3 { font-size: 19px; margin: 22px 0 4px; }
+p, li, td { color: var(--dim); text-wrap: pretty; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+b, strong { color: var(--bone); }
+.lead { font-size: 20px; margin: 6px 0 0; }
+code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
+pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
+pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
+th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: 15px; }
+td:first-child { white-space: nowrap; }
+.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
+.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
+.note p { margin: 4px 0; }
+.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
+article ul { list-style: none; padding-left: 22px; }
+article ul > li { position: relative; }
+article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+article ol { list-style: none; padding-left: 34px; counter-reset: step; }
+article ol > li { position: relative; counter-increment: step; }
+article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
+.side .sub a { position: relative; }
+.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
+.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
+.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
+details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
+details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
+details.prov p { margin: 0; padding: 0 14px 12px; }
+@media (hover: none) { h2 .anchor { display: none; } }
+@media (max-width: 520px) {
+  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
+  .table td, .table th { display: block; border: 0; padding: 0; }
+  .table td:first-child { margin-bottom: 2px; }
+  .table thead { display: none; }
+}
+figure.shot { margin: 16px 0 20px; }
+figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
+figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
+h3 { font-weight: 700; }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
+.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
+.pager a:hover { background: var(--panel-2); }
+.pager .next { margin-left: auto; text-align: right; }
+.pager a[hidden] { display: none; }
+html:not(.js) .pager { display: none; }
+
+footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+footer a { color: var(--dim); }
+
+@media (max-width: 900px) {
+  .top nav a:not(.btn) { display: none; }
+  .brand .here { display: none; }
+  html { scroll-padding-top: calc(var(--top) + 64px); }
+  .docs { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: contents; }
+  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
+    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
+  .menu-btn .chev { transition: transform .15s; }
+  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
+  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
+  .js .side.open { display: block; }
+  h1 { font-size: 32px; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
+</style>
+<style>
+.ref .topic { display: block; }
+.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
+.ref .pins dt { color: var(--bone); font-weight: 600; }
+.ref .pins dd { margin: 0; color: var(--dim); }
+.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
+.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
+.ref .node h3 { margin: 0 0 4px; }
+.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
+.ref .meta { color: var(--faint); font-size: 15px; }
+.ref .side { position: static; max-height: none; }
+@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
+@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
+</style>
+</head>
+<body class="ref">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="../../docs.html">Docs</a><a href="../../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="docs">
+  <div class="rail"><nav class="side" aria-label="Numbers"><div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li><li><a href="events.html">Events</a></li><li><a href="conditions.html">Conditions</a></li><li><a href="numbers.html" aria-current="page">Numbers</a></li><li><a href="text.html">Text</a></li><li><a href="variables.html">Variables</a></li><li><a href="flow.html">Flow</a></li><li><a href="functions.html">Functions</a></li><li><a href="macros.html">Macros</a></li><li><a href="arrays.html">Arrays</a></li><li><a href="maps.html">Maps</a></li><li><a href="structs.html">Structs</a></li><li><a href="enums.html">Enums</a></li><li><a href="vectors.html">Vectors</a></li><li><a href="spatial.html">Spatial</a></li><li><a href="timers.html">Timers</a></li><li><a href="round-clock.html">Round clock</a></li><li><a href="players.html">Players</a></li><li><a href="input.html">Input</a></li><li><a href="cooldowns.html">Cooldowns</a></li><li><a href="weapons.html">Weapons</a></li><li><a href="damage.html">Damage</a></li><li><a href="squads.html">Squads</a></li><li><a href="buying.html">Buying</a></li><li><a href="saved.html">Saved</a></li><li><a href="messages.html">Messages</a></li><li><a href="game.html">Game</a></li><li><a href="scoring.html">Scoring</a></li><li><a href="bots.html">Bots</a></li><li><a href="components.html">Components</a></li><li><a href="map-markers.html">Map markers</a></li><li><a href="waves.html">Waves</a></li><li><a href="upgrades.html">Upgrades</a></li><li><a href="world.html">World</a></li><li><a href="entities.html">Entities</a></li><li><a href="effects.html">Effects</a></li><li><a href="advanced.html">Advanced</a></li><li><a href="downed.html">Downed</a></li><li><a href="shop.html">Shop</a></li><li><a href="npcs.html">NPCs</a></li><li><a href="battle-royale.html">Battle Royale</a></li><li><a href="creatures.html">Creatures</a></li><li><a href="data-tables.html">Data tables</a></li><li><a href="projectiles.html">Projectiles</a></li><li><a href="hud-view.html">HUD &amp; View</a></li><li><a href="collision.html">Collision</a></li></ul></div></nav></div>
+  <article id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a> › <a href="../nodes.html">Game Mode Studio nodes</a></p>
+    <h1>Numbers</h1>
+    <p class="lead">Game Mode Studio's Numbers nodes (15): what each does, its inputs and outputs, settings, limits and related nodes.</p>
+    <p class="meta">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it always matches the app.</p>
+<section class="topic" id="c-numbers"><div class="node" id="n-math-op"><h3>Math <a class="anchor" href="#n-math-op" aria-label="Link to Math">#</a></h3>
+<p>Adds, takes away, multiplies, divides, or picks the smaller or bigger number.</p><p class="meta">Inputs</p><dl class="pins"><dt>A <span class="ty">Number</span></dt><dd>A: a number. Leave it empty to use the setting.</dd><dt>B <span class="ty">Number</span></dt><dd>B: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>A</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Do</dt><dd>Pick one: A + B, A - B, A × B, A ÷ B, smaller, bigger, remainder of A ÷ B, A to the power B. Default: add. Choices: A + B, A - B, A × B, A ÷ B, smaller, bigger, remainder of A ÷ B, A to the power B.</dd><dt>B</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 1. From -100000 up to 100000.</dd></dl><p class="meta">Related: <a href="#n-math-random">Random Number</a>, <a href="#n-math-fn">Math Function</a>, <a href="#n-math-clamp">Clamp</a></p></div>
+<div class="node" id="n-math-random"><h3>Random Number <a class="anchor" href="#n-math-random" aria-label="Link to Random Number">#</a></h3>
+<p>A random number from Min to Max (whole numbers unless Fractions is on).</p><p class="meta">Inputs</p><dl class="pins"><dt>Min <span class="ty">Number</span></dt><dd>Min: a number. Leave it empty to use the setting.</dd><dt>Max <span class="ty">Number</span></dt><dd>Max: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Number <span class="ty">Number</span></dt><dd>The number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Min</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 1. From -100000 up to 100000.</dd><dt>Max</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 10. From -100000 up to 100000.</dd><dt>Fractions</dt><dd>On or off. Default: false.</dd></dl><p class="meta">Related: <a href="#n-math-op">Math</a>, <a href="#n-math-fn">Math Function</a>, <a href="#n-math-clamp">Clamp</a></p></div>
+<div class="node" id="n-math-fn"><h3>Math Function <a class="anchor" href="#n-math-fn" aria-label="Link to Math Function">#</a></h3>
+<p>Absolute value, rounding, square root and more; Truncate drops the fraction toward zero (-2.7 becomes -2, where Round down gives -3).</p><p class="meta">Inputs</p><dl class="pins"><dt>In <span class="ty">Number</span></dt><dd>In: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>In</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Do</dt><dd>Pick one: Absolute (no minus), Round, Round down, Round up, Square root, Minus, Sign (-1, 0, 1), Truncate (toward zero). Default: abs. Choices: Absolute (no minus), Round, Round down, Round up, Square root, Minus, Sign (-1, 0, 1), Truncate (toward zero).</dd></dl><p class="meta">Related: <a href="#n-math-clamp">Clamp</a>, <a href="#n-math-lerp">Lerp</a>, <a href="#n-math-in-range">In Range</a></p></div>
+<div class="node" id="n-math-clamp"><h3>Clamp <a class="anchor" href="#n-math-clamp" aria-label="Link to Clamp">#</a></h3>
+<p>Keeps a number between Min and Max.</p><p class="meta">Inputs</p><dl class="pins"><dt>Value <span class="ty">Number</span></dt><dd>Value: a number. Leave it empty to use the setting.</dd><dt>Min <span class="ty">Number</span></dt><dd>Min: a number. Leave it empty to use the setting.</dd><dt>Max <span class="ty">Number</span></dt><dd>Max: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Value</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Min</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Max</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 100. From -100000 up to 100000.</dd></dl><p class="meta">Related: <a href="#n-math-fn">Math Function</a>, <a href="#n-math-lerp">Lerp</a>, <a href="#n-math-in-range">In Range</a></p></div>
+<div class="node" id="n-math-lerp"><h3>Lerp <a class="anchor" href="#n-math-lerp" aria-label="Link to Lerp">#</a></h3>
+<p>A number between A and B: Alpha 0 is A, 1 is B, 0.5 halfway.</p><p class="meta">Inputs</p><dl class="pins"><dt>A <span class="ty">Number</span></dt><dd>A: a number. Leave it empty to use the setting.</dd><dt>B <span class="ty">Number</span></dt><dd>B: a number. Leave it empty to use the setting.</dd><dt>Alpha <span class="ty">Number</span></dt><dd>Alpha: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>A</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>B</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 100. From -100000 up to 100000.</dd><dt>Alpha</dt><dd>A number from -100 to 100. A wire into the pin of the same name is used instead. Default: 0.5. From -100 up to 100.</dd></dl><p class="meta">Related: <a href="#n-math-clamp">Clamp</a>, <a href="#n-math-in-range">In Range</a>, <a href="#n-math-fn">Math Function</a></p></div>
+<div class="node" id="n-math-in-range"><h3>In Range <a class="anchor" href="#n-math-in-range" aria-label="Link to In Range">#</a></h3>
+<p>Is the number from Min to Max?</p><p class="meta">Inputs</p><dl class="pins"><dt>Value <span class="ty">Number</span></dt><dd>Value: a number. Needs a wire.</dd><dt>Min <span class="ty">Number</span></dt><dd>Min: a number. Leave it empty to use the setting.</dd><dt>Max <span class="ty">Number</span></dt><dd>Max: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>In range <span class="ty">Yes/No</span></dt><dd>In range: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Min</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Max</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 100. From -100000 up to 100000.</dd></dl><p class="meta">Related: <a href="#n-math-lerp">Lerp</a>, <a href="#n-math-number">Number</a>, <a href="#n-math-clamp">Clamp</a></p></div>
+<div class="node" id="n-math-number"><h3>Number <a class="anchor" href="#n-math-number" aria-label="Link to Number">#</a></h3>
+<p>A number.</p><p class="meta">Outputs</p><dl class="pins"><dt>Number <span class="ty">Number</span></dt><dd>The number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Number</dt><dd>A number from -100000 to 100000. Default: 0. From -100000 up to 100000.</dd></dl><p class="meta">Related: <a href="#n-math-in-range">In Range</a>, <a href="#n-math-lerp">Lerp</a>, <a href="#n-math-clamp">Clamp</a></p></div>
+<div class="node" id="n-random-chance"><h3>Random Chance <a class="anchor" href="#n-random-chance" aria-label="Link to Random Chance">#</a></h3>
+<p>Yes Percent % of the time (a new roll each time it's worked out).</p><p class="meta">Inputs</p><dl class="pins"><dt>Percent <span class="ty">Number</span></dt><dd>Percent: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Yes <span class="ty">Yes/No</span></dt><dd>Yes: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Percent</dt><dd>A number from 0 to 100. A wire into the pin of the same name is used instead. Default: 25. From 0 up to 100.</dd></dl><p class="meta">Related: <a href="#n-random-bool">Random Bool</a>, <a href="#n-random-weighted">Weighted Random Pick</a>, <a href="#n-math-map-range">Map Range</a></p></div>
+<div class="node" id="n-random-bool"><h3>Random Bool <a class="anchor" href="#n-random-bool" aria-label="Link to Random Bool">#</a></h3>
+<p>Yes or no, half the time each.</p><p class="meta">Outputs</p><dl class="pins"><dt>Yes <span class="ty">Yes/No</span></dt><dd>Yes: yes or no.</dd></dl><p class="meta">Related: <a href="#n-random-chance">Random Chance</a>, <a href="#n-random-weighted">Weighted Random Pick</a>, <a href="#n-math-map-range">Map Range</a></p></div>
+<div class="node" id="n-random-weighted"><h3>Weighted Random Pick <a class="anchor" href="#n-random-weighted" aria-label="Link to Weighted Random Pick">#</a></h3>
+<p>Picks an index from an array of weights (a weight of 3 is picked three times as often as 1); with Items wired, the item at that index too. -1 when every weight is 0.</p><p class="meta">Inputs</p><dl class="pins"><dt>Weights <span class="ty">array&lt;number&gt;</span></dt><dd>Weights: a list of numbers. Needs a wire.</dd><dt>Items <span class="ty">array&lt;$T&gt;</span></dt><dd>Items: a list of the type set in Holdss. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-random-bool">Random Bool</a>, <a href="#n-math-map-range">Map Range</a>, <a href="#n-random-chance">Random Chance</a></p></div>
+<div class="node" id="n-math-map-range"><h3>Map Range <a class="anchor" href="#n-math-map-range" aria-label="Link to Map Range">#</a></h3>
+<p>A value from one range moved into another: In Min..In Max becomes Out Min..Out Max (Clamp keeps it inside).</p><p class="meta">Inputs</p><dl class="pins"><dt>Value <span class="ty">Number</span></dt><dd>Value: a number. Leave it empty to use the setting.</dd><dt>In Min <span class="ty">Number</span></dt><dd>In Min: a number. Leave it empty to use the setting.</dd><dt>In Max <span class="ty">Number</span></dt><dd>In Max: a number. Leave it empty to use the setting.</dd><dt>Out Min <span class="ty">Number</span></dt><dd>Out Min: a number. Leave it empty to use the setting.</dd><dt>Out Max <span class="ty">Number</span></dt><dd>Out Max: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Value</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 50. From -100000 up to 100000.</dd><dt>In Min</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>In Max</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 100. From -100000 up to 100000.</dd><dt>Out Min</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 0. From -100000 up to 100000.</dd><dt>Out Max</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 1. From -100000 up to 100000.</dd><dt>Clamp</dt><dd>On or off. Default: true.</dd></dl><p class="meta">Related: <a href="#n-random-weighted">Weighted Random Pick</a>, <a href="#n-math-trig">Sin / Cos / Tan</a>, <a href="#n-random-bool">Random Bool</a></p></div>
+<div class="node" id="n-math-trig"><h3>Sin / Cos / Tan <a class="anchor" href="#n-math-trig" aria-label="Link to Sin / Cos / Tan">#</a></h3>
+<p>The sine, cosine or tangent of an angle (degrees, or radians).</p><p class="meta">Inputs</p><dl class="pins"><dt>Angle <span class="ty">Number</span></dt><dd>Angle: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Angle</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 45. From -100000 up to 100000.</dd><dt>Do</dt><dd>Pick one: Sin, Cos, Tan. Default: sin. Choices: Sin, Cos, Tan.</dd><dt>Angles in</dt><dd>Pick one: Degrees, Radians. Default: deg. Choices: Degrees, Radians.</dd></dl><p class="meta">Related: <a href="#n-math-map-range">Map Range</a>, <a href="#n-math-atan2">Atan2</a>, <a href="#n-random-weighted">Weighted Random Pick</a></p></div>
+<div class="node" id="n-math-atan2"><h3>Atan2 <a class="anchor" href="#n-math-atan2" aria-label="Link to Atan2">#</a></h3>
+<p>The angle of the direction X, Y (from the X axis, -180..180 degrees, or radians).</p><p class="meta">Inputs</p><dl class="pins"><dt>Y <span class="ty">Number</span></dt><dd>Y: a number. Leave it empty to use the setting.</dd><dt>X <span class="ty">Number</span></dt><dd>X: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Angle <span class="ty">Number</span></dt><dd>Angle: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Y</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 1. From -100000 up to 100000.</dd><dt>X</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 1. From -100000 up to 100000.</dd><dt>Angles in</dt><dd>Pick one: Degrees, Radians. Default: deg. Choices: Degrees, Radians.</dd></dl><p class="meta">Related: <a href="#n-math-trig">Sin / Cos / Tan</a>, <a href="#n-math-angle-convert">Degrees / Radians</a>, <a href="#n-math-map-range">Map Range</a></p></div>
+<div class="node" id="n-math-angle-convert"><h3>Degrees / Radians <a class="anchor" href="#n-math-angle-convert" aria-label="Link to Degrees / Radians">#</a></h3>
+<p>Degrees to radians or radians to degrees.</p><p class="meta">Inputs</p><dl class="pins"><dt>Angle <span class="ty">Number</span></dt><dd>Angle: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Angle</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 180. From -100000 up to 100000.</dd><dt>Do</dt><dd>Pick one: Degrees to radians, Radians to degrees. Default: to_rad. Choices: Degrees to radians, Radians to degrees.</dd></dl><p class="meta">Related: <a href="#n-math-atan2">Atan2</a>, <a href="#n-math-trig">Sin / Cos / Tan</a>, <a href="#n-math-map-range">Map Range</a></p></div>
+<div class="node" id="n-math-bitwise"><h3>Bitwise <a class="anchor" href="#n-math-bitwise" aria-label="Link to Bitwise">#</a></h3>
+<p>Bits of whole numbers (the fractions are dropped): And, Or, Xor, Not (of A), or A shifted left or right by B bits. Exact up to 16,777,216.</p><p class="meta">Inputs</p><dl class="pins"><dt>A <span class="ty">Number</span></dt><dd>A: a number. Leave it empty to use the setting.</dd><dt>B <span class="ty">Number</span></dt><dd>B: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Result <span class="ty">Number</span></dt><dd>Result: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>A</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 6. From -100000 up to 100000.</dd><dt>B</dt><dd>A number from -100000 to 100000. A wire into the pin of the same name is used instead. Default: 3. From -100000 up to 100000.</dd><dt>Do</dt><dd>Pick one: And (&amp;), Or (|), Xor (^), Not (~A), Shift left (&lt;&lt;), Shift right (&gt;&gt;). Default: and. Choices: And (&amp;), Or (|), Xor (^), Not (~A), Shift left (&lt;&lt;), Shift right (&gt;&gt;).</dd></dl><p class="meta">Related: <a href="#n-math-angle-convert">Degrees / Radians</a>, <a href="#n-math-atan2">Atan2</a>, <a href="#n-math-trig">Sin / Cos / Tan</a></p></div></section>
+  </article>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+</body>
+</html>

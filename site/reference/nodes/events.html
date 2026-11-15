@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events · Loner-Strike docs</title>
+<meta name="description" content="Game Mode Studio's Events nodes (44): what each does, its inputs and outputs, settings, limits and related nodes.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("../../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root {
+  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
+  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
+  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
+  --signal: #c4b550; --ink: #26240f;
+  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+  --stencil: "Counter-Strike", Impact, sans-serif;
+  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --top: 58px;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--top) + 16px); }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
+a { color: var(--signal); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
+
+/* top bar, as on the home page */
+.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
+.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
+.brand .here { color: var(--faint); font-weight: 600; }
+.top nav { display: flex; gap: 22px; align-items: center; }
+.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
+.top nav a:hover { color: var(--bone); }
+.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.top nav a.btn:hover { background: #d4c55d; }
+
+/* the topic list on the left (sticky), one topic at a time on the right */
+.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
+.rail { align-self: stretch; }
+.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
+  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.search { margin: 0 12px 6px; }
+.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
+.search input::placeholder { color: var(--faint); opacity: .85; }
+.group { margin-top: 8px; }
+.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
+.side ul { list-style: none; margin: 0; padding: 0; }
+.side li + li { margin-top: 0; }
+.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
+.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
+.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
+.side .sub { display: none; padding: 2px 0 6px; }
+.side a[aria-current="page"] + .sub { display: block; }
+.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
+.side .sub a:hover, .side .sub a.on { color: var(--bone); }
+/* search results: one per heading, the topic above it, a snippet with the match marked */
+.results ul { list-style: none; margin: 0; padding: 0; }
+.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
+.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
+.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
+.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
+.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
+.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
+.flash { animation: flash 2.2s ease-out; }
+@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.wrong-link { margin: 0 12px 4px; }
+.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
+/* collapsible groups */
+.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
+.group-btn:hover { color: var(--bone); }
+.group-btn .chev { transition: transform .15s; font-size: 12px; }
+.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.group-btn[aria-expanded="false"] + ul { display: none; }
+/* on this page (wide screens) */
+.toc { display: none; }
+@media (min-width: 1200px) {
+  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
+  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
+  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
+  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
+  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
+  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
+  .toc a:hover { color: var(--bone); }
+  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
+html:not(.js) .search { display: none; }
+html:not(.js) .side .sub { display: block; }
+
+.menu-btn { display: none; }
+
+article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
+.topic + .topic { margin-top: 56px; }
+.js .topic { display: none; }
+.js .topic + .topic { margin-top: 0; }
+.js .topic.on { display: block; }
+.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
+h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
+h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
+h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
+h3 { font-size: 19px; margin: 22px 0 4px; }
+p, li, td { color: var(--dim); text-wrap: pretty; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+b, strong { color: var(--bone); }
+.lead { font-size: 20px; margin: 6px 0 0; }
+code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
+pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
+pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
+th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: 15px; }
+td:first-child { white-space: nowrap; }
+.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
+.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
+.note p { margin: 4px 0; }
+.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
+article ul { list-style: none; padding-left: 22px; }
+article ul > li { position: relative; }
+article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+article ol { list-style: none; padding-left: 34px; counter-reset: step; }
+article ol > li { position: relative; counter-increment: step; }
+article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
+.side .sub a { position: relative; }
+.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
+.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
+.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
+details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
+details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
+details.prov p { margin: 0; padding: 0 14px 12px; }
+@media (hover: none) { h2 .anchor { display: none; } }
+@media (max-width: 520px) {
+  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
+  .table td, .table th { display: block; border: 0; padding: 0; }
+  .table td:first-child { margin-bottom: 2px; }
+  .table thead { display: none; }
+}
+figure.shot { margin: 16px 0 20px; }
+figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
+figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
+h3 { font-weight: 700; }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
+.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
+.pager a:hover { background: var(--panel-2); }
+.pager .next { margin-left: auto; text-align: right; }
+.pager a[hidden] { display: none; }
+html:not(.js) .pager { display: none; }
+
+footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+footer a { color: var(--dim); }
+
+@media (max-width: 900px) {
+  .top nav a:not(.btn) { display: none; }
+  .brand .here { display: none; }
+  html { scroll-padding-top: calc(var(--top) + 64px); }
+  .docs { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: contents; }
+  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
+    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
+  .menu-btn .chev { transition: transform .15s; }
+  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
+  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
+  .js .side.open { display: block; }
+  h1 { font-size: 32px; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
+</style>
+<style>
+.ref .topic { display: block; }
+.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
+.ref .pins dt { color: var(--bone); font-weight: 600; }
+.ref .pins dd { margin: 0; color: var(--dim); }
+.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
+.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
+.ref .node h3 { margin: 0 0 4px; }
+.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
+.ref .meta { color: var(--faint); font-size: 15px; }
+.ref .side { position: static; max-height: none; }
+@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
+@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
+</style>
+</head>
+<body class="ref">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="../../docs.html">Docs</a><a href="../../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="docs">
+  <div class="rail"><nav class="side" aria-label="Events"><div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li><li><a href="events.html" aria-current="page">Events</a></li><li><a href="conditions.html">Conditions</a></li><li><a href="numbers.html">Numbers</a></li><li><a href="text.html">Text</a></li><li><a href="variables.html">Variables</a></li><li><a href="flow.html">Flow</a></li><li><a href="functions.html">Functions</a></li><li><a href="macros.html">Macros</a></li><li><a href="arrays.html">Arrays</a></li><li><a href="maps.html">Maps</a></li><li><a href="structs.html">Structs</a></li><li><a href="enums.html">Enums</a></li><li><a href="vectors.html">Vectors</a></li><li><a href="spatial.html">Spatial</a></li><li><a href="timers.html">Timers</a></li><li><a href="round-clock.html">Round clock</a></li><li><a href="players.html">Players</a></li><li><a href="input.html">Input</a></li><li><a href="cooldowns.html">Cooldowns</a></li><li><a href="weapons.html">Weapons</a></li><li><a href="damage.html">Damage</a></li><li><a href="squads.html">Squads</a></li><li><a href="buying.html">Buying</a></li><li><a href="saved.html">Saved</a></li><li><a href="messages.html">Messages</a></li><li><a href="game.html">Game</a></li><li><a href="scoring.html">Scoring</a></li><li><a href="bots.html">Bots</a></li><li><a href="components.html">Components</a></li><li><a href="map-markers.html">Map markers</a></li><li><a href="waves.html">Waves</a></li><li><a href="upgrades.html">Upgrades</a></li><li><a href="world.html">World</a></li><li><a href="entities.html">Entities</a></li><li><a href="effects.html">Effects</a></li><li><a href="advanced.html">Advanced</a></li><li><a href="downed.html">Downed</a></li><li><a href="shop.html">Shop</a></li><li><a href="npcs.html">NPCs</a></li><li><a href="battle-royale.html">Battle Royale</a></li><li><a href="creatures.html">Creatures</a></li><li><a href="data-tables.html">Data tables</a></li><li><a href="projectiles.html">Projectiles</a></li><li><a href="hud-view.html">HUD &amp; View</a></li><li><a href="collision.html">Collision</a></li></ul></div></nav></div>
+  <article id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a> › <a href="../nodes.html">Game Mode Studio nodes</a></p>
+    <h1>Events</h1>
+    <p class="lead">Game Mode Studio's Events nodes (44): what each does, its inputs and outputs, settings, limits and related nodes.</p>
+    <p class="meta">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it always matches the app.</p>
+<section class="topic" id="c-events"><div class="node" id="n-event-round-started"><h3>Round Started <a class="anchor" href="#n-event-round-started" aria-label="Link to Round Started">#</a></h3>
+<p>Runs when a round begins: freeze time is over and everyone can move.</p><p>The usual place to set a round up: give weapons, reset scores, show a message. It runs once per round for the whole server, not per player (use For Each Player for that).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-new-round">New Round</a>, <a href="#n-event-freeze-ended">Freeze Time Ended</a>, <a href="flow.html#n-flow-for-each-player">For Each Player</a></p></div>
+<div class="node" id="n-event-round-ended"><h3>Round Ended <a class="anchor" href="#n-event-round-ended" aria-label="Link to Round Ended">#</a></h3>
+<p>Runs when a round ends. Winner is no team for a draw.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Winner <span class="ty">Team</span></dt><dd>The team that won; no team for a draw.</dd><dt>Round number <span class="ty">Number</span></dt><dd>How many rounds have been played on this map, counting this one.</dd></dl><p class="meta">Related: <a href="#n-event-round-started">Round Started</a>, <a href="#n-event-player-killed">Player Killed</a>, <a href="#n-event-player-spawned">Player Spawned</a></p></div>
+<div class="node" id="n-event-player-killed"><h3>Player Killed <a class="anchor" href="#n-event-player-killed" aria-label="Link to Player Killed">#</a></h3>
+<p>Runs when a player dies. Attacker is nobody when the world killed them (a fall, the bomb).</p><p>Runs once for every death. Attacker is nobody when the world did it (a fall, the bomb, a trigger_hurt); check with Is Valid before giving the attacker anything.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Victim <span class="ty">Player</span></dt><dd>Who died.</dd><dt>Attacker <span class="ty">Player</span></dt><dd>Who killed them; nobody for the world, and the victim themselves for a suicide.</dd><dt>Headshot <span class="ty">Yes/No</span></dt><dd>Yes when the killing shot hit the head.</dd><dt>Weapon <span class="ty">Text</span></dt><dd>The weapon's short name, as the kill feed shows it: ak47, knife, grenade, world.</dd><dt>Distance <span class="ty">Number</span></dt><dd>How far apart they were, in units (a player is 72 units tall).</dd><dt>Team kill <span class="ty">Yes/No</span></dt><dd>Yes when the attacker shot a teammate.</dd><dt>Suicide <span class="ty">Yes/No</span></dt><dd>Yes when the victim killed themselves (a grenade, the Kill node, the kill command).</dd><dt>Killed by the world <span class="ty">Yes/No</span></dt><dd>Yes when no player did it.</dd></dl><p class="meta">Related: <a href="#n-event-player-hurt">Player Hurt</a>, <a href="players.html#n-player-add-frags">Add Score</a>, <a href="players.html#n-player-respawn">Respawn</a></p></div>
+<div class="node" id="n-event-player-spawned"><h3>Player Spawned <a class="anchor" href="#n-event-player-spawned" aria-label="Link to Player Spawned">#</a></h3>
+<p>Runs when a player comes alive (each round, or a respawn).</p><p>Runs each time a player comes alive: every round, and after Respawn. The place for loadouts and per-player setup.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="players.html#n-player-give-weapon">Give Weapon</a>, <a href="players.html#n-player-strip">Strip Weapons</a>, <a href="players.html#n-player-set-health">Set Health</a></p></div>
+<div class="node" id="n-event-player-joined"><h3>Player Joined <a class="anchor" href="#n-event-player-joined" aria-label="Link to Player Joined">#</a></h3>
+<p>Runs when a player (or bot) has joined the server.</p><p>Runs once when someone (or a bot) has joined, before they pick a team. Per-player variables start fresh here.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="#n-event-player-spawned">Player Spawned</a>, <a href="#n-event-player-left">Player Left</a>, <a href="#n-event-player-killed">Player Killed</a></p></div>
+<div class="node" id="n-event-player-left"><h3>Player Left <a class="anchor" href="#n-event-player-left" aria-label="Link to Player Left">#</a></h3>
+<p>Runs when a player leaves the server.</p><p>Runs as a player leaves. Their slot can be taken by someone else right after, so tidy up their variables here.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="#n-event-player-joined">Player Joined</a>, <a href="#n-event-bomb-planted">Bomb Planted</a>, <a href="#n-event-player-spawned">Player Spawned</a></p></div>
+<div class="node" id="n-event-bomb-planted"><h3>Bomb Planted <a class="anchor" href="#n-event-bomb-planted" aria-label="Link to Bomb Planted">#</a></h3>
+<p>Runs when the bomb is planted.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Planter <span class="ty">Player</span></dt><dd>Planter: a player.</dd></dl><p class="meta">Related: <a href="#n-event-player-left">Player Left</a>, <a href="#n-event-bomb-defused">Bomb Defused</a>, <a href="#n-event-player-joined">Player Joined</a></p></div>
+<div class="node" id="n-event-bomb-defused"><h3>Bomb Defused <a class="anchor" href="#n-event-bomb-defused" aria-label="Link to Bomb Defused">#</a></h3>
+<p>Runs when the bomb is defused.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Defuser <span class="ty">Player</span></dt><dd>Defuser: a player.</dd></dl><p class="meta">Related: <a href="#n-event-bomb-planted">Bomb Planted</a>, <a href="#n-event-bomb-exploded">Bomb Exploded</a>, <a href="#n-event-player-left">Player Left</a></p></div>
+<div class="node" id="n-event-bomb-exploded"><h3>Bomb Exploded <a class="anchor" href="#n-event-bomb-exploded" aria-label="Link to Bomb Exploded">#</a></h3>
+<p>Runs when the bomb goes off.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-bomb-defused">Bomb Defused</a>, <a href="#n-event-player-used">Player Used</a>, <a href="#n-event-bomb-planted">Bomb Planted</a></p></div>
+<div class="node" id="n-event-player-used"><h3>Player Used <a class="anchor" href="#n-event-player-used" aria-label="Link to Player Used">#</a></h3>
+<p>Runs when a player presses a button (func_button) with this name. Leave the name empty for any button.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Button <span class="ty">Entity</span></dt><dd>Button: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Button name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Related: <a href="#n-event-bomb-exploded">Bomb Exploded</a>, <a href="#n-event-player-touched">Player Touched</a>, <a href="#n-event-bomb-defused">Bomb Defused</a></p></div>
+<div class="node" id="n-event-player-touched"><h3>Player Touched <a class="anchor" href="#n-event-player-touched" aria-label="Link to Player Touched">#</a></h3>
+<p>Runs when a player walks into a trigger (trigger_multiple) with this name, at most once a second each. Empty name: any.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Trigger <span class="ty">Entity</span></dt><dd>Trigger: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Trigger name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Cost: Runs at most once a second per player, so a trigger can't flood the mode.</p><p class="meta">Related: <a href="#n-event-player-used">Player Used</a>, <a href="#n-event-bomb-exploded">Bomb Exploded</a>, <a href="#n-event-bomb-defused">Bomb Defused</a></p></div>
+<div class="node" id="n-event-player-hurt"><h3>Player Hurt <a class="anchor" href="#n-event-player-hurt" aria-label="Link to Player Hurt">#</a></h3>
+<p>Runs when a player takes damage, with the health it took (blocked damage doesn't count). Hit Position: where a bullet or the knife struck (else the middle of the victim); Direction: which way the hit was going (from the attacker). Use Get Transform on Victim/Attacker for where they were.</p><p>Runs after the damage is done, with what was really taken: nothing when it was blocked, less when armor took some. To change the damage before it lands, use Player About To Be Hurt.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Victim <span class="ty">Player</span></dt><dd>Victim: a player.</dd><dt>Attacker <span class="ty">Player</span></dt><dd>Attacker: a player.</dd><dt>Damage <span class="ty">Number</span></dt><dd>Health taken by this hit.</dd><dt>Headshot <span class="ty">Yes/No</span></dt><dd>Yes when a bullet or the knife hit the head.</dd><dt>Health left <span class="ty">Number</span></dt><dd>Health left after it (0 or less: the hit killed them).</dd><dt>Hit where <span class="ty">Text</span></dt><dd>Where a bullet hit: head, chest, stomach, arm, leg; body for anything else (grenades, falls).</dd><dt>Weapon <span class="ty">Text</span></dt><dd>The weapon that did it: the attacker's gun or knife, hegrenade for a grenade, empty when no player did it.</dd><dt>Hit Position <span class="ty">Vector</span></dt><dd>Hit Position: a position or direction (X, Y, Z).</dd><dt>Direction <span class="ty">Vector</span></dt><dd>Direction: a position or direction (X, Y, Z).</dd></dl><p class="meta">Cost: Runs on every hit, often many times a second in a firefight. Keep what follows it small.</p><p class="meta">Related: <a href="#n-event-player-about-hurt">Player About To Be Hurt</a>, <a href="#n-event-player-killed">Player Killed</a>, <a href="#n-event-team-changed">Team Changed</a></p></div>
+<div class="node" id="n-event-team-changed"><h3>Team Changed <a class="anchor" href="#n-event-team-changed" aria-label="Link to Team Changed">#</a></h3>
+<p>Runs once when a player joins a team or changes team (Spectator is No team).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Team <span class="ty">Team</span></dt><dd>The team.</dd></dl><p class="meta">Related: <a href="#n-event-player-hurt">Player Hurt</a>, <a href="#n-event-map-started">Map Started</a>, <a href="#n-event-new-round">New Round</a></p></div>
+<div class="node" id="n-event-map-started"><h3>Map Started <a class="anchor" href="#n-event-map-started" aria-label="Link to Map Started">#</a></h3>
+<p>Runs once when the map has loaded (before the first round): load map packs, set things up.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-team-changed">Team Changed</a>, <a href="#n-event-new-round">New Round</a>, <a href="#n-event-player-hurt">Player Hurt</a></p></div>
+<div class="node" id="n-event-new-round"><h3>New Round <a class="anchor" href="#n-event-new-round" aria-label="Link to New Round">#</a></h3>
+<p>Runs when a new round is set up (freeze time starts), before Round Started.</p><p>Runs as the new round is being set up, before freeze time. Players are respawning, so per-player work is better done in Player Spawned.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-map-started">Map Started</a>, <a href="#n-event-chat-command">Chat Command</a>, <a href="#n-event-team-changed">Team Changed</a></p></div>
+<div class="node" id="n-event-chat-command"><h3>Chat Command <a class="anchor" href="#n-event-chat-command" aria-label="Link to Chat Command">#</a></h3>
+<p>Runs when a player says /command or !command in chat (shop for /shop and !shop); Arguments is the rest of the line (&quot;/give 5&quot;: 5).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Arguments <span class="ty">Text</span></dt><dd>Whatever was typed after the command: for /give 5, the text 5.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Command (without /)</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: shop.</dd></dl><p class="meta">Related: <a href="#n-event-new-round">New Round</a>, <a href="#n-event-map-started">Map Started</a>, <a href="#n-event-team-changed">Team Changed</a></p></div>
+<div class="node" id="n-event-player-said"><h3>Player Said <a class="anchor" href="#n-event-player-said" aria-label="Link to Player Said">#</a></h3>
+<p>Runs when a player chats (anything; Team Only for team chat).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Text <span class="ty">Text</span></dt><dd>The text.</dd><dt>Team only <span class="ty">Yes/No</span></dt><dd>Team only: yes or no.</dd></dl><p class="meta">Cost: Runs on every chat line. Fine for a few checks.</p><p class="meta">Related: <a href="#n-event-freeze-ended">Freeze Time Ended</a>, <a href="#n-event-map-ending">Map Ending</a>, <a href="#n-event-weapon-fired">Weapon Fired</a></p></div>
+<div class="node" id="n-event-freeze-ended"><h3>Freeze Time Ended <a class="anchor" href="#n-event-freeze-ended" aria-label="Link to Freeze Time Ended">#</a></h3>
+<p>Runs when the freeze time ends and players can move.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-player-said">Player Said</a>, <a href="#n-event-map-ending">Map Ending</a>, <a href="#n-event-weapon-fired">Weapon Fired</a></p></div>
+<div class="node" id="n-event-map-ending"><h3>Map Ending <a class="anchor" href="#n-event-map-ending" aria-label="Link to Map Ending">#</a></h3>
+<p>Runs when the map ends (the scoreboard shows), just before the next map.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-freeze-ended">Freeze Time Ended</a>, <a href="#n-event-weapon-fired">Weapon Fired</a>, <a href="#n-event-player-said">Player Said</a></p></div>
+<div class="node" id="n-event-weapon-fired"><h3>Weapon Fired <a class="anchor" href="#n-event-weapon-fired" aria-label="Link to Weapon Fired">#</a></h3>
+<p>Runs when a player shoots (at most 10 times a second per player). Frequent: keep the flow short.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Weapon <span class="ty">Text</span></dt><dd>Weapon: text.</dd></dl><p class="meta">Cost: Runs on every shot (at most ten times a second per player). Keep what follows it small, or a busy server slows down.</p><p class="meta">Related: <a href="#n-event-map-ending">Map Ending</a>, <a href="#n-event-reloaded">Reloaded</a>, <a href="#n-event-freeze-ended">Freeze Time Ended</a></p></div>
+<div class="node" id="n-event-reloaded"><h3>Reloaded <a class="anchor" href="#n-event-reloaded" aria-label="Link to Reloaded">#</a></h3>
+<p>Runs when a player starts reloading.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Weapon <span class="ty">Text</span></dt><dd>Weapon: text.</dd></dl><p class="meta">Related: <a href="#n-event-weapon-fired">Weapon Fired</a>, <a href="#n-event-hostage-rescued">Hostage Rescued</a>, <a href="#n-event-map-ending">Map Ending</a></p></div>
+<div class="node" id="n-event-hostage-rescued"><h3>Hostage Rescued <a class="anchor" href="#n-event-hostage-rescued" aria-label="Link to Hostage Rescued">#</a></h3>
+<p>Runs when a player rescues a hostage.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="#n-event-reloaded">Reloaded</a>, <a href="#n-event-vip-escaped">VIP Escaped</a>, <a href="#n-event-weapon-fired">Weapon Fired</a></p></div>
+<div class="node" id="n-event-vip-escaped"><h3>VIP Escaped <a class="anchor" href="#n-event-vip-escaped" aria-label="Link to VIP Escaped">#</a></h3>
+<p>Runs when the VIP escapes.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="#n-event-hostage-rescued">Hostage Rescued</a>, <a href="#n-event-reloaded">Reloaded</a>, <a href="#n-event-weapon-fired">Weapon Fired</a></p></div>
+<div class="node" id="n-event-player-about-hurt"><h3>Player About To Be Hurt <a class="anchor" href="#n-event-player-about-hurt" aria-label="Link to Player About To Be Hurt">#</a></h3>
+<p>Runs just before a player takes damage. Block, scale or set the damage here (it happens straight after this flow).</p><p>Runs before damage lands, so Damage nodes after it can scale or block it.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Victim <span class="ty">Player</span></dt><dd>Victim: a player.</dd><dt>Attacker <span class="ty">Player</span></dt><dd>Attacker: a player.</dd><dt>Damage <span class="ty">Number</span></dt><dd>Damage: a number.</dd><dt>Kind <span class="ty">Text</span></dt><dd>Kind: text.</dd><dt>Headshot <span class="ty">Yes/No</span></dt><dd>Headshot: yes or no.</dd><dt>Hit where <span class="ty">Text</span></dt><dd>Hit where: text.</dd></dl><p class="meta">Cost: Runs on every hit. Keep what follows it small.</p><p class="meta">Related: <a href="#n-event-player-revived">Player Revived</a>, <a href="#n-event-down-timeout">Downed Player Out</a>, <a href="#n-event-time-up">Round Time Up</a></p></div>
+<div class="node" id="n-event-player-revived"><h3>Player Revived <a class="anchor" href="#n-event-player-revived" aria-label="Link to Player Revived">#</a></h3>
+<p>Runs when a downed player is brought back.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Revived by <span class="ty">Player</span></dt><dd>Revived by: a player.</dd></dl><p class="meta">Related: <a href="#n-event-down-timeout">Downed Player Out</a>, <a href="#n-event-player-about-hurt">Player About To Be Hurt</a>, <a href="#n-event-time-up">Round Time Up</a></p></div>
+<div class="node" id="n-event-down-timeout"><h3>Downed Player Out <a class="anchor" href="#n-event-down-timeout" aria-label="Link to Downed Player Out">#</a></h3>
+<p>Runs when nobody revived a downed player in time.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Related: <a href="#n-event-player-revived">Player Revived</a>, <a href="#n-event-player-about-hurt">Player About To Be Hurt</a>, <a href="#n-event-time-up">Round Time Up</a></p></div>
+<div class="node" id="n-event-time-up"><h3>Round Time Up <a class="anchor" href="#n-event-time-up" aria-label="Link to Round Time Up">#</a></h3>
+<p>Runs when the mode's round clock reaches 0.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-event-down-timeout">Downed Player Out</a>, <a href="#n-event-player-revived">Player Revived</a>, <a href="#n-event-player-about-hurt">Player About To Be Hurt</a></p></div>
+<div class="node" id="n-event-custom"><h3>Custom Event <a class="anchor" href="#n-event-custom" aria-label="Link to Custom Event">#</a></h3>
+<p>Runs when something calls this Custom Event (Call Custom Event, Set Timer by Event, or the map: an ls_event entity, or an info_target named lsev_&lt;its map name&gt;, when triggered). Its inputs are its own (My mode, Custom events).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Custom event</dt><dd>Picked from this mode's own pieces.</dd></dl><p class="meta">Related: <a href="#n-event-time-up">Round Time Up</a>, <a href="#n-event-down-timeout">Downed Player Out</a>, <a href="#n-event-player-revived">Player Revived</a></p></div>
+<div class="node" id="n-vol-on-begin"><h3>Begin Overlap <a class="anchor" href="#n-vol-on-begin" aria-label="Link to Begin Overlap">#</a></h3>
+<p>Runs when something its filter counts goes into a trigger volume (Spawn Trigger Volume). Name: only volumes with this name (empty: any).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map).</dd><dt>Who <span class="ty">Entity</span></dt><dd>Who: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Volume name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Related: <a href="#n-vol-on-end">End Overlap</a>, <a href="#n-col-on-touch">Entity Touched</a>, <a href="#n-col-on-bullet">Bullet Hit</a></p></div>
+<div class="node" id="n-vol-on-end"><h3>End Overlap <a class="anchor" href="#n-vol-on-end" aria-label="Link to End Overlap">#</a></h3>
+<p>Runs when something leaves a trigger volume (or the volume is removed, or it died or left the server inside). Name: only volumes with this name (empty: any).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map).</dd><dt>Who <span class="ty">Entity</span></dt><dd>Who: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Volume name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Related: <a href="#n-vol-on-begin">Begin Overlap</a>, <a href="#n-col-on-touch">Entity Touched</a>, <a href="#n-col-on-bullet">Bullet Hit</a></p></div>
+<div class="node" id="n-col-on-touch"><h3>Entity Touched <a class="anchor" href="#n-col-on-touch" aria-label="Link to Entity Touched">#</a></h3>
+<p>Runs when an entity touches another (props, projectiles, NPCs, creatures, players; not the world's walls and floors). Name: only an entity with this name (empty: any). The first touch per N seconds for each entity (players standing on a prop would touch it every frame).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity.</dd><dt>Other <span class="ty">Entity</span></dt><dd>Other: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Entity name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd><dt>Only the first touch per (seconds)</dt><dd>A number from 0.1 to 60. Default: 1. From 0.1 up to 60.</dd></dl><p class="meta">Related: <a href="#n-vol-on-end">End Overlap</a>, <a href="#n-col-on-bullet">Bullet Hit</a>, <a href="#n-vol-on-begin">Begin Overlap</a></p></div>
+<div class="node" id="n-col-on-bullet"><h3>Bullet Hit <a class="anchor" href="#n-col-on-bullet" aria-label="Link to Bullet Hit">#</a></h3>
+<p>Runs where a shot lands: the shooter, the hit position, the surface's normal, what it hit (an entity, or World), the weapon and, on a player, where (head, chest...). At most once per shooter every N seconds (automatic weapons and shotguns would flood it).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Shooter <span class="ty">Player</span></dt><dd>Shooter: a player.</dd><dt>Hit Position <span class="ty">Vector</span></dt><dd>Hit Position: a position or direction (X, Y, Z).</dd><dt>Normal <span class="ty">Vector</span></dt><dd>Normal: a position or direction (X, Y, Z).</dd><dt>Hit Entity <span class="ty">Entity</span></dt><dd>Hit Entity: an entity (a thing in the map).</dd><dt>Hit World <span class="ty">Yes/No</span></dt><dd>Hit World: yes or no.</dd><dt>Weapon <span class="ty">Text</span></dt><dd>Weapon: text.</dd><dt>Hit where <span class="ty">Text</span></dt><dd>Hit where: text.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>At most once per shooter every (seconds)</dt><dd>A number from 0.05 to 10. Default: 0.1. From 0.05 up to 10.</dd></dl><p class="meta">Related: <a href="#n-col-on-touch">Entity Touched</a>, <a href="#n-vol-on-end">End Overlap</a>, <a href="#n-vol-on-begin">Begin Overlap</a></p></div>
+<div class="node" id="n-col-on-landed"><h3>Player Landed <a class="anchor" href="#n-col-on-landed" aria-label="Link to Player Landed">#</a></h3>
+<p>Runs when a player lands after a fall: how fast they were falling (units a second; over 580 hurts) and the fall damage the game gives for it (0 if Fall Damage Off). Small hops don't count.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>Fall speed <span class="ty">Number</span></dt><dd>Fall speed: a number.</dd><dt>Damage <span class="ty">Number</span></dt><dd>Damage: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Only falls faster than</dt><dd>A number from 0 to 2000. Default: 250. From 0 up to 2000.</dd></dl><p class="meta">Related: <a href="#n-in-pressed">Player Pressed Button</a>, <a href="#n-col-on-bullet">Bullet Hit</a>, <a href="#n-in-command">Player Command</a></p></div>
+<div class="node" id="n-in-pressed"><h3>Player Pressed Button <a class="anchor" href="#n-in-pressed" aria-label="Link to Player Pressed Button">#</a></h3>
+<p>Runs when a player presses (or lets go of) a button the game knows: fire, right click, use, jump, duck, reload, walk or a move key. It arrives with the player's ping, like everything they do. Only: wire a player (from a variable) to listen to one player only. Include bots: bots press buttons too.</p><p>Works the same on your own game, a listen server and a dedicated Linux server: the server sees a button when the player's game sends it, so it arrives with their ping (a 100 ms player's press shows up about 100 ms after they pressed). Only buttons the game itself has: fire, right click, use, jump, duck, reload, walk and the move keys. For any other key, use Player Command (players bind the key to it). Include bots: bots press buttons too (on by default); untick it for something only people should set off.</p><p class="meta">Inputs</p><dl class="pins"><dt>Only this player <span class="ty">Player</span></dt><dd>A player to listen to (from a variable, set when they're picked): nobody else's presses run it. Not wired: everyone's.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>Who pressed it.</dd><dt>Button <span class="ty">Text</span></dt><dd>Which button, by name: attack, attack2, use, jump, duck, reload, walk, forward, back, left, right.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Button</dt><dd>Pick one: Attack (fire), Attack 2 (right click), Use (E), Jump, Duck, Reload, Walk (Shift), Forward, Back, Move left, Move right, Any of these. Default: use. Choices: Attack (fire), Attack 2 (right click), Use (E), Jump, Duck, Reload, Walk (Shift), Forward, Back, Move left, Move right, Any of these.</dd><dt>When</dt><dd>Pick one: Pressed, Released. Default: pressed. Choices: Pressed, Released.</dd><dt>Include bots</dt><dd>On or off. Default: true.</dd></dl><p class="meta">Cost: A check of each player's buttons every server frame, only when a mode has this node; the flow runs only on a press.</p><p class="meta">Related: <a href="input.html#n-in-holding">Is Holding Button</a>, <a href="#n-in-command">Player Command</a>, <a href="cooldowns.html#n-cd-start">Start Cooldown</a></p></div>
+<div class="node" id="n-in-command"><h3>Player Command <a class="anchor" href="#n-in-command" aria-label="Link to Player Command">#</a></h3>
+<p>Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f &quot;ls_dash&quot;). Arguments is the rest of the line, as text only: it's never run. Each player can use it at most a few times a second (Player Command uses a second, in the mode's Limits settings).</p><p>A key the game has no button for (F, G, a mouse button) can still start a flow: name a command (ls_ and letters, like ls_dash), and players bind a key to it in their console (bind f &quot;ls_dash&quot;); Tell Player To Bind shows them the line. Arguments is whatever came after the command, as text only: the mode can read it, but it's never run as a command. Player Command uses a second (each player) keeps a held or scripted key from flooding the server: a setting in the mode's Limits group, 5 to start (the checks warn above 20).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>Who used the command.</dd><dt>Arguments <span class="ty">Text</span></dt><dd>The rest of the line, as text (empty when there was none).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Command (ls_...)</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: ls_dash.</dd></dl><p class="meta">Limits: Player Command uses a second (5 by default, hosts can raise it to 1000; slow above 20).</p><p class="meta">Careful: Safe by design: the command name can only be ls_ and letters (never one of the game's own), and the arguments are never run.</p><p class="meta">Related: <a href="input.html#n-in-tell-bind">Tell Player To Bind</a>, <a href="#n-in-pressed">Player Pressed Button</a>, <a href="#n-event-chat-command">Chat Command</a></p></div>
+<div class="node" id="n-item-picked-up"><h3>Picked Up <a class="anchor" href="#n-item-picked-up" aria-label="Link to Picked Up">#</a></h3>
+<p>Runs when a player picks a weapon or an item up from the ground (not when they buy one or the mode gives it). Item is its short name: ak47, kevlar, hegrenade...</p><p>Weapons and grenades from the ground (dropped ones, or a map's armoury), and armor from a map's armoury. Not what's bought, given by the mode, or handed out at spawn.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>Who picked it up.</dd><dt>Item <span class="ty">Text</span></dt><dd>Its short name: ak47, deagle, hegrenade, kevlar.</dd></dl><p class="meta">Related: <a href="#n-item-dropped">Dropped</a>, <a href="players.html#n-player-give-weapon">Give Weapon</a>, <a href="#n-in-command">Player Command</a></p></div>
+<div class="node" id="n-item-dropped"><h3>Dropped <a class="anchor" href="#n-item-dropped" aria-label="Link to Dropped">#</a></h3>
+<p>Runs when a player drops a weapon (G, or the mode makes them). On death: also when a dying player's weapon falls.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>Who dropped it.</dd><dt>Weapon <span class="ty">Text</span></dt><dd>Its short name: ak47, deagle, c4.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Also on death</dt><dd>On or off. Default: false.</dd></dl><p class="meta">Related: <a href="#n-item-picked-up">Picked Up</a>, <a href="players.html#n-player-drop-weapon">Drop Weapon</a>, <a href="#n-in-command">Player Command</a></p></div>
+<div class="node" id="n-event-grenade-thrown"><h3>Grenade Thrown <a class="anchor" href="#n-event-grenade-thrown" aria-label="Link to Grenade Thrown">#</a></h3>
+<p>Runs when a player throws a grenade: who, the grenade (an entity: Set Grenade Fuse, Push, Remove Entity work on it), which kind and where. Type: only that kind.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Thrower <span class="ty">Player</span></dt><dd>Thrower: a player.</dd><dt>Grenade <span class="ty">Entity</span></dt><dd>Grenade: an entity (a thing in the map).</dd><dt>Kind <span class="ty">Text</span></dt><dd>Kind: text.</dd><dt>Position <span class="ty">Vector</span></dt><dd>The position.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Type</dt><dd>Pick one: Any grenade, HE grenade, Flashbang, Smoke grenade. Default: any. Choices: Any grenade, HE grenade, Flashbang, Smoke grenade.</dd></dl><p class="meta">Related: <a href="#n-event-grenade-exploded">Grenade Exploded</a>, <a href="#n-event-map-fired">On Map Entity Fired</a>, <a href="#n-event-weapon-switched">Weapon Switched</a></p></div>
+<div class="node" id="n-event-grenade-exploded"><h3>Grenade Exploded <a class="anchor" href="#n-event-grenade-exploded" aria-label="Link to Grenade Exploded">#</a></h3>
+<p>Runs when a thrown grenade goes off (a smoke grenade when it starts smoking): who threw it, the grenade, which kind and where. Type: only that kind.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Thrower <span class="ty">Player</span></dt><dd>Thrower: a player.</dd><dt>Grenade <span class="ty">Entity</span></dt><dd>Grenade: an entity (a thing in the map).</dd><dt>Kind <span class="ty">Text</span></dt><dd>Kind: text.</dd><dt>Position <span class="ty">Vector</span></dt><dd>The position.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Type</dt><dd>Pick one: Any grenade, HE grenade, Flashbang, Smoke grenade. Default: any. Choices: Any grenade, HE grenade, Flashbang, Smoke grenade.</dd></dl><p class="meta">Related: <a href="#n-event-grenade-thrown">Grenade Thrown</a>, <a href="#n-event-map-fired">On Map Entity Fired</a>, <a href="#n-event-weapon-switched">Weapon Switched</a></p></div>
+<div class="node" id="n-event-map-fired"><h3>On Map Entity Fired <a class="anchor" href="#n-event-map-fired" aria-label="Link to On Map Entity Fired">#</a></h3>
+<p>Runs when a named entity of the map is triggered (by a button, a trigger, a timer or another entity) or used: its name, the entity, who set it off (a player, or nobody) and the entity that fired it. Name: only that entity (empty: any named one). Map logic drives the mode without an ls_event.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Entity name <span class="ty">Text</span></dt><dd>Entity name: text.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity.</dd><dt>Activator <span class="ty">Player</span></dt><dd>Activator: a player.</dd><dt>Caller <span class="ty">Entity</span></dt><dd>Caller: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Entity name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Limits: Map entity kinds heard (96 by default, hosts can raise it to 256; slow above 160).</p><p class="meta">Related: <a href="#n-event-weapon-switched">Weapon Switched</a>, <a href="#n-event-grenade-exploded">Grenade Exploded</a>, <a href="#n-event-grenade-thrown">Grenade Thrown</a></p></div>
+<div class="node" id="n-event-weapon-switched"><h3>Weapon Switched <a class="anchor" href="#n-event-weapon-switched" aria-label="Link to Weapon Switched">#</a></h3>
+<p>Runs when a player takes out a weapon (a switch, a pick-up that goes to hand, a spawn): the player, the new weapon and the one before (short names: ak47, knife; empty when there was none), and the weapon entity.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd><dt>New weapon <span class="ty">Text</span></dt><dd>New weapon: text.</dd><dt>Old weapon <span class="ty">Text</span></dt><dd>Old weapon: text.</dd><dt>Weapon entity <span class="ty">Entity</span></dt><dd>Weapon entity: an entity (a thing in the map).</dd></dl><p class="meta">Related: <a href="#n-event-map-fired">On Map Entity Fired</a>, <a href="#n-event-zone-enter">Entered Map Zone</a>, <a href="#n-event-zone-leave">Left Map Zone</a></p></div>
+<div class="node" id="n-event-zone-enter"><h3>Entered Map Zone <a class="anchor" href="#n-event-zone-enter" aria-label="Link to Entered Map Zone">#</a></h3>
+<p>Runs when a living player walks into one of the map's zones (checked four times a second).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Zone</dt><dd>Pick one: Buy zone, Bomb site, Hostage rescue zone, Escape zone, VIP safety zone. Default: buy. Choices: Buy zone, Bomb site, Hostage rescue zone, Escape zone, VIP safety zone.</dd></dl><p class="meta">Related: <a href="#n-event-zone-leave">Left Map Zone</a>, <a href="#n-event-weapon-switched">Weapon Switched</a>, <a href="#n-event-map-fired">On Map Entity Fired</a></p></div>
+<div class="node" id="n-event-zone-leave"><h3>Left Map Zone <a class="anchor" href="#n-event-zone-leave" aria-label="Link to Left Map Zone">#</a></h3>
+<p>Runs when a living player walks out of one of the map's zones (checked four times a second).</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Player <span class="ty">Player</span></dt><dd>The player.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Zone</dt><dd>Pick one: Buy zone, Bomb site, Hostage rescue zone, Escape zone, VIP safety zone. Default: buy. Choices: Buy zone, Bomb site, Hostage rescue zone, Escape zone, VIP safety zone.</dd></dl><p class="meta">Related: <a href="#n-event-zone-enter">Entered Map Zone</a>, <a href="#n-event-weapon-switched">Weapon Switched</a>, <a href="#n-event-map-fired">On Map Entity Fired</a></p></div>
+<div class="node" id="n-event-on-tick"><h3>On Tick <a class="anchor" href="#n-event-on-tick" aria-label="Link to On Tick">#</a></h3>
+<p>Runs again and again, every Interval seconds (0.1: ten times a second; 0: as often as the mode's Limits setting lets it, 100 a second at first), all through the map. Delta is the seconds since the last time.</p><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Delta <span class="ty">Number</span></dt><dd>Delta: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Interval (seconds)</dt><dd>A number from 0 to 60. Default: 0.1. From 0 up to 60.</dd></dl><p class="meta">Limits: On Tick runs a second at most (100 by default, hosts can raise it to 1000; slow above 100).</p><p class="meta">Related: <a href="#n-event-zone-leave">Left Map Zone</a>, <a href="#n-event-zone-enter">Entered Map Zone</a>, <a href="#n-event-weapon-switched">Weapon Switched</a></p></div></section>
+  </article>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+</body>
+</html>

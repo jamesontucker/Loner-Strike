@@ -12,7 +12,7 @@
 // enums, the starter library items (library/*.lib.json); app/src-tauri/src/editor/cstrike.fgd,
 // lonerstrike.fgd and components.json; docs/notes/EditorCoverage.md's inventory.
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -199,7 +199,7 @@ function docsStyle() {
   return d.slice(d.indexOf("<style>"), d.indexOf("</style>") + 8);
 }
 
-function page({ title, lead, nav, body, file }) {
+function page({ title, lead, nav, body, file, up = "../" }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -207,10 +207,10 @@ function page({ title, lead, nav, body, file }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · Loner-Strike docs</title>
 <meta name="description" content="${esc(lead)}">
-<link rel="icon" href="../favicon.ico">
+<link rel="icon" href="${up}favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-${docsStyle().replace(/url\("fonts\//g, 'url("../fonts/')}
+${docsStyle().replace(/url\("fonts\//g, `url("${up}fonts/`)}
 <style>
 .ref .topic { display: block; }
 .ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
@@ -230,18 +230,18 @@ ${docsStyle().replace(/url\("fonts\//g, 'url("../fonts/')}
 <body class="ref">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
-<nav aria-label="Site"><a href="../docs.html">Docs</a><a href="../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<nav aria-label="Site"><a href="${up}docs.html">Docs</a><a href="${up}docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
 <div class="docs">
   <div class="rail"><nav class="side" aria-label="${esc(title)}">${nav}</nav></div>
   <article id="content" tabindex="-1">
-    <p class="crumb"><a href="../docs.html#reference">Reference</a></p>
+    <p class="crumb"><a href="${up}docs.html#reference">Reference</a>${up === "../../" ? ` › <a href="../nodes.html">Game Mode Studio nodes</a>` : ""}</p>
     <h1>${esc(title)}</h1>
     <p class="lead">${esc(lead)}</p>
     <p class="meta">Made from the app's own catalog (${esc(file)}), so it always matches the app.</p>
 ${body}
   </article>
 </div>
-<footer><a href="/">lonerstrike.com</a> · <a href="../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<footer><a href="/">lonerstrike.com</a> · <a href="${up}docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
 </body>
 </html>
 `;
@@ -249,9 +249,14 @@ ${body}
 
 const typeLabel = (types, t) => types[t]?.label ?? t.replace(/^(struct|enum|array):/, "");
 
-function nodesPage(data, enums, lib) {
-  const cats = [...new Set([...data.categories, ...data.nodes.map((n) => n.category)])].filter((c) => data.nodes.some((n) => n.category === c));
-  const nav = `<div class="group"><b>Categories</b><ul>${cats.map((c) => `<li><a href="#c-${slug(c)}">${esc(c)}</a></li>`).join("")}<li><a href="#enums">Built-in lists</a></li><li><a href="#library">Starter library</a></li></ul></div>`;
+const catsOf = (data) => [...new Set([...data.categories, ...data.nodes.map((n) => n.category)])].filter((c) => data.nodes.some((n) => n.category === c));
+/** A node's page and anchor, from reference/ (`nodes/events.html#n-…`). */
+const nodeHref = (n) => `nodes/${slug(n.category)}.html#${nodeId(n.type)}`;
+
+/** One page per category (phones load only what they open), and an index page linking them. */
+function nodePages(data, enums, lib) {
+  const cats = catsOf(data);
+  const byType = Object.fromEntries(data.nodes.map((n) => [n.type, n]));
   const pins = (list, dir) =>
     list.length
       ? `<p class="meta">${dir}</p><dl class="pins">${list.map((p) => `<dt>${esc(p.label || (p.type === "exec" ? (dir === "Inputs" ? "Run" : "Then") : p.id))} <span class="ty">${esc(typeLabel(data.pinTypes, p.type))}</span></dt><dd>${esc(p.help || (p.type === "exec" ? (dir === "Inputs" ? "Runs it." : "Goes on when it's done.") : ""))}</dd>`).join("")}</dl>`
@@ -262,21 +267,24 @@ function nodesPage(data, enums, lib) {
     const def = s.default === "" || s.default == null ? "" : ` Default: ${typeof s.default === "object" ? JSON.stringify(s.default) : s.default}.`;
     return `<dt>${esc(s.label)}</dt><dd>${esc(s.help)}${esc(def)}${range ? esc(` ${range[0].toUpperCase()}${range.slice(1)}.`) : ""}${esc(choices)}</dd>`;
   };
-  const byType = Object.fromEntries(data.nodes.map((n) => [n.type, n]));
-  const body = cats
-    .map((c) => {
+  const nav = (here) => `<div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li>${cats.map((c) => `<li><a href="${slug(c)}.html"${c === here ? ' aria-current="page"' : ""}>${esc(c)}</a></li>`).join("")}</ul></div>`;
+  const node = (n) => `<div class="node" id="${nodeId(n.type)}"><h3>${esc(n.title)} <a class="anchor" href="#${nodeId(n.type)}" aria-label="Link to ${esc(n.title)}">#</a></h3>
+<p>${esc(n.what)}</p>${n.more ? `<p>${esc(n.more)}</p>` : ""}${pins(n.inputs, "Inputs")}${pins(n.outputs, "Outputs")}${n.settings.length ? `<p class="meta">Settings</p><dl class="pins">${n.settings.map(setting).join("")}</dl>` : ""}${n.limits.length ? `<p class="meta">Limits: ${n.limits.map((l) => esc(`${l.label} (${l.default} by default, hosts can raise it to ${l.max}; slow above ${l.lagAbove})`)).join("; ")}.</p>` : ""}${n.needs ? `<p class="meta">${esc(n.needs)}</p>` : ""}${n.risk ? `<p class="meta">Careful: ${esc(n.risk)}</p>` : ""}${n.cost ? `<p class="meta">Cost: ${esc(n.cost)}</p>` : ""}${n.related.length ? `<p class="meta">Related: ${n.related.filter((r) => byType[r]).map((r) => `<a href="${byType[r].category === n.category ? "" : `${slug(byType[r].category)}.html`}#${nodeId(r)}">${esc(byType[r].title)}</a>`).join(", ")}</p>` : ""}</div>`;
+  const pages = Object.fromEntries(
+    cats.map((c) => {
       const list = data.nodes.filter((n) => n.category === c);
-      return `<section class="topic" id="c-${slug(c)}"><h2>${esc(c)}</h2>${list
-        .map(
-          (n) => `<div class="node" id="${nodeId(n.type)}"><h3>${esc(n.title)} <a class="anchor" href="#${nodeId(n.type)}" aria-label="Link to ${esc(n.title)}">#</a></h3>
-<p>${esc(n.what)}</p>${n.more ? `<p>${esc(n.more)}</p>` : ""}${pins(n.inputs, "Inputs")}${pins(n.outputs, "Outputs")}${n.settings.length ? `<p class="meta">Settings</p><dl class="pins">${n.settings.map(setting).join("")}</dl>` : ""}${n.limits.length ? `<p class="meta">Limits: ${n.limits.map((l) => esc(`${l.label} (${l.default} by default, hosts can raise it to ${l.max}; slow above ${l.lagAbove})`)).join("; ")}.</p>` : ""}${n.needs ? `<p class="meta">${esc(n.needs)}</p>` : ""}${n.risk ? `<p class="meta">Careful: ${esc(n.risk)}</p>` : ""}${n.cost ? `<p class="meta">Cost: ${esc(n.cost)}</p>` : ""}${n.related.length ? `<p class="meta">Related: ${n.related.map((r) => `<a href="#${nodeId(r)}">${esc(byType[r]?.title ?? r)}</a>`).join(", ")}</p>` : ""}</div>`,
-        )
-        .join("\n")}</section>`;
-    })
-    .join("\n");
-  const enumsHtml = `<section class="topic" id="enums"><h2>Built-in lists</h2><p>Lists every mode has (What Kind Of, Component Kind Of give them; Switch on Enum fills its cases from them).</p>${enums.map((e) => `<h3 id="enum-${slug(e.id)}">${esc(e.name)}</h3><p>${esc(e.values.join(", "))}</p>`).join("")}</section>`;
-  const libHtml = `<section class="topic" id="library"><h2>Starter library</h2><p>Ready-made pieces to add from Game Mode Studio's My library.</p>${lib.map((l) => `<div class="node" id="lib-${slug(l.name)}"><h3>${esc(l.name)}</h3><p class="meta">${esc(l.category)}</p><p>${esc(l.description)}</p>${l.inputs.length ? `<p class="meta">In: ${esc(l.inputs.map((p) => p.name).join(", "))}. Out: ${esc(l.outputs.map((p) => p.name).join(", "))}.</p>` : ""}${l.tables.length ? `<p class="meta">Brings the table${l.tables.length > 1 ? "s" : ""} ${esc(l.tables.join(", "))}.</p>` : ""}</div>`).join("")}</section>`;
-  return page({ title: "Game Mode Studio nodes", lead: `Every node (${data.nodes.length}): what it does, its inputs and outputs, settings, limits and related nodes.`, nav, body: body + enumsHtml + libHtml, file: "nodes.json, nodehelp.json, limits.ts" });
+      return [`${slug(c)}.html`, page({ title: c, lead: `Game Mode Studio's ${c} nodes (${list.length}): what each does, its inputs and outputs, settings, limits and related nodes.`, nav: nav(c), body: `<section class="topic" id="c-${slug(c)}">${list.map(node).join("\n")}</section>`, file: "nodes.json, nodehelp.json, limits.ts", up: "../../" })];
+    }),
+  );
+  const indexNav = `<div class="group"><b>Categories</b><ul>${cats.map((c) => `<li><a href="nodes/${slug(c)}.html">${esc(c)}</a></li>`).join("")}<li><a href="#enums">Built-in lists</a></li><li><a href="#library">Starter library</a></li></ul></div>`;
+  const indexBody = `<section class="topic" id="categories"><h2>Categories</h2>${cats.map((c) => {
+    const list = data.nodes.filter((n) => n.category === c);
+    return `<h3 id="c-${slug(c)}"><a href="nodes/${slug(c)}.html">${esc(c)}</a> <span class="ty">${list.length}</span></h3><p class="meta">${list.map((n) => `<a href="${nodeHref(n)}">${esc(n.title)}</a>`).join(", ")}</p>`;
+  }).join("")}</section>
+<section class="topic" id="enums"><h2>Built-in lists</h2><p>Lists every mode has (What Kind Of, Component Kind Of give them; Switch on Enum fills its cases from them).</p>${enums.map((e) => `<h3 id="enum-${slug(e.id)}">${esc(e.name)}</h3><p>${esc(e.values.join(", "))}</p>`).join("")}</section>
+<section class="topic" id="library"><h2>Starter library</h2><p>Ready-made pieces to add from Game Mode Studio's My library.</p>${lib.map((l) => `<div class="node" id="lib-${slug(l.name)}"><h3>${esc(l.name)}</h3><p class="meta">${esc(l.category)}</p><p>${esc(l.description)}</p>${l.inputs.length ? `<p class="meta">In: ${esc(l.inputs.map((p) => p.name).join(", "))}. Out: ${esc(l.outputs.map((p) => p.name).join(", "))}.</p>` : ""}${l.tables.length ? `<p class="meta">Brings the table${l.tables.length > 1 ? "s" : ""} ${esc(l.tables.join(", "))}.</p>` : ""}</div>`).join("")}</section>`;
+  const index = page({ title: "Game Mode Studio nodes", lead: `Every node (${data.nodes.length}) by category; each category has its own page.`, nav: indexNav, body: indexBody, file: "nodes.json, nodehelp.json, limits.ts" });
+  return { index, pages };
 }
 
 function entitiesPage(ents) {
@@ -308,7 +316,7 @@ function editorPage(inv) {
 function searchIndex(data, ents, inv) {
   const cut = (s, n = 160) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   return [
-    ...data.nodes.map((n) => ({ u: `reference/nodes.html#${nodeId(n.type)}`, n: n.title, t: `Studio node · ${n.category}`, k: n.type, x: cut([n.what, ...n.inputs.map((p) => p.label), ...n.outputs.map((p) => p.label)].filter(Boolean).join(" ")) })),
+    ...data.nodes.map((n) => ({ u: `reference/${nodeHref(n)}`, n: n.title, t: `Studio node · ${n.category}`, k: n.type, x: cut([n.what, ...n.inputs.map((p) => p.label), ...n.outputs.map((p) => p.label)].filter(Boolean).join(" ")) })),
     ...ents.map((e) => ({ u: `reference/entities.html#${entId(e.name)}`, n: e.name, t: `Entity · ${e.group}`, k: `${e.title} ${e.keys.map((k) => k.name).join(" ")}`, x: cut(e.help) })),
     ...inv.map((s) => ({ u: `reference/editor.html#t-${slug(s.name)}`, n: `Editor: ${s.name}`, t: "Map editor tools and keys", k: "", x: cut(s.rows.map((r) => r.item).join(", ")) })),
   ];
@@ -326,13 +334,13 @@ const GUIDES = [
 ];
 
 function docsBlock(data, ents, inv) {
-  const cats = [...new Set([...data.categories, ...data.nodes.map((n) => n.category)])].filter((c) => data.nodes.some((n) => n.category === c));
+  const cats = catsOf(data);
   const ref = `<section class="topic" id="reference" data-group="Reference" data-keywords="reference nodes entities keys shortcuts catalog">
   <p class="crumb">Reference</p>
   <h1>Reference</h1>
   <p class="lead">Made from the app's own catalogs, so it always matches the app. The docs search finds every entry.</p>
   <ul>
-    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all ${data.nodes.length}, by category: ${cats.map((c) => `<a href="reference/nodes.html#c-${slug(c)}">${esc(c)}</a>`).join(", ")}.</li>
+    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all ${data.nodes.length}, by category: ${cats.map((c) => `<a href="reference/nodes/${slug(c)}.html">${esc(c)}</a>`).join(", ")}.</li>
     <li><a href="reference/entities.html"><b>Map editor entities</b></a>: all ${ents.length}, with their keys and flags.</li>
     <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: ${inv.map((s) => esc(s.name)).join(", ")}.</li>
   </ul>
@@ -387,7 +395,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const inv = editorInventory();
   const out = join(site, "reference");
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, "nodes.html"), nodesPage(data, builtinEnums(), library()));
+  const np = nodePages(data, builtinEnums(), library());
+  writeFileSync(join(out, "nodes.html"), np.index);
+  mkdirSync(join(out, "nodes"), { recursive: true });
+  for (const f of readdirSync(join(out, "nodes"))) if (f.endsWith(".html") && !np.pages[f]) unlinkSync(join(out, "nodes", f));
+  for (const [f, html] of Object.entries(np.pages)) writeFileSync(join(out, "nodes", f), html);
   writeFileSync(join(out, "entities.html"), entitiesPage(ents));
   writeFileSync(join(out, "editor.html"), editorPage(inv));
   writeFileSync(join(out, "index.js"), `// Made by scripts/gen-reference.mjs: the docs search's reference entries (u url, n name, t where, k keywords, x text)\nwindow.LS_REFERENCE = ${JSON.stringify(searchIndex(data, ents, inv))};\n`);

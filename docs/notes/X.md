@@ -1535,3 +1535,9 @@ Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small ma
   Starter library's test mode B (Burn marks the burning player) fails amxxpc with `undefined symbol
   "lsg_avoid_room"`; every_node_5 hides it because it has volumes. Whoever owns that WIP: write the avoid helpers
   whenever bots.avoid/avoid_stop is used.
+- **Parity A → X (2026-11-14), br.feed renamed (label and help only):** "Kill Feed Line" was on two nodes; br.feed is now
+  **Match Feed Line** ("Adds a text line to Battle Royale's match HUD feed (eliminations, zone news). Not the top-right
+  kill notice: that's Kill Feed Line (Messages).") in make_nodes.py, nodes.json and nodehelp.json, and the one comment
+  line it makes in every_node_2(.debug).sma ("// Match Feed Line (feed)"). The id br.feed is unchanged, so saved graphs
+  open as before. Your other uncommitted Studio work (gen.rs, graph.rs, limits.rs and the goldens) wasn't touched; the
+  snapshot tests fail on it at the moment, not on this.
