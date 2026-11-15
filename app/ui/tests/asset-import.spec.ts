@@ -96,25 +96,29 @@ test("Creature Studio's model picker: Import…, a dropped file with a taken nam
   expect(problems).toEqual([]);
 });
 
-const ID = "pw_assets";
+// (its own id each run: a run that stopped halfway leaves its graph behind)
+const ID = `pw_assets_${Date.now() % 100000}`;
 test("Game Mode Studio's sprite input: Import…, a dropped file, your map projects", async ({ page }) => {
   const problems: string[] = [];
   page.on("pageerror", (e) => problems.push(e.message));
-  await page.addInitScript(() => {
-    localStorage.setItem("ls.studio.panels", JSON.stringify({ left: true, right: true, minimap: false }));
+  // (the left panel stays closed in a small window: the canvas keeps room for the graph; the
+  // right one shows the picked node's inputs)
+  const roomy = (page.viewportSize()?.width ?? 1440) >= 1280;
+  await page.addInitScript((open) => {
+    localStorage.setItem("ls.studio.panels", JSON.stringify({ left: open, right: true, minimap: false }));
     localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false }));
-  });
+  }, roomy);
   const tpl = await (await page.request.get("/src/views/tools/studio/templates/team-dm.graph.json")).json();
   tpl.mode.id = ID;
   tpl.mode.name = "Asset check";
-  tpl.nodes.push({ id: "mk", type: "fx.marker", pos: { x: 2400, y: 0 }, params: { sprite: "sprites/arrow1.spr" } });
+  tpl.nodes.push({ id: "mk", type: "fx.marker", pos: { x: 0, y: -260 }, params: { sprite: "sprites/arrow1.spr" } });
   expect((await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H })).json()).ok).toBeTruthy();
   const { calls } = await fakeAssets(page, "sprite", "sprites/qa_mark.spr");
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
-  const node = page.locator('.react-flow__node[data-id="mk"]');
-  await node.waitFor({ state: "attached", timeout: 20_000 });
-  await page.locator(".react-flow__controls-fitview").click();
-  await node.click();
+  // (picked the way the Problems list does it: it selects the node and brings it into view, at
+  // any window size; the canvas only draws what's in view)
+  await page.locator(".react-flow__node").first().waitFor({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Objective Marker", exact: true }).first().click();
   const field = page.locator(".ai-field").first();
   await expect(field.locator("input").first()).toHaveValue("sprites/arrow1.spr");
   await field.getByRole("button", { name: "Choose…" }).click();

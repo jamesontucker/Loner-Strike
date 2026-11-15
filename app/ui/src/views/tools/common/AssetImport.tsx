@@ -12,13 +12,15 @@ import { BusyButton, useAskText, useToast } from "../../../ui";
 import { post, tryGet } from "./api";
 import { matches, searchWords } from "./search";
 import { fileData } from "../editor/contentApi";
+import { MakeSpriteButton } from "./SpriteMaker"; // T1fix: the Sprite maker
 import "./assetImport.css";
 
 export type ImportKind = "model" | "sprite" | "sound";
 /** What's known about where a file came from and what it allows. */
 export type AssetCredit = { verdict?: "ok" | "ask" | "no" | "stock" | "unknown"; authors?: { name: string }[]; page?: { url: string; name: string } | null; note?: string } | null;
 export type Imported = { ok?: boolean; path?: string; files?: string[]; credit?: AssetCredit; cancelled?: boolean; taken?: { name: string; suggestion: string }; error?: string };
-export type ProjectFile = { project: string; path: string; name: string; size: number; credit?: AssetCredit };
+/** `project` is the project file (sent back as it is to copy one in); `projectName` is for people */
+export type ProjectFile = { project: string; projectName?: string; path: string; name: string; size: number; credit?: AssetCredit };
 
 const EXT: Record<ImportKind, string> = { model: ".mdl", sprite: ".spr", sound: ".wav" };
 export const ACCEPT: Record<ImportKind, string> = { model: ".mdl", sprite: ".spr", sound: ".wav" };
@@ -135,6 +137,14 @@ export function ImportBar({ kind, imp, onRefresh, refreshing }: { kind: ImportKi
   return (
     <div className="ai-bar">
       <BusyButton className="btn small" busy={imp.busy === "import"} disabled={!!imp.busy} label="Import…" busyLabel="Importing…" onClick={() => void imp.importFile()} title={`Add a ${EXT[kind]} file from your computer (or drop one here)`} />
+      {kind === "sprite" && (
+        <MakeSpriteButton
+          onMade={async (f) => {
+            await imp.importFile(f);
+            return true;
+          }}
+        />
+      )}
       <button type="button" className="btn small icon ai-refresh" aria-label="Refresh the list" title="Look again" disabled={refreshing} onClick={onRefresh}>
         {refreshing ? <span className="spinner" aria-hidden="true" /> : "↻"}
       </button>
@@ -153,7 +163,7 @@ export function ProjectFilesGroup({ kind, q, imp }: { kind: ImportKind; q: strin
   const files = useQuery({ queryKey: ["tools", "assets", "project-files", kind], queryFn: ({ signal }) => projectFiles(kind, signal), staleTime: 15_000 });
   const shown = useMemo(() => {
     const w = searchWords(q);
-    return (files.data?.files ?? []).filter((f) => matches(w, f.path, f.project)).slice(0, 40);
+    return (files.data?.files ?? []).filter((f) => matches(w, f.path, f.projectName ?? f.project)).slice(0, 40);
   }, [files.data, q]);
   if (!shown.length) return null;
   return (
@@ -162,9 +172,9 @@ export function ProjectFilesGroup({ kind, q, imp }: { kind: ImportKind; q: strin
       <ul className="cs-pop-list">
         {shown.map((f) => (
           <li key={`${f.project}/${f.path}`}>
-            <button type="button" className="cs-pick" disabled={!!imp.busy} onClick={() => void imp.adopt(f)} title={`Copies ${f.path} from ${f.project} into your game`}>
+            <button type="button" className="cs-pick" disabled={!!imp.busy} onClick={() => void imp.adopt(f)} title={`Copies ${f.path} from ${f.projectName ?? f.project} into your game`}>
               <span>{f.path.replace(/^(models|sprites|sound)\//, "")}</span>
-              <span className="muted">{f.project}</span>
+              <span className="muted">{f.projectName ?? f.project.split(/[\\/]/).pop()}</span>
             </button>
           </li>
         ))}
