@@ -58,7 +58,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 720
+    "y": 725
    },
    "params": {}
   },
@@ -67,7 +67,7 @@
    "type": "flow.for_each_entity",
    "pos": {
     "x": 3065,
-    "y": 685
+    "y": 679
    },
    "params": {
     "by": "class",
@@ -145,7 +145,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1795
+    "y": 1856
    },
    "params": {}
   },
@@ -154,7 +154,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1847
+    "y": 1908
    },
    "params": {
     "var": "alive"
@@ -165,7 +165,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1900
+    "y": 1959
    },
    "params": {
     "text": "Squads left:",
@@ -178,7 +178,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 2121
+    "y": 2177
    },
    "params": {
     "op": "le",
@@ -190,7 +190,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1984
+    "y": 2039
    },
    "params": {}
   },
@@ -199,7 +199,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 1973
+    "y": 2017
    },
    "params": {
     "which": "alive"
@@ -210,7 +210,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1790
+    "y": 1839
    },
    "params": {
     "text": "Winner:",
@@ -223,7 +223,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 3065,
-    "y": 1838
+    "y": 1888
    },
    "params": {
     "amount": 5
@@ -234,7 +234,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 2064
+    "y": 2126
    },
    "params": {}
   },
@@ -243,7 +243,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 1951
+    "y": 2011
    },
    "params": {}
   },
@@ -252,7 +252,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 2126
+    "y": 2188
    },
    "params": {
     "winner": "draw"
@@ -341,7 +341,7 @@
    "type": "bots.no_buy",
    "pos": {
     "x": 565,
-    "y": 696
+    "y": 701
    },
    "params": {
     "on": true
@@ -352,7 +352,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 1065,
-    "y": 696
+    "y": 701
    },
    "params": {
     "phase": "loot"
@@ -363,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 1565,
-    "y": 674
+    "y": 679
    },
    "params": {
     "var": "looting",
@@ -375,7 +375,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 2065,
-    "y": 696
+    "y": 701
    },
    "params": {
     "text": "Squads forming: say slash squad"
@@ -386,7 +386,7 @@
    "type": "br.lobby",
    "pos": {
     "x": 2565,
-    "y": 696
+    "y": 701
    },
    "params": {
     "secs": 15
@@ -397,7 +397,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 65,
-    "y": 1495
+    "y": 1554
    },
    "params": {}
   },
@@ -406,7 +406,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 1471
+    "y": 1508
    },
    "params": {
     "which": "alive"
@@ -417,7 +417,7 @@
    "type": "player.strip",
    "pos": {
     "x": 1065,
-    "y": 1372
+    "y": 1416
    },
    "params": {
     "knife": true
@@ -428,7 +428,7 @@
    "type": "br.drop_in",
    "pos": {
     "x": 1565,
-    "y": 1417
+    "y": 1461
    },
    "params": {}
   },
@@ -437,7 +437,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 1065,
-    "y": 1576
+    "y": 1620
    },
    "params": {
     "text": "Loot up: the fight starts in 45 s"
@@ -448,7 +448,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 1565,
-    "y": 1576
+    "y": 1620
    },
    "params": {
     "secs": 45
@@ -459,7 +459,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 2065,
-    "y": 1576
+    "y": 1620
    },
    "params": {
     "phase": "fight"
@@ -470,7 +470,7 @@
    "type": "var.set",
    "pos": {
     "x": 2565,
-    "y": 1554
+    "y": 1598
    },
    "params": {
     "var": "looting",
@@ -482,7 +482,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 3065,
-    "y": 1576
+    "y": 1620
    },
    "params": {
     "text": ""
@@ -502,7 +502,7 @@
    "type": "var.get",
    "pos": {
     "x": 65,
-    "y": 1180
+    "y": 1224
    },
    "params": {
     "var": "looting"
@@ -513,7 +513,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 565,
-    "y": 1069
+    "y": 1096
    },
    "params": {}
   },
@@ -522,7 +522,7 @@
    "type": "dmg.block",
    "pos": {
     "x": 1065,
-    "y": 1093
+    "y": 1120
    },
    "params": {}
   },
@@ -531,7 +531,7 @@
    "type": "br.squads_alive",
    "pos": {
     "x": 65,
-    "y": 2125
+    "y": 2185
    },
    "params": {}
   }
@@ -1129,11 +1129,11 @@
    "text": "When one squad is left, a player of it is named the winner (5 points) and the round ends.",
    "pos": {
     "x": 41,
-    "y": 1744
+    "y": 1793
    },
    "size": {
     "w": 3778,
-    "h": 516
+    "h": 529
    }
   },
   {
@@ -1153,7 +1153,7 @@
    "text": "Lobby over: everyone drops in from the sky with a knife (the map's br_drop markers, no damage until landing). 45 s of looting with nobody hurt (bots too), then the fight.",
    "pos": {
     "x": 41,
-    "y": 1326
+    "y": 1370
    },
    "size": {
     "w": 3278,
@@ -1169,7 +1169,7 @@
    },
    "size": {
     "w": 1278,
-    "h": 372
+    "h": 416
    }
   }
  ]
