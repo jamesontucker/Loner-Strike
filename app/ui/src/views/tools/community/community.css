@@ -167,3 +167,7 @@
 .cm-register input[type="url"], .cm-register > input { width: 100%; }
 .cm-agree { font-weight: 400; align-items: flex-start; }
 .cm-pub .cm-copies { margin: 0; }
+/* Parity A: Publish's GameBanana checklist (compact, numbered) */
+.cm-checklist { margin: 4px 0 10px; padding-left: 22px; display: grid; gap: 3px; font-size: 14px; color: var(--bone-dim); }
+.cm-checklist b { color: var(--bone); }
+#cm-needs { margin: 2px 0 0; }

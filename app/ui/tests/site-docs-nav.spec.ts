@@ -106,3 +106,16 @@ test("On this page is off on narrow screens; groups fold and remember; Something
   const hrefs = await page.locator("#something-wrong a").evaluateAll((as) => as.map((a) => a.getAttribute("href")!));
   for (const h of hrefs) expect(await page.locator(h).count(), h).toBe(1);
 });
+
+test("Something's wrong? covers an upload that doesn't show in Community", async ({ page }) => {
+  await page.goto("/docs.html#wrong-sharing");
+  const item = page.locator("#something-wrong li", { hasText: "My upload doesn't show in Community" });
+  await expect(item).toBeVisible();
+  for (const need of ["Counter-Strike 1.6", "Software Used: LonerStrike", "file check", "moderator", "daily re-check"]) await expect(item).toContainText(need);
+  await item.getByRole("link", { name: "the publishing steps" }).click();
+  await expect(page.locator("#publish-steps")).toBeInViewport();
+  await expect(page.locator("#publishing")).toContainText("set the field Software Used to LonerStrike");
+  // and search finds it
+  await page.locator("#q").fill("upload not showing community");
+  await expect(page.locator("#results [role=option]").first()).toHaveAttribute("data-id", "wrong-sharing");
+});
