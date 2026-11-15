@@ -418,6 +418,8 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
     };
     // gm_components first when a node needs it (as the shipped modes list it)
     let comps = if gen::needs(g).components { format!("gm_components.amxx{nl}") } else { String::new() };
+    // (NPC Move To / Follow Path walk the bot navigation mesh's routes: gm_botnav finds them)
+    let comps = if gen::coverage::needs_botnav(g) { format!("{comps}gm_botnav.amxx{nl}") } else { comps };
     let uid = if g.mode.uid.is_empty() { String::new() } else { format!(" (uid {})", g.mode.uid) };
     write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio{uid}: compile the graph again instead of editing this.{nl}{comps}{plugin}.amxx{nl}"))?;
     // the mode settings hosts can change: what they are (the app reads it for the Play and server

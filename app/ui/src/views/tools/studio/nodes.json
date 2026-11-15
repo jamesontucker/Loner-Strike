@@ -21621,6 +21621,2136 @@
    "event": true
   },
   {
+   "type": "damage.deal",
+   "title": "Deal Damage",
+   "category": "Damage",
+   "help": "Hurts a player or any entity that can be hurt (a breakable, an NPC, a creature) by Amount, as if Attacker did it: kills, the kill feed, scores and Player Hurt / Player Killed count as usual. No Attacker: the world did it. Kind is what it counts as (a burn, a fall...); Hit zone is where (a head hit shows as a headshot in the kill feed; the amount isn't multiplied). Armor takes its share unless Ignore armor.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "target",
+     "type": "entity",
+     "label": "Target",
+     "required": true
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker",
+     "optional": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Amount",
+     "kind": "number",
+     "default": 25,
+     "min": 0,
+     "max": 10000
+    },
+    {
+     "id": "kind",
+     "label": "Kind",
+     "kind": "choice",
+     "default": "generic",
+     "choices": [
+      [
+       "generic",
+       "Generic"
+      ],
+      [
+       "bullet",
+       "Bullet"
+      ],
+      [
+       "slash",
+       "Slash (knife)"
+      ],
+      [
+       "burn",
+       "Burn"
+      ],
+      [
+       "blast",
+       "Blast"
+      ],
+      [
+       "fall",
+       "Fall"
+      ],
+      [
+       "shock",
+       "Shock"
+      ],
+      [
+       "crush",
+       "Crush"
+      ],
+      [
+       "poison",
+       "Poison"
+      ],
+      [
+       "freeze",
+       "Freeze"
+      ]
+     ]
+    },
+    {
+     "id": "zone",
+     "label": "Hit zone",
+     "kind": "choice",
+     "default": "generic",
+     "choices": [
+      [
+       "generic",
+       "Anywhere (generic)"
+      ],
+      [
+       "head",
+       "Head"
+      ],
+      [
+       "chest",
+       "Chest"
+      ],
+      [
+       "stomach",
+       "Stomach"
+      ],
+      [
+       "leftarm",
+       "Left arm"
+      ],
+      [
+       "rightarm",
+       "Right arm"
+      ],
+      [
+       "leftleg",
+       "Left leg"
+      ],
+      [
+       "rightleg",
+       "Right leg"
+      ]
+     ]
+    },
+    {
+     "id": "armor",
+     "label": "Ignore armor",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "hurt damage harm takedamage attack kill credit"
+  },
+  {
+   "type": "ent.prop_get",
+   "title": "Get Entity Property",
+   "category": "Entities",
+   "help": "Reads a property of any entity (a prop, an NPC, a map entity, a player): its render mode, effect, color, amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is the number the game keeps (render modes and the like are numbered as in the map editor); Color is red, green, blue.",
+   "inputs": [
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Value"
+    },
+    {
+     "id": "color",
+     "type": "vector",
+     "label": "Color"
+    }
+   ],
+   "params": [
+    {
+     "id": "field",
+     "label": "Property",
+     "kind": "choice",
+     "default": "amount",
+     "choices": [
+      [
+       "rendermode",
+       "Render mode"
+      ],
+      [
+       "renderfx",
+       "Render effect"
+      ],
+      [
+       "color",
+       "Color"
+      ],
+      [
+       "amount",
+       "Render amount (0-255)"
+      ],
+      [
+       "skin",
+       "Skin"
+      ],
+      [
+       "body",
+       "Body (submodel)"
+      ],
+      [
+       "scale",
+       "Scale (sprites, models)"
+      ],
+      [
+       "gravity",
+       "Gravity"
+      ],
+      [
+       "movetype",
+       "Movement"
+      ],
+      [
+       "solid",
+       "Collision"
+      ],
+      [
+       "health",
+       "Health"
+      ],
+      [
+       "framerate",
+       "Animation speed"
+      ]
+     ]
+    }
+   ],
+   "keywords": "render glow color skin body scale gravity movetype solid health pev property",
+   "pure": true
+  },
+  {
+   "type": "ent.prop_set",
+   "title": "Set Entity Property",
+   "category": "Entities",
+   "help": "Changes a property of any entity: render mode, effect and color (so props and NPCs can glow or fade), amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is for the number properties; Pick is for the named ones (render mode, effect, movement, collision); Color for color. Players: render, color, skin, body, gravity and health work here; movement and collision are theirs to keep (use No Clip, Freeze).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Value",
+     "param": "value"
+    },
+    {
+     "id": "color",
+     "type": "vector",
+     "label": "Color",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "field",
+     "label": "Property",
+     "kind": "choice",
+     "default": "renderfx",
+     "choices": [
+      [
+       "rendermode",
+       "Render mode"
+      ],
+      [
+       "renderfx",
+       "Render effect"
+      ],
+      [
+       "color",
+       "Color"
+      ],
+      [
+       "amount",
+       "Render amount (0-255)"
+      ],
+      [
+       "skin",
+       "Skin"
+      ],
+      [
+       "body",
+       "Body (submodel)"
+      ],
+      [
+       "scale",
+       "Scale (sprites, models)"
+      ],
+      [
+       "gravity",
+       "Gravity"
+      ],
+      [
+       "movetype",
+       "Movement"
+      ],
+      [
+       "solid",
+       "Collision"
+      ],
+      [
+       "health",
+       "Health"
+      ],
+      [
+       "framerate",
+       "Animation speed"
+      ]
+     ]
+    },
+    {
+     "id": "value",
+     "label": "Value",
+     "kind": "number",
+     "default": 1,
+     "min": -10000,
+     "max": 10000
+    },
+    {
+     "id": "pick",
+     "label": "Pick",
+     "kind": "choice",
+     "default": "fx_glowshell",
+     "choices": [
+      [
+       "normal",
+       "Render mode: Normal"
+      ],
+      [
+       "color",
+       "Render mode: Color"
+      ],
+      [
+       "texture",
+       "Render mode: Texture (see-through)"
+      ],
+      [
+       "glow",
+       "Render mode: Glow (sprites)"
+      ],
+      [
+       "solid",
+       "Render mode: Solid (cut-out)"
+      ],
+      [
+       "additive",
+       "Render mode: Additive (bright, see-through)"
+      ],
+      [
+       "fx_none",
+       "Effect: None"
+      ],
+      [
+       "fx_pulse",
+       "Effect: Pulse"
+      ],
+      [
+       "fx_pulsefast",
+       "Effect: Fast pulse"
+      ],
+      [
+       "fx_fadeslow",
+       "Effect: Fade out slowly"
+      ],
+      [
+       "fx_strobe",
+       "Effect: Strobe"
+      ],
+      [
+       "fx_flicker",
+       "Effect: Flicker"
+      ],
+      [
+       "fx_hologram",
+       "Effect: Hologram"
+      ],
+      [
+       "fx_glowshell",
+       "Effect: Glow shell"
+      ],
+      [
+       "fx_distort",
+       "Effect: Distort"
+      ],
+      [
+       "mv_none",
+       "Movement: None (stays put)"
+      ],
+      [
+       "mv_toss",
+       "Movement: Falls"
+      ],
+      [
+       "mv_bounce",
+       "Movement: Falls and bounces"
+      ],
+      [
+       "mv_fly",
+       "Movement: Flies (no gravity)"
+      ],
+      [
+       "mv_flymissile",
+       "Movement: Flies, hits things"
+      ],
+      [
+       "mv_noclip",
+       "Movement: Through walls"
+      ],
+      [
+       "mv_step",
+       "Movement: Steps on the floor"
+      ],
+      [
+       "so_not",
+       "Collision: Not solid"
+      ],
+      [
+       "so_trigger",
+       "Collision: Touch only"
+      ],
+      [
+       "so_box",
+       "Collision: Solid"
+      ]
+     ]
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "render glow color fade skin body scale gravity movetype solid health pev property transparency"
+  },
+  {
+   "type": "msg.big_hud",
+   "title": "Big HUD Text",
+   "category": "Messages",
+   "help": "Big text on the screen (the director HUD: larger than HUD Text, its own slots), to one player or everyone, at a position (X and Y from 0 to 1; -1 centers), in a color, with an effect, for some seconds. A Value wired in goes after the text.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Round 1",
+     "max": 100
+    },
+    {
+     "id": "x",
+     "label": "X (-1: center)",
+     "kind": "number",
+     "default": -1,
+     "min": -1,
+     "max": 1
+    },
+    {
+     "id": "y",
+     "label": "Y (-1: center)",
+     "kind": "number",
+     "default": 0.3,
+     "min": -1,
+     "max": 1
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "effect",
+     "label": "Effect",
+     "kind": "choice",
+     "default": "fade",
+     "choices": [
+      [
+       "fade",
+       "Fade in and out"
+      ],
+      [
+       "flicker",
+       "Flicker"
+      ],
+      [
+       "type",
+       "Typed out"
+      ]
+     ]
+    },
+    {
+     "id": "seconds",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 3,
+     "min": 0.5,
+     "max": 30
+    }
+   ],
+   "keywords": "dhud director hud big text title announce center"
+  },
+  {
+   "type": "msg.color_chat",
+   "title": "Colored Chat",
+   "category": "Messages",
+   "help": "A chat line in color, to one player or everyone: a green Tag first (empty: none), then the text in a team color (red, blue, gray, or the color of the player wired into Color of), green, or the usual yellow. A Value wired in goes after the text; color codes in a player's name or text never get through.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    },
+    {
+     "id": "of",
+     "type": "player",
+     "label": "Color of",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "text",
+     "default": "[Mode]",
+     "max": 24
+    },
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Hello!",
+     "max": 120
+    },
+    {
+     "id": "color",
+     "label": "Color",
+     "kind": "choice",
+     "default": "team",
+     "choices": [
+      [
+       "team",
+       "Their team's color"
+      ],
+      [
+       "red",
+       "Red (Terrorist)"
+      ],
+      [
+       "blue",
+       "Blue (Counter-Terrorist)"
+      ],
+      [
+       "gray",
+       "Gray"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "normal",
+       "Yellow (normal)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "chat color colour green red blue team say print_color"
+  },
+  {
+   "type": "player.move_state",
+   "title": "Player Movement State",
+   "category": "Players",
+   "help": "What a player is doing with their feet: on the ground, ducking, in water (and how deep: 0 dry, 1 feet, 2 waist, 3 under), on a ladder, and how fast (across the ground, and up or down: falling is negative).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ground",
+     "type": "bool",
+     "label": "On ground"
+    },
+    {
+     "id": "duck",
+     "type": "bool",
+     "label": "Ducking"
+    },
+    {
+     "id": "water",
+     "type": "bool",
+     "label": "In water"
+    },
+    {
+     "id": "level",
+     "type": "number",
+     "label": "Water level"
+    },
+    {
+     "id": "ladder",
+     "type": "bool",
+     "label": "On ladder"
+    },
+    {
+     "id": "speed",
+     "type": "number",
+     "label": "Speed"
+    },
+    {
+     "id": "vspeed",
+     "type": "number",
+     "label": "Vertical speed"
+    }
+   ],
+   "params": [],
+   "keywords": "ground ducking crouch water swim ladder speed velocity falling airborne flags",
+   "pure": true
+  },
+  {
+   "type": "player.push",
+   "title": "Push",
+   "category": "Players",
+   "help": "Pushes a player or an entity: along where they aim, where they face (flat), the Direction wired in, away from a Point, or straight up, by Strength (units a second). Add keeps their speed and adds to it; Replace sets it. Lift adds a little upward push so people on the ground aren't held by friction. Jump pads, dashes, knockback.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "target",
+     "type": "entity",
+     "label": "Player or entity",
+     "required": true
+    },
+    {
+     "id": "dir",
+     "type": "vector",
+     "label": "Direction",
+     "optional": true
+    },
+    {
+     "id": "point",
+     "type": "vector",
+     "label": "Away from point",
+     "optional": true
+    },
+    {
+     "id": "strength",
+     "type": "number",
+     "label": "Strength",
+     "param": "strength"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "along",
+     "label": "Along",
+     "kind": "choice",
+     "default": "aim",
+     "choices": [
+      [
+       "aim",
+       "Where they aim"
+      ],
+      [
+       "facing",
+       "Where they face (flat)"
+      ],
+      [
+       "dir",
+       "The Direction"
+      ],
+      [
+       "away",
+       "Away from the Point"
+      ],
+      [
+       "up",
+       "Straight up"
+      ]
+     ]
+    },
+    {
+     "id": "strength",
+     "label": "Strength",
+     "kind": "number",
+     "default": 500,
+     "min": 0,
+     "max": 3000
+    },
+    {
+     "id": "lift",
+     "label": "Lift",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 1000
+    },
+    {
+     "id": "how",
+     "label": "How",
+     "kind": "choice",
+     "default": "add",
+     "choices": [
+      [
+       "add",
+       "Add to their speed"
+      ],
+      [
+       "replace",
+       "Replace their speed"
+      ]
+     ]
+    }
+   ],
+   "keywords": "push knockback dash jump pad launch velocity impulse boost"
+  },
+  {
+   "type": "player.jump_rules",
+   "title": "Jump Rules",
+   "category": "Players",
+   "help": "Jumping rules for a player (or everyone): block jumping or ducking, extra jumps in the air (double jump and more), and automatic bunny hopping (hold jump to hop with no slowdown). Their own game predicts the stock moves, so a blocked jump can look like a small hop on their screen.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "nojump",
+     "label": "Block jumping",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "noduck",
+     "label": "Block ducking",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "air",
+     "label": "Extra air jumps",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 10
+    },
+    {
+     "id": "power",
+     "label": "Air jump strength",
+     "kind": "number",
+     "default": 268,
+     "min": 100,
+     "max": 1000
+    },
+    {
+     "id": "bhop",
+     "label": "Auto bunny hop",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "reset_death",
+     "label": "Back to normal on death",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "reset_round",
+     "label": "Back to normal at a new round",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "jump double jump bhop bunnyhop duck crouch air jump block multi"
+  },
+  {
+   "type": "event.grenade_thrown",
+   "title": "Grenade Thrown",
+   "category": "Events",
+   "help": "Runs when a player throws a grenade: who, the grenade (an entity: Set Grenade Fuse, Push, Remove Entity work on it), which kind and where. Type: only that kind.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Thrower"
+    },
+    {
+     "id": "grenade",
+     "type": "entity",
+     "label": "Grenade"
+    },
+    {
+     "id": "kind",
+     "type": "text",
+     "label": "Kind"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    }
+   ],
+   "params": [
+    {
+     "id": "type",
+     "label": "Type",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Any grenade"
+      ],
+      [
+       "he",
+       "HE grenade"
+      ],
+      [
+       "flash",
+       "Flashbang"
+      ],
+      [
+       "smoke",
+       "Smoke grenade"
+      ]
+     ]
+    }
+   ],
+   "event": true,
+   "keywords": "grenade throw he flash smoke nade"
+  },
+  {
+   "type": "event.grenade_exploded",
+   "title": "Grenade Exploded",
+   "category": "Events",
+   "help": "Runs when a thrown grenade goes off (a smoke grenade when it starts smoking): who threw it, the grenade, which kind and where. Type: only that kind.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Thrower"
+    },
+    {
+     "id": "grenade",
+     "type": "entity",
+     "label": "Grenade"
+    },
+    {
+     "id": "kind",
+     "type": "text",
+     "label": "Kind"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    }
+   ],
+   "params": [
+    {
+     "id": "type",
+     "label": "Type",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Any grenade"
+      ],
+      [
+       "he",
+       "HE grenade"
+      ],
+      [
+       "flash",
+       "Flashbang"
+      ],
+      [
+       "smoke",
+       "Smoke grenade"
+      ]
+     ]
+    }
+   ],
+   "event": true,
+   "keywords": "grenade explode detonate blast he flash smoke nade"
+  },
+  {
+   "type": "ent.grenade_fuse",
+   "title": "Set Grenade Fuse",
+   "category": "Entities",
+   "help": "How many seconds until a thrown grenade goes off, from now (0: at once). Anything that isn't a thrown grenade is left alone.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "grenade",
+     "type": "entity",
+     "label": "Grenade",
+     "required": true
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 60
+    }
+   ],
+   "keywords": "grenade fuse timer detonate dmgtime"
+  },
+  {
+   "type": "ent.play_anim",
+   "title": "Play Animation",
+   "category": "Entities",
+   "help": "Plays an animation (a sequence of its model, by name or number) on a prop, an NPC or any model entity, at a speed (1 normal), from the start or not; Loop plays a one-time animation again every Length seconds (looping ones loop by themselves). Players, creatures and NPCs that are walking are animated by the game and will switch back.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "number",
+     "type": "number",
+     "label": "Sequence number",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "sequence",
+     "label": "Sequence name",
+     "kind": "name",
+     "default": "idle"
+    },
+    {
+     "id": "rate",
+     "label": "Speed",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 10
+    },
+    {
+     "id": "restart",
+     "label": "From the start",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "length",
+     "label": "Length (seconds, for Loop)",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 60
+    }
+   ],
+   "keywords": "animation sequence animate model play anim frame"
+  },
+  {
+   "type": "ent.attach",
+   "title": "Attach To",
+   "category": "Entities",
+   "help": "Makes an entity (a prop, a sprite, an NPC) follow a player or another entity, keeping an offset (X forward is along the world, not their facing) or, at an attachment point of their model (0 to 3), following that point. It's let go when Detach runs, the parent is removed or dies (if asked), or the attached one is removed.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "Parent",
+     "required": true
+    },
+    {
+     "id": "offset",
+     "type": "vector",
+     "label": "Offset",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "point",
+     "label": "Follow",
+     "kind": "choice",
+     "default": "origin",
+     "choices": [
+      [
+       "origin",
+       "Its position (and turning)"
+      ],
+      [
+       "a0",
+       "Attachment 0"
+      ],
+      [
+       "a1",
+       "Attachment 1"
+      ],
+      [
+       "a2",
+       "Attachment 2"
+      ],
+      [
+       "a3",
+       "Attachment 3"
+      ]
+     ]
+    },
+    {
+     "id": "on_death",
+     "label": "Let go when the parent dies",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "attach follow parent hat carry bone attachment movetype follow aiment"
+  },
+  {
+   "type": "ent.detach",
+   "title": "Detach",
+   "category": "Entities",
+   "help": "Lets go of an entity attached with Attach To; it stays where it is (or falls, if Fall is on).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "fall",
+     "label": "Fall",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "detach unattach drop release unparent"
+  },
+  {
+   "type": "event.map_fired",
+   "title": "On Map Entity Fired",
+   "category": "Events",
+   "help": "Runs when a named entity of the map is triggered (by a button, a trigger, a timer or another entity) or used: its name, the entity, who set it off (a player, or nobody) and the entity that fired it. Name: only that entity (empty: any named one). Map logic drives the mode without an ls_event.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Entity name"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Entity"
+    },
+    {
+     "id": "activator",
+     "type": "player",
+     "label": "Activator"
+    },
+    {
+     "id": "caller",
+     "type": "entity",
+     "label": "Caller"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Entity name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "event": true,
+   "keywords": "map trigger fired target targetname use button door relay multi_manager io logic"
+  },
+  {
+   "type": "game.remove_objectives",
+   "title": "Remove Map Objectives",
+   "category": "Game",
+   "help": "Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones. The game notices at the next round (the bomb isn't given, no hostages to save); removed buy zones don't fall back to buying at spawn. Best at Map Started.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "buy",
+     "label": "Buy zones",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "bomb",
+     "label": "Bomb sites",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "hostages",
+     "label": "Hostages",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "rescue",
+     "label": "Rescue zones",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "vip",
+     "label": "VIP safety zones",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "escape",
+     "label": "Escape zones",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "objectives remove bomb site hostage buyzone vip escape rescue map type deathmatch"
+  },
+  {
+   "type": "game.map_type",
+   "title": "Map Type",
+   "category": "Game",
+   "help": "What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "type",
+     "type": "text",
+     "label": "Type"
+    },
+    {
+     "id": "bomb",
+     "type": "bool",
+     "label": "Has bomb sites"
+    },
+    {
+     "id": "hostage",
+     "type": "bool",
+     "label": "Has hostages"
+    },
+    {
+     "id": "vip",
+     "type": "bool",
+     "label": "Has VIP zone"
+    },
+    {
+     "id": "escape",
+     "type": "bool",
+     "label": "Has escape zone"
+    }
+   ],
+   "params": [],
+   "keywords": "map type bomb hostage vip escape de cs as es objectives",
+   "pure": true
+  },
+  {
+   "type": "event.weapon_switched",
+   "title": "Weapon Switched",
+   "category": "Events",
+   "help": "Runs when a player takes out a weapon (a switch, a pick-up that goes to hand, a spawn): the player, the new weapon and the one before (short names: ak47, knife; empty when there was none), and the weapon entity.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "new",
+     "type": "text",
+     "label": "New weapon"
+    },
+    {
+     "id": "old",
+     "type": "text",
+     "label": "Old weapon"
+    },
+    {
+     "id": "weapon",
+     "type": "entity",
+     "label": "Weapon entity"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "keywords": "weapon switch change deploy draw holster slot"
+  },
+  {
+   "type": "game.voice_rules",
+   "title": "Voice Rules",
+   "category": "Game",
+   "help": "Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules). Spectators hear spectators. Voice Override changes it for one player; Mute Voice still mutes.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Who hears",
+     "kind": "choice",
+     "default": "team",
+     "choices": [
+      [
+       "all",
+       "Everyone hears everyone"
+      ],
+      [
+       "team",
+       "Teammates only"
+      ],
+      [
+       "life",
+       "Dead with dead, alive with alive"
+      ],
+      [
+       "team_life",
+       "Teammates, and dead with dead"
+      ],
+      [
+       "near",
+       "Only within the distance"
+      ]
+     ]
+    },
+    {
+     "id": "dist",
+     "label": "Within (units, 0: any)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 8192
+    }
+   ],
+   "keywords": "voice chat talk hear alltalk proximity dead team mic"
+  },
+  {
+   "type": "player.voice_override",
+   "title": "Voice Override",
+   "category": "Players",
+   "help": "Changes the Voice Rules for one player: everyone hears them, nobody does, they hear everyone, or back to the rules.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "how",
+     "label": "Override",
+     "kind": "choice",
+     "default": "heard",
+     "choices": [
+      [
+       "heard",
+       "Everyone hears them"
+      ],
+      [
+       "silent",
+       "Nobody hears them"
+      ],
+      [
+       "hears",
+       "They hear everyone"
+      ],
+      [
+       "rules",
+       "Back to the rules"
+      ]
+     ]
+    }
+   ],
+   "keywords": "voice override mic hear talk admin"
+  },
+  {
+   "type": "msg.radio",
+   "title": "Play Radio",
+   "category": "Messages",
+   "help": "Plays one of the game's radio lines or announcer words to a player, a team or everyone, with the radio text in chat (as From, if a player is wired in). Only the game's own sounds: nothing to load.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "from",
+     "type": "player",
+     "label": "From",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "line",
+     "label": "Line",
+     "kind": "choice",
+     "default": "go",
+     "choices": [
+      [
+       "go",
+       "Go go go!"
+      ],
+      [
+       "fallback",
+       "Team, fall back!"
+      ],
+      [
+       "sticktog",
+       "Stick together, team."
+      ],
+      [
+       "getinpos",
+       "Get in position and wait."
+      ],
+      [
+       "stormfront",
+       "Storm the front!"
+      ],
+      [
+       "reportin",
+       "Report in, team."
+      ],
+      [
+       "affirm",
+       "Affirmative / Roger that."
+      ],
+      [
+       "roger",
+       "Roger that."
+      ],
+      [
+       "enemyspot",
+       "Enemy spotted."
+      ],
+      [
+       "backup",
+       "Need backup."
+      ],
+      [
+       "clear",
+       "Sector clear."
+      ],
+      [
+       "inpos",
+       "I'm in position."
+      ],
+      [
+       "reportingin",
+       "Reporting in."
+      ],
+      [
+       "blow",
+       "Get out of there, it's gonna blow!"
+      ],
+      [
+       "negative",
+       "Negative."
+      ],
+      [
+       "enemydown",
+       "Enemy down."
+      ],
+      [
+       "coverme",
+       "Cover me!"
+      ],
+      [
+       "takepoint",
+       "You take the point."
+      ],
+      [
+       "position",
+       "Hold this position."
+      ],
+      [
+       "regroup",
+       "Regroup, team."
+      ],
+      [
+       "followme",
+       "Follow me."
+      ],
+      [
+       "takingfire",
+       "Taking fire, need assistance!"
+      ],
+      [
+       "fireinhole",
+       "Fire in the hole!"
+      ],
+      [
+       "a_terwin",
+       "Announcer: Terrorists win!"
+      ],
+      [
+       "a_ctwin",
+       "Announcer: Counter-Terrorists win!"
+      ],
+      [
+       "a_draw",
+       "Announcer: Round draw."
+      ],
+      [
+       "a_bombpl",
+       "Announcer: The bomb has been planted."
+      ],
+      [
+       "a_bombdef",
+       "Announcer: The bomb has been defused."
+      ],
+      [
+       "a_rescued",
+       "Announcer: All hostages have been rescued."
+      ],
+      [
+       "a_letsgo",
+       "Announcer: Let's go! (round start)"
+      ],
+      [
+       "a_locknload",
+       "Announcer: Lock and load."
+      ],
+      [
+       "a_moveout",
+       "Announcer: Move out."
+      ]
+     ]
+    },
+    {
+     "id": "to",
+     "label": "To",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone (or the Player)"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "text",
+     "label": "Show the radio text",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "radio announcer sound voice line sendaudio go cover me fire in the hole"
+  },
+  {
+   "type": "player.in_zone",
+   "title": "In Map Zone",
+   "category": "Players",
+   "help": "Is a player in one of the map's zones now: a buy zone, a bomb site, a hostage rescue zone, an escape zone or a VIP safety zone (the map's own, as the game sees them).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "In it"
+    }
+   ],
+   "params": [
+    {
+     "id": "zone",
+     "label": "Zone",
+     "kind": "choice",
+     "default": "buy",
+     "choices": [
+      [
+       "buy",
+       "Buy zone"
+      ],
+      [
+       "bomb",
+       "Bomb site"
+      ],
+      [
+       "rescue",
+       "Hostage rescue zone"
+      ],
+      [
+       "escape",
+       "Escape zone"
+      ],
+      [
+       "vip",
+       "VIP safety zone"
+      ]
+     ]
+    }
+   ],
+   "keywords": "zone buyzone bomb site rescue escape vip in area",
+   "pure": true
+  },
+  {
+   "type": "event.zone_enter",
+   "title": "Entered Map Zone",
+   "category": "Events",
+   "help": "Runs when a living player walks into one of the map's zones (checked four times a second).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "zone",
+     "label": "Zone",
+     "kind": "choice",
+     "default": "buy",
+     "choices": [
+      [
+       "buy",
+       "Buy zone"
+      ],
+      [
+       "bomb",
+       "Bomb site"
+      ],
+      [
+       "rescue",
+       "Hostage rescue zone"
+      ],
+      [
+       "escape",
+       "Escape zone"
+      ],
+      [
+       "vip",
+       "VIP safety zone"
+      ]
+     ]
+    }
+   ],
+   "event": true,
+   "keywords": "zone enter buyzone bomb site rescue escape vip"
+  },
+  {
+   "type": "event.zone_leave",
+   "title": "Left Map Zone",
+   "category": "Events",
+   "help": "Runs when a living player walks out of one of the map's zones (checked four times a second).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "zone",
+     "label": "Zone",
+     "kind": "choice",
+     "default": "buy",
+     "choices": [
+      [
+       "buy",
+       "Buy zone"
+      ],
+      [
+       "bomb",
+       "Bomb site"
+      ],
+      [
+       "rescue",
+       "Hostage rescue zone"
+      ],
+      [
+       "escape",
+       "Escape zone"
+      ],
+      [
+       "vip",
+       "VIP safety zone"
+      ]
+     ]
+    }
+   ],
+   "event": true,
+   "keywords": "zone leave exit buyzone bomb site rescue escape vip"
+  },
+  {
+   "type": "msg.info_window",
+   "title": "Show Info Window",
+   "category": "Messages",
+   "help": "Opens the game's info window (the one the server's message of the day uses) for a player, with a title and text: Text from here, then any Text wired in (from a data table or Format Text). [br] starts a new line, [b]...[b] makes words bold. Plain text only: never a web page or a link.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "more",
+     "type": "text",
+     "label": "Text",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "title",
+     "label": "Title",
+     "kind": "text",
+     "default": "Rules",
+     "max": 40
+    },
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Welcome![br]Have fun.",
+     "max": 900
+    }
+   ],
+   "keywords": "motd info window rules help text page message of the day"
+  },
+  {
+   "type": "npc.move_to",
+   "title": "NPC Move To",
+   "category": "NPCs",
+   "help": "Sends an NPC walking (or running) to an entity or a point now, along the map's bot navigation (straight when the map has none), facing where it goes. Arrived runs when it gets there, Failed when it can't (no way, stuck, or too long). Then it goes back to what it did, or stays there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "To entity",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Or point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "arrived",
+     "type": "exec",
+     "label": "Arrived"
+    },
+    {
+     "id": "failed",
+     "type": "exec",
+     "label": "Failed"
+    }
+   ],
+   "params": [
+    {
+     "id": "speed",
+     "label": "Speed",
+     "kind": "choice",
+     "default": "walk",
+     "choices": [
+      [
+       "walk",
+       "Walk"
+      ],
+      [
+       "run",
+       "Run"
+      ]
+     ]
+    },
+    {
+     "id": "stay",
+     "label": "Stay there after",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "npc move walk go to path navigate run goto",
+   "needs": "components"
+  },
+  {
+   "type": "npc.follow_path",
+   "title": "NPC Follow Path",
+   "category": "NPCs",
+   "help": "Sends an NPC along points in order: an array of positions, or a map's path_track chain by its first name. At point runs at each one, Finished at the end (never with Loop), Failed when it can't get on. Then it goes back to what it did, or stays there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "required": true
+    },
+    {
+     "id": "points",
+     "type": "array<vector>",
+     "label": "Points",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "exec",
+     "label": "At point"
+    },
+    {
+     "id": "finished",
+     "type": "exec",
+     "label": "Finished"
+    },
+    {
+     "id": "failed",
+     "type": "exec",
+     "label": "Failed"
+    }
+   ],
+   "params": [
+    {
+     "id": "track",
+     "label": "Or path_track (first name)",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "speed",
+     "label": "Speed",
+     "kind": "choice",
+     "default": "walk",
+     "choices": [
+      [
+       "walk",
+       "Walk"
+      ],
+      [
+       "run",
+       "Run"
+      ]
+     ]
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "stay",
+     "label": "Stay at the end",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "npc path patrol route waypoints path_track follow walk",
+   "needs": "components"
+  },
+  {
+   "type": "npc.stop",
+   "title": "NPC Stop",
+   "category": "NPCs",
+   "help": "Stops an NPC's Move To or Follow Path where it is (neither Arrived nor Failed runs); it goes back to what it did, or stays.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "stay",
+     "label": "Stay there",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "npc stop halt wait",
+   "needs": "components"
+  },
+  {
    "type": "spatial.players_in_radius",
    "title": "Players In Radius",
    "category": "Spatial",

@@ -766,6 +766,127 @@ node("bots.avoid", "Bots Avoid Area", "Bots", "Marks a place bots keep away from
 node("bots.avoid_stop", "Bots Stop Avoiding", "Bots", "Bots stop avoiding the place with this tag (Bots Avoid Area).", inputs=[X], outputs=[E()], params=[prm("tag","Tag","name","danger")], needs="components", keywords="avoid danger area bots stop")
 node("col.on_landed", "Player Landed", "Events", "Runs when a player lands after a fall: how fast they were falling (units a second; over 580 hurts) and the fall damage the game gives for it (0 if Fall Damage Off). Small hops don't count.", outputs=[E(), P("player","player","Player"), P("speed","number","Fall speed"), P("damage","number","Damage")], params=[prm("min","Only falls faster than","number",250,min=0,max=2000)], **ev)
 
+# ==== EC: engine coverage nodes (the approved gaps 1-8, 10-15, and NPC moves). Kept together; codegen in gen/coverage.rs ====
+EC_PL = P("player","player","Player",required=True)
+EC_PLO = P("player","player","Player (empty: everyone)",optional=True)
+EC_ENT = P("ent","entity","Entity",required=True)
+EC_RGB = [prm("r","Red","number",255,min=0,max=255), prm("g","Green","number",255,min=0,max=255), prm("b","Blue","number",255,min=0,max=255)]
+EC_FIELDS = [["rendermode","Render mode"],["renderfx","Render effect"],["color","Color"],["amount","Render amount (0-255)"],["skin","Skin"],["body","Body (submodel)"],["scale","Scale (sprites, models)"],["gravity","Gravity"],["movetype","Movement"],["solid","Collision"],["health","Health"],["framerate","Animation speed"]]
+EC_PICKS = [["normal","Render mode: Normal"],["color","Render mode: Color"],["texture","Render mode: Texture (see-through)"],["glow","Render mode: Glow (sprites)"],["solid","Render mode: Solid (cut-out)"],["additive","Render mode: Additive (bright, see-through)"],
+            ["fx_none","Effect: None"],["fx_pulse","Effect: Pulse"],["fx_pulsefast","Effect: Fast pulse"],["fx_fadeslow","Effect: Fade out slowly"],["fx_strobe","Effect: Strobe"],["fx_flicker","Effect: Flicker"],["fx_hologram","Effect: Hologram"],["fx_glowshell","Effect: Glow shell"],["fx_distort","Effect: Distort"],
+            ["mv_none","Movement: None (stays put)"],["mv_toss","Movement: Falls"],["mv_bounce","Movement: Falls and bounces"],["mv_fly","Movement: Flies (no gravity)"],["mv_flymissile","Movement: Flies, hits things"],["mv_noclip","Movement: Through walls"],["mv_step","Movement: Steps on the floor"],
+            ["so_not","Collision: Not solid"],["so_trigger","Collision: Touch only"],["so_box","Collision: Solid"]]
+EC_KINDS = [["generic","Generic"],["bullet","Bullet"],["slash","Slash (knife)"],["burn","Burn"],["blast","Blast"],["fall","Fall"],["shock","Shock"],["crush","Crush"],["poison","Poison"],["freeze","Freeze"]]
+EC_ZONES = [["generic","Anywhere (generic)"],["head","Head"],["chest","Chest"],["stomach","Stomach"],["leftarm","Left arm"],["rightarm","Right arm"],["leftleg","Left leg"],["rightleg","Right leg"]]
+EC_ZONE_KIND = [["buy","Buy zone"],["bomb","Bomb site"],["rescue","Hostage rescue zone"],["escape","Escape zone"],["vip","VIP safety zone"]]
+EC_GREN = [["any","Any grenade"],["he","HE grenade"],["flash","Flashbang"],["smoke","Smoke grenade"]]
+EC_RADIO = [["go","Go go go!"],["fallback","Team, fall back!"],["sticktog","Stick together, team."],["getinpos","Get in position and wait."],["stormfront","Storm the front!"],["reportin","Report in, team."],["affirm","Affirmative / Roger that."],["roger","Roger that."],["enemyspot","Enemy spotted."],["backup","Need backup."],["clear","Sector clear."],["inpos","I'm in position."],["reportingin","Reporting in."],["blow","Get out of there, it's gonna blow!"],["negative","Negative."],["enemydown","Enemy down."],["coverme","Cover me!"],["takepoint","You take the point."],["position","Hold this position."],["regroup","Regroup, team."],["followme","Follow me."],["takingfire","Taking fire, need assistance!"],["fireinhole","Fire in the hole!"],
+            ["a_terwin","Announcer: Terrorists win!"],["a_ctwin","Announcer: Counter-Terrorists win!"],["a_draw","Announcer: Round draw."],["a_bombpl","Announcer: The bomb has been planted."],["a_bombdef","Announcer: The bomb has been defused."],["a_rescued","Announcer: All hostages have been rescued."],["a_letsgo","Announcer: Let's go! (round start)"],["a_locknload","Announcer: Lock and load."],["a_moveout","Announcer: Move out."]]
+ECT = dict(pure=True)
+# 1. damage
+node("damage.deal", "Deal Damage", "Damage", "Hurts a player or any entity that can be hurt (a breakable, an NPC, a creature) by Amount, as if Attacker did it: kills, the kill feed, scores and Player Hurt / Player Killed count as usual. No Attacker: the world did it. Kind is what it counts as (a burn, a fall...); Hit zone is where (a head hit shows as a headshot in the kill feed; the amount isn't multiplied). Armor takes its share unless Ignore armor.",
+     inputs=[X, P("target","entity","Target",required=True), P("attacker","player","Attacker",optional=True), P("amount","number","Amount",param="amount")], outputs=[E()],
+     params=[prm("amount","Amount","number",25,min=0,max=10000), prm("kind","Kind","choice","generic",choices=EC_KINDS), prm("zone","Hit zone","choice","generic",choices=EC_ZONES), prm("armor","Ignore armor","bool",False)],
+     keywords="hurt damage harm takedamage attack kill credit")
+# 2. entity properties
+node("ent.prop_get", "Get Entity Property", "Entities", "Reads a property of any entity (a prop, an NPC, a map entity, a player): its render mode, effect, color, amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is the number the game keeps (render modes and the like are numbered as in the map editor); Color is red, green, blue.",
+     inputs=[EC_ENT], outputs=[P("value","number","Value"), P("color","vector","Color")], params=[prm("field","Property","choice","amount",choices=EC_FIELDS)], keywords="render glow color skin body scale gravity movetype solid health pev property", **ECT)
+node("ent.prop_set", "Set Entity Property", "Entities", "Changes a property of any entity: render mode, effect and color (so props and NPCs can glow or fade), amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is for the number properties; Pick is for the named ones (render mode, effect, movement, collision); Color for color. Players: render, color, skin, body, gravity and health work here; movement and collision are theirs to keep (use No Clip, Freeze).",
+     inputs=[X, EC_ENT, P("value","number","Value",param="value"), P("color","vector","Color",optional=True)], outputs=[E()],
+     params=[prm("field","Property","choice","renderfx",choices=EC_FIELDS), prm("value","Value","number",1,min=-10000,max=10000), prm("pick","Pick","choice","fx_glowshell",choices=EC_PICKS)] + EC_RGB,
+     keywords="render glow color fade skin body scale gravity movetype solid health pev property transparency")
+# 3. big HUD text, colored chat
+node("msg.big_hud", "Big HUD Text", "Messages", "Big text on the screen (the director HUD: larger than HUD Text, its own slots), to one player or everyone, at a position (X and Y from 0 to 1; -1 centers), in a color, with an effect, for some seconds. A Value wired in goes after the text.",
+     inputs=[X, EC_PLO, P("value","any","Value",optional=True)], outputs=[E()],
+     params=[prm("text","Text","text","Round 1",max=100), prm("x","X (-1: center)","number",-1,min=-1,max=1), prm("y","Y (-1: center)","number",0.3,min=-1,max=1)] + EC_RGB + [prm("effect","Effect","choice","fade",choices=[["fade","Fade in and out"],["flicker","Flicker"],["type","Typed out"]]), prm("seconds","Seconds","number",3,min=0.5,max=30)],
+     keywords="dhud director hud big text title announce center")
+node("msg.color_chat", "Colored Chat", "Messages", "A chat line in color, to one player or everyone: a green Tag first (empty: none), then the text in a team color (red, blue, gray, or the color of the player wired into Color of), green, or the usual yellow. A Value wired in goes after the text; color codes in a player's name or text never get through.",
+     inputs=[X, EC_PLO, P("value","any","Value",optional=True), P("of","player","Color of",optional=True)], outputs=[E()],
+     params=[prm("tag","Tag","text","[Mode]",max=24), prm("text","Text","text","Hello!",max=120), prm("color","Color","choice","team",choices=[["team","Their team's color"],["red","Red (Terrorist)"],["blue","Blue (Counter-Terrorist)"],["gray","Gray"],["green","Green"],["normal","Yellow (normal)"]])],
+     keywords="chat color colour green red blue team say print_color")
+# 4. movement state
+node("player.move_state", "Player Movement State", "Players", "What a player is doing with their feet: on the ground, ducking, in water (and how deep: 0 dry, 1 feet, 2 waist, 3 under), on a ladder, and how fast (across the ground, and up or down: falling is negative).",
+     inputs=[EC_PL], outputs=[P("ground","bool","On ground"), P("duck","bool","Ducking"), P("water","bool","In water"), P("level","number","Water level"), P("ladder","bool","On ladder"), P("speed","number","Speed"), P("vspeed","number","Vertical speed")],
+     keywords="ground ducking crouch water swim ladder speed velocity falling airborne flags", **ECT)
+# 5. push and jump rules
+node("player.push", "Push", "Players", "Pushes a player or an entity: along where they aim, where they face (flat), the Direction wired in, away from a Point, or straight up, by Strength (units a second). Add keeps their speed and adds to it; Replace sets it. Lift adds a little upward push so people on the ground aren't held by friction. Jump pads, dashes, knockback.",
+     inputs=[X, P("target","entity","Player or entity",required=True), P("dir","vector","Direction",optional=True), P("point","vector","Away from point",optional=True), P("strength","number","Strength",param="strength")], outputs=[E()],
+     params=[prm("along","Along","choice","aim",choices=[["aim","Where they aim"],["facing","Where they face (flat)"],["dir","The Direction"],["away","Away from the Point"],["up","Straight up"]]), prm("strength","Strength","number",500,min=0,max=3000), prm("lift","Lift","number",0,min=0,max=1000), prm("how","How","choice","add",choices=[["add","Add to their speed"],["replace","Replace their speed"]])],
+     keywords="push knockback dash jump pad launch velocity impulse boost")
+node("player.jump_rules", "Jump Rules", "Players", "Jumping rules for a player (or everyone): block jumping or ducking, extra jumps in the air (double jump and more), and automatic bunny hopping (hold jump to hop with no slowdown). Their own game predicts the stock moves, so a blocked jump can look like a small hop on their screen.",
+     inputs=[X, EC_PLO], outputs=[E()],
+     params=[prm("nojump","Block jumping","bool",False), prm("noduck","Block ducking","bool",False), prm("air","Extra air jumps","number",1,min=0,max=10), prm("power","Air jump strength","number",268,min=100,max=1000), prm("bhop","Auto bunny hop","bool",False), prm("reset_death","Back to normal on death","bool",False), prm("reset_round","Back to normal at a new round","bool",False)],
+     keywords="jump double jump bhop bunnyhop duck crouch air jump block multi")
+# 6. grenades
+node("event.grenade_thrown", "Grenade Thrown", "Events", "Runs when a player throws a grenade: who, the grenade (an entity: Set Grenade Fuse, Push, Remove Entity work on it), which kind and where. Type: only that kind.",
+     outputs=[E(), P("player","player","Thrower"), P("grenade","entity","Grenade"), P("kind","text","Kind"), P("pos","vector","Position")], params=[prm("type","Type","choice","any",choices=EC_GREN)], event=True, keywords="grenade throw he flash smoke nade")
+node("event.grenade_exploded", "Grenade Exploded", "Events", "Runs when a thrown grenade goes off (a smoke grenade when it starts smoking): who threw it, the grenade, which kind and where. Type: only that kind.",
+     outputs=[E(), P("player","player","Thrower"), P("grenade","entity","Grenade"), P("kind","text","Kind"), P("pos","vector","Position")], params=[prm("type","Type","choice","any",choices=EC_GREN)], event=True, keywords="grenade explode detonate blast he flash smoke nade")
+node("ent.grenade_fuse", "Set Grenade Fuse", "Entities", "How many seconds until a thrown grenade goes off, from now (0: at once). Anything that isn't a thrown grenade is left alone.",
+     inputs=[X, P("grenade","entity","Grenade",required=True), P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",1,min=0,max=60)], keywords="grenade fuse timer detonate dmgtime")
+# 7. animation and attaching
+node("ent.play_anim", "Play Animation", "Entities", "Plays an animation (a sequence of its model, by name or number) on a prop, an NPC or any model entity, at a speed (1 normal), from the start or not; Loop plays a one-time animation again every Length seconds (looping ones loop by themselves). Players, creatures and NPCs that are walking are animated by the game and will switch back.",
+     inputs=[X, EC_ENT, P("number","number","Sequence number",optional=True)], outputs=[E()],
+     params=[prm("sequence","Sequence name","name","idle"), prm("rate","Speed","number",1,min=0,max=10), prm("restart","From the start","bool",True), prm("loop","Loop","bool",False), prm("length","Length (seconds, for Loop)","number",2,min=0.1,max=60)],
+     keywords="animation sequence animate model play anim frame")
+node("ent.attach", "Attach To", "Entities", "Makes an entity (a prop, a sprite, an NPC) follow a player or another entity, keeping an offset (X forward is along the world, not their facing) or, at an attachment point of their model (0 to 3), following that point. It's let go when Detach runs, the parent is removed or dies (if asked), or the attached one is removed.",
+     inputs=[X, P("ent","entity","Entity",required=True), P("to","entity","Parent",required=True), P("offset","vector","Offset",optional=True)], outputs=[E()],
+     params=[prm("point","Follow","choice","origin",choices=[["origin","Its position (and turning)"],["a0","Attachment 0"],["a1","Attachment 1"],["a2","Attachment 2"],["a3","Attachment 3"]]), prm("on_death","Let go when the parent dies","bool",True)],
+     keywords="attach follow parent hat carry bone attachment movetype follow aiment")
+node("ent.detach", "Detach", "Entities", "Lets go of an entity attached with Attach To; it stays where it is (or falls, if Fall is on).",
+     inputs=[X, P("ent","entity","Entity",required=True)], outputs=[E()], params=[prm("fall","Fall","bool",False)], keywords="detach unattach drop release unparent")
+# 8. map entity fired
+node("event.map_fired", "On Map Entity Fired", "Events", "Runs when a named entity of the map is triggered (by a button, a trigger, a timer or another entity) or used: its name, the entity, who set it off (a player, or nobody) and the entity that fired it. Name: only that entity (empty: any named one). Map logic drives the mode without an ls_event.",
+     outputs=[E(), P("name","text","Entity name"), P("entity","entity","Entity"), P("activator","player","Activator"), P("caller","entity","Caller")], params=[prm("name","Entity name","name","")], event=True,
+     keywords="map trigger fired target targetname use button door relay multi_manager io logic")
+# 10. map objectives
+node("game.remove_objectives", "Remove Map Objectives", "Game", "Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones. The game notices at the next round (the bomb isn't given, no hostages to save); removed buy zones don't fall back to buying at spawn. Best at Map Started.",
+     inputs=[X], outputs=[E()],
+     params=[prm("buy","Buy zones","bool",False), prm("bomb","Bomb sites","bool",True), prm("hostages","Hostages","bool",True), prm("rescue","Rescue zones","bool",True), prm("vip","VIP safety zones","bool",True), prm("escape","Escape zones","bool",True)],
+     keywords="objectives remove bomb site hostage buyzone vip escape rescue map type deathmatch")
+node("game.map_type", "Map Type", "Game", "What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no.",
+     outputs=[P("type","text","Type"), P("bomb","bool","Has bomb sites"), P("hostage","bool","Has hostages"), P("vip","bool","Has VIP zone"), P("escape","bool","Has escape zone")], keywords="map type bomb hostage vip escape de cs as es objectives", **ECT)
+# 11. weapon switched
+node("event.weapon_switched", "Weapon Switched", "Events", "Runs when a player takes out a weapon (a switch, a pick-up that goes to hand, a spawn): the player, the new weapon and the one before (short names: ak47, knife; empty when there was none), and the weapon entity.",
+     outputs=[E(), P("player","player","Player"), P("new","text","New weapon"), P("old","text","Old weapon"), P("weapon","entity","Weapon entity")], event=True, keywords="weapon switch change deploy draw holster slot")
+# 12. voice
+node("game.voice_rules", "Voice Rules", "Game", "Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules). Spectators hear spectators. Voice Override changes it for one player; Mute Voice still mutes.",
+     inputs=[X], outputs=[E()],
+     params=[prm("who","Who hears","choice","team",choices=[["all","Everyone hears everyone"],["team","Teammates only"],["life","Dead with dead, alive with alive"],["team_life","Teammates, and dead with dead"],["near","Only within the distance"]]), prm("dist","Within (units, 0: any)","number",0,min=0,max=8192)],
+     keywords="voice chat talk hear alltalk proximity dead team mic")
+node("player.voice_override", "Voice Override", "Players", "Changes the Voice Rules for one player: everyone hears them, nobody does, they hear everyone, or back to the rules.",
+     inputs=[X, EC_PL], outputs=[E()], params=[prm("how","Override","choice","heard",choices=[["heard","Everyone hears them"],["silent","Nobody hears them"],["hears","They hear everyone"],["rules","Back to the rules"]])],
+     keywords="voice override mic hear talk admin")
+# 13. radio
+node("msg.radio", "Play Radio", "Messages", "Plays one of the game's radio lines or announcer words to a player, a team or everyone, with the radio text in chat (as From, if a player is wired in). Only the game's own sounds: nothing to load.",
+     inputs=[X, P("player","player","Player",optional=True), P("from","player","From",optional=True)], outputs=[E()],
+     params=[prm("line","Line","choice","go",choices=EC_RADIO), prm("to","To","choice","all",choices=[["all","Everyone (or the Player)"],["t","Terrorists"],["ct","Counter-Terrorists"]]), prm("text","Show the radio text","bool",True)],
+     keywords="radio announcer sound voice line sendaudio go cover me fire in the hole")
+# 14. map zones
+node("player.in_zone", "In Map Zone", "Players", "Is a player in one of the map's zones now: a buy zone, a bomb site, a hostage rescue zone, an escape zone or a VIP safety zone (the map's own, as the game sees them).",
+     inputs=[EC_PL], outputs=[P("out","bool","In it")], params=[prm("zone","Zone","choice","buy",choices=EC_ZONE_KIND)], keywords="zone buyzone bomb site rescue escape vip in area", **ECT)
+node("event.zone_enter", "Entered Map Zone", "Events", "Runs when a living player walks into one of the map's zones (checked four times a second).",
+     outputs=[E(), P("player","player","Player")], params=[prm("zone","Zone","choice","buy",choices=EC_ZONE_KIND)], event=True, keywords="zone enter buyzone bomb site rescue escape vip")
+node("event.zone_leave", "Left Map Zone", "Events", "Runs when a living player walks out of one of the map's zones (checked four times a second).",
+     outputs=[E(), P("player","player","Player")], params=[prm("zone","Zone","choice","buy",choices=EC_ZONE_KIND)], event=True, keywords="zone leave exit buyzone bomb site rescue escape vip")
+# 15. info window
+node("msg.info_window", "Show Info Window", "Messages", "Opens the game's info window (the one the server's message of the day uses) for a player, with a title and text: Text from here, then any Text wired in (from a data table or Format Text). [br] starts a new line, [b]...[b] makes words bold. Plain text only: never a web page or a link.",
+     inputs=[X, EC_PL, P("more","text","Text",optional=True)], outputs=[E()],
+     params=[prm("title","Title","text","Rules",max=40), prm("text","Text","text","Welcome![br]Have fun.",max=900)],
+     keywords="motd info window rules help text page message of the day")
+# NPC moves
+node("npc.move_to", "NPC Move To", "NPCs", "Sends an NPC walking (or running) to an entity or a point now, along the map's bot navigation (straight when the map has none), facing where it goes. Arrived runs when it gets there, Failed when it can't (no way, stuck, or too long). Then it goes back to what it did, or stays there.",
+     inputs=[X, P("npc","entity","NPC",required=True), P("to","entity","To entity",optional=True), P("pos","vector","Or point",optional=True)], outputs=[E(), E("arrived","Arrived"), E("failed","Failed")],
+     params=[prm("speed","Speed","choice","walk",choices=[["walk","Walk"],["run","Run"]]), prm("stay","Stay there after","bool",False)],
+     keywords="npc move walk go to path navigate run goto", needs="components")
+node("npc.follow_path", "NPC Follow Path", "NPCs", "Sends an NPC along points in order: an array of positions, or a map's path_track chain by its first name. At point runs at each one, Finished at the end (never with Loop), Failed when it can't get on. Then it goes back to what it did, or stays there.",
+     inputs=[X, P("npc","entity","NPC",required=True), P("points","array<vector>","Points",optional=True)], outputs=[E(), E("point","At point"), E("finished","Finished"), E("failed","Failed")],
+     params=[prm("track","Or path_track (first name)","name",""), prm("speed","Speed","choice","walk",choices=[["walk","Walk"],["run","Run"]]), prm("loop","Loop","bool",False), prm("stay","Stay at the end","bool",False)],
+     keywords="npc path patrol route waypoints path_track follow walk", needs="components")
+node("npc.stop", "NPC Stop", "NPCs", "Stops an NPC's Move To or Follow Path where it is (neither Arrived nor Failed runs); it goes back to what it did, or stays.",
+     inputs=[X, P("npc","entity","NPC",required=True)], outputs=[E()], params=[prm("stay","Stay there","bool",True)], keywords="npc stop halt wait", needs="components")
+
+
 data = {
   "version": 4,
   "pinTypes": {

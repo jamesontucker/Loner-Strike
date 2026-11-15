@@ -1,0 +1,821 @@
+// ---- engine coverage nodes (EC): only stocks here; the hooks are written for the nodes used ----
+// comfort limits: plain defaults (a call past one is skipped; the debugger says so)
+#define LSG_EC_ATTACH 64
+#define LSG_EC_LOOPS 64
+#define LSG_EC_CLASSES 96
+// an engine limit: big HUD texts and colored chat lines sent in one server frame
+#define LSG_EC_MSGS 24
+stock const g_lsgEcGren[][] = { "", "HE grenade", "Flashbang", "Smoke grenade" }
+stock g_lsgEcGType[2048], bool:g_lsgEcGBoom[2048], g_lsgEcGOwner[2048]
+stock g_lsgEcLastW[33], g_lsgEcLastE[33], g_lsgEcZone[33], bool:g_lsgEcZoneTurn
+stock g_lsgEcJr[33], g_lsgEcAir[33], Float:g_lsgEcPow[33], g_lsgEcUsed[33]
+stock g_lsgEcJrAll, g_lsgEcAirAll, Float:g_lsgEcPowAll = 268.0
+stock g_lsgEcVoice = -1, Float:g_lsgEcVoiceDist, g_lsgEcVoiceOv[33]
+stock g_lsgEcAtt[LSG_EC_ATTACH], g_lsgEcAttTo[LSG_EC_ATTACH], g_lsgEcAttPt[LSG_EC_ATTACH], bool:g_lsgEcAttDie[LSG_EC_ATTACH], g_lsgEcAttSolid[LSG_EC_ATTACH], Float:g_lsgEcAttOff[LSG_EC_ATTACH][3]
+stock g_lsgEcLoop[LSG_EC_LOOPS], g_lsgEcLoopSeq[LSG_EC_LOOPS], Float:g_lsgEcLoopLen[LSG_EC_LOOPS], Float:g_lsgEcLoopAt[LSG_EC_LOOPS]
+stock Float:g_lsgEcMsgAt, g_lsgEcMsgN, bool:g_lsgEcMsgSaid
+stock g_lsgEcUseLast, Float:g_lsgEcUseAt, g_lsgEcUseCaller
+stock bool:g_lsgEcNoObj
+
+// an engine limit: so many messages in one frame and the rest are skipped (said once in the log)
+stock bool:lsg_ec_msg_ok()
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgEcMsgAt)
+	{
+		g_lsgEcMsgAt = now
+		g_lsgEcMsgN = 0
+	}
+	if (++g_lsgEcMsgN <= LSG_EC_MSGS)
+		return true
+	if (!g_lsgEcMsgSaid)
+	{
+		g_lsgEcMsgSaid = true
+		log_amx("Studio: more than %d big HUD texts or colored chat lines in one frame; the rest were skipped", LSG_EC_MSGS)
+	}
+	return false
+}
+
+// Deal Damage: through the game's own TakeDamage (kills, the kill feed and scores count)
+stock lsg_ec_damage(t, a, Float:dmg, bits, zone, bool:noarmor)
+{
+	if (t <= 0 || !pev_valid(t) || dmg <= 0.0 || pev(t, pev_takedamage) == DAMAGE_NO)
+		return 0
+	new bool:pl = t <= MaxClients
+	if (pl && !is_user_alive(t))
+		return 0
+	if (!pl && pev_valid(t) != 2)
+		return 0
+	if (!lsg_ok(a) || !is_user_alive(a))
+		a = 0
+	if (pl)
+		set_ent_data(t, "CBaseMonster", "m_LastHitGroup", zone)
+	new Float:arm
+	if (pl && noarmor)
+	{
+		pev(t, pev_armorvalue, arm)
+		set_pev(t, pev_armorvalue, 0.0)
+	}
+	ExecuteHamB(Ham_TakeDamage, t, a, a, dmg, bits)
+	if (pl && noarmor && is_user_connected(t))
+		set_pev(t, pev_armorvalue, arm)
+	return 1
+}
+
+// Get/Set Entity Property: 0 rendermode 1 renderfx 2 color 3 amount 4 skin 5 body 6 scale
+// 7 gravity 8 movetype 9 solid 10 health 11 framerate
+stock Float:lsg_ec_get(e, f)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 0.0
+	new Float:x
+	switch (f)
+	{
+		case 0: return float(pev(e, pev_rendermode))
+		case 1: return float(pev(e, pev_renderfx))
+		case 3: pev(e, pev_renderamt, x)
+		case 4: return float(pev(e, pev_skin))
+		case 5: return float(pev(e, pev_body))
+		case 6: pev(e, pev_scale, x)
+		case 7: pev(e, pev_gravity, x)
+		case 8: return float(pev(e, pev_movetype))
+		case 9: return float(pev(e, pev_solid))
+		case 10: pev(e, pev_health, x)
+		case 11: pev(e, pev_framerate, x)
+	}
+	return x
+}
+
+stock lsg_ec_getcolor(e)
+{
+	new Float:c[3]
+	if (e > 0 && pev_valid(e))
+		pev(e, pev_rendercolor, c)
+	return lsg_vfrom(c)
+}
+
+stock bool:lsg_ec_brush(e)
+{
+	new m[2]
+	pev(e, pev_model, m, charsmax(m))
+	return m[0] == '*'
+}
+
+stock lsg_ec_set(e, f, Float:v, pick, cv)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 0
+	new bool:pl = e <= MaxClients
+	if (pl && !is_user_connected(e))
+		return 0
+	switch (f)
+	{
+		case 0, 1, 8, 9:
+		{
+			if (pick < 0)
+				return 0
+			if (f == 0)
+				set_pev(e, pev_rendermode, pick)
+			else if (f == 1)
+				set_pev(e, pev_renderfx, pick)
+			else if (f == 8)
+			{
+				// players, brushes (doors, trains) and attached things keep their own movement
+				if (pl || lsg_ec_brush(e) || pev(e, pev_movetype) == MOVETYPE_FOLLOW)
+					return 0
+				set_pev(e, pev_movetype, pick)
+			}
+			else
+			{
+				if (pl)
+					return 0
+				new s = pick == SOLID_BBOX && lsg_ec_brush(e) ? SOLID_BSP : pick
+				set_pev(e, pev_solid, s)
+				new Float:o[3]
+				pev(e, pev_origin, o)
+				engfunc(EngFunc_SetOrigin, e, o)
+			}
+		}
+		case 2:
+		{
+			new Float:c[3]
+			lsg_vto(cv, c)
+			for (new k = 0; k < 3; k++)
+				c[k] = floatclamp(c[k], 0.0, 255.0)
+			set_pev(e, pev_rendercolor, c)
+		}
+		case 3: set_pev(e, pev_renderamt, floatclamp(v, 0.0, 255.0))
+		case 4: set_pev(e, pev_skin, clamp(floatround(v), 0, 255))
+		case 5: set_pev(e, pev_body, clamp(floatround(v), 0, 255))
+		case 6:
+		{
+			if (pl)
+				return 0
+			set_pev(e, pev_scale, floatclamp(v, 0.05, 10.0))
+		}
+		case 7: set_pev(e, pev_gravity, floatclamp(v, 0.01, 10.0))
+		case 10:
+		{
+			if (v < 1.0 || (pl && !is_user_alive(e)))
+				return 0
+			set_pev(e, pev_health, floatmin(v, 100000.0))
+		}
+		default: set_pev(e, pev_framerate, floatclamp(v, 0.0, 10.0))
+	}
+	return 1
+}
+
+// Colored Chat: a player whose team color is wanted (0: the reader's own)
+stock lsg_ec_sender(p)
+	return lsg_ok(p) ? p : 0
+
+// color codes (bytes 1-4) out of text that came from players or tables
+stock lsg_ec_clean(s[])
+{
+	for (new k = 0; s[k]; k++)
+		if (s[k] < ' ')
+			s[k] = ' '
+}
+
+// Player Movement State: 0 ground 1 ducking 2 in water 4 ladder; 3 water level, 5 speed, 6 vertical
+stock lsg_ec_mv(p, w)
+{
+	if (!lsg_ok(p) || !is_user_alive(p))
+		return 0
+	new fl = pev(p, pev_flags)
+	switch (w)
+	{
+		case 0: return fl & FL_ONGROUND ? 1 : 0
+		case 1: return fl & FL_DUCKING ? 1 : 0
+		case 2: return pev(p, pev_waterlevel) > 0 ? 1 : 0
+		case 4: return pev(p, pev_movetype) == MOVETYPE_FLY ? 1 : 0
+	}
+	return 0
+}
+
+stock Float:lsg_ec_mvf(p, w)
+{
+	if (!lsg_ok(p) || !is_user_alive(p))
+		return 0.0
+	if (w == 3)
+		return float(pev(p, pev_waterlevel))
+	new Float:v[3]
+	pev(p, pev_velocity, v)
+	if (w == 6)
+		return v[2]
+	return floatsqroot(v[0] * v[0] + v[1] * v[1])
+}
+
+// Push: 0 aim 1 facing 2 the direction 3 away from the point 4 up
+stock lsg_ec_push(e, along, dv, pv, Float:str, Float:lift, bool:replace)
+{
+	if (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))
+		return 0
+	new Float:d[3], Float:a[3]
+	switch (along)
+	{
+		case 0, 1:
+		{
+			if (e <= MaxClients)
+				pev(e, pev_v_angle, a)
+			else
+				pev(e, pev_angles, a)
+			if (along == 1)
+				a[0] = 0.0
+			angle_vector(a, ANGLEVECTOR_FORWARD, d)
+		}
+		case 2:
+		{
+			if (dv < 0)
+				return 0
+			lsg_vto(dv, d)
+		}
+		case 3:
+		{
+			if (pv < 0)
+				return 0
+			new Float:o[3]
+			lsg_vto(pv, a)
+			pev(e, pev_origin, o)
+			for (new k = 0; k < 3; k++)
+				d[k] = o[k] - a[k]
+		}
+		default: d[2] = 1.0
+	}
+	new Float:len = floatsqroot(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
+	if (len < 0.001)
+		return 0
+	new Float:v[3]
+	if (!replace)
+		pev(e, pev_velocity, v)
+	for (new k = 0; k < 3; k++)
+		v[k] += d[k] / len * str
+	v[2] += lift
+	set_pev(e, pev_velocity, v)
+	return 1
+}
+
+// Jump Rules: flags 1 no jump, 2 no duck, 4 auto bunny hop, 8 back to normal on death, 16 at a new round
+stock lsg_ec_jump(id, flags, air, Float:pow)
+{
+	if (id)
+	{
+		if (lsg_ok(id))
+		{
+			g_lsgEcJr[id] = flags
+			g_lsgEcAir[id] = air
+			g_lsgEcPow[id] = pow
+		}
+		return
+	}
+	g_lsgEcJrAll = flags
+	g_lsgEcAirAll = air
+	g_lsgEcPowAll = pow
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		g_lsgEcJr[p] = flags
+		g_lsgEcAir[p] = air
+		g_lsgEcPow[p] = pow
+	}
+}
+
+stock lsg_ec_jump_reset(id, bit)
+{
+	if ((g_lsgEcJr[id] & bit) && id >= 1 && id <= 32)
+	{
+		g_lsgEcJr[id] = 0
+		g_lsgEcAir[id] = 0
+	}
+}
+
+public lsg_ec_cmd(id, uc, seed)
+{
+	#pragma unused seed
+	if (id < 1 || id > 32 || !(g_lsgEcJr[id] & 3))
+		return FMRES_IGNORED
+	new b = get_uc(uc, UC_Buttons)
+	if (g_lsgEcJr[id] & 1)
+		b &= ~IN_JUMP
+	if (g_lsgEcJr[id] & 2)
+		b &= ~IN_DUCK
+	set_uc(uc, UC_Buttons, b)
+	return FMRES_IGNORED
+}
+
+public lsg_ec_think(id)
+{
+	if (id < 1 || id > 32 || (!g_lsgEcAir[id] && !(g_lsgEcJr[id] & 4)) || !is_user_alive(id))
+		return FMRES_IGNORED
+	new b = pev(id, pev_button), ob = pev(id, pev_oldbuttons), fl = pev(id, pev_flags)
+	if (fl & FL_ONGROUND)
+	{
+		g_lsgEcUsed[id] = 0
+		if ((g_lsgEcJr[id] & 4) && (b & IN_JUMP))
+		{
+			set_pev(id, pev_oldbuttons, ob & ~IN_JUMP)
+			set_pev(id, pev_fuser2, 0.0)
+		}
+	}
+	else if (g_lsgEcAir[id] && (b & IN_JUMP) && !(ob & IN_JUMP) && g_lsgEcUsed[id] < g_lsgEcAir[id] && pev(id, pev_waterlevel) < 2 && pev(id, pev_movetype) == MOVETYPE_WALK)
+	{
+		g_lsgEcUsed[id]++
+		new Float:v[3]
+		pev(id, pev_velocity, v)
+		v[2] = g_lsgEcPow[id]
+		set_pev(id, pev_velocity, v)
+	}
+	return FMRES_IGNORED
+}
+
+public lsg_ec_dead(id)
+	lsg_ec_jump_reset(id, 8)
+
+public lsg_ec_round()
+{
+	for (new p = 1; p <= MaxClients; p++)
+		lsg_ec_jump_reset(p, 16)
+}
+
+// grenades: the kind of a thrown one (1 HE, 2 flash, 3 smoke; 0 anything else), its thrower
+stock lsg_ec_gtype(e, const model[])
+{
+	if (e <= MaxClients || e >= 2048 || !pev_valid(e))
+		return 0
+	new c[10]
+	pev(e, pev_classname, c, charsmax(c))
+	if (!equal(c, "grenade"))
+		return 0
+	new t = 0
+	if (equal(model, "models/w_hegrenade.mdl"))
+		t = 1
+	else if (equal(model, "models/w_flashbang.mdl"))
+		t = 2
+	else if (equal(model, "models/w_smokegrenade.mdl"))
+		t = 3
+	g_lsgEcGType[e] = t
+	g_lsgEcGBoom[e] = false
+	new o = pev(e, pev_owner)
+	g_lsgEcGOwner[e] = lsg_ok(o) ? o : 0
+	return t
+}
+
+// the moment it goes off (once): its fuse is over (a smoke grenade also has to lie still)
+stock lsg_ec_gdue(e)
+{
+	if (e <= MaxClients || e >= 2048 || !g_lsgEcGType[e] || g_lsgEcGBoom[e] || !pev_valid(e))
+		return 0
+	new Float:t
+	pev(e, pev_dmgtime, t)
+	if (t > get_gametime())
+		return 0
+	if (g_lsgEcGType[e] == 3 && !(pev(e, pev_flags) & FL_ONGROUND))
+		return 0
+	g_lsgEcGBoom[e] = true
+	return g_lsgEcGType[e]
+}
+
+stock lsg_ec_fuse(e, Float:secs)
+{
+	if (e <= MaxClients || e >= 2048 || !pev_valid(e) || !g_lsgEcGType[e] || g_lsgEcGBoom[e])
+		return 0
+	set_pev(e, pev_dmgtime, get_gametime() + secs)
+	return 1
+}
+
+// Play Animation (looping one-time sequences are played again from the tick)
+stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Float:len)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return 0
+	new s = num
+	if (s < 0)
+	{
+		new Float:fr, bool:loops
+		s = lookup_sequence(e, name, fr, loops)
+		if (s < 0)
+			return 0
+		if (loops)
+			loop = false
+	}
+	set_pev(e, pev_sequence, s)
+	if (restart)
+	{
+		set_pev(e, pev_frame, 0.0)
+		set_pev(e, pev_animtime, get_gametime())
+	}
+	set_pev(e, pev_framerate, rate)
+	new k = -1
+	for (new i = 0; i < LSG_EC_LOOPS; i++)
+		if (g_lsgEcLoop[i] == e)
+			k = i
+	if (!loop)
+	{
+		if (k >= 0)
+			g_lsgEcLoop[k] = 0
+		return 1
+	}
+	for (new i = 0; i < LSG_EC_LOOPS && k < 0; i++)
+		if (!g_lsgEcLoop[i] || !pev_valid(g_lsgEcLoop[i]))
+			k = i
+	if (k < 0)
+		return 0
+	g_lsgEcLoop[k] = e
+	g_lsgEcLoopSeq[k] = s
+	g_lsgEcLoopLen[k] = len
+	g_lsgEcLoopAt[k] = get_gametime()
+	return 1
+}
+
+stock lsg_ec_anim_tick()
+{
+	new Float:now = get_gametime()
+	for (new i = 0; i < LSG_EC_LOOPS; i++)
+	{
+		new e = g_lsgEcLoop[i]
+		if (!e)
+			continue
+		if (!pev_valid(e) || pev(e, pev_sequence) != g_lsgEcLoopSeq[i])
+		{
+			g_lsgEcLoop[i] = 0
+			continue
+		}
+		if (now - g_lsgEcLoopAt[i] >= g_lsgEcLoopLen[i])
+		{
+			g_lsgEcLoopAt[i] = now
+			set_pev(e, pev_frame, 0.0)
+			set_pev(e, pev_animtime, now)
+		}
+	}
+}
+
+// Attach To: moved with its parent every server frame (its own velocity too, so it's smooth)
+stock lsg_ec_attach(e, to, ov, pt, bool:ondeath)
+{
+	if (e <= MaxClients || !pev_valid(e) || to <= 0 || !pev_valid(to) || e == to)
+		return 0
+	new k = -1
+	for (new i = 0; i < LSG_EC_ATTACH; i++)
+		if (g_lsgEcAtt[i] == e)
+			k = i
+	// never round in a circle
+	for (new i = 0; i < LSG_EC_ATTACH; i++)
+		if (g_lsgEcAtt[i] == to && g_lsgEcAttTo[i] == e)
+			return 0
+	for (new i = 0; i < LSG_EC_ATTACH && k < 0; i++)
+		if (!g_lsgEcAtt[i])
+			k = i
+	if (k < 0)
+		return 0
+	if (g_lsgEcAtt[k] != e)
+		g_lsgEcAttSolid[k] = pev(e, pev_solid)
+	g_lsgEcAtt[k] = e
+	g_lsgEcAttTo[k] = to
+	g_lsgEcAttPt[k] = pt
+	g_lsgEcAttDie[k] = ondeath
+	new Float:off[3]
+	if (ov >= 0)
+		lsg_vto(ov, off)
+	g_lsgEcAttOff[k] = off
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
+	lsg_ec_attach_put(k)
+	return 1
+}
+
+stock lsg_ec_attach_put(k)
+{
+	new e = g_lsgEcAtt[k], to = g_lsgEcAttTo[k]
+	new Float:o[3], Float:a[3], Float:v[3]
+	if (g_lsgEcAttPt[k] >= 0)
+		engfunc(EngFunc_GetAttachment, to, g_lsgEcAttPt[k], o, a)
+	else
+		pev(to, pev_origin, o)
+	pev(to, to <= MaxClients ? pev_v_angle : pev_angles, a)
+	a[0] = 0.0
+	for (new i = 0; i < 3; i++)
+		o[i] += g_lsgEcAttOff[k][i]
+	pev(to, pev_velocity, v)
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_angles, a)
+	set_pev(e, pev_velocity, v)
+}
+
+stock lsg_ec_detach(e, bool:fall)
+{
+	for (new k = 0; k < LSG_EC_ATTACH; k++)
+	{
+		if (g_lsgEcAtt[k] != e || !e)
+			continue
+		g_lsgEcAtt[k] = 0
+		if (!pev_valid(e))
+			continue
+		set_pev(e, pev_velocity, Float:{0.0, 0.0, 0.0})
+		set_pev(e, pev_movetype, fall ? MOVETYPE_TOSS : MOVETYPE_NONE)
+		set_pev(e, pev_solid, g_lsgEcAttSolid[k])
+		new Float:o[3]
+		pev(e, pev_origin, o)
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+public lsg_ec_frame()
+{
+	for (new k = 0; k < LSG_EC_ATTACH; k++)
+	{
+		new e = g_lsgEcAtt[k]
+		if (!e)
+			continue
+		new to = g_lsgEcAttTo[k]
+		if (!pev_valid(e))
+		{
+			g_lsgEcAtt[k] = 0
+			continue
+		}
+		if (!pev_valid(to) || (to <= MaxClients && (!is_user_connected(to) || (g_lsgEcAttDie[k] && !is_user_alive(to)))) || (to > MaxClients && g_lsgEcAttDie[k] && pev(to, pev_deadflag) != DEAD_NO))
+		{
+			lsg_ec_detach(e, false)
+			continue
+		}
+		lsg_ec_attach_put(k)
+	}
+	return FMRES_IGNORED
+}
+
+// On Map Entity Fired: Use hooked on one entity of each kind (by its code, so twice never)
+// that has a name when the map starts
+stock lsg_ec_hook_use()
+{
+	new seen[LSG_EC_CLASSES], n = 0, tn[2]
+	new top = global_get(glb_maxEntities)
+	for (new e = MaxClients + 1; e < top && n < LSG_EC_CLASSES; e++)
+	{
+		if (pev_valid(e) != 2)
+			continue
+		pev(e, pev_targetname, tn, charsmax(tn))
+		if (!tn[0])
+			continue
+		new vt = get_pdata_int(e, 0, 0, 0), bool:dup = false
+		for (new i = 0; i < n && !dup; i++)
+			dup = seen[i] == vt
+		if (dup)
+			continue
+		seen[n++] = vt
+		RegisterHamFromEntity(Ham_Use, e, "lsg_ec_used", 1)
+	}
+	if (n >= LSG_EC_CLASSES)
+		log_amx("Studio: On Map Entity Fired hooks %d kinds of entity (Limits); others on this map aren't heard", LSG_EC_CLASSES)
+}
+
+// the same entity fired twice in one go (a class hooked through a parent) counts once
+stock bool:lsg_ec_twice(ent, caller)
+{
+	new Float:now = get_gametime()
+	if (ent == g_lsgEcUseLast && caller == g_lsgEcUseCaller && now == g_lsgEcUseAt)
+		return true
+	g_lsgEcUseLast = ent
+	g_lsgEcUseCaller = caller
+	g_lsgEcUseAt = now
+	return false
+}
+
+// Remove Map Objectives: 1 buy, 2 bomb, 4 hostages, 8 rescue, 16 VIP, 32 escape
+stock lsg_ec_noobj(mask)
+{
+	new const cls[][] = { "func_buyzone", "func_bomb_target", "info_bomb_target", "hostage_entity", "monster_scientist", "func_hostage_rescue", "info_hostage_rescue", "func_vip_safetyzone", "func_escapezone" }
+	new const bit[] = { 1, 2, 2, 4, 4, 8, 8, 16, 32 }
+	for (new i = 0; i < sizeof cls; i++)
+	{
+		if (!(mask & bit[i]))
+			continue
+		new e = -1
+		while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", cls[i])) > 0)
+		{
+			new tn[16]
+			pev(e, pev_targetname, tn, charsmax(tn))
+			if (!equal(tn, "lsg_ec_standin"))
+				engfunc(EngFunc_RemoveEntity, e)
+		}
+	}
+	// a stand-in nobody reaches: the game still sees a buy zone (else it lets them buy at spawn)
+	if ((mask & 1) && !g_lsgEcNoObj)
+	{
+		new d = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "func_buyzone"))
+		if (d > 0)
+		{
+			set_pev(d, pev_targetname, "lsg_ec_standin")
+			g_lsgEcNoObj = true
+		}
+	}
+}
+
+// Map Type: 1 bomb 2 hostage 3 VIP 4 escape
+stock bool:lsg_ec_mhas(w)
+{
+	switch (w)
+	{
+		case 1: return lsg_ec_any("func_bomb_target") || lsg_ec_any("info_bomb_target")
+		case 2: return lsg_ec_any("hostage_entity") || lsg_ec_any("monster_scientist")
+		case 3: return lsg_ec_any("func_vip_safetyzone")
+	}
+	return lsg_ec_any("func_escapezone")
+}
+
+stock bool:lsg_ec_any(const c[])
+	return engfunc(EngFunc_FindEntityByString, -1, "classname", c) > 0
+
+stock lsg_ec_mtype()
+{
+	new s[12]
+	if (lsg_ec_mhas(1))
+		copy(s, charsmax(s), "bomb")
+	else if (lsg_ec_mhas(2))
+		copy(s, charsmax(s), "hostage")
+	else if (lsg_ec_mhas(3))
+		copy(s, charsmax(s), "vip")
+	else if (lsg_ec_mhas(4))
+		copy(s, charsmax(s), "escape")
+	else
+		copy(s, charsmax(s), "other")
+	return s
+}
+
+// Weapon Switched: a weapon's short name (ak47); "" for none
+stock lsg_ec_wname(csw)
+{
+	new s[24]
+	if (csw > 0 && csw <= 32)
+	{
+		get_weaponname(csw, s, charsmax(s))
+		if (equal(s, "weapon_", 7))
+			copy(s, charsmax(s), s[7])
+	}
+	return s
+}
+
+// Voice Rules: 0 all 1 team 2 dead with dead 3 team and dead with dead 4 distance only; -1 unset
+stock bool:lsg_ec_hears(r, s)
+{
+	if (g_lsgEcVoiceOv[s] == 1 || g_lsgEcVoiceOv[r] == 3)
+		return true
+	if (g_lsgEcVoiceOv[s] == 2)
+		return false
+	if (g_lsgEcVoice < 0)
+		return true
+	new tr = get_user_team(r), ts = get_user_team(s)
+	new bool:ar = is_user_alive(r) != 0, bool:as = is_user_alive(s) != 0
+	if (tr != 1 && tr != 2)
+		tr = 3
+	if (ts != 1 && ts != 2)
+		ts = 3
+	switch (g_lsgEcVoice)
+	{
+		case 1: if (tr != ts) return false
+		case 2: if (ar != as) return false
+		case 3:
+		{
+			if (ar != as)
+				return false
+			if (ar && tr != ts)
+				return false
+		}
+	}
+	if (g_lsgEcVoiceDist > 0.0 && ar && as)
+	{
+		new Float:a[3], Float:b[3]
+		pev(r, pev_origin, a)
+		pev(s, pev_origin, b)
+		if (get_distance_f(a, b) > g_lsgEcVoiceDist)
+			return false
+	}
+	return true
+}
+
+public lsg_ec_voice(r, s, bool:listen)
+{
+	#pragma unused listen
+	if (r == s || !lsg_ok(r) || !lsg_ok(s) || (g_lsgEcVoice < 0 && !g_lsgEcVoiceOv[r] && !g_lsgEcVoiceOv[s]))
+		return FMRES_IGNORED
+	// Mute Voice still mutes
+	new bool:ok = get_speak(s) != SPEAK_MUTED && (get_speak(r) == SPEAK_LISTENALL || lsg_ec_hears(r, s))
+	engfunc(EngFunc_SetClientListening, r, s, ok)
+	forward_return(FMV_CELL, ok)
+	return FMRES_SUPERCEDE
+}
+
+// Play Radio: the game's own lines (SendAudio) and the radio text (TextMsg)
+stock lsg_ec_radio(who, team, from, const snd[], const txt[], bool:ann)
+{
+	if (!lsg_ok(from))
+		from = 0
+	new fname[32], num[4]
+	if (from)
+		get_user_name(from, fname, charsmax(fname))
+	else
+		copy(fname, charsmax(fname), "Radio")
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p) || (who && p != who) || (team && get_user_team(p) != team))
+			continue
+		message_begin(MSG_ONE, get_user_msgid("SendAudio"), _, p)
+		write_byte(from ? from : p)
+		write_string(snd)
+		write_short(100)
+		message_end()
+		if (!txt[0])
+			continue
+		message_begin(MSG_ONE, get_user_msgid("TextMsg"), _, p)
+		if (ann)
+		{
+			write_byte(4)
+			write_string(txt)
+		}
+		else
+		{
+			num_to_str(from ? from : p, num, charsmax(num))
+			write_byte(5)
+			write_string(num)
+			write_string("#Game_radio")
+			write_string(fname)
+			write_string(txt)
+		}
+		message_end()
+	}
+}
+
+// In Map Zone: the game's own zone signals
+stock lsg_ec_inzone(p, bit)
+	return lsg_ok(p) && is_user_alive(p) && (cs_get_user_mapzones(p) & bit) ? 1 : 0
+
+// Show Info Window: always a page made here, its text escaped ([br] a new line, [b] bold)
+stock lsg_ec_html(out[], len, const s[], &bool:bold)
+{
+	new n = 0
+	for (new k = 0; s[k] && n < len - 8; k++)
+	{
+		new c = s[k]
+		if (c == '[' && equal(s[k], "[br]", 4))
+		{
+			n += copy(out[n], len - n, "<br>")
+			k += 3
+		}
+		else if (c == '[' && equal(s[k], "[b]", 3))
+		{
+			n += copy(out[n], len - n, bold ? "</b>" : "<b>")
+			bold = !bold
+			k += 2
+		}
+		else if (c == '<')
+			n += copy(out[n], len - n, "&lt;")
+		else if (c == '>')
+			n += copy(out[n], len - n, "&gt;")
+		else if (c == '&')
+			n += copy(out[n], len - n, "&amp;")
+		else if (c == '"')
+			n += copy(out[n], len - n, "&quot;")
+		else if (c == 39)
+			n += copy(out[n], len - n, "&#39;")
+		else if (c == '^n')
+			n += copy(out[n], len - n, "<br>")
+		else if (c >= ' ')
+			out[n++] = c
+	}
+	out[n] = 0
+	return n
+}
+
+stock lsg_ec_motd(id, const title[], const body[], const more[])
+{
+	if (!lsg_ok(id) || is_user_bot(id))
+		return 0
+	static buf[1536]
+	new bool:bold = false
+	new len = charsmax(buf) - 24
+	new n = copy(buf, len, "<html><head><style>body{background:#111;color:#e8e2c8;font:13px Tahoma,Verdana,sans-serif;padding:8px}b{color:#ffb000}</style></head><body>")
+	n += lsg_ec_html(buf[n], len - n, body, bold)
+	if (more[0] && n < len - 8)
+	{
+		n += copy(buf[n], len - n, "<br>")
+		n += lsg_ec_html(buf[n], len - n, more, bold)
+	}
+	if (bold)
+		n += copy(buf[n], charsmax(buf) - n, "</b>")
+	copy(buf[n], charsmax(buf) - n, "</body></html>")
+	show_motd(id, buf, title)
+	return 1
+}
+
+// leaving: nothing carries over to whoever gets the slot next
+public lsg_ec_left(id)
+{
+	if (id < 1 || id > 32)
+		return FMRES_IGNORED
+	g_lsgEcLastW[id] = 0
+	g_lsgEcLastE[id] = 0
+	g_lsgEcZone[id] = 0
+	g_lsgEcJr[id] = g_lsgEcJrAll
+	g_lsgEcAir[id] = g_lsgEcAirAll
+	g_lsgEcPow[id] = g_lsgEcPowAll
+	g_lsgEcUsed[id] = 0
+	g_lsgEcVoiceOv[id] = 0
+	return FMRES_IGNORED
+}

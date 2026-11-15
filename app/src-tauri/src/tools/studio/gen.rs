@@ -33,6 +33,8 @@ mod collide;
 
 // HUD & View: the engine nodes (Y), their own file
 pub(crate) mod engine;
+// engine coverage nodes (EC), their own file
+pub(crate) mod coverage;
 
 /// How many event cell values a flow can carry (victim, attacker...).
 const CTX: usize = 8;
@@ -727,6 +729,7 @@ impl<'a> Gen<'a> {
             return Val { expr: e, ty };
         }
         let expr = match def.kind.as_str() {
+            k if coverage::is_pure(k) => coverage::pure(self, node, pin), // EC
             k if w1::PURE.contains(&k) => w1::pure(self, node, pin), // W1
             "math.compare" => {
                 let op = match self.choice(n, def, "op") {
@@ -1198,6 +1201,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         || g.enums.iter().any(|e| !e.builtin)
         || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
         || w1::used(g) // W1
+        || coverage::used(g) // EC
         || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))));
 
     let mut o = Out { text: String::new(), lines: 0 };
@@ -1443,6 +1447,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.blank();
     }
     engine::blocks(g, &mut o);
+    coverage::blocks(g, &mut o); // EC
     if uses_clock {
         o.line(CLOCK);
         o.blank();
@@ -1713,6 +1718,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
     }
     engine::init(g, &mut o);
+    coverage::init(&gen, &mut o); // EC
     if uses_clock {
         o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
     }
@@ -1964,6 +1970,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if collide::used(g) {
         collide::handlers(&gen, &mut o);
     }
+    coverage::handlers(&gen, &mut o); // EC
 
     // nodes
     for id in &gen.live {
@@ -3783,6 +3790,18 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             if debug {
                 b.line(format!("\tlsd_exit({i}, fmt(\"%d keys\", lsg_mlen({m})))"));
             }
+            then_line(&mut b, "then");
+        }
+        // engine coverage nodes (EC)
+        k if coverage::is_event(k) => {
+            let e = exit("ran");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        k if coverage::is_action(k) => {
+            coverage::action(gen, id, n, def, &mut b, &inp, &exit, &err);
             then_line(&mut b, "then");
         }
         k if engine::is_action(k) => {
@@ -7619,7 +7638,7 @@ mod tests {
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
         let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up", "event.on_tick"];
-        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind)) {
+        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind) && !coverage::is_event(&d.kind)) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
     }
@@ -7952,6 +7971,8 @@ mod tests {
         for k in w1::PURE.iter().chain(w1::FLOW) {
             used.insert(k);
         }
+        // EC: the engine coverage nodes are in every_node_ec.graph.json (gen/coverage/tests.rs tests it)
+        let used: BTreeSet<&str> = used.into_iter().chain(coverage::PURE.iter().copied()).chain(coverage::EVENTS.iter().copied()).chain(coverage::ACTIONS.iter().copied()).collect();
         for d in &registry().nodes {
             assert!(used.contains(d.kind.as_str()), "every_node(_2/_3/_4).graph.json lacks {}", d.kind);
         }
