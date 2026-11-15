@@ -4,7 +4,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
-import { container, nodeDef, typeColor, type NodeDef, type ParamDef, type PinDef } from "./registry";
+import { container, nodeDef, pinMeta, typeColor, type NodeDef, type ParamDef, type PinDef } from "./registry";
 import { outType, resizeComment, setCommentText, setParam, toggleBreakpoint } from "./graphOps";
 import { LABEL_CHARS } from "./schema";
 import { allVariables, nodeTitle, typeLabel } from "./pins";
@@ -131,7 +131,7 @@ function Pin({ pin, side, color, wired, problem, watch, value }: { pin: PinDef; 
   const exec = pin.type === "exec";
   const shape = container(pin.type)?.kind;
   return (
-    <div className={`st-pin st-pin-${side}${problem ? " bad" : ""}${watch ? " watched" : ""}`} title={problem ?? watch}>
+    <div className={`st-pin st-pin-${side}${problem ? " bad" : ""}${watch ? " watched" : ""}${pin.orphan ? " st-pin-orphan" : ""}`} title={pin.orphan ? "This pin was removed in an update. Re-wire or delete it." : (problem ?? watch)}>
       <Handle
         type={side === "in" ? "target" : "source"}
         position={side === "in" ? Position.Left : Position.Right}
@@ -141,6 +141,8 @@ function Pin({ pin, side, color, wired, problem, watch, value }: { pin: PinDef; 
         style={exec ? undefined : { borderColor: color, background: wired ? color : undefined }}
       />
       {pin.label && <span className="st-pin-label">{pin.label}</span>}
+      {pin.whole && <span className="st-pin-whole" title="A whole number">#</span>}
+      {pinMeta(pin.type)?.badge && <span className="st-pin-badge" title={pinMeta(pin.type)?.label}>{pinMeta(pin.type)?.badge}</span>}
       {value}
     </div>
   );

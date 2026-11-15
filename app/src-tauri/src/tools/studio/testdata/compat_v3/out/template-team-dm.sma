@@ -1,5 +1,5 @@
 /*
-	Rifle Reward - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Rifle Reward - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from rifle_reward.graph.json: change the graph and compile it again; edits here are lost.
 */
 

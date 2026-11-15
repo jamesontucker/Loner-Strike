@@ -1,5 +1,5 @@
 /*
-	Starter library test B - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Starter library test B - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from starter_test_b.graph.json: change the graph and compile it again; edits here are lost.
 */
 

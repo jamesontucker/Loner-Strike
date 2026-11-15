@@ -7,7 +7,7 @@
 import { z } from "zod";
 
 export const SCHEMA = "loner-strike/graph";
-export const VERSION = 3;
+export const VERSION = 4;
 
 const id = z.string().regex(/^[A-Za-z0-9_]{1,24}$/, "ids are 1 to 24 letters, digits or _");
 export const modeId = z.string().regex(/^[a-z][a-z0-9_]{1,23}$/, "2 to 24 small letters, digits or _, starting with a letter");
@@ -132,7 +132,7 @@ export const macroSchema = z.object({ id, name: label(30), inputs: z.array(membe
 
 export const graphSchema = z.object({
   schema: z.literal(SCHEMA),
-  version: z.union([z.literal(1), z.literal(2), z.literal(VERSION)]).transform(() => VERSION),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(VERSION)]).transform(() => VERSION),
   mode: z.object({
     id: modeId,
     /** the mode's permanent identity (UUID v4): made with the mode, kept through renames */

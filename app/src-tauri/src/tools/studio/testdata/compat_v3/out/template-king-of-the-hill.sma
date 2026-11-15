@@ -1,5 +1,5 @@
 /*
-	King of the Hill - made with Loner-Strike's Game Mode Studio (graph version 3).
+	King of the Hill - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from king_of_the_hill.graph.json: change the graph and compile it again; edits here are lost.
 */
 

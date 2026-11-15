@@ -1081,7 +1081,9 @@ for d in nodes:
         d["help"] += XF_HELP if d["type"] != "comp.create" else XF_HELP.split(" Rotation (pitch")[0] + " Rotation (pitch, yaw, roll) sets the facing outright (no Velocity or Scale: a component is a zone)."
 
 data = {
-  "version": 4,
+  "version": 5,
+  # (a renamed node's old type id -> its id now: StudioCompat.md, never remove one)
+  "aliases": {},
   "pinTypes": {
     "exec": {"label": "Flow", "color": "#f2f2f2"},
     "player": {"label": "Player", "color": "#5ab0ff"},
@@ -1095,6 +1097,19 @@ data = {
     "enum": {"label": "Enum", "color": "#1f8a70"},
     "struct": {"label": "Struct", "color": "#2f6fd6"},
     "any": {"label": "Anything", "color": "#9a9a9a"},
+    "model": {"label": "Model", "color": "#c98b5a", "mark": "file"},
+    "sprite": {"label": "Sprite", "color": "#f29ad8", "mark": "file"},
+    "sound": {"label": "Sound", "color": "#6fe3b0", "mark": "file"},
+    "decal": {"label": "Decal", "color": "#b9a37a", "mark": "file"},
+    "visual": {"label": "Model or Sprite", "color": "#dd92a0", "mark": "file"},
+    "color": {"label": "Color", "color": "#ff5fa2", "mark": "rainbow"},
+    "npc": {"label": "NPC", "color": "#4dd0c8", "badge": "N"},
+    "creature": {"label": "Creature", "color": "#4dd0c8", "badge": "C"},
+    "projectile": {"label": "Projectile", "color": "#4dd0c8", "badge": "P"},
+    "volume": {"label": "Trigger Volume", "color": "#4dd0c8", "badge": "V"},
+    "objmarker": {"label": "Objective Marker", "color": "#4dd0c8", "badge": "M"},
+    "component": {"label": "Component", "color": "#4dd0c8", "badge": "K"},
+    "soundloop": {"label": "Sound Loop", "color": "#9cc4ff"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
   "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Waves", "Upgrades", "Game", "World", "Entities", "Effects", "Advanced", "Downed", "Shop", "NPCs", "Battle Royale", "Creatures", "Data tables", "Projectiles", "HUD & View"],

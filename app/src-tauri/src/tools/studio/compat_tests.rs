@@ -139,3 +139,54 @@ fn every_1_0_graph_compiles_with_amxxpc() {
     }
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// Orphans (StudioCompat.md): a wire to a pin the node doesn't have any more, and a value of a
+/// setting it doesn't have, are kept, named by an error (so Compile, Test and Publish stop) and
+/// saved again as they were; nothing is dropped.
+#[test]
+fn orphaned_pins_and_values_are_kept_and_named() {
+    let text = json!({"schema": graph::SCHEMA, "version": 3, "mode": {"id": "orphans", "name": "Orphans"},
+        "nodes": [{"id": "rs", "type": "event.round_started"}, {"id": "p", "type": "debug.print", "params": {"text": "hi", "chat": false, "gone_setting": 5}},
+                  {"id": "n", "type": "math.number", "params": {"value": 2}}],
+        "edges": [{"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                  {"id": "w2", "from": {"node": "n", "pin": "out"}, "to": {"node": "p", "pin": "removed_pin"}},
+                  {"id": "w3", "from": {"node": "rs", "pin": "old_out"}, "to": {"node": "p", "pin": "value"}}]}).to_string();
+    let g = graph::parse(&text).unwrap();
+    assert_eq!(g.edges.len(), 3, "no wire dropped");
+    let p = graph::validate(&g);
+    let orphan = |pin: &str, edge: Option<&str>| p.iter().any(|x| x.level == "error" && x.pin.as_deref() == Some(pin) && x.edge.as_deref() == edge && x.message.contains("orphaned"));
+    assert!(orphan("removed_pin", Some("w2")), "{p:#?}");
+    assert!(orphan("old_out", Some("w3")), "{p:#?}");
+    assert!(p.iter().any(|x| x.level == "error" && x.pin.as_deref() == Some("gone_setting") && x.message.contains(graph::ORPHAN_VALUE)), "{p:#?}");
+    assert!(graph::has_errors(&p), "Compile, Test and Publish stop on errors");
+    // saved and read again: all still there
+    let again = graph::parse(&serde_json::to_string(&g).unwrap()).unwrap();
+    assert_eq!(again.edges.len(), 3);
+    assert_eq!(again.nodes.iter().find(|n| n.id == "p").unwrap().params.get("gone_setting"), Some(&json!(5)));
+    // deleting the wire ends the orphan
+    let mut fixed = again.clone();
+    fixed.edges.retain(|e| e.id != "w2");
+    assert!(!graph::validate(&fixed).iter().any(|x| x.pin.as_deref() == Some("removed_pin")));
+}
+
+/// Renamed ids read forward through the registry's alias maps (none are needed yet: the map is
+/// there for the first rename), and graph versions 1-3 read as the current one.
+#[test]
+fn old_versions_read_forward() {
+    for v in 1..=graph::VERSION {
+        let g = graph::parse(&json!({"schema": graph::SCHEMA, "version": v, "mode": {"id": "old", "name": "Old"}, "nodes": [], "edges": []}).to_string()).unwrap();
+        assert_eq!(g.version, graph::VERSION);
+    }
+    let newer = graph::parse(&json!({"schema": graph::SCHEMA, "version": graph::VERSION + 1, "mode": {"id": "new", "name": "New"}, "nodes": [], "edges": []}).to_string());
+    assert!(newer.unwrap_err().contains("newer Loner-Strike"));
+    // every alias points at something that exists
+    let r = graph::registry();
+    for (old, new) in &r.aliases {
+        assert!(r.get(new).is_some() && r.get(old).is_none(), "{old} -> {new}");
+    }
+    for d in &r.nodes {
+        for (old, new) in &d.aliases {
+            assert!(d.inputs.iter().chain(&d.outputs).any(|p| &p.id == new) || d.param(new).is_some(), "{}: {old} -> {new}", d.kind);
+        }
+    }
+}

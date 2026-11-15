@@ -7,7 +7,8 @@ import { useReactFlow } from "@xyflow/react";
 import { useStudio } from "./store";
 import { loadBookmarks, saveBookmarks, type Bookmark } from "./tidyOps";
 import { usePanels } from "./panels";
-import { useAskText } from "../../../ui";
+import { useAskText, useToast } from "../../../ui";
+import { refreshReport, refreshSummary } from "./refreshOps";
 
 const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
@@ -19,6 +20,7 @@ export function ViewMenu({ onTidy }: { onTidy: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const minimap = usePanels((p) => p.minimap);
   const askText = useAskText();
+  const toast = useToast();
   const uid = graph?.mode.uid || graph?.mode.id || "";
   useEffect(() => {
     if (!open) return;
@@ -65,6 +67,9 @@ export function ViewMenu({ onTidy }: { onTidy: () => void }) {
         <div className="st-help-menu-list st-bookmarks" role="menu" aria-label="View">
           <button type="button" role="menuitem" onClick={() => (setOpen(false), onTidy())}>
             Tidy up <span className="st-muted">nodes left to right</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => (setOpen(false), graph && toast(refreshSummary(refreshReport(graph)), refreshReport(graph).length > 0))}>
+            Refresh nodes <span className="st-muted">what an update changed</span>
           </button>
           <button type="button" role="menuitemcheckbox" aria-checked={minimap} onClick={() => usePanels.getState().set({ minimap: !minimap })}>
             {minimap ? "✓ " : ""}Show the minimap

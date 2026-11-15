@@ -1,5 +1,5 @@
 /*
-	Every node (effects, sounds, spawning) - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Every node (effects, sounds, spawning) - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from every_node_fx.graph.json: change the graph and compile it again; edits here are lost.
 */
 

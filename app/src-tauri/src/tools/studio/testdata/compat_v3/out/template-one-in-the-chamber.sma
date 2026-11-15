@@ -1,5 +1,5 @@
 /*
-	One in the Chamber - made with Loner-Strike's Game Mode Studio (graph version 3).
+	One in the Chamber - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from one_in_the_chamber.graph.json: change the graph and compile it again; edits here are lost.
 */
 

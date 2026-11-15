@@ -186,6 +186,16 @@ export function setParam(g: Graph, node: string, param: string, value: string | 
   return { ...g, nodes: g.nodes.map((n) => (n.id === node ? { ...n, params: { ...n.params, [param]: value } } : n)) };
 }
 
+/** Clears a setting's value (an orphaned one: the node doesn't have it any more). */
+export function clearParam(g: Graph, node: string, param: string): Graph {
+  return { ...g, nodes: g.nodes.map((n) => {
+    if (n.id !== node) return n;
+    const params = { ...n.params };
+    delete params[param];
+    return { ...n, params };
+  }) };
+}
+
 // ---- variables -----------------------------------------------------------------------------
 
 export function addVariable(g: Graph, v: Omit<GVariable, "id">): { graph: Graph; id: string } {

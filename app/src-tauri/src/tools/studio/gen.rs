@@ -4030,7 +4030,7 @@ fn to_text(gen: &Gen, val: &Val) -> String {
         "text" => e.clone(),
         "number" => format!("lsg_ntext({e})"),
         "player" => format!("lsg_name({e})"),
-        "entity" => format!("lsg_etext({e})"),
+        "entity" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" => format!("lsg_etext({e})"),
         "team" => format!("g_lsgTeamName[clamp({e}, 0, 3)]"),
         "bool" => format!("g_lsgYesNo[({e}) ? 1 : 0]"),
         "vector" => format!("lsg_vtext({e})"),

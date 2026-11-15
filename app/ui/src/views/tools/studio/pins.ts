@@ -7,7 +7,11 @@ import { container, nodeDef, PIN_TYPES, type NodeDef, type PinDef, type PinType 
 import { allEnums, type GMember, type GNode, type Graph } from "./schema";
 import { tablePins } from "./tables";
 
-export const BASE_TYPES = ["number", "bool", "text", "player", "entity", "team", "vector", "timer"] as const;
+export const BASE_TYPES = [
+  "number", "bool", "text", "player", "entity", "team", "vector", "timer",
+  // (graph version 4: files, a color, the entity handles, a playing loop; graph.rs BASE_TYPES)
+  "model", "sprite", "sound", "decal", "color", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop",
+] as const;
 export const KEY_TYPES = ["text", "number", "player"] as const;
 
 /** A plain type, an enum or (with `structs`) a struct of this graph. */
@@ -208,8 +212,22 @@ export function pinsOf(g: Graph, n: GNode): Pins {
     inputs: inputs.map((p) => ({ ...p, type: resolve(g, n, def, p.type) })),
     outputs: outputs.map((p) => ({ ...p, type: resolve(g, n, def, p.type) })),
   };
+  // orphans: a wire to a pin the node doesn't have any more (an update took it away) stays,
+  // on a red pin of its own, until it's re-wired or deleted (graph.rs ORPHAN_PIN)
+  for (const e of g.edges) {
+    if (e.to.node === n.id && !out.inputs.some((p) => p.id === e.to.pin)) out.inputs.push({ id: e.to.pin, type: "any", label: `Orphaned: ${e.to.pin}`, orphan: true });
+    if (e.from.node === n.id && !out.outputs.some((p) => p.id === e.from.pin)) out.outputs.push({ id: e.from.pin, type: "any", label: `Orphaned: ${e.from.pin}`, orphan: true });
+  }
   m.set(n.id, out);
   return out;
+}
+
+/** Settings a node has a value for that its definition doesn't (removed in an update): kept,
+ *  shown greyed until cleared (graph.rs ORPHAN_VALUE). */
+export function orphanValues(n: GNode): string[] {
+  const def = nodeDef(n.type);
+  if (!def) return [];
+  return Object.keys(n.params ?? {}).filter((k) => !def.params.some((p) => p.id === k));
 }
 
 /** The registry's own pin (its type before it's worked out), for generic nodes. */

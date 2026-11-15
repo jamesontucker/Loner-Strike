@@ -7,7 +7,7 @@ import raw from "./nodes.json?raw";
  *  array<T>, map<K,T>, any, var (the node's variable's type) and, in the registry, $T $K $E $S $F
  *  (worked out from the node's settings: pins.ts). */
 export type PinType = string;
-export type PinDef = { id: string; type: PinType; label: string; required?: boolean; optional?: boolean; param?: string };
+export type PinDef = { id: string; type: PinType; label: string; required?: boolean; optional?: boolean; param?: string; /** a whole number (# on the pin) */ whole?: boolean; /** a wired pin the node doesn't have any more (kept, drawn red: StudioCompat.md) */ orphan?: boolean };
 export type ParamDef = {
   id: string;
   label: string;
@@ -51,6 +51,8 @@ const data = JSON.parse(raw) as { nodes: NodeDef[]; categories: string[]; pinTyp
 export const NODE_DEFS = data.nodes;
 export const CATEGORIES = data.categories;
 export const PIN_TYPES = data.pinTypes;
+/** A pin type's look: its label, color and, for files, colors and entity handles, a mark or a badge letter. */
+export const pinMeta = (t: string) => (PIN_TYPES as Record<string, { label: string; color: string; mark?: string; badge?: string } | undefined>)[t];
 
 const BY_TYPE = new Map(NODE_DEFS.map((d) => [d.type, d]));
 export const nodeDef = (type: string): NodeDef | undefined => BY_TYPE.get(type);
@@ -63,10 +65,20 @@ export function container(t: string): { kind: "array" | "map"; key?: string; ite
   return m ? { kind: "map", key: m[1], item: m[2] } : null;
 }
 
+/** What a value of this type goes into as it is, one step (graph.rs `upcast`). */
+export function upcast(t: PinType): PinType | undefined {
+  if (["player", "npc", "creature", "projectile", "volume", "objmarker", "component"].includes(t)) return "entity";
+  if (t === "model" || t === "sprite") return "visual";
+  if (t === "enum:ls_weapon") return "text";
+  return undefined;
+}
+
 /** Can a wire carrying `from` go into a pin of type `to`? ("any" is a reroute's pin; a player
  *  is an entity; an array of anything fits any array.) Same rules as graph.rs `compatible`. */
 export function compatible(from: PinType, to: PinType): boolean {
-  if (from === to || from === "any" || to === "any" || (from === "player" && to === "entity")) return true;
+  if (from === to || from === "any" || to === "any") return true;
+  // (up the chain: a Creature is an Entity; arrays don't widen)
+  for (let t: string | undefined = upcast(from); t; t = upcast(t)) if (t === to) return true;
   const a = container(from);
   const b = container(to);
   if (!a || !b || a.kind !== b.kind) return false;

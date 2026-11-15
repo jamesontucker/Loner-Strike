@@ -1,5 +1,5 @@
 /*
-	Marker test - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Marker test - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from mk_test.graph.json: change the graph and compile it again; edits here are lost.
 */
 

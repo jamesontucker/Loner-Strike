@@ -1,5 +1,5 @@
 /*
-	Every P5 node - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Every P5 node - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from every_node_p5.graph.json: change the graph and compile it again; edits here are lost.
 */
 

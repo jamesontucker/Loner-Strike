@@ -1,5 +1,5 @@
 /*
-	Every Node W1 - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Every Node W1 - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from every_node_w1.graph.json: change the graph and compile it again; edits here are lost.
 */
 

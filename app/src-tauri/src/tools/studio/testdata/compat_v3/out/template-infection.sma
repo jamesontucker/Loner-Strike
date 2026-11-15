@@ -1,5 +1,5 @@
 /*
-	Infection - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Infection - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from infection.graph.json: change the graph and compile it again; edits here are lost.
 */
 

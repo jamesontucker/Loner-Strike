@@ -3,9 +3,9 @@
 
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
-import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { allEnums, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
-import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
+import { allVariables, itemTypeOk, nodeTitle, orphanValues, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { Requirements } from "./Requirements";
 import { insertItem, newerInLibrary } from "./library";
@@ -726,6 +726,16 @@ export function Inspector() {
         <h3 className="st-side-title">{nodeTitle(graph, node)}</h3>
         <p className="st-side-help">{def.help}</p>
         {def.needs && <p className="st-side-help st-needs">{def.needs === "components" ? "Needs the game mode components (gm_components) on the server; without them this does nothing and Playtest says so." : "Needs Loner-Strike's bot brain with creatures; without it this does nothing and Playtest says so."}</p>}
+        {orphanValues(node).length > 0 && (
+          <div className="st-side-fields" aria-label="Removed settings">
+            {orphanValues(node).map((k) => (
+              <div key={k} className="st-orphan-value" title="This setting was removed in an update. Clear it or delete the node.">
+                <span>Orphaned: {k} = {String(node.params?.[k])}</span>
+                <button type="button" className="btn small" onClick={() => edit((g) => clearParam(g, node.id, k))}>Clear</button>
+              </div>
+            ))}
+          </div>
+        )}
         {def.params.length > 0 && (
           <div className="st-side-fields">
             {def.params.map((p) => {

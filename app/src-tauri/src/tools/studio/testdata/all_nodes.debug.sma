@@ -1,5 +1,5 @@
 /*
-	All Nodes - made with Loner-Strike's Game Mode Studio (graph version 3).
+	All Nodes - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from all_nodes.graph.json: change the graph and compile it again; edits here are lost.
 	This is a debug build (Playtest): it reports every node to the Studio.
 */

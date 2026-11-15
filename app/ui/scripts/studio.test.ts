@@ -22,6 +22,9 @@ import { insertAsPlayer, wantsAsPlayer } from "../src/views/tools/studio/castOps
 import { narrowed } from "../src/views/tools/studio/panels";
 import { addPin, countOf, removePin } from "../src/views/tools/studio/pinCountOps"; // (X2)
 import { allEnums } from "../src/views/tools/studio/schema";
+import { refreshReport, refreshSummary } from "../src/views/tools/studio/refreshOps";
+import { compatible as wireOk, upcast } from "../src/views/tools/studio/registry";
+import { orphanValues as orphanVals, pinsOf as pinsFor } from "../src/views/tools/studio/pins";
 
 const template = (): Graph => {
   const r = parseGraph(JSON.parse(templateRaw));
@@ -109,13 +112,14 @@ test("mode settings may have digits after the first letter (mp_give_player_c4), 
   assert.ok("error" in bad, "a digit first");
 });
 
-test("version 1 and 2 files open as version 3; variables are checked", () => {
+test("version 1, 2 and 3 files open as version 4; variables are checked", () => {
   const g = template();
   const r = parseGraph({ ...g, version: 1, variables: undefined });
-  assert.ok("graph" in r && r.graph.version === 3 && r.graph.variables.length === 0 && !r.graph.functions);
+  assert.ok("graph" in r && r.graph.version === 4 && r.graph.variables.length === 0 && !r.graph.functions);
   const r2 = parseGraph({ ...g, version: 2 });
-  assert.ok("graph" in r2 && r2.graph.version === 3);
-  assert.ok("error" in parseGraph({ ...g, version: 4 }));
+  assert.ok("graph" in r2 && r2.graph.version === 4);
+  assert.ok("graph" in parseGraph({ ...g, version: 3 }));
+  assert.ok("error" in parseGraph({ ...g, version: 5 }));
   assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: "lots" }] }));
   assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "a */ b", type: "number", scope: "mode", default: 0 }] }));
   assert.ok("graph" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: 0 }] }));
@@ -648,4 +652,32 @@ test("+ Add pin and − change a node's count or cases (Details stays in step), 
   assert.equal(ok(removePin(g0, "n")).nodes.find((x) => x.id === "n")!.params.cases, "1,2");
   assert.match((removePin(g0, "t") as { error: string }).error, /at least 1/);
   assert.equal(countOf(g0, "p"), null, "a node with fixed pins");
+test("types: handles and players go into Entity pins, files into Model-or-Sprite pins, arrays don't widen (graph.rs upcast)", () => {
+  for (const h of ["player", "npc", "creature", "projectile", "volume", "objmarker", "component"]) assert.ok(wireOk(h, "entity"), h);
+  assert.ok(!wireOk("entity", "creature"), "an Entity might not be a Creature");
+  assert.ok(wireOk("model", "visual") && wireOk("sprite", "visual") && !wireOk("sound", "visual"));
+  assert.ok(!wireOk("model", "sprite") && !wireOk("text", "model") && !wireOk("number", "color"));
+  assert.ok(wireOk("enum:ls_weapon", "text") && !wireOk("text", "enum:ls_weapon"));
+  assert.ok(!wireOk("array<creature>", "array<entity>"), "arrays are invariant");
+  assert.equal(upcast("creature"), "entity");
+  assert.equal(upcast("number"), undefined);
+});
+
+test("orphans: a wire to a removed pin and a removed setting's value stay, shown, and Refresh nodes lists them", () => {
+  const g = parseGraph({ schema: "loner-strike/graph", version: 3, mode: { id: "orph", name: "O" }, variables: [], comments: [],
+    nodes: [{ id: "rs", type: "event.round_started", pos: { x: 0, y: 0 }, params: {} }, { id: "p", type: "debug.print", pos: { x: 0, y: 0 }, params: { text: "hi", chat: false, gone: 5 } }],
+    edges: [{ id: "w1", from: { node: "rs", pin: "then" }, to: { node: "p", pin: "exec" } }, { id: "w2", from: { node: "rs", pin: "old_out" }, to: { node: "p", pin: "removed_in" } }] });
+  assert.ok("graph" in g);
+  const graph = (g as { graph: Parameters<typeof refreshReport>[0] }).graph;
+  assert.equal(graph.version, 4, "read forward");
+  assert.equal(graph.edges.length, 2, "no wire dropped");
+  const p = graph.nodes.find((n) => n.id === "p")!;
+  assert.ok(pinsFor(graph, p).inputs.some((x) => x.id === "removed_in" && x.orphan));
+  assert.ok(pinsFor(graph, graph.nodes[0]).outputs.some((x) => x.id === "old_out" && x.orphan));
+  assert.deepEqual(orphanVals(p), ["gone"]);
+  const r = refreshReport(graph);
+  assert.equal(r.filter((x) => x.what === "wire").length, 2);
+  assert.equal(r.filter((x) => x.what === "setting").length, 1);
+  assert.match(refreshSummary(r), /2 orphaned wires, 1 orphaned setting/);
+  assert.match(refreshSummary([]), /up to date/);
 });

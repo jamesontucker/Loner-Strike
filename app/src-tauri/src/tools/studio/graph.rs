@@ -37,7 +37,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const SCHEMA: &str = "loner-strike/graph";
-pub const VERSION: u32 = 3;
+/// 4: the typed values (Model, Sprite, Sound, Decal, Color, the entity handles, Sound Loop, the
+/// Weapon / Hit Zone / Damage Kind enums, Transform). Versions 1-3 are read forward (migrate).
+pub const VERSION: u32 = 4;
 /// Limits that keep a graph (and the plugin made from it) sane.
 pub const MAX_NODES: usize = 400;
 pub const MAX_EDGES: usize = 1200;
@@ -62,6 +64,9 @@ pub const NUMBER_LIMIT: f64 = 100_000.0;
 pub struct Registry {
     pub version: u32,
     pub nodes: Vec<NodeDef>,
+    /// a renamed node's old type id -> its id now (StudioCompat.md: ids never change, they alias)
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -83,6 +88,12 @@ pub struct NodeDef {
     pub inputs: Vec<PinDef>,
     pub outputs: Vec<PinDef>,
     pub params: Vec<ParamDef>,
+    /// a renamed pin's or setting's old id -> its id now (read forward by migrate)
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
+    /// kept so old graphs work, hidden from the palette; the node to use instead
+    #[serde(default)]
+    pub deprecated: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -862,6 +873,8 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
         Some(n) if n > VERSION as u64 => return Err(format!("That graph was made by a newer Loner-Strike (graph version {n}). Update the app to open it.")),
         _ => return Err("That graph's version isn't one this app knows.".into()),
     }
+    let mut v = v;
+    migrate(&mut v);
     let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
     g.version = VERSION;
     proj_spawn_pins(&mut g);
@@ -874,6 +887,48 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
     }
     Ok(g)
 }
+
+/// Older graphs read forward (StudioCompat.md): renamed nodes, pins and settings move to their ids
+/// now (the registry's aliases). Nothing is dropped: a wire or a value whose pin is gone stays, an
+/// orphan the checks name until it's re-wired or deleted.
+pub fn migrate(v: &mut Value) {
+    let r = registry();
+    let Some(nodes) = v.get_mut("nodes").and_then(Value::as_array_mut) else { return };
+    let mut kinds: HashMap<String, String> = HashMap::new();
+    for n in nodes.iter_mut() {
+        let Some(kind) = n.get("type").and_then(Value::as_str).map(str::to_string) else { continue };
+        let kind = r.aliases.get(&kind).cloned().unwrap_or(kind);
+        n["type"] = Value::String(kind.clone());
+        if let Some(def) = r.get(&kind).filter(|d| !d.aliases.is_empty()) {
+            if let Some(params) = n.get_mut("params").and_then(Value::as_object_mut) {
+                for (old, new) in &def.aliases {
+                    if !params.contains_key(new) {
+                        if let Some(x) = params.remove(old) {
+                            params.insert(new.clone(), x);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(id) = n.get("id").and_then(Value::as_str) {
+            kinds.insert(id.to_string(), kind);
+        }
+    }
+    let Some(edges) = v.get_mut("edges").and_then(Value::as_array_mut) else { return };
+    for e in edges.iter_mut() {
+        for end in ["from", "to"] {
+            let Some(node) = e[end]["node"].as_str() else { continue };
+            let Some(def) = kinds.get(node).and_then(|k| r.get(k)) else { continue };
+            if let Some(new) = e[end]["pin"].as_str().and_then(|p| def.aliases.get(p)) {
+                e[end]["pin"] = Value::String(new.clone());
+            }
+        }
+    }
+}
+
+/// An orphan: a wire to a pin, or a value of a setting, that the node doesn't have any more.
+pub const ORPHAN_PIN: &str = "This pin was removed in an update. Re-wire or delete it.";
+pub const ORPHAN_VALUE: &str = "This setting was removed in an update. Clear it or delete the node.";
 
 // ---- checks --------------------------------------------------------------------------------
 
@@ -976,7 +1031,24 @@ pub fn value_fits(ty: &str, v: &Value) -> bool {
 // ---- types ---------------------------------------------------------------------------------
 
 /// The plain types: a value of one fits in a pin, a variable, an array's item.
-pub const BASE_TYPES: [&str; 8] = ["number", "bool", "text", "player", "entity", "team", "vector", "timer"];
+pub const BASE_TYPES: [&str; 20] = [
+    "number", "bool", "text", "player", "entity", "team", "vector", "timer",
+    // (graph version 4) files the mode loads, a color, the entity handles, a playing loop
+    "model", "sprite", "sound", "decal", "color", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop",
+];
+/// The entity handles: an entity known to be that kind (each goes into Entity pins as it is).
+pub const HANDLES: [&str; 6] = ["npc", "creature", "projectile", "volume", "objmarker", "component"];
+
+/// What a value of this type goes into as it is, one step (a Player is an Entity, a Creature is an
+/// Entity, a Model or a Sprite is a "visual", a Weapon is its name).
+pub fn upcast(t: &str) -> Option<&'static str> {
+    match t {
+        "player" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" => Some("entity"),
+        "model" | "sprite" => Some("visual"),
+        "enum:ls_weapon" => Some("text"),
+        _ => None,
+    }
+}
 /// What a map's keys can be.
 pub const KEY_TYPES: [&str; 3] = ["text", "number", "player"];
 
@@ -1022,8 +1094,17 @@ pub fn short_lived(t: &str) -> bool {
 }
 
 pub fn compatible(from: &str, to: &str) -> bool {
-    if from == to || from == "any" || to == "any" || (from == "player" && to == "entity") {
+    if from == to || from == "any" || to == "any" {
         return true;
+    }
+    // (up the chain: Creature -> Entity; arrays don't: one written through the wider type could get
+    // a value that isn't the narrower kind)
+    let mut t = from;
+    while let Some(up) = upcast(t) {
+        if up == to {
+            return true;
+        }
+        t = up;
     }
     match (container(from), container(to)) {
         (Some((a, ka, ia)), Some((b, kb, ib))) => a == b && (ka == kb || ka == Some("any") || kb == Some("any")) && (ia == ib || ia == "any" || ib == "any"),
@@ -1966,9 +2047,12 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
             k if in_fn && latent(k) => p.push(Problem::err(Some(&n.id), format!("{} waits, and a Function runs straight through: use it on the Event Graph or in a Macro.", def.title))),
             _ => {}
         }
+        if let Some(instead) = &def.deprecated {
+            p.push(Problem { level: "info", node: Some(n.id.clone()), pin: None, edge: None, message: format!("{} is from an older version and still works; {instead} does it now.", def.title) });
+        }
         for k in n.params.keys() {
             if def.param(k).is_none() {
-                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't a setting of {}; it's ignored.", short(k), def.title)));
+                p.push(Problem::err(Some(&n.id), format!("{} has a value for \u{201c}{}\u{201d}, which it doesn't have (orphaned): {ORPHAN_VALUE}", def.title, short(k))).pin(k));
             }
         }
         for prm in &def.params {
@@ -2118,11 +2202,11 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
             continue;
         }
         if v.output(&e.from.node, &e.from.pin).is_none() {
-            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d}.", fd.title, short(&e.from.pin))).edge(&e.id));
+            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d} (orphaned): {ORPHAN_PIN}", fd.title, short(&e.from.pin))).pin(&e.from.pin).edge(&e.id));
             continue;
         }
         let Some(tp) = v.input(&e.to.node, &e.to.pin) else {
-            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d}.", td.title, short(&e.to.pin))).edge(&e.id));
+            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d} (orphaned): {ORPHAN_PIN}", td.title, short(&e.to.pin))).pin(&e.to.pin).edge(&e.id));
             continue;
         };
         if e.from.node == e.to.node {
@@ -2714,6 +2798,19 @@ fn type_label(ty: &str) -> &str {
         "vector" => "Vector",
         "timer" => "Timer",
         "any" => "Anything",
+        "model" => "Model",
+        "sprite" => "Sprite",
+        "sound" => "Sound",
+        "decal" => "Decal",
+        "color" => "Color",
+        "visual" => "Model or Sprite",
+        "npc" => "NPC",
+        "creature" => "Creature",
+        "projectile" => "Projectile",
+        "volume" => "Trigger Volume",
+        "objmarker" => "Objective Marker",
+        "component" => "Component",
+        "soundloop" => "Sound Loop",
         _ => ty,
     }
 }
@@ -2929,7 +3026,7 @@ mod tests {
     #[test]
     fn registry_is_complete() {
         let r = registry();
-        assert_eq!(r.version, 4);
+        assert_eq!(r.version, 5);
         for kind in ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round", "msg.broadcast", "flow.reroute", "timer.delay", "var.set", "comp.on_capture", "creature.spawn"] {
             assert!(r.get(kind).is_some(), "{kind}");
         }
@@ -2962,9 +3059,9 @@ mod tests {
         assert!(parse(r#"{"schema":"loner-strike/graph","version":9,"mode":{"id":"a","name":"b"}}"#).unwrap_err().contains("newer"));
         // version 1 and 2 files open as version 3
         let g = parse(r#"{"schema":"loner-strike/graph","version":1,"mode":{"id":"abc","name":"ABC"}}"#).unwrap();
-        assert!(g.nodes.is_empty() && g.version == 3 && g.variables.is_empty() && g.functions.is_empty());
+        assert!(g.nodes.is_empty() && g.version == VERSION && g.variables.is_empty() && g.functions.is_empty());
         let g = parse(r#"{"schema":"loner-strike/graph","version":2,"mode":{"id":"abc","name":"ABC"},"variables":[]}"#).unwrap();
-        assert!(g.version == 3 && g.enums.iter().all(|e| e.builtin) && g.structs.is_empty() && g.macros.is_empty());
+        assert!(g.version == VERSION && g.enums.iter().all(|e| e.builtin) && g.structs.is_empty() && g.macros.is_empty());
         // and nothing new is written for them
         let back = serde_json::to_string(&g).unwrap();
         assert!(!back.contains("functions") && !back.contains("enums") && !back.contains("\"graph\""), "{back}");

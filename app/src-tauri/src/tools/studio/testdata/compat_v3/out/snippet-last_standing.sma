@@ -1,5 +1,5 @@
 /*
-	Compat - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Compat - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from c_last_standing.graph.json: change the graph and compile it again; edits here are lost.
 */
 

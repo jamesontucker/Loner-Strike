@@ -1,5 +1,5 @@
 /*
-	Last Stand Lite - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Last Stand Lite - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from last_stand_lite.graph.json: change the graph and compile it again; edits here are lost.
 */
 

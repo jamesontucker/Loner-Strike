@@ -1,5 +1,5 @@
 /*
-	Gun Game Lite - made with Loner-Strike's Game Mode Studio (graph version 3).
+	Gun Game Lite - made with Loner-Strike's Game Mode Studio (graph version 4).
 	Generated from gun_game_lite.graph.json: change the graph and compile it again; edits here are lost.
 */
 
