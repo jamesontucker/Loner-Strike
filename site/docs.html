@@ -220,6 +220,13 @@ footer a { color: var(--dim); }
   td:first-child { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
+/* themed scrollbars (thin, dark track, muted thumb), as on the reference pages */
+* { scrollbar-width: thin; scrollbar-color: #5a6a50 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #5a6a50; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #6b7d5e; }
+::-webkit-scrollbar-corner { background: transparent; }
 </style>
 </head>
 <body>
