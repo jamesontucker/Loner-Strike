@@ -37,6 +37,7 @@ pub mod creatures;
 pub mod creaturepack;
 pub mod creaturesrv;
 pub mod creaturekind; // CP-kind: Community's creature kind
+pub mod assetimport; // the asset pickers' Import into the game, and files from your map projects
 #[cfg(test)]
 mod creature_roundtrip; // QA: the shared-creature round trip on real game folders (ignored)
 
@@ -324,6 +325,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(community::routes())
         .merge(communitylib::routes())
         .merge(creaturekind::routes())
+        .merge(assetimport::routes())
         .merge(credits::routes())
         .merge(playercfg::routes())
         .merge(people::routes())

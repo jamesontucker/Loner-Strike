@@ -1586,10 +1586,11 @@ pub fn npc_files_in_entity_text(text: &str) -> BTreeSet<String> {
 
 /// Graph nodes whose params can name an NPC's model or sound: NPC and interactable nodes, and a
 /// component made at run time as one (`comp.create` of ls_npc / ls_interactable: its keys).
+/// A Studio node whose settings may name a file that travels with the mode: every node (an
+/// NPC's model, an Objective Marker's sprite, a prop's model, a sound a node plays: whatever the
+/// asset pickers put in the game travels with the mode; only custom files are packed).
 fn npc_node(n: &Value) -> bool {
-    let kind = n["type"].as_str().unwrap_or("");
-    // (an Objective Marker's own sprite travels the same way)
-    kind.starts_with("npc.") || kind.starts_with("interact") || kind == "fx.marker" || (kind == "comp.create" && NPC_CLASSES.contains(&n["params"]["kind"].as_str().unwrap_or("")))
+    n["type"].is_string()
 }
 
 /// Words of a param value that may be paths (a comp.create's `k=v;k=v` keys, or a plain value).
@@ -2396,7 +2397,8 @@ mod tests {
             {"type": "fx.beam", "params": {"sprite": "sprites/qa/not_this.spr"}}
         ]});
         let found = npc_files_in_graph_json(&g);
-        assert_eq!(found.iter().map(String::as_str).collect::<Vec<_>>(), vec!["sprites/arrow1.spr", "sprites/qa/flag.spr"]);
+        // (every node's sprite counts now, a beam's too: the asset pickers' files go with a mode)
+        assert_eq!(found.iter().map(String::as_str).collect::<Vec<_>>(), vec!["sprites/arrow1.spr", "sprites/qa/flag.spr", "sprites/qa/not_this.spr"]);
         let (hl, gd) = game("");
         std::fs::create_dir_all(gd.join("sprites/qa")).unwrap();
         std::fs::write(gd.join("sprites/qa/flag.spr"), b"spr").unwrap();
@@ -2420,7 +2422,8 @@ mod tests {
             {"type": "comp.create", "params": {"kind": "ls_interactable", "keys": "model=models/qa/lever.mdl;prompt=Pull"}},
             {"type": "prop.spawn", "params": {"model": "models/qa/not_npc.mdl"}}
         ]});
-        assert_eq!(npc_files_in_graph_json(&g).into_iter().collect::<Vec<_>>(), vec!["models/qa/joe.mdl", "models/qa/lever.mdl"]);
+        // (any node's file travels with a mode: a prop's model too)
+        assert_eq!(npc_files_in_graph_json(&g).into_iter().collect::<Vec<_>>(), vec!["models/qa/joe.mdl", "models/qa/lever.mdl", "models/qa/not_npc.mdl"]);
         // packed: the custom ones (not the game's own battery) under gb7's folders
         let (hl, gd) = game("");
         std::fs::create_dir_all(gd.join("models/qa")).unwrap();
@@ -2443,6 +2446,7 @@ mod tests {
         let mut gv = g.clone();
         Pack::default().with_npc(&hl, "cstrike", &npc_files_in_graph_json(&g), "gb7").unwrap().rewrite_graph(&mut gv);
         assert_eq!(gv["nodes"][0]["params"]["model"], "models/gb7/qa/joe.mdl");
+        // (a file that isn't in the game stays as it was)
         assert_eq!(gv["nodes"][2]["params"]["model"], "models/qa/not_npc.mdl");
         let _ = std::fs::remove_dir_all(&hl);
     }

@@ -709,7 +709,7 @@ def creatures_ini_refs(data):
     return out
 
 
-NPC_FILE = re.compile(r"^(models/[a-z0-9_./-]{1,150}\.mdl|sound/[a-z0-9_-][a-z0-9_./-]{0,150}\.wav)$")
+NPC_FILE = re.compile(r"^(models/[a-z0-9_./-]{1,150}\.mdl|sprites/[a-z0-9_./-]{1,150}\.spr|sound/[a-z0-9_-][a-z0-9_./-]{0,150}\.wav)$")
 
 
 def creatures_ini_npc(data):

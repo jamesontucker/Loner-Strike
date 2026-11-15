@@ -2421,7 +2421,8 @@ class Community:
         listed = None
         for p in shipped:
             top, _, rest = p.partition("/")
-            if top not in ("models", "sound"):
+            # (sprites too: a mode's Objective Marker or other sprite input travels the same way)
+            if top not in ("models", "sound", "sprites"):
                 continue
             folder = rest.partition("/")[0]
             ns = folder if re.match(r"^gb[1-9][0-9]{0,8}$", folder) and "/" in rest else ""

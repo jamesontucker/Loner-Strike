@@ -82,7 +82,7 @@ def run(path, name, seconds):
             if got:
                 texts.append(got.lower())
                 text_bytes[0] += len(got)
-        if low.startswith(("models/", "sound/")) and len(files) < 2048:
+        if low.startswith(("models/", "sprites/", "sound/")) and len(files) < 2048:
             fh.seek(0)
             h = hashlib.sha256()
             while True:

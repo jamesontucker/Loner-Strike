@@ -29,7 +29,7 @@ const MAX_FILES: usize = 40;
 const MAX_TOTAL: usize = 160 << 20;
 
 /// The size a file of a kind may be.
-fn cap(ext: &str) -> usize {
+pub fn cap(ext: &str) -> usize {
     match ext {
         "mdl" | "wav" => 32 << 20,
         "wad" => 64 << 20,
@@ -86,7 +86,7 @@ pub fn place_for(name: &str) -> Result<(String, &'static str), String> {
 }
 
 /// The game's own file by that name (a project file would hide or replace it when shared).
-fn stock(rel: &str, ext: &str, game: &str) -> bool {
+pub fn stock(rel: &str, ext: &str, game: &str) -> bool {
     if ext == "wad" {
         crate::tools::doctor::stock_wad_names(game).iter().any(|w| w.eq_ignore_ascii_case(rel))
     } else {
@@ -114,6 +114,16 @@ pub struct Incoming {
 /// (with the path), renamed (from → to), taken (a name already used: a free one offered),
 /// refused (and why).
 pub fn import(project: &Path, game: &str, files: Vec<Incoming>) -> Value {
+    let exists = |r: &str| Finder::default().find(project, r).is_some() || project.join(r).exists();
+    import_into(project, game, files, &place_for, &exists)
+}
+
+/// The same checks and copying into any folder (shared with the asset pickers' Import, which
+/// puts files in the game's custom folders, tools/assetimport.rs): `place` maps a file name to
+/// its path under `root` (or why not), `exists` says whether a path is taken anywhere it'd be
+/// seen (the project, or every folder the game reads).
+pub fn import_into(root: &Path, game: &str, files: Vec<Incoming>, place: &dyn Fn(&str) -> Result<(String, &'static str), String>, exists: &dyn Fn(&str) -> bool) -> Value {
+    let project = root;
     let mut imported = Vec::new();
     let mut renamed = Vec::new();
     let mut taken = Vec::new();
@@ -126,7 +136,7 @@ pub fn import(project: &Path, game: &str, files: Vec<Incoming>) -> Value {
     // (the models first, so their companions follow a rename)
     order.sort_by_key(|f| base_of(&f.name.to_ascii_lowercase().trim_end_matches(".mdl").to_string()).is_some());
     for f in order {
-        let (rel, ext) = match place_for(&f.name) {
+        let (rel, ext) = match place(&f.name) {
             Ok(x) => x,
             Err(why) => {
                 refused.push(json!({"name": f.name, "why": why}));
@@ -156,13 +166,12 @@ pub fn import(project: &Path, game: &str, files: Vec<Incoming>) -> Value {
                 want = format!("{dir_rel}{nb}{tail}");
             }
         }
-        let exists = |r: &str| Finder::default().find(project, r).is_some() || project.join(r).exists();
         if exists(&want) {
             if !f.rename {
-                taken.push(json!({"name": f.name, "path": want, "suggest": free_name(project, &want, &exists)}));
+                taken.push(json!({"name": f.name, "path": want, "suggest": free_name(project, &want, exists)}));
                 continue;
             }
-            want = free_name(project, &want, &exists);
+            want = free_name(project, &want, exists);
         }
         let dest = project.join(&want);
         let r = (|| {
@@ -200,7 +209,7 @@ pub fn import(project: &Path, game: &str, files: Vec<Incoming>) -> Value {
 }
 
 /// `name_2.ext`, `name_3.ext`... the first that isn't there.
-fn free_name(project: &Path, rel: &str, exists: &dyn Fn(&str) -> bool) -> String {
+pub fn free_name(project: &Path, rel: &str, exists: &dyn Fn(&str) -> bool) -> String {
     let _ = project;
     let (stem, ext) = rel.rsplit_once('.').unwrap_or((rel, ""));
     for i in 2..1000 {

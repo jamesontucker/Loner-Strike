@@ -408,6 +408,24 @@ class NpcFiles(unittest.TestCase):
         code, ans = c.submit(body(map_item()), "a")
         self.assertEqual((code, ans.get("state")), (200, "listed"), ans)
 
+    def test_a_sprite_travels_in_the_owners_folder_too(self):
+        # a sprite a picker put in the game (an Objective Marker's, an interactable's): listed, used, owned
+        from test_formats import sprite
+        mine = "sprites/gb6096365/custom/goal.spr"
+        self.assertEqual(formats.creatures_ini_npc(b"; npc: " + mine.encode() + b"\n"), [mine])
+        files = {"maps/de_marakesh.bsp": npc_bsp(mine), "creatures/creatures.ini": b"; types:\n; npc: " + mine.encode() + b"\n",
+                 mine: sprite(), "loner-strike.json": manifest(MAP_MANIFEST)}
+        c = self.setup(zip_of(["README.txt"], files))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual((code, ans.get("state")), (200, "listed"), ans)
+        # someone else's folder: refused unless it's their listed file
+        theirs = "sprites/gb1001/custom/goal.spr"
+        files = {"maps/de_marakesh.bsp": npc_bsp(theirs), "creatures/creatures.ini": b"; types:\n; npc: " + theirs.encode() + b"\n",
+                 theirs: sprite(), "loner-strike.json": manifest(MAP_MANIFEST)}
+        c = self.setup(zip_of(["README.txt"], files))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+
     def test_an_npc_file_the_map_doesnt_use(self):
         mine = "models/gb6096365/qa/joe.mdl"
         c = self.setup(self.npc_map("models/barney.mdl", mine, mine))
