@@ -21,6 +21,28 @@ export const LINK_KEYS: [string, IoKind][] = [
   ["LaserTarget", "names"],
   ["combattarget", "fires"],
 ];
+// Keys that name another entity on some classes only (editor/io.rs CLASS_LINK_KEYS): a path's
+// "message" fires a name when the train passes; on most entities it's text.
+export const CLASS_LINK_KEYS: [string, string, IoKind][] = [
+  ["path_track", "message", "fires"],
+  ["path_track", "altpath", "names"],
+  ["path_corner", "message", "fires"],
+  ["func_guntarget", "message", "fires"],
+  ["trigger_setorigin", "copypointer", "names"],
+  ["game_zone_player", "intarget", "fires"],
+  ["game_zone_player", "outtarget", "fires"],
+  ["game_zone_player", "incount", "fires"],
+  ["game_zone_player", "outcount", "fires"],
+  ["func_trackchange", "train", "names"],
+  ["func_trackchange", "toptrack", "names"],
+  ["func_trackchange", "bottomtrack", "names"],
+  ["func_trackautochange", "train", "names"],
+  ["func_trackautochange", "toptrack", "names"],
+  ["func_trackautochange", "bottomtrack", "names"],
+  ["func_tanklaser", "laserentity", "names"],
+];
+/** trigger_random's numbered targets ("target0" to "target15"). */
+export const randomTargetKey = (cls: string, key: string) => cls.startsWith("trigger_random") && /^target\d{1,2}$/.test(key) && Number(key.slice(6)) < 16;
 const MM_OWN = new Set(["classname", "targetname", "origin", "spawnflags", "wait", "master", "angles", "angle"]);
 
 export const KIND_COLOR: Record<IoKind, string> = { fires: "#ffd84a", kills: "#ff5f56", master: "#c58cff", names: "#5fd3e8" };
@@ -47,6 +69,11 @@ export function ioLinks(ents: DocEntity[]): IoLink[] {
       const v = keyOf(e.keys, k);
       if (v) add(k, v, kind, null);
     }
+    for (const [c, k, kind] of CLASS_LINK_KEYS) {
+      const v = c === e.classname ? keyOf(e.keys, k) : undefined;
+      if (v) add(k, v, kind, null);
+    }
+    if (e.classname.startsWith("trigger_random")) for (const [k, v] of e.keys) if (randomTargetKey(e.classname, k)) add(k, v, "fires", null);
     if (e.classname === "multi_manager") {
       for (const [k, v] of e.keys) {
         if (MM_OWN.has(k) || LINK_KEYS.some(([l]) => l === k)) continue;

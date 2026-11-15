@@ -21,6 +21,33 @@ pub const LINK_KEYS: &[(&str, Kind)] = &[
     ("combattarget", Kind::Fires),
 ];
 
+/// Keys that name another entity on some classes only (a path's "message" fires a name when the
+/// train passes; on most entities "message" is text), from the game DLL's key handling.
+pub const CLASS_LINK_KEYS: &[(&str, &str, Kind)] = &[
+    ("path_track", "message", Kind::Fires),
+    ("path_track", "altpath", Kind::Names),
+    ("path_corner", "message", Kind::Fires),
+    ("func_guntarget", "message", Kind::Fires),
+    ("trigger_setorigin", "copypointer", Kind::Names),
+    ("game_zone_player", "intarget", Kind::Fires),
+    ("game_zone_player", "outtarget", Kind::Fires),
+    ("game_zone_player", "incount", Kind::Fires),
+    ("game_zone_player", "outcount", Kind::Fires),
+    ("func_trackchange", "train", Kind::Names),
+    ("func_trackchange", "toptrack", Kind::Names),
+    ("func_trackchange", "bottomtrack", Kind::Names),
+    ("func_trackautochange", "train", Kind::Names),
+    ("func_trackautochange", "toptrack", Kind::Names),
+    ("func_trackautochange", "bottomtrack", Kind::Names),
+    ("func_tanklaser", "laserentity", Kind::Names),
+];
+
+/// trigger_random's numbered targets ("target0" to "target15"; the game reads no others).
+pub fn random_target_key(class: &str, key: &str) -> bool {
+    let n = key.strip_prefix("target").unwrap_or("");
+    class.starts_with("trigger_random") && (1..=2).contains(&n.len()) && n.bytes().all(|c| c.is_ascii_digit()) && n.parse::<u8>().is_ok_and(|n| n < 16)
+}
+
 /// multi_manager keys that are its own settings, not names to fire.
 const MM_OWN: &[&str] = &["classname", "targetname", "origin", "spawnflags", "wait", "master", "angles", "angle"];
 
@@ -129,6 +156,21 @@ pub fn graph(doc: &MapDocument) -> Graph {
                 add(k, v, *kind, None);
             }
         }
+        // keys that are links on this class only, and trigger_random's numbered targets
+        for (c, k, kind) in CLASS_LINK_KEYS {
+            if *c == e.classname() {
+                if let Some(v) = e.get(k) {
+                    add(k, v, *kind, None);
+                }
+            }
+        }
+        if e.classname().starts_with("trigger_random") {
+            for (k, v) in &e.keys {
+                if random_target_key(e.classname(), k) {
+                    add(k, v, Kind::Fires, None);
+                }
+            }
+        }
         // an NPC's patrol stops (NPC-editor): names it walks between
         if e.classname() == "ls_npc" {
             for w in e.get("targets").unwrap_or("").split_whitespace() {
@@ -187,6 +229,28 @@ mod tests {
         assert_eq!(mm_name("door#12"), "door");
         assert_eq!(mm_name("#3"), "#3");
         assert_eq!(mm_name("a#b"), "a#b");
+    }
+
+    /// The stock entities' own link keys: a track's stops, trigger_random's numbered targets, a
+    /// zone's in/out names; "message" stays text on everything but paths and gun targets.
+    #[test]
+    fn stock_entity_links() {
+        let mut d = MapDocument::default();
+        ent(&mut d, 1, &[("classname", "path_track"), ("targetname", "t1"), ("target", "t2"), ("message", "bell"), ("altpath", "b1")]);
+        ent(&mut d, 2, &[("classname", "path_track"), ("targetname", "t2")]);
+        ent(&mut d, 3, &[("classname", "ambient_generic"), ("targetname", "bell")]);
+        ent(&mut d, 4, &[("classname", "trigger_random"), ("targetname", "r"), ("target_count", "2"), ("target0", "bell"), ("target1", "nowhere"), ("target_count2", "x")]);
+        ent(&mut d, 5, &[("classname", "game_zone_player"), ("intarget", "bell"), ("incount", "ctr")]);
+        ent(&mut d, 6, &[("classname", "game_text"), ("targetname", "hello"), ("message", "Hi there")]);
+        let g = graph(&d);
+        let of = |id: u64| g.links.iter().filter(|l| l.from == EntityId(id)).map(|l| (l.key.as_str(), l.to.len())).collect::<Vec<_>>();
+        let p = of(1);
+        assert!(p.contains(&("target", 1)) && p.contains(&("message", 1)) && p.contains(&("altpath", 0)), "{p:?}");
+        let r = of(4);
+        assert!(r.contains(&("target0", 1)) && r.contains(&("target1", 0)) && r.len() == 2, "{r:?}");
+        assert_eq!(of(5), vec![("intarget", 1), ("incount", 0)]);
+        assert!(of(6).is_empty(), "game_text's message is text");
+        assert!(random_target_key("trigger_random_unique", "target15") && !random_target_key("trigger_random", "target16") && !random_target_key("func_door", "target0"));
     }
 
     /// NPC-editor: NPCs and interactables in plain map I/O.
