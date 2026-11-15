@@ -227,7 +227,7 @@ function baseCss() {
 }
 
 /** A reference page: the docs' top bar, the search with filters, the sidebar, the main column, On this page. */
-function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true, section = "" }) {
+function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true, section = "", head = "", meta = "" }) {
   // (the three references and the guides are always one click away)
   const sw = [["nodes", "reference/nodes.html", "Nodes", "Studio nodes"], ["entities", "reference/entities.html", "Entities", "Map entities"], ["editor", "reference/editor.html", "Editor", "Editor tools"], ["guides", "reference/#guides", "Guides", "Guides"]]
     .map(([id, href, label, full]) => `<a href="${up}${href}" title="${full}"${id === section ? ' aria-current="true"' : ""}>${label}</a>`).join("");
@@ -252,7 +252,7 @@ function page({ title, lead, side, main, toc = "", file, up = "../", kinds = tru
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="${up}reference/base.css">
-<link rel="stylesheet" href="${up}reference/ref.css">
+<link rel="stylesheet" href="${up}reference/ref.css">${head}
 </head>
 <body data-root="${up}">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
@@ -273,7 +273,7 @@ function page({ title, lead, side, main, toc = "", file, up = "../", kinds = tru
     <h1>${esc(title)}</h1>
     <p class="lead">${esc(lead)}</p>
 ${main}
-    <p class="meta ty">Made from the app's own catalog (${esc(file)}), so it matches the app.</p>
+    <p class="meta ty">${meta || `Made from the app's own catalog (${esc(file)}), so it matches the app.`}</p>
   </main>
   ${toc ? `<nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul>${toc}</ul></nav>` : "<div></div>"}
 </div>
@@ -436,7 +436,7 @@ function editorPage(inv) {
 function landingPage(data, ents, inv) {
   const card = (href, title, n, about) => `<a class="mini" href="${href}"><span class="badge">${n}</span><b>${esc(title)}</b><span class="s">${esc(about)}</span></a>`;
   const main = `<div class="grid">${card("nodes.html", "Game Mode Studio nodes", data.nodes.length, "Every node: its pins, settings, limits and what bots do with it.")}${card("entities.html", "Map editor entities", ents.length, "Every entity: what it does in the game, its keys and flags.")}${card("editor.html", "Map editor tools and keys", inv.length, "The editor's menus, panels and dialogs, and their keys.")}</div>
-<h2 id="guides">Guides</h2><div class="grid">${GUIDES.map(([id, title, about]) => card(`../docs.html#${id}`, title, "soon", about)).join("")}</div>`;
+<h2 id="guides">Guides</h2><div class="grid">${GUIDES.map(([id, title, about, file]) => (guideBody(file) ? card(`guides/${file}.html`, title, "guide", about) : card(`../docs.html#${id}`, title, "soon", about))).join("")}</div>`;
   return page({ title: "Reference", lead: "Made from the app's own catalogs, so it always matches the app. Search everything from the box above.", side: `<details open class="here"><summary><a href="./" aria-current="page">Reference</a></summary><ul><li><a href="nodes.html">Studio nodes</a></li><li><a href="entities.html">Map entities</a></li><li><a href="editor.html">Editor tools and keys</a></li></ul></details>`, main, file: "nodes.json, the FGDs, the editor's inventory" });
 }
 
@@ -448,19 +448,144 @@ function searchIndex(data, ents, inv) {
     ...data.nodes.map((n) => ({ u: `reference/${nodeHref(n)}`, n: n.title, t: `Studio node · ${n.category}`, k: `${n.type} ${[...n.inputs, ...n.outputs].map((p) => p.label || "").join(" ")}`.trim(), x: firstSentence(n.what), cat: n.category, c: kindOf(n), b: hasBots(n) ? 1 : 0, l: n.limits.length ? 1 : 0, ty: [...new Set([...n.inputs, ...n.outputs].filter((p) => p.type !== "exec").map((p) => typeLabel(data.pinTypes, p.type)))] })),
     ...ents.map((e) => ({ u: `reference/${entHref(e)}`, n: e.name, t: `Entity · ${entGroup(e)}`, k: `${e.title} ${e.keys.map((k) => k.name).join(" ")}`, x: firstSentence(e.help), cat: entGroup(e), c: e.kind === "SolidClass" ? "brush" : "point", b: /\bbots?\b/i.test(e.help) ? 1 : 0, l: 0, ty: [] })),
     ...inv.map((s) => ({ u: `reference/editor.html#t-${slug(s.name)}`, n: `Editor: ${s.name}`, t: "Map editor tools and keys", k: s.rows.map((r) => r.where).join(" ").slice(0, 300), x: s.rows.map((r) => r.item).slice(0, 8).join(", "), cat: "Map editor", c: "", b: 0, l: 0, ty: [] })),
+    ...guideIndex(),
   ];
 }
 
-/** The hand-written guides to come (stubs in docs.html's Reference group). */
+/** The hand-written guides: [docs.html id, title, about, page in reference/guides/]. A guide is
+ *  written when its page has text between its GUIDE markers; until then it's a stub in docs.html. */
 const GUIDES = [
-  ["guide-types", "Types and casting", "Numbers, text, players, entities, vectors and lists, and turning one into another."],
-  ["guide-events-flow", "Events and flow", "What starts a graph running, and Branch, Sequence, loops and timers."],
-  ["guide-variables", "Variables and saving", "Mode, round and player variables, and what's kept between maps."],
-  ["guide-spawning", "Spawning and transforms", "Making props, creatures and effects, and moving, turning and attaching them."],
-  ["guide-limits", "Limits", "The comfort limits on effects and searches, and when the game itself runs out."],
-  ["guide-bots", "Steering bots", "Goals, offers, friends and avoid areas: telling bots what matters in your mode."],
-  ["guide-sharing", "Sharing", "What travels with a mode, what players need, and how credits work."],
+  ["guide-types", "Types and casting", "Numbers, text, players, entities, vectors and lists, and turning one into another.", "types"],
+  ["guide-events-flow", "Events and flow", "What starts a graph running, and Branch, Sequence, loops and timers.", "events-flow"],
+  ["guide-variables", "Variables and saving", "Mode, round and player variables, and what's kept between maps.", "variables"],
+  ["guide-spawning", "Spawning and transforms", "Making props, creatures and effects, and moving, turning and attaching them.", "spawning"],
+  ["guide-limits", "Limits", "The comfort limits on effects and searches, and when the game itself runs out.", "limits"],
+  ["guide-bots", "Steering bots", "Goals, offers, friends and avoid areas: telling bots what matters in your mode.", "bots"],
+  ["guide-sharing", "Sharing", "What travels with a mode, what players need, and how credits work.", "sharing"],
 ];
+
+// ---- the guides (hand-written; this script only frames them) --------------------------------
+// Each guide's text lives in its own page, site/reference/guides/<file>.html, between
+// <!-- GUIDE:BEGIN --> and <!-- GUIDE:END -->. Running this script keeps that text as it is and
+// rebuilds everything round it (the top bar, search, sidebar, On this page, the docs' entry and
+// the search index). Node links are written <a class="node" data-node="flow.branch" href="…">;
+// their href is set again from the catalog each run, so a node moving category never breaks one.
+
+const GUIDE_BEGIN = "<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->";
+const GUIDE_END = "<!-- GUIDE:END -->";
+const guideDir = join(site, "reference", "guides");
+const guidePath = (file) => join(guideDir, `${file}.html`);
+
+/** A guide's hand-written text (between its markers), or "" when it isn't written yet. */
+function guideBody(file) {
+  if (!existsSync(guidePath(file))) return "";
+  const t = read(guidePath(file));
+  const a = t.indexOf("<!-- GUIDE:BEGIN");
+  const b = t.indexOf(GUIDE_END);
+  if (a < 0 || b < a) return "";
+  return t.slice(t.indexOf("-->", a) + 3, b).trim();
+}
+
+const strip = (h) => String(h).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim();
+/** The guide's sections: each <h2 id="…">, with the text up to the next one. */
+function guideSections(body) {
+  const out = [];
+  const re = /<h2 id="([^"]+)"[^>]*>([\s\S]*?)<\/h2>/g;
+  let m, last = null;
+  while ((m = re.exec(body))) {
+    if (last) last.html = body.slice(last.end, m.index);
+    last = { id: m[1], title: strip(m[2]), end: re.lastIndex };
+    out.push(last);
+  }
+  if (last) last.html = body.slice(last.end);
+  for (const x of out) {
+    x.text = strip(x.html);
+    // (its search words: the nodes it names and its own headings)
+    x.words = [...new Set([...x.html.matchAll(/<a class="node"[^>]*>([^<]+)<\/a>|<h3[^>]*>([\s\S]*?)<\/h3>/g)].map((m) => strip(m[1] || m[2])))].join(" ");
+  }
+  return out;
+}
+/** The sections worth listing outside the page (not See also). */
+const guideTopics = (body) => guideSections(body).filter((s) => s.id !== "see-also");
+
+/** Node links: href from the catalog (the node's category page); unknown nodes listed. */
+function linkNodes(body, byType, bad) {
+  return body.replace(/<a class="node" data-node="([^"]+)"( href="[^"]*")?>/g, (_, t) => {
+    const n = byType[t];
+    if (!n) {
+      bad.push(t);
+      return `<a class="node" data-node="${t}" href="../nodes.html">`;
+    }
+    return `<a class="node" data-node="${t}" href="../${nodeHref(n)}">`;
+  });
+}
+
+/** Guide links that point at a guide not written yet go to its stub in the docs instead. */
+function linkGuides(body) {
+  return body.replace(/href="([a-z-]+)\.html(#[^"]*)?"/g, (all, f) => {
+    const g = GUIDES.find((x) => x[3] === f);
+    return g && !guideBody(f) ? `href="../../docs.html#${g[0]}"` : all;
+  });
+}
+
+const GUIDE_CSS = `/* Made by scripts/gen-reference.mjs: the guides' own bits (with base.css and ref.css). */
+article.guide { padding: 0; max-width: 780px; }
+article.guide h2 { scroll-margin-top: calc(var(--top) + 120px); }
+article.guide h3 { scroll-margin-top: calc(var(--top) + 120px); }
+a.node { color: var(--bone); text-decoration: none; font-weight: 600; box-shadow: inset 0 -1px 0 var(--signal); }
+a.node:hover { color: var(--signal); }
+.chain { background: #23271c; box-shadow: var(--sunken); border-radius: 2px; padding: 9px 12px; margin: 10px 0 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.chain .to { color: var(--signal); font-weight: 700; padding: 0 4px; }
+.chain .pin { display: inline; width: auto; height: auto; border: 0; margin: 0; color: var(--faint); font-size: .92em; }
+.guide .see { margin-top: 34px; }
+.guide .table td, .guide .table th { vertical-align: top; }
+.badge.k-guide { background: #6a5a2f; }
+.guide-soon { opacity: .7; }
+@media (max-width: 860px) { .chain { padding: 8px 10px; } }
+`;
+
+/** A guide's page: the reference frame round the hand-written text. */
+function guidePage(g, body, byType, bad) {
+  const [, title, about, file] = g;
+  const secs = guideSections(body);
+  const side = `<details open class="here"><summary><a href="../#guides">Guides</a><span class="n">${GUIDES.filter((x) => guideBody(x[3])).length}</span></summary><ul>${GUIDES.map(([id, t, , f]) => (guideBody(f) ? `<li><a href="${f}.html"${f === file ? ' aria-current="page"' : ""}>${esc(t)}</a></li>` : `<li class="guide-soon"><a href="../../docs.html#${id}">${esc(t)} (soon)</a></li>`)).join("")}</ul></details>`;
+  const main = `<article class="guide">\n${GUIDE_BEGIN}\n${linkGuides(linkNodes(body, byType, bad))}\n${GUIDE_END}\n</article>`;
+  return page({ section: "guides", title, lead: about, side, main, toc: secs.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join(""), file: "", up: "../../", kinds: false, head: `\n<link rel="stylesheet" href="guides.css">`, meta: "A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog." });
+}
+
+/** The guides in the search index: one entry per guide and one per section. */
+function guideIndex() {
+  return GUIDES.flatMap(([, title, about, file]) => {
+    const body = guideBody(file);
+    if (!body) return [];
+    const secs = guideTopics(body);
+    return [
+      { u: `reference/guides/${file}.html`, n: title, t: "Guide", k: secs.map((s) => s.title).join(" "), x: about, cat: "Guides", c: "guide", b: /\bbots?\b/i.test(body) ? 1 : 0, l: 0, ty: [] },
+      ...secs.map((s) => ({ u: `reference/guides/${file}.html#${s.id}`, n: s.title, t: `Guide · ${title}`, k: s.words.slice(0, 400), x: firstSentence(s.text).slice(0, 200), cat: "Guides", c: "guide", b: /\bbots?\b/i.test(s.text) ? 1 : 0, l: 0, ty: [] })),
+    ];
+  });
+}
+
+/** Writes every written guide's page again (its text kept), and guides.css. Unknown node links are returned. */
+export function writeGuides(data) {
+  const byType = Object.fromEntries(data.nodes.map((n) => [n.type, n]));
+  const bad = [];
+  mkdirSync(guideDir, { recursive: true });
+  writeFileSync(join(guideDir, "guides.css"), GUIDE_CSS);
+  for (const g of GUIDES) {
+    const body = guideBody(g[3]);
+    if (body) writeFileSync(guidePath(g[3]), guidePage(g, body, byType, bad));
+  }
+  return bad;
+}
+
+/** Node types a guide links to that the catalog doesn't have (the spec checks it's none). */
+export function guideProblems() {
+  const types = new Set(nodes().nodes.map((n) => n.type));
+  const bad = [];
+  for (const g of GUIDES) for (const m of guideBody(g[3]).matchAll(/data-node="([^"]+)"/g)) if (!types.has(m[1])) bad.push(`${g[3]}: ${m[1]}`);
+  return bad;
+}
 
 function docsBlock(data, ents, inv) {
   const cats = catsOf(data);
@@ -475,13 +600,26 @@ function docsBlock(data, ents, inv) {
   </ul>
   <p><a href="reference/">Open the reference</a>: it has its own search with filters.</p>
 </section>`;
-  // (stubs for the hand-written guides: an agent writes them once the type system lands)
-  const stubs = GUIDES.map(([id, title, about]) => `<section class="topic" id="${id}" data-group="Reference" data-stub="1">
+  // (the hand-written guides: a written one is an entry that opens its page; the rest are stubs)
+  const stubs = GUIDES.map(([id, title, about, file]) => {
+    const body = guideBody(file);
+    if (!body) return `<section class="topic" id="${id}" data-group="Reference" data-stub="1">
   <p class="crumb">Reference</p>
   <h1>${esc(title)}</h1>
   <p class="lead">${esc(about)}</p>
   <p>This guide is being written. Until then, the <a href="reference/nodes.html">node reference</a> has every node's own help.</p>
-</section>`).join("\n\n");
+</section>`;
+    const secs = guideTopics(body);
+    return `<section class="topic" id="${id}" data-group="Reference" data-guide="${file}" data-keywords="guide ${esc(secs.map((s) => s.title).join(" ").toLowerCase())}">
+  <p class="crumb">Reference · Guide</p>
+  <h1>${esc(title)}</h1>
+  <p class="lead">${esc(about)}</p>
+  <p><a href="reference/guides/${file}.html"><b>Read the guide</b></a>. In it:</p>
+  <ul>
+${secs.map((s) => `    <li><a href="reference/guides/${file}.html#${s.id}">${esc(s.title)}</a></li>`).join("\n")}
+  </ul>
+</section>`;
+  }).join("\n\n");
   return `<!-- REFERENCE:BEGIN (made by scripts/gen-reference.mjs; edits here are replaced) -->\n${ref}\n\n${stubs}\n<!-- REFERENCE:END -->`;
 }
 
@@ -532,6 +670,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(join(out, "entities.html"), ep.index);
   writeFileSync(join(out, "editor.html"), editorPage(inv));
   writeFileSync(join(out, "index.html"), landingPage(data, ents, inv));
+  const badLinks = writeGuides(data);
+  if (badLinks.length) console.warn(`Guides link to nodes the catalog doesn't have: ${[...new Set(badLinks)].join(", ")}`);
   for (const [dir, pages] of [["nodes", np.pages], ["entities", ep.pages]]) {
     mkdirSync(join(out, dir), { recursive: true });
     for (const f of readdirSync(join(out, dir))) if (f.endsWith(".html") && !pages[f]) unlinkSync(join(out, dir, f));

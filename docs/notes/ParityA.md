@@ -241,3 +241,15 @@ Flaky (once, then passed): `studio-v3.spec.ts:153` (a leftover "pw_one"), `studi
 Not failures (the sweep's setup, passing once fixed): `studio-perf.spec.ts:55` and `studio-v3.spec.ts:325` read a
 testdata path relative to the working folder (run from app/ui); `tools.spec.ts:308` Plugin Studio got a 403 on
 Monaco's codicon font because the sweep's node_modules was a symlink outside Vite's `fs.allow`.
+
+## Requests from Guides (2026-11-14)
+- `site/reference/ref.js` `load(then)`: while the index is loading, a second call returns without keeping `then`,
+  so the first search typed after focusing the box (focus calls `load()` with no callback) stays on "Loading the
+  index…" until the next keystroke. WebKit shows it every time (no requestIdleCallback there): `fill("double jump")`
+  right after the page opens never gets results. Keeping a list of callbacks and running them in `onload` fixes it.
+  site-guides.spec.ts waits for `window.LS_REFERENCE` before typing until then.
+- The guides hook in gen-reference.mjs (my part, between "the guides" markers in the script): written guides live in
+  `site/reference/guides/<file>.html` between `<!-- GUIDE:BEGIN … -->` and `<!-- GUIDE:END -->`; the script keeps
+  that text, re-frames the page and resets node links' hrefs from the catalog. `guideProblems()` lists links to
+  nodes that don't exist (site-guides.spec.ts checks it's empty), so renaming or removing a node a guide names
+  fails that spec: update the guide's `data-node` when you do.

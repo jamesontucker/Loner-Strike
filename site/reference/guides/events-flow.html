@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events and flow · Loner-Strike reference</title>
+<meta name="description" content="What starts a graph running, and Branch, Sequence, loops and timers.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Events and flow <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html" aria-current="page">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Events and flow</h1>
+    <p class="lead">What starts a graph running, and Branch, Sequence, loops and timers.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>A Game Mode Studio graph sits still until something happens in the game. Then it runs from that event along the white flow wires, one node after another. This guide covers what starts a graph, how the flow moves, and the nodes that steer it: branches, sequences, loops, gates, custom events and timers.</p>
+
+<h2 id="what-starts">What starts a graph</h2>
+<p>Every flow starts at an <b>event</b>: a red node with no flow pin going in. Some you'll use in almost every mode:</p>
+<ul>
+  <li><a class="node" data-node="event.map_started" href="../nodes/events.html#n-event-map-started">Map Started</a>: once, when the map has loaded. Set things up here.</li>
+  <li><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a>: once per round, for the whole server (not once per player).</li>
+  <li><a class="node" data-node="event.player_spawned" href="../nodes/events.html#n-event-player-spawned">Player Spawned</a>: each time a player comes alive. The place for loadouts.</li>
+  <li><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a>, <a class="node" data-node="event.player_hurt" href="../nodes/events.html#n-event-player-hurt">Player Hurt</a> and <a class="node" data-node="event.player_about_hurt" href="../nodes/events.html#n-event-player-about-hurt">Player About To Be Hurt</a>: deaths and hits. Use the last one to change damage before it lands.</li>
+  <li><a class="node" data-node="event.chat_command" href="../nodes/events.html#n-event-chat-command">Chat Command</a>, <a class="node" data-node="in.pressed" href="../nodes/events.html#n-in-pressed">Player Pressed Button</a> and <a class="node" data-node="in.command" href="../nodes/events.html#n-in-command">Player Command</a>: something a player says or presses.</li>
+  <li><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a>, <a class="node" data-node="event.zone_enter" href="../nodes/events.html#n-event-zone-enter">Entered Map Zone</a>, <a class="node" data-node="event.map_fired" href="../nodes/events.html#n-event-map-fired">On Map Entity Fired</a>: the map and your trigger volumes.</li>
+</ul>
+<p>A graph with no event never runs. The Problems tab says so ("Nothing happens yet").</p>
+<p>The same event can sit in more than one event graph (My mode › Graphs). They all run, in tab order, then top to bottom. That's handy for keeping a big mode tidy: one graph for the shop, one for scoring.</p>
+
+<h2 id="three-kinds">Events, actions and values</h2>
+<p>Nodes come in three kinds, and the reference marks each one:</p>
+<ul>
+  <li><b>Events</b> start a flow and hand you what happened: Player Killed gives Victim, Attacker, Weapon and more.</li>
+  <li><b>Actions</b> have a white flow pin in and out. They do something when the flow reaches them: <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a>, <a class="node" data-node="msg.chat" href="../nodes/messages.html#n-msg-chat">Chat Message</a>, <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a>.</li>
+  <li><b>Values</b> (pure nodes) have no flow pins. They work out an answer when an action needs it: <a class="node" data-node="player.get_health" href="../nodes/players.html#n-player-get-health">Health Of</a>, <a class="node" data-node="math.op" href="../nodes/numbers.html#n-math-op">Math</a>, <a class="node" data-node="vec.distance" href="../nodes/vectors.html#n-vec-distance">Distance</a>. A value is worked out again each time it's used, so <a class="node" data-node="math.random" href="../nodes/numbers.html#n-math-random">Random Number</a> wired into two actions can give two numbers.</li>
+</ul>
+<p>Flow and loop nodes such as Branch and For Each are actions that pick which flow pin runs next.</p>
+
+<h2 id="flow">Following the flow</h2>
+<p>White pentagon pins carry the flow; round pins carry values. A flow pin out can go to one place. To do several things, chain them, or use a Sequence. Several flow wires can come into the same pin.</p>
+<p>Most actions run and carry on at once. A few wait: <a class="node" data-node="timer.delay" href="../nodes/timers.html#n-timer-delay">Delay</a> carries on later, and Say and Choose runs a reply's output when the player picks it. Other flows keep running while one waits.</p>
+<p>Double-click a wire to add a <a class="node" data-node="flow.reroute" href="../nodes/flow.html#n-flow-reroute">Reroute</a> point and bend it out of the way. It changes nothing.</p>
+
+<h2 id="branch">Branch and other choices</h2>
+<p><a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> goes to True or False. Feed it a yes/no: <a class="node" data-node="math.compare" href="../nodes/conditions.html#n-math-compare">Compare</a>, <a class="node" data-node="cond.is_team" href="../nodes/conditions.html#n-cond-is-team">Is Team</a>, <a class="node" data-node="logic.and_or" href="../nodes/conditions.html#n-logic-and-or">And / Or</a>, <a class="node" data-node="logic.not" href="../nodes/conditions.html#n-logic-not">Not</a>.</p>
+<p>To pay a bounty only for real kills (a fall has no attacker):</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="flow.if_valid" href="../nodes/conditions.html#n-flow-if-valid">Is Valid?</a> (Attacker) <span class="to">→</span> Is Valid <span class="to">→</span> <a class="node" data-node="player.add_money" href="../nodes/players.html#n-player-add-money">Give Money</a> (Attacker, 300)</p>
+<p>For more than two ways:</p>
+<ul>
+  <li><a class="node" data-node="flow.switch_num" href="../nodes/flow.html#n-flow-switch-num">Switch on Number</a>, <a class="node" data-node="flow.switch_text" href="../nodes/flow.html#n-flow-switch-text">Switch on Text</a> and <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> go to the output that matches, or Default.</li>
+  <li><a class="node" data-node="logic.select" href="../nodes/conditions.html#n-logic-select">Select</a> picks one of two values without splitting the flow.</li>
+  <li><a class="node" data-node="flow.flipflop" href="../nodes/flow.html#n-flow-flipflop">Flip Flop</a> goes A, then B, then A again.</li>
+  <li><a class="node" data-node="random.chance" href="../nodes/numbers.html#n-random-chance">Random Chance</a> and <a class="node" data-node="flow.pick_player" href="../nodes/flow.html#n-flow-pick-player">Pick Random Player</a> add luck.</li>
+</ul>
+
+<h2 id="sequence">Sequence</h2>
+<p><a class="node" data-node="flow.sequence" href="../nodes/flow.html#n-flow-sequence">Sequence</a> runs its outputs in turn, top to bottom, each one to its end before the next. It keeps a long chain readable. Press + Add pin for more outputs (up to 32).</p>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="flow.sequence" href="../nodes/flow.html#n-flow-sequence">Sequence</a> <span class="to">→</span> Then 0: <a class="node" data-node="msg.broadcast" href="../nodes/messages.html#n-msg-broadcast">Show Message</a> ("Fight!") <span class="to">→</span> Then 1: <a class="node" data-node="bots.phase" href="../nodes/bots.html#n-bots-phase">Bots: Phase</a> (Fight)</p>
+
+<h2 id="loops">Loops</h2>
+<p>A loop runs its Loop Body (or Each) output again and again, then its Completed (or Then) output once.</p>
+<div class="table"><table>
+<thead><tr><th>Node</th><th>Goes through</th></tr></thead>
+<tbody>
+<tr><td><a class="node" data-node="flow.for_each_player" href="../nodes/flow.html#n-flow-for-each-player">For Each Player</a></td><td>Every player who fits (alive, dead, a team…), or the players in Only these. At most 32, so it's cheap.</td></tr>
+<tr><td><a class="node" data-node="flow.for_each_array" href="../nodes/arrays.html#n-flow-for-each-array">For Each</a></td><td>Every item of an array, with Item and Index.</td></tr>
+<tr><td><a class="node" data-node="flow.for_loop" href="../nodes/flow.html#n-flow-for-loop">For Loop</a> / <a class="node" data-node="flow.for_loop_break" href="../nodes/flow.html#n-flow-for-loop-break">For Loop with Break</a></td><td>Each number from First to Last (at most 10000 steps).</td></tr>
+<tr><td><a class="node" data-node="flow.while" href="../nodes/flow.html#n-flow-while">While Loop</a></td><td>While a condition is true, stopped at Limit (1000 to start) so it can never freeze the server.</td></tr>
+<tr><td><a class="node" data-node="table.for_each" href="../nodes/data-tables.html#n-table-for-each">For Each Row</a>, <a class="node" data-node="creature.for_each" href="../nodes/creatures.html#n-creature-for-each">For Each Creature</a>, <a class="node" data-node="marker.for_each" href="../nodes/map-markers.html#n-marker-for-each">For Each Marker</a>, <a class="node" data-node="flow.for_each_entity" href="../nodes/flow.html#n-flow-for-each-entity">For Each Entity</a>, <a class="node" data-node="save.top" href="../nodes/saved.html#n-save-top">Top Players</a></td><td>A data table's rows, living creatures, map markers, entities, saved leaders.</td></tr>
+</tbody></table></div>
+<p>Flow into <b>Break</b> stops a loop early; Completed still runs.</p>
+<p>To give everyone on the Terrorist team a grenade at the start of a round:</p>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="flow.for_each_player" href="../nodes/flow.html#n-flow-for-each-player">For Each Player</a> (Who: Terrorists) <span class="to">→</span> Each <span class="to">→</span> <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a> (Player, hegrenade)</p>
+<p>To go through your own list, build an array (Players Array, Players In Radius, Find Entities, Split Text) and use For Each:</p>
+<p class="chain"><a class="node" data-node="spatial.players_in_radius" href="../nodes/spatial.html#n-spatial-players-in-radius">Players In Radius</a> <span class="to">→</span> <a class="node" data-node="flow.for_each_array" href="../nodes/arrays.html#n-flow-for-each-array">For Each</a> <span class="to">→</span> Loop Body <span class="to">→</span> <a class="node" data-node="player.slap" href="../nodes/players.html#n-player-slap">Slap</a> (Item)</p>
+<p>A loop does all its steps in one go, in the same server frame. Thousands of steps with work in each can stall the server for a moment. To spread work out over time, use a timer instead.</p>
+
+<h2 id="gates">Do Once, gates and counters</h2>
+<ul>
+  <li><a class="node" data-node="flow.do_once" href="../nodes/flow.html#n-flow-do-once">Do Once</a> lets the flow through the first time only, until Reset.</li>
+  <li><a class="node" data-node="flow.do_once_per_player" href="../nodes/flow.html#n-flow-do-once-per-player">Do Once Per Player</a>: once for each player, until Reset (everyone) or Reset Player.</li>
+  <li><a class="node" data-node="flow.do_n" href="../nodes/flow.html#n-flow-do-n">Do N</a>: N times, until Reset.</li>
+  <li><a class="node" data-node="flow.gate" href="../nodes/flow.html#n-flow-gate">Gate</a>: Enter goes through only while it's open. Open, Close and Toggle change it.</li>
+  <li><a class="node" data-node="flow.multi_gate" href="../nodes/flow.html#n-flow-multi-gate">Multi Gate</a>: each time, the next output (in order or random); Loop starts over after the last.</li>
+</ul>
+<p>To announce first blood once a round:</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="flow.do_once" href="../nodes/flow.html#n-flow-do-once">Do Once</a> <span class="to">→</span> <a class="node" data-node="msg.big_hud" href="../nodes/messages.html#n-msg-big-hud">Big HUD Text</a> ("First blood!")<br><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="flow.do_once" href="../nodes/flow.html#n-flow-do-once">Do Once</a>'s Reset</p>
+
+<h2 id="custom-events">Custom events, functions and macros</h2>
+<p>A <b>custom event</b> is your own event, with inputs you choose (My mode › Custom events). <a class="node" data-node="event.call" href="../nodes/flow.html#n-event-call">Call Custom Event</a> runs every <a class="node" data-node="event.custom" href="../nodes/events.html#n-event-custom">Custom Event</a> node for it, from anywhere in the mode. Use one when several places need the same reaction ("give the round's reward").</p>
+<p>A map can fire one too: tick <b>The map can fire it</b>, and point a button or trigger at an <code>ls_event</code> entity with the event's name. <a class="node" data-node="event.map_fired" href="../nodes/events.html#n-event-map-fired">On Map Entity Fired</a> hears any named map entity without an <code>ls_event</code>.</p>
+<p>To talk to other plugins and other Studio modes, use <a class="node" data-node="amx.fire" href="../nodes/advanced.html#n-amx-fire">Fire Custom Event</a> and <a class="node" data-node="amx.on_event" href="../nodes/advanced.html#n-amx-on-event">On Custom Event</a>.</p>
+<p>A <b>function</b> is a reusable graph with inputs and outputs: <a class="node" data-node="fn.entry" href="../nodes/functions.html#n-fn-entry">Function Entry</a> starts it, <a class="node" data-node="fn.call" href="../nodes/functions.html#n-fn-call">Call</a> runs it, <a class="node" data-node="fn.call_pure" href="../nodes/functions.html#n-fn-call-pure">Call Pure</a> uses a pure one as a value. Functions run straight through, so nodes that wait (Delay, Repeat) don't go in them. Put those in a <b>macro</b> (<a class="node" data-node="macro.use" href="../nodes/macros.html#n-macro-use">Macro</a>), which is copied in where you use it and can have several flows in and out.</p>
+
+<h2 id="timers">Timers</h2>
+<ul>
+  <li><a class="node" data-node="timer.delay" href="../nodes/timers.html#n-timer-delay">Delay</a>: waits, then carries on. Running it again starts another wait.</li>
+  <li><a class="node" data-node="timer.retrigger" href="../nodes/timers.html#n-timer-retrigger">Retriggerable Delay</a>: like Delay, but coming in again starts the wait over, so it carries on once things go quiet.</li>
+  <li><a class="node" data-node="timer.repeat" href="../nodes/timers.html#n-timer-repeat">Repeat</a>: runs Each every few seconds, a number of times (0: until the round ends).</li>
+  <li><a class="node" data-node="timer.countdown" href="../nodes/timers.html#n-timer-countdown">Countdown</a>: counts down on everyone's screen, then runs Done.</li>
+  <li><a class="node" data-node="timer.by_event" href="../nodes/timers.html#n-timer-by-event">Set Timer by Event</a> and <a class="node" data-node="timer.by_function" href="../nodes/timers.html#n-timer-by-function">Set Timer by Function</a>: run a custom event or a function later, or again and again.</li>
+  <li><a class="node" data-node="timer.stop" href="../nodes/timers.html#n-timer-stop">Stop Timer</a>, <a class="node" data-node="timer.clear" href="../nodes/timers.html#n-timer-clear">Clear Timer</a>, <a class="node" data-node="timer.is_active" href="../nodes/timers.html#n-timer-is-active">Is Timer Active</a> and <a class="node" data-node="timer.stop_all" href="../nodes/timers.html#n-timer-stop-all">Stop Timers</a>: stop or check them. Each timer node gives a Timer value you can keep in a variable.</li>
+  <li><a class="node" data-node="timeline.play" href="../nodes/timers.html#n-timeline-play">Timeline</a>: values that change over time and events at set moments (a lifting platform, a pulsing glow).</li>
+</ul>
+<p>For abilities, cooldowns are simpler than timers: <a class="node" data-node="cd.start" href="../nodes/cooldowns.html#n-cd-start">Start Cooldown</a> when it's used, <a class="node" data-node="cd.ready" href="../nodes/cooldowns.html#n-cd-ready">Is Ready</a> before letting it run again.</p>
+
+<h2 id="on-tick">On Tick and what it costs</h2>
+<p><a class="node" data-node="event.on_tick" href="../nodes/events.html#n-event-on-tick">On Tick</a> runs again and again all through the map, every Interval seconds, with Delta (the seconds since last time). 0.1 means ten times a second, which looks smooth for almost anything. 0 means as often as the mode's <b>On Tick runs a second at most</b> setting lets it (100 to start; see <a href="limits.html">Limits</a>).</p>
+<p>Everything after On Tick runs every time, for the whole server. A loop over every player or entity, a search round a point, or a line-of-sight check in a fast On Tick adds up quickly. The Problems tab warns when an On Tick faster than 0.05 s has one of those in it.</p>
+<ul>
+  <li>Use the slowest interval that looks right. A Repeat every half second is usually plenty for checks.</li>
+  <li>Prefer an event when there is one: Player Landed instead of checking feet every tick, Begin Overlap instead of measuring distances.</li>
+  <li>Keep long lists in a variable instead of finding them every tick.</li>
+</ul>
+
+<h2 id="examples">Worked examples</h2>
+<h3>A double jump</h3>
+<p>The quick way: one node.</p>
+<p class="chain"><a class="node" data-node="event.player_spawned" href="../nodes/events.html#n-event-player-spawned">Player Spawned</a> <span class="to">→</span> <a class="node" data-node="player.jump_rules" href="../nodes/players.html#n-player-jump-rules">Jump Rules</a> (Player, Extra air jumps: 1)</p>
+<p>By hand, so you can add a sound or a cooldown:</p>
+<p class="chain"><a class="node" data-node="in.pressed" href="../nodes/events.html#n-in-pressed">Player Pressed Button</a> (Jump) <span class="to">→</span> <a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="player.move_state" href="../nodes/players.html#n-player-move-state">Player Movement State</a>: On ground) <span class="to">→</span> False <span class="to">→</span> <a class="node" data-node="flow.do_once_per_player" href="../nodes/flow.html#n-flow-do-once-per-player">Do Once Per Player</a> <span class="to">→</span> <a class="node" data-node="player.push" href="../nodes/players.html#n-player-push">Push</a> (Straight up, 300)<br><a class="node" data-node="col.on_landed" href="../nodes/events.html#n-col-on-landed">Player Landed</a> (Only falls faster than: 0) <span class="to">→</span> <a class="node" data-node="flow.do_once_per_player" href="../nodes/flow.html#n-flow-do-once-per-player">Do Once Per Player</a>'s Reset Player</p>
+<p>The starter library's Double Jump (My library) is this, ready to wire in.</p>
+<h3>Last one standing wins</h3>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="game.count_alive" href="../nodes/players.html#n-game-count-alive">Count Alive</a> ≤ 1) <span class="to">→</span> True <span class="to">→</span> <a class="node" data-node="score.end_round" href="../nodes/scoring.html#n-score-end-round">End Round</a></p>
+<h3>Pick who's "it" after a countdown</h3>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="timer.countdown" href="../nodes/timers.html#n-timer-countdown">Countdown</a> (10, "Picking in") <span class="to">→</span> Done <span class="to">→</span> <a class="node" data-node="flow.pick_player" href="../nodes/flow.html#n-flow-pick-player">Pick Random Player</a> (Everyone alive) <span class="to">→</span> Found <span class="to">→</span> <a class="node" data-node="player.set_glow" href="../nodes/players.html#n-player-set-glow">Set Glow</a> (Player, Red) <span class="to">→</span> <a class="node" data-node="msg.broadcast" href="../nodes/messages.html#n-msg-broadcast">Show Message</a> (Player, "You're it!")</p>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="variables.html">Variables and saving</a>: keep values between events.</li>
+  <li><a href="limits.html">Limits</a>: what a fast On Tick or a big loop costs.</li>
+  <li><a href="../nodes/flow.html">Flow nodes</a>, <a href="../nodes/events.html">Events</a> and <a href="../nodes/timers.html">Timers</a> in the reference.</li>
+  <li><a href="../../docs.html#studio-graphs">Event graphs and custom events</a> and <a href="../../docs.html#studio-timelines">Timelines</a> in the docs.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#what-starts">What starts a graph</a></li><li><a href="#three-kinds">Events, actions and values</a></li><li><a href="#flow">Following the flow</a></li><li><a href="#branch">Branch and other choices</a></li><li><a href="#sequence">Sequence</a></li><li><a href="#loops">Loops</a></li><li><a href="#gates">Do Once, gates and counters</a></li><li><a href="#custom-events">Custom events, functions and macros</a></li><li><a href="#timers">Timers</a></li><li><a href="#on-tick">On Tick and what it costs</a></li><li><a href="#examples">Worked examples</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

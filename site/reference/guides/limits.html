@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limits · Loner-Strike reference</title>
+<meta name="description" content="The comfort limits on effects and searches, and when the game itself runs out.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Limits <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html" aria-current="page">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Limits</h1>
+    <p class="lead">The comfort limits on effects and searches, and when the game itself runs out.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Experiment freely. A Game Mode Studio mode can't crash the server by spawning too much or flooding players with effects: the plugin it makes checks the game's real breaking points and skips what wouldn't fit. On top of that, a few <b>comfort limits</b> keep a mode smooth on a busy server. They're defaults, not walls, and hosts can change them.</p>
+
+<h2 id="comfort">Comfort limits</h2>
+<p>When you add a node that can pile up (markers, trails, projectiles, trigger volumes…), the Studio adds its limit to the mode as a setting in the <b>Limits</b> group. You set the start value in My mode › Variables; hosts change it in the mode's settings (the Play page, the server page, the in-game admin menu) without editing the mode.</p>
+<div class="table"><table>
+<thead><tr><th>Setting</th><th>Default</th><th>Warns above</th><th>Most</th><th>Used by</th></tr></thead>
+<tbody>
+<tr><td>Effect messages a frame</td><td>48</td><td>96</td><td>160</td><td>Effects, HUD and chat sent in one server frame: <a class="node" data-node="fun.burst" href="../nodes/effects.html#n-fun-burst">Effect Burst</a>, <a class="node" data-node="fun.trail" href="../nodes/effects.html#n-fun-trail">Trail</a>, <a class="node" data-node="msg.big_hud" href="../nodes/messages.html#n-msg-big-hud">Big HUD Text</a>, <a class="node" data-node="msg.color_chat" href="../nodes/messages.html#n-msg-color-chat">Colored Chat</a>, <a class="node" data-node="msg.killfeed" href="../nodes/messages.html#n-msg-killfeed">Kill Feed Line</a>, <a class="node" data-node="fx.tracer" href="../nodes/effects.html#n-fx-tracer">Tracer</a>, <a class="node" data-node="fx.dlight" href="../nodes/effects.html#n-fx-dlight">Dynamic Light</a>, debug drawing and more</td></tr>
+<tr><td>On Tick runs a second at most</td><td>100</td><td>100</td><td>1000</td><td><a class="node" data-node="event.on_tick" href="../nodes/events.html#n-event-on-tick">On Tick</a> with Interval 0</td></tr>
+<tr><td>Objective markers at once</td><td>32</td><td>64</td><td>256</td><td><a class="node" data-node="fx.marker" href="../nodes/effects.html#n-fx-marker">Objective Marker</a></td></tr>
+<tr><td>Trails at once</td><td>32</td><td>64</td><td>256</td><td><a class="node" data-node="fun.trail" href="../nodes/effects.html#n-fun-trail">Trail</a></td></tr>
+<tr><td>Loop sounds at once</td><td>16</td><td>64</td><td>256</td><td><a class="node" data-node="snd.loop" href="../nodes/effects.html#n-snd-loop">Loop Sound</a></td></tr>
+<tr><td>Projectiles at once</td><td>64</td><td>128</td><td>512</td><td><a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a></td></tr>
+<tr><td>Trigger volumes at once</td><td>32</td><td>64</td><td>256</td><td><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a></td></tr>
+<tr><td>Things inside one trigger volume</td><td>32</td><td>48</td><td>64</td><td><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a></td></tr>
+<tr><td>Areas bots avoid at once</td><td>16</td><td>24</td><td>32</td><td><a class="node" data-node="bots.avoid" href="../nodes/bots.html#n-bots-avoid">Bots Avoid Area</a></td></tr>
+<tr><td>Attached things at once</td><td>64</td><td>128</td><td>256</td><td><a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a></td></tr>
+<tr><td>Looping animations at once</td><td>64</td><td>128</td><td>256</td><td><a class="node" data-node="ent.play_anim" href="../nodes/entities.html#n-ent-play-anim">Play Animation</a></td></tr>
+<tr><td>NPC moves at once</td><td>32</td><td>48</td><td>64</td><td><a class="node" data-node="npc.move_to" href="../nodes/npcs.html#n-npc-move-to">NPC Move To</a>, <a class="node" data-node="npc.follow_path" href="../nodes/npcs.html#n-npc-follow-path">NPC Follow Path</a></td></tr>
+<tr><td>Map entity kinds heard</td><td>96</td><td>160</td><td>256</td><td><a class="node" data-node="event.map_fired" href="../nodes/events.html#n-event-map-fired">On Map Entity Fired</a></td></tr>
+<tr><td>Entities one search keeps</td><td>64</td><td>256</td><td>2048</td><td><a class="node" data-node="spatial.entities_in_radius" href="../nodes/spatial.html#n-spatial-entities-in-radius">Entities In Radius</a></td></tr>
+<tr><td>Tries finding a free spot</td><td>64</td><td>256</td><td>1024</td><td><a class="node" data-node="spatial.free_spot" href="../nodes/spatial.html#n-spatial-free-spot">Find Free Spot Near</a></td></tr>
+<tr><td>Aim Point's longest trace</td><td>8192</td><td>8192</td><td>32768</td><td><a class="node" data-node="aim.point" href="../nodes/players.html#n-aim-point">Aim Point</a></td></tr>
+<tr><td>Player Command uses a second</td><td>5</td><td>20</td><td>1000</td><td><a class="node" data-node="in.command" href="../nodes/events.html#n-in-command">Player Command</a></td></tr>
+<tr><td>Top Players places</td><td>10</td><td>50</td><td>100</td><td><a class="node" data-node="save.top" href="../nodes/saved.html#n-save-top">Top Players</a></td></tr>
+</tbody></table></div>
+<p>Each node's reference card lists its limits too.</p>
+
+<h2 id="warnings">The warnings</h2>
+<p>Raise a limit past its "warns above" value and the Problems tab says so, for example: "Projectiles at once is set to 300 (the default is 64): that may lag servers with many players." It's a warning, never an error: Compile still works. Above "Most", the value is held at the most the plugin can keep.</p>
+<p>Other cost warnings in Problems:</p>
+<ul>
+  <li>An <a class="node" data-node="event.on_tick" href="../nodes/events.html#n-event-on-tick">On Tick</a> faster than 0.05 s with a loop, a search or a line-of-sight check in it.</li>
+  <li>A mode that loads more than 64 files of its own (see below).</li>
+  <li><a class="node" data-node="debug.log_line" href="../nodes/messages.html#n-debug-log-line">Log Line</a> allowed many lines a second.</li>
+</ul>
+<p>Node help also has a <b>Cost</b> note on nodes that are heavy when run often (Find Entities, For Each Entity, Player Hurt, Top Players).</p>
+
+<h2 id="engine">The game's own breaking points</h2>
+<p>A few things crash a GoldSrc server or kick players when they run out. The plugin guards each one, whatever the settings say:</p>
+<div class="table"><table>
+<thead><tr><th>What runs out</th><th>What the game does</th><th>What the mode does</th></tr></thead>
+<tbody>
+<tr><td><b>Entity slots</b> (every prop, sprite, projectile, volume is one)</td><td>Crashes with "no free edicts"</td><td>Keeps 96 slots free for the game. A spawn that would eat into them is skipped: <a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a>, <a class="node" data-node="ent.spawn_weapon" href="../nodes/entities.html#n-ent-spawn-weapon">Spawn Weapon On Ground</a>, <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a>, <a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a>, <a class="node" data-node="fx.marker" href="../nodes/effects.html#n-fx-marker">Objective Marker</a>, <a class="node" data-node="snd.loop" href="../nodes/effects.html#n-snd-loop">Loop Sound</a>, <a class="node" data-node="fun.burn" href="../nodes/players.html#n-fun-burn">Set On Fire</a>'s flames, <a class="node" data-node="fun.view_from" href="../nodes/players.html#n-fun-view-from">View From</a>.</td></tr>
+<tr><td><b>Files loaded with the map</b> (models, sounds, sprites: 512 models and 512 sounds for the map, every plugin and the game together)</td><td>The map fails to load</td><td>A mode loads at most 160 files of its own. Problems warns past 64 and shows an error past 160; the plugin stops loading at 160 too. A file that isn't on the server is skipped, and what uses it does without.</td></tr>
+<tr><td><b>Messages in one server frame</b> (effects, HUD text, chat)</td><td>The reliable channel overflows and players are kicked</td><td>Past Effect messages a frame (48 to start, never above 160), the effect is skipped. A message to one player counts against that player too, at half the budget.</td></tr>
+</tbody></table></div>
+<p>Loops have their own guards: <a class="node" data-node="flow.while" href="../nodes/flow.html#n-flow-while">While Loop</a> stops at its Limit (1000 to start), <a class="node" data-node="flow.for_loop" href="../nodes/flow.html#n-flow-for-loop">For Loop</a> at 10000 steps, and arrays hold at most 10000 items. A mode has up to 400 nodes and 64 variables.</p>
+
+<h2 id="skipped">What's skipped, and where it's said</h2>
+<p>When a guard steps in, the one action is skipped and the rest of the mode carries on. Nothing crashes, and you can see what happened:</p>
+<ul>
+  <li><b>The server log</b> names the mode, the node and why: "Spawn Projectile skipped: the server is out of entity slots", "Big HUD Text skipped: too many effects this frame" (at most once a second), "Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (32, Limits)", "missing sound/custom/boom.wav: what uses it does without".</li>
+  <li><b>The debugger</b> (Playtest) marks the node with the same reason.</li>
+  <li><b>The node's outputs</b>: a spawn's output is empty (check it with <a class="node" data-node="flow.if_valid" href="../nodes/conditions.html#n-flow-if-valid">Is Valid?</a>); <a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> runs Failed with a Failure Reason.</li>
+</ul>
+
+<h2 id="tuning">Tuning a heavy mode</h2>
+<ol>
+  <li>Run a <b>Test run</b>: it measures the real build. The Playtest build records every node, so it's slower than what players get.</li>
+  <li>Slow down fast timers: <a class="node" data-node="timer.repeat" href="../nodes/timers.html#n-timer-repeat">Repeat</a> every 0.5 s and <a class="node" data-node="event.on_tick" href="../nodes/events.html#n-event-on-tick">On Tick</a> at 0.1 s are usually plenty.</li>
+  <li>Find once, keep the list: put <a class="node" data-node="ent.find_all" href="../nodes/entities.html#n-ent-find-all">Find Entities</a> in a variable at Round Started instead of searching every tick.</li>
+  <li>Prefer events to checks: <a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> instead of measuring distances, <a class="node" data-node="col.on_landed" href="../nodes/events.html#n-col-on-landed">Player Landed</a> instead of watching feet.</li>
+  <li>Remove what you're done with: <a class="node" data-node="ent.remove" href="../nodes/entities.html#n-ent-remove">Remove Entity</a>, <a class="node" data-node="proj.remove" href="../nodes/projectiles.html#n-proj-remove">Remove Projectile</a>, <a class="node" data-node="vol.remove" href="../nodes/collision.html#n-vol-remove">Remove Trigger Volume</a>, <a class="node" data-node="fx.marker_remove" href="../nodes/effects.html#n-fx-marker-remove">Remove Marker</a>.</li>
+  <li>Only then raise a comfort limit, and say so in the mode's description so hosts know.</li>
+</ol>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="events-flow.html#on-tick">On Tick and what it costs</a>.</li>
+  <li><a href="spawning.html">Spawning and transforms</a>: what happens when a spawn can't happen.</li>
+  <li><a href="../../docs.html#studio-checks">Check a mode</a> and <a href="../../docs.html#studio-debugging">Playtest and debug a mode</a> in the docs.</li>
+  <li><a href="../../docs.html#editor-budget">The map editor's Budget</a>: the same engine limits, for maps.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#comfort">Comfort limits</a></li><li><a href="#warnings">The warnings</a></li><li><a href="#engine">The game's own breaking points</a></li><li><a href="#skipped">What's skipped, and where it's said</a></li><li><a href="#tuning">Tuning a heavy mode</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

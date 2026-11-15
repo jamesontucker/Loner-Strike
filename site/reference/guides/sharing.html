@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sharing · Loner-Strike reference</title>
+<meta name="description" content="What travels with a mode, what players need, and how credits work.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Sharing <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html" aria-current="page">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Sharing</h1>
+    <p class="lead">What travels with a mode, what players need, and how credits work.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Share a mode or map from Tools › Community › Publish. The app makes the package and fills in the credits; you upload it to GameBanana yourself, and it shows up in everyone's Community tab. The app never uploads or signs in to GameBanana for you.</p>
+
+<h2 id="what-travels">What travels with a mode</h2>
+<p>Only the <b>graph</b> is shared. Each player's app builds the plugin from it on their own computer, so nothing that runs code travels. With it go:</p>
+<ul>
+  <li>The models, sounds and sprites its nodes use that aren't the game's own (a custom .spr for <a class="node" data-node="fx.marker" href="../nodes/effects.html#n-fx-marker">Objective Marker</a>, a model for <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a>).</li>
+  <li>The custom creatures it spawns with <a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a>, with their models and sounds.</li>
+  <li>The models and sounds of its NPCs (<a class="node" data-node="npc.spawn" href="../nodes/npcs.html#n-npc-spawn">Spawn NPC</a>).</li>
+  <li>Its data tables, map markers, Timelines, functions and macros (they're part of the graph).</li>
+</ul>
+<p>Every file has to be on your computer, or linked to the GameBanana item that has it: see My mode › Details › Requirements. Starter library items you added are copied into your mode, so they travel too; your own My library items don't go to Community on their own yet.</p>
+
+<h2 id="what-travels-map">What travels with a map</h2>
+<ul>
+  <li>The map, its nav and map knowledge (so bots play it), a fresh download list and the overview.</li>
+  <li>Its own sounds, models, sprites and textures; never the game's own.</li>
+  <li>The custom creatures its spawners use, and its NPCs' models.</li>
+  <li>If you tick it, the editable source (below).</li>
+</ul>
+<p>Never shared: the game's own files, plugins and compiled code (.amxx, .sma, .dll, .exe, scripts), settings files (.cfg, liblist.gam, plugin lists), archives inside the package, and the Metamod and dlls folders.</p>
+
+<h2 id="owner-folders">Creatures and NPC models in your own folder</h2>
+<p>Custom creatures and NPC models are carried in your own folder, named for your GameBanana account, so they never clash with anyone else's. Players see them as "crawler by you". Publish lists them ("Includes: crawler (with its model)").</p>
+<p>On a player's computer, shared creatures go into their own marked block in creatures.ini; their own types are never touched. Removing the mode or map removes only that block, and a type two installs share stays until both are gone.</p>
+
+<h2 id="publish">Publish it</h2>
+<ol>
+  <li>For a mode: make sure it compiles and run a Test run. For a map: compile it into your game.</li>
+  <li>In Tools › Community › Publish, pick <b>A game mode</b> or <b>A map</b>. The app says what's missing.</li>
+  <li>Fill in Name, Made by (your GameBanana name), About it and screenshots. For a mode, set <b>How well bots play it</b>; the Studio may suggest one.</li>
+  <li>Check <b>Credits</b> for the files it uses (below), and the AI box.</li>
+  <li>Make the package, then open GameBanana and sign in there.</li>
+  <li>Upload the package unchanged in the Counter-Strike 1.6 section, with the screenshots.</li>
+  <li>On GameBanana's <b>Technical</b> tab, under Tags, add a <b>Custom Tag</b> with the value <code>LonerStrike</code> (the title can stay empty), press + and save. That's how Community finds it.</li>
+  <li>Paste the credits into GameBanana's Authors section, and fill in its AI Usage section if AI helped. The app has copy buttons for each.</li>
+  <li>Once GameBanana has checked the file, paste the page's link in the app and press <b>Add to Community</b>.</li>
+</ol>
+<p>Most things are listed within a few minutes; some go to a moderator first. If one is turned down, the app says why.</p>
+
+<h2 id="power-tools">Power tools get a badge</h2>
+<p>A mode that uses <a class="node" data-node="game.run_command" href="../nodes/advanced.html#n-game-run-command">Run Server Command</a>, <a class="node" data-node="game.amx_command" href="../nodes/advanced.html#n-game-amx-command">Run AMX Command</a>, <a class="node" data-node="player.kick" href="../nodes/players.html#n-player-kick">Kick</a> or <a class="node" data-node="amx.call" href="../nodes/advanced.html#n-amx-call">Call Plugin Function</a> shows a badge for each on its Community page, and players confirm before installing. Those nodes only run commands that change the game, both when the mode is built and as it runs. If you can do it with other nodes, do: fewer badges, more players.</p>
+
+<h2 id="credits">Credits and AI use</h2>
+<p>Loner-Strike tracks where every file came from. Credits lists each file's source, makers and what its page allows. When a page wants you to ask first, ask the maker, then press <b>Permission granted…</b> and note who, where and when. A file whose page doesn't allow sharing stops the package until you record permission; <b>Add credit…</b> names the maker of a file the app doesn't know.</p>
+<p>The credits go into the package's README.txt, the Community listing, and a block for GameBanana's Authors section: you, the maker of the original when it's a remix, the makers of shared creatures it carries, and the makers of the files it uses.</p>
+<p>GameBanana asks people to say when AI helped. Publish has an <b>AI agents helped make this</b> box, ticked for you when an AI agent changed the mode or map through Loner-Strike's connection, with the AI's name. When it's ticked, the description ends with a short disclosure. Fill in GameBanana's <b>AI Usage</b> section too: GameBanana needs real creative work of your own in what you upload.</p>
+
+<h2 id="remix">Map source and Remix</h2>
+<p>When you publish a map, tick <b>Include the editable source</b> and pick its project. The package gets a source/ folder: the map editor's project (.lsmap), a Valve 220 .map that TrenchBroom, Hammer and J.A.C.K. open, a texture file with only the map's own textures, and a short note. Players who only play it never get source/ in their game.</p>
+<p>On a map shared with its source, <b>Remix this map</b> saves a copy as a new project of yours and opens it in the map editor. A mode can always be remixed: <b>Remix in Game Mode Studio</b> makes a new mode of yours. Either way, when you publish the remix, it says "A remix of" the original, by its maker. Only the first uploader can update a creation; everyone else posts a remix that credits it.</p>
+
+<h2 id="updates">Updates and Go back</h2>
+<p>To update something you shared, upload the new file to its GameBanana page, then paste the link in Publish again. Players get it as an update, with your notes:</p>
+<ul>
+  <li>Never while it's in use: the map or mode being played updates at the next map change. Servers update once nobody's playing it there.</li>
+  <li><b>Go back</b> to the previous version restores the old one; a failed update does it by itself.</li>
+  <li>Placed prefabs and remixed modes don't change.</li>
+</ul>
+<p>The Published tab lists what you've shared. <b>Unlist</b> takes one off Community (installed copies stay); List again puts it back.</p>
+
+<h2 id="plugin-studio">Plugin Studio stays local</h2>
+<p>Community never takes plugins or compiled code. A plugin from Plugin Studio stays on your computer: to share one, Export… its .sma and post it on GameBanana or AlliedModders yourself. To share a mode through Community, make it in Game Mode Studio.</p>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="bots.html">Steering bots</a>: worth doing before you set How well bots play it.</li>
+  <li><a href="limits.html">Limits</a>: the 160 files a mode can load of its own.</li>
+  <li><a href="../../docs.html#publishing">Publishing</a>, <a href="../../docs.html#community">Community</a> and <a href="../../docs.html#creature-studio">Creature Studio</a> in the docs.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#what-travels">What travels with a mode</a></li><li><a href="#what-travels-map">What travels with a map</a></li><li><a href="#owner-folders">Creatures and NPC models in your own folder</a></li><li><a href="#publish">Publish it</a></li><li><a href="#power-tools">Power tools get a badge</a></li><li><a href="#credits">Credits and AI use</a></li><li><a href="#remix">Map source and Remix</a></li><li><a href="#updates">Updates and Go back</a></li><li><a href="#plugin-studio">Plugin Studio stays local</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

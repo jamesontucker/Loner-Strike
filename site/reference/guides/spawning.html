@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spawning and transforms · Loner-Strike reference</title>
+<meta name="description" content="Making props, creatures and effects, and moving, turning and attaching them.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Spawning and transforms <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html" aria-current="page">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Spawning and transforms</h1>
+    <p class="lead">Making props, creatures and effects, and moving, turning and attaching them.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Props, creatures, NPCs, interactables, components, weapons on the ground, effect entities, projectiles and trigger volumes all come from spawn nodes. They share one way of saying where a thing goes, which way it faces and how it moves. Learn it once and every spawn node works the same.</p>
+
+<h2 id="spawn-nodes">The spawn nodes</h2>
+<div class="table"><table>
+<thead><tr><th>Node</th><th>Makes</th></tr></thead>
+<tbody>
+<tr><td><a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a></td><td>A model, solid or not.</td></tr>
+<tr><td><a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a></td><td>A creature of a type from Creature Studio, with health, tier and pay.</td></tr>
+<tr><td><a class="node" data-node="npc.spawn" href="../nodes/npcs.html#n-npc-spawn">Spawn NPC</a></td><td>A character people talk to.</td></tr>
+<tr><td><a class="node" data-node="npc.spawn_use" href="../nodes/npcs.html#n-npc-spawn-use">Spawn Interactable</a></td><td>Something people use with E: a lever, a note, a terminal.</td></tr>
+<tr><td><a class="node" data-node="comp.create" href="../nodes/components.html#n-comp-create">Create Component</a></td><td>A component: a capture point, a crate, a zone (no Velocity or Scale).</td></tr>
+<tr><td><a class="node" data-node="ent.spawn_weapon" href="../nodes/entities.html#n-ent-spawn-weapon">Spawn Weapon On Ground</a></td><td>A gun or item lying on the ground, picked up like the map's own.</td></tr>
+<tr><td><a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a></td><td>One of the game's entities with your keys: sprites, beams, sparks, sounds, relays. Only classes that are safe while the game runs.</td></tr>
+<tr><td><a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a></td><td>A flying model or sprite that hits things (below).</td></tr>
+<tr><td><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a></td><td>An invisible box or sphere that says who goes in and out (below).</td></tr>
+</tbody></table></div>
+<p>Each one hands back what it made (Prop, Creature, NPC…). Keep it in a variable to move, change or remove it later with <a class="node" data-node="ent.remove" href="../nodes/entities.html#n-ent-remove">Remove Entity</a>.</p>
+
+<h2 id="transform">The transform pins</h2>
+<p>Every spawn node has the same pins for where the thing goes:</p>
+<div class="table"><table>
+<thead><tr><th>Pin</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><b>At entity</b> (<code>at_ent</code>)</td><td>Put it at this entity's spot: a player, a marker, another prop.</td></tr>
+<tr><td><b>At position</b> (<code>pos</code>)</td><td>Put it at this point. Wins over At entity when both are wired (the Problems tab says so).</td></tr>
+<tr><td><b>Local offset</b> (<code>offset</code>)</td><td>Move it from At entity along that entity's own forward, right and up.</td></tr>
+<tr><td><b>Rotation</b> (<code>angles</code>)</td><td>Its facing (pitch, yaw, roll), set outright.</td></tr>
+<tr><td><b>Rotation offset</b> (<code>angles_offset</code>)</td><td>Turned this much more than At entity's facing (or its own).</td></tr>
+<tr><td><b>Velocity</b> (<code>vel</code>)</td><td>Starts it moving. A thing that stood still then falls and slides.</td></tr>
+<tr><td><b>Scale</b> (<code>scale</code>)</td><td>Its size, for models and sprites (1 is normal).</td></tr>
+</tbody></table></div>
+<p>The setting <b>Face the way At entity faces</b> (on by default) turns the new thing to match At entity before Rotation offset is added.</p>
+<p>A crate one step in front of a player, facing them:</p>
+<p class="chain"><a class="node" data-node="event.chat_command" href="../nodes/events.html#n-event-chat-command">Chat Command</a> ("crate") <span class="to">→</span> <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a> (At entity: Player, Local offset: 64 0 0, Rotation offset: 0 180 0)</p>
+<p>A gun tossed forward when a player dies:</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="ent.spawn_weapon" href="../nodes/entities.html#n-ent-spawn-weapon">Spawn Weapon On Ground</a> (deagle, At entity: Victim, Local offset: 0 0 32, Velocity: <a class="node" data-node="vec.scale" href="../nodes/vectors.html#n-vec-scale">Scale Vector</a> (<a class="node" data-node="aim.dir" href="../nodes/players.html#n-aim-dir">Aim Direction</a> Victim, 250))</p>
+
+<h2 id="spaces">Local and world space</h2>
+<p><b>World space</b> is the map's own X, Y and Z: the same for everyone. <b>Local space</b> is seen from a player or entity: X forward, Y right, Z up, by its facing. Local offset is local; At position and Velocity are world.</p>
+<ul>
+  <li><a class="node" data-node="rel.to_world" href="../nodes/vectors.html#n-rel-to-world">To World Space</a>: a local offset from someone, as a world position. "128 in front of the player" as a point.</li>
+  <li><a class="node" data-node="rel.to_local" href="../nodes/vectors.html#n-rel-to-local">To Local Space</a>: a world position as seen from someone.</li>
+  <li><a class="node" data-node="rel.position_of" href="../nodes/vectors.html#n-rel-position-of">Relative Position Of</a>, <a class="node" data-node="rel.is_in_front" href="../nodes/vectors.html#n-rel-is-in-front">Is In Front</a>, <a class="node" data-node="rel.is_behind" href="../nodes/vectors.html#n-rel-is-behind">Is Behind</a> and <a class="node" data-node="rel.angle_to" href="../nodes/vectors.html#n-rel-angle-to">Angle To</a>: where one thing is from another.</li>
+  <li><a class="node" data-node="vec.forward" href="../nodes/vectors.html#n-vec-forward">Angles To Forward Vector</a> and <a class="node" data-node="vec.to_angles" href="../nodes/vectors.html#n-vec-to-angles">Direction To Angles</a> turn angles into a direction and back; <a class="node" data-node="aim.dir" href="../nodes/players.html#n-aim-dir">Aim Direction</a> and <a class="node" data-node="aim.point" href="../nodes/players.html#n-aim-point">Aim Point</a> give where a player aims.</li>
+</ul>
+<p>One exception: <a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a>'s Offset is along the world, not the parent's facing. Use the Follow setting to stick to one of the model's attachment points instead.</p>
+<p>A sprite floating over a player's head that follows them:</p>
+<p class="chain"><a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a> (env_sprite, At entity: Player) <span class="to">→</span> <a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a> (Entity, Parent: Player, Offset: 0 0 48)</p>
+
+<h2 id="blocked">When the spot is taken</h2>
+<p>Spawning on top of a wall, a player or another prop can leave a thing stuck. Check the spot first with <a class="node" data-node="spatial.free_spot" href="../nodes/spatial.html#n-spatial-free-spot">Find Free Spot Near</a>: it gives the point itself if a player (or the size you pick) fits there, else the nearest free spot in rings round it, up to Max distance. Found is No when there's none.</p>
+<p class="chain"><a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="spatial.free_spot" href="../nodes/spatial.html#n-spatial-free-spot">Find Free Spot Near</a>'s Found; Near: <a class="node" data-node="vec.random_in_radius" href="../nodes/vectors.html#n-vec-random-in-radius">Random Point In Radius</a> (Marker position, 300), Size: Large) <span class="to">→</span> True <span class="to">→</span> <a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a> (At position: Free Spot's Position)</p>
+<p>When a spawn can't happen, nothing is made and the node's output is empty: check it with <a class="node" data-node="flow.if_valid" href="../nodes/conditions.html#n-flow-if-valid">Is Valid?</a>. That happens when At entity is gone and there's no position, when a model or sound isn't on the server, or when the server is near the game's entity limit (see <a href="limits.html">Limits</a>). The debugger marks the node with the reason, and the server log says what was skipped.</p>
+<p><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> also has <b>Spawned</b> and <b>Failed</b> flow outputs, plus Success and <b>Failure Reason</b>: Out of entity slots; Limit reached (Trigger volumes at once, in Limits); or Bad input (At entity is gone and there's no Position).</p>
+
+<h2 id="projectiles">Projectiles</h2>
+<p><a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> fires a model or sprite. Where from: At position, else At entity (a player's eyes) with Local offset, else the Owner's eyes. Which way: Direction, else Rotation, else the way At entity faces. Gravity 0 flies straight; 1 falls like a grenade. Damage hits what it touches, or everything in Radius.</p>
+<p>Its own <b>On Hit</b> output runs later, for this projectile only, with Hit Position, Hit Player, Hit Entity, Hit World and Hit Zone (each bounce too). <b>On Expired</b> runs when its Lifetime runs out. So two kinds of projectile from the same mode never mix up their hits. <a class="node" data-node="proj.on_hit" href="../nodes/projectiles.html#n-proj-on-hit">Projectile Hit</a> is the event for every projectile at once.</p>
+<p class="chain"><a class="node" data-node="in.pressed" href="../nodes/events.html#n-in-pressed">Player Pressed Button</a> (Attack 2) <span class="to">→</span> <a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="cd.ready" href="../nodes/cooldowns.html#n-cd-ready">Is Ready</a>) <span class="to">→</span> True <span class="to">→</span> <a class="node" data-node="cd.start" href="../nodes/cooldowns.html#n-cd-start">Start Cooldown</a> (3 s) <span class="to">→</span> <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> (Owner: Player, At entity: Player, Speed 1200) <span class="to">→</span> On Hit <span class="to">→</span> <a class="node" data-node="fx.explosion" href="../nodes/effects.html#n-fx-explosion">Explosion</a> (Hit Position, Damage 60)</p>
+<p>A kill counts for the Owner. Up to 64 fly at once (the Projectiles at once setting); a new round clears them. <a class="node" data-node="proj.remove" href="../nodes/projectiles.html#n-proj-remove">Remove Projectile</a> takes one away with no hit. Tick <b>Dangerous to bots</b> so bots dodge it. The starter library's Fireball is this, ready to use.</p>
+
+<h2 id="volumes">Trigger volumes</h2>
+<p><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> makes an invisible box or sphere. <a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> runs when something goes in, <a class="node" data-node="vol.on_end" href="../nodes/events.html#n-vol-on-end">End Overlap</a> when it leaves (or dies or leaves the server inside, or the volume is removed). Who counts: players, creatures or anything. Give it a name so the events pick out the right one.</p>
+<p>Put it at a Position, or At entity with a Local offset: then it follows the entity and turns with it. Rotation turns a box; a sphere ignores it. Volumes are checked ten times a second.</p>
+<p>A jump pad:</p>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> (Box 96×96×32, Name: "pad", At position: Marker) <br><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> ("pad") <span class="to">→</span> <a class="node" data-node="player.push" href="../nodes/players.html#n-player-push">Push</a> (Who, Straight up, 900)</p>
+<p><a class="node" data-node="vol.is_overlapping" href="../nodes/collision.html#n-vol-is-overlapping">Is Overlapping</a> asks who's inside right now; <a class="node" data-node="vol.remove" href="../nodes/collision.html#n-vol-remove">Remove Trigger Volume</a> takes it away. Map-made triggers still work with <a class="node" data-node="event.player_touched" href="../nodes/events.html#n-event-player-touched">Player Touched</a> and <a class="node" data-node="event.zone_enter" href="../nodes/events.html#n-event-zone-enter">Entered Map Zone</a>.</p>
+
+<h2 id="moving">Moving and changing things later</h2>
+<ul>
+  <li><a class="node" data-node="ent.set_position" href="../nodes/entities.html#n-ent-set-position">Set Entity Position</a>, <a class="node" data-node="ent.set_angles" href="../nodes/entities.html#n-ent-set-angles">Set Entity Rotation</a>, <a class="node" data-node="player.set_transform" href="../nodes/players.html#n-player-set-transform">Set Transform</a>, <a class="node" data-node="player.teleport" href="../nodes/players.html#n-player-teleport">Teleport</a>: move and turn.</li>
+  <li><a class="node" data-node="ent.transform" href="../nodes/entities.html#n-ent-transform">Get Entity Transform</a> and <a class="node" data-node="player.transform" href="../nodes/players.html#n-player-transform">Get Transform</a>: where something is, which way it faces, how fast it moves.</li>
+  <li><a class="node" data-node="ent.prop_set" href="../nodes/entities.html#n-ent-prop-set">Set Entity Property</a>: glow, color, skin, scale, gravity, collision; <a class="node" data-node="col.set_solid" href="../nodes/collision.html#n-col-set-solid">Set Entity Collision</a> and <a class="node" data-node="col.set_size" href="../nodes/collision.html#n-col-set-size">Set Entity Size</a> for how it collides.</li>
+  <li><a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a> and <a class="node" data-node="ent.detach" href="../nodes/entities.html#n-ent-detach">Detach</a>: follow a player or entity until let go.</li>
+  <li><a class="node" data-node="timeline.play" href="../nodes/timers.html#n-timeline-play">Timeline</a>: smooth movement over time (a lifting platform).</li>
+</ul>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="limits.html">Limits</a>: entity slots, files loaded with the map, and the "at once" settings.</li>
+  <li><a href="bots.html">Steering bots</a>: tell bots about what you spawn.</li>
+  <li><a href="../nodes/entities.html">Entities</a>, <a href="../nodes/projectiles.html">Projectiles</a>, <a href="../nodes/collision.html">Collision</a> and <a href="../nodes/vectors.html">Vectors</a> in the reference.</li>
+  <li><a href="../../docs.html#studio-engine">Engine nodes</a> in the docs.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#spawn-nodes">The spawn nodes</a></li><li><a href="#transform">The transform pins</a></li><li><a href="#spaces">Local and world space</a></li><li><a href="#blocked">When the spot is taken</a></li><li><a href="#projectiles">Projectiles</a></li><li><a href="#volumes">Trigger volumes</a></li><li><a href="#moving">Moving and changing things later</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

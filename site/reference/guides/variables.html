@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Variables and saving · Loner-Strike reference</title>
+<meta name="description" content="Mode, round and player variables, and what's kept between maps.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Variables and saving <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html" aria-current="page">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Variables and saving</h1>
+    <p class="lead">Mode, round and player variables, and what's kept between maps.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Variables hold what a mode needs to remember between events: a score, who's "it", which wave it is. This guide covers the kinds of variables, the containers (structs, enums, arrays, maps and data tables), and the Saved nodes that keep values after the map ends.</p>
+
+<h2 id="make-one">Make a variable</h2>
+<ol>
+  <li>In My mode (left), press + by Variables and name it.</li>
+  <li>In Details, pick its <b>Type</b> (number, yes/no, text, player, team, vector, an enum, a struct, an array or a map), <b>One for</b>, <b>Kept</b> and <b>Starts at</b>.</li>
+  <li>Drag it onto the graph: you get <a class="node" data-node="var.get" href="../nodes/variables.html#n-var-get">Get Variable</a> or <a class="node" data-node="var.set" href="../nodes/variables.html#n-var-set">Set Variable</a>.</li>
+</ol>
+<p><a class="node" data-node="var.add" href="../nodes/variables.html#n-var-add">Add To Variable</a> adds to a number and <a class="node" data-node="var.toggle" href="../nodes/variables.html#n-var-toggle">Toggle Variable</a> flips a yes/no. A mode has up to 64 variables.</p>
+
+<h2 id="scope">Mode, player and team variables</h2>
+<p><b>One for</b> says how many copies there are:</p>
+<div class="table"><table>
+<thead><tr><th>One for</th><th>What it means</th><th>Use it for</th></tr></thead>
+<tbody>
+<tr><td>The whole mode</td><td>One value for the server.</td><td>The wave number, the current "it", a round counter.</td></tr>
+<tr><td>Each player</td><td>Every player has their own. Get and Set need a Player wired in. It starts again when they join.</td><td>Lives left, a kill streak, a chosen class.</td></tr>
+<tr><td>Each team</td><td>One per team. Get and Set need a Team.</td><td>Team points, a team's upgrade level.</td></tr>
+</tbody></table></div>
+<p><b>Kept</b> says when it starts over: <b>For the map</b>, or <b>Starts again each round</b>. A round variable is the easy way to get a "this round only" count without resetting it yourself.</p>
+<p>To count each player's kills this round and reward the third:</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="var.add" href="../nodes/variables.html#n-var-add">Add To Variable</a> (Kills, Attacker, 1) <span class="to">→</span> <a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="math.compare" href="../nodes/conditions.html#n-math-compare">Compare</a>: <a class="node" data-node="var.get" href="../nodes/variables.html#n-var-get">Get Variable</a> Kills = 3) <span class="to">→</span> True <span class="to">→</span> <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a> (Attacker, awp)</p>
+<p>with Kills set to One for: Each player, Kept: Starts again each round.</p>
+
+<h2 id="settings">Variables hosts can change</h2>
+<p>A whole-mode number or yes/no variable can be a <b>Setting (hosts can change it)</b>. Hosts then set its start value on the Play page, the server page and the in-game admin menu, without editing or compiling the mode. Give it a label, help, a range and a group. The <a href="limits.html">comfort limits</a> are settings like this, in the Limits group.</p>
+<p>While you Playtest, Live values › Change sets a variable in the running game at once, and Use as start value copies it back into your graph.</p>
+
+<h2 id="structs-enums">Structs and enums</h2>
+<p>An <b>enum</b> is a list of named choices: scout, tank, medic. A variable of that enum can only hold one of them. <a class="node" data-node="enum.value" href="../nodes/enums.html#n-enum-value">Enum Value</a> picks one, <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> goes to the output for the value, <a class="node" data-node="enum.to_number" href="../nodes/enums.html#n-enum-to-number">Enum To Number</a> gives its number (from 0).</p>
+<p>A <b>struct</b> groups values under one name: a loadout with a primary, a secondary and armor. <a class="node" data-node="struct.make" href="../nodes/structs.html#n-struct-make">Make Struct</a> builds one, <a class="node" data-node="struct.break" href="../nodes/structs.html#n-struct-break">Break Struct</a> splits it into its fields, <a class="node" data-node="struct.set_field" href="../nodes/structs.html#n-struct-set-field">Set Field</a> changes one field of a struct variable.</p>
+<p class="chain"><a class="node" data-node="event.player_spawned" href="../nodes/events.html#n-event-player-spawned">Player Spawned</a> <span class="to">→</span> <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> (<a class="node" data-node="var.get" href="../nodes/variables.html#n-var-get">Get Variable</a> Class, Player) <span class="to">→</span> Tank <span class="to">→</span> <a class="node" data-node="player.set_health" href="../nodes/players.html#n-player-set-health">Set Health</a> (Player, 200)</p>
+
+<h2 id="arrays">Arrays</h2>
+<p>An array is a list of values of one type (up to 10000 items). Make an array variable, or get one from a node such as <a class="node" data-node="array.players" href="../nodes/arrays.html#n-array-players">Players Array</a>, <a class="node" data-node="spatial.players_in_radius" href="../nodes/spatial.html#n-spatial-players-in-radius">Players In Radius</a>, <a class="node" data-node="ent.find_all" href="../nodes/entities.html#n-ent-find-all">Find Entities</a> or <a class="node" data-node="text.split" href="../nodes/text.html#n-text-split">Split Text</a>.</p>
+<ul>
+  <li>Change it: <a class="node" data-node="array.add" href="../nodes/arrays.html#n-array-add">Add</a>, <a class="node" data-node="array.insert" href="../nodes/arrays.html#n-array-insert">Insert</a>, <a class="node" data-node="array.remove" href="../nodes/arrays.html#n-array-remove">Remove Item</a>, <a class="node" data-node="array.remove_index" href="../nodes/arrays.html#n-array-remove-index">Remove Index</a>, <a class="node" data-node="array.set" href="../nodes/arrays.html#n-array-set">Set Array Item</a>, <a class="node" data-node="array.clear" href="../nodes/arrays.html#n-array-clear">Clear</a>, <a class="node" data-node="array.shuffle" href="../nodes/arrays.html#n-array-shuffle">Shuffle</a>, <a class="node" data-node="array.sort" href="../nodes/arrays.html#n-array-sort">Sort</a>.</li>
+  <li>Read it: <a class="node" data-node="array.get" href="../nodes/arrays.html#n-array-get">Get</a> (from 0), <a class="node" data-node="array.length" href="../nodes/arrays.html#n-array-length">Length</a>, <a class="node" data-node="array.contains" href="../nodes/arrays.html#n-array-contains">Contains</a>, <a class="node" data-node="array.find" href="../nodes/arrays.html#n-array-find">Find</a>, <a class="node" data-node="array.random" href="../nodes/arrays.html#n-array-random">Random Item</a>, <a class="node" data-node="array.sum" href="../nodes/arrays.html#n-array-sum">Sum</a>.</li>
+  <li>Go through it: <a class="node" data-node="flow.for_each_array" href="../nodes/arrays.html#n-flow-for-each-array">For Each</a>.</li>
+</ul>
+<p>To keep a queue of players waiting to play:</p>
+<p class="chain"><a class="node" data-node="event.player_joined" href="../nodes/events.html#n-event-player-joined">Player Joined</a> <span class="to">→</span> <a class="node" data-node="array.add" href="../nodes/arrays.html#n-array-add">Add</a> (Queue, Player)<br><a class="node" data-node="event.player_left" href="../nodes/events.html#n-event-player-left">Player Left</a> <span class="to">→</span> <a class="node" data-node="array.remove" href="../nodes/arrays.html#n-array-remove">Remove Item</a> (Queue, Player)</p>
+
+<h2 id="maps">Maps</h2>
+<p>A map (the container, not a game map) looks values up by a key: a text, a number or a player. A <code>map&lt;player, number&gt;</code> is a score per player that you can list.</p>
+<ul>
+  <li><a class="node" data-node="map.add" href="../nodes/maps.html#n-map-add">Map Add</a> puts a value under a key (replacing what was there); <a class="node" data-node="map.remove" href="../nodes/maps.html#n-map-remove">Map Remove</a> and <a class="node" data-node="map.clear" href="../nodes/maps.html#n-map-clear">Map Clear</a> take them out.</li>
+  <li><a class="node" data-node="map.find" href="../nodes/maps.html#n-map-find">Map Find</a> gives the value and Found; <a class="node" data-node="map.contains" href="../nodes/maps.html#n-map-contains">Map Contains</a>, <a class="node" data-node="map.length" href="../nodes/maps.html#n-map-length">Map Length</a>, <a class="node" data-node="map.keys" href="../nodes/maps.html#n-map-keys">Map Keys</a> and <a class="node" data-node="map.values" href="../nodes/maps.html#n-map-values">Map Values</a> read it.</li>
+</ul>
+<p>Arrays, maps and structs are always one for the whole mode.</p>
+
+<h2 id="tables">Data tables</h2>
+<p>A data table is a grid you fill in (My mode › Data tables), or paste from a spreadsheet: a gun list, prices, waves. Each column has a type and the key column names each row. It's built into the plugin, so reading it costs almost nothing, but the mode can't change it while it runs.</p>
+<ul>
+  <li><a class="node" data-node="table.get_row" href="../nodes/data-tables.html#n-table-get-row">Get Row</a>: the row with this key, every cell as a pin.</li>
+  <li><a class="node" data-node="table.get_cell" href="../nodes/data-tables.html#n-table-get-cell">Get Cell</a>: one cell by row number (from 0).</li>
+  <li><a class="node" data-node="table.for_each" href="../nodes/data-tables.html#n-table-for-each">For Each Row</a>, <a class="node" data-node="table.find" href="../nodes/data-tables.html#n-table-find">Find Rows</a>, <a class="node" data-node="table.count" href="../nodes/data-tables.html#n-table-count">Row Count</a>, <a class="node" data-node="table.keys" href="../nodes/data-tables.html#n-table-keys">Row Keys</a>.</li>
+</ul>
+<p>A mode can have 16 tables of up to 12 columns and 256 rows.</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="var.add" href="../nodes/variables.html#n-var-add">Add To Variable</a> (Level, Attacker, 1) <span class="to">→</span> <a class="node" data-node="table.get_cell" href="../nodes/data-tables.html#n-table-get-cell">Get Cell</a> (Guns, Weapon, Row: Level) <span class="to">→</span> <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a> (Attacker, Value)</p>
+
+<h2 id="saved">Saved values</h2>
+<p>Variables last for the map at most. To keep something longer, use the Saved nodes. They keep values across map changes, server restarts and crashes, in the mode's own file:</p>
+<ul>
+  <li><a class="node" data-node="save.get" href="../nodes/saved.html#n-save-get">Saved Value</a> and <a class="node" data-node="save.set" href="../nodes/saved.html#n-save-set">Save Value</a>: a number for each player (wins, XP, coins). <a class="node" data-node="save.add" href="../nodes/saved.html#n-save-add">Add To Saved</a> adds to it.</li>
+  <li><a class="node" data-node="save.text_get" href="../nodes/saved.html#n-save-text-get">Saved Text</a> and <a class="node" data-node="save.text_set" href="../nodes/saved.html#n-save-text-set">Save Text</a>: text for each player (a title, a chosen skin), up to 63 letters.</li>
+  <li><a class="node" data-node="save.server_get" href="../nodes/saved.html#n-save-server-get">Server Value</a> and <a class="node" data-node="save.server_set" href="../nodes/saved.html#n-save-server-set">Set Server Value</a>: a number and a text for the whole server (a record time and who set it).</li>
+  <li><a class="node" data-node="save.top" href="../nodes/saved.html#n-save-top">Top Players</a>: the best players by a saved value, offline players too, one place at a time. How many places is the Top Players places setting (10 to start).</li>
+</ul>
+<p>Players are known by their Steam ID; bots and LAN players by their name. The file is written within 5 seconds of a change and at the map's end, and a crash still leaves one whole file.</p>
+<p>A win counter with a leaderboard:</p>
+<p class="chain"><a class="node" data-node="event.round_ended" href="../nodes/events.html#n-event-round-ended">Round Ended</a> <span class="to">→</span> <a class="node" data-node="flow.for_each_player" href="../nodes/flow.html#n-flow-for-each-player">For Each Player</a> (Team: Winner) <span class="to">→</span> Each <span class="to">→</span> <a class="node" data-node="save.add" href="../nodes/saved.html#n-save-add">Add To Saved</a> ("wins", Player, 1)<br><a class="node" data-node="event.chat_command" href="../nodes/events.html#n-event-chat-command">Chat Command</a> ("top") <span class="to">→</span> <a class="node" data-node="save.top" href="../nodes/saved.html#n-save-top">Top Players</a> ("wins") <span class="to">→</span> Each <span class="to">→</span> <a class="node" data-node="msg.chat" href="../nodes/messages.html#n-msg-chat">Chat Message</a> (Player, <a class="node" data-node="text.format" href="../nodes/text.html#n-text-format">Format Text</a>: "[0]. [1]: [2] wins")</p>
+<p>Top Players reads the whole save file each time, so run it now and then (a round's start, a chat command), never every tick. The starter library's Leaderboard Display shows it in an info window.</p>
+
+<h2 id="what-survives">What survives what</h2>
+<div class="table"><table>
+<thead><tr><th></th><th>New round</th><th>Map change</th><th>Server restart</th></tr></thead>
+<tbody>
+<tr><td>Variable, Kept: Starts again each round</td><td>Starts over</td><td>Starts over</td><td>Starts over</td></tr>
+<tr><td>Variable, Kept: For the map</td><td>Kept</td><td>Starts over</td><td>Starts over</td></tr>
+<tr><td>Player variable</td><td colspan="3">As above, and it also starts over when that player leaves and joins again</td></tr>
+<tr><td>Cooldowns (<a class="node" data-node="cd.start" href="../nodes/cooldowns.html#n-cd-start">Start Cooldown</a>)</td><td>Kept</td><td>Start clean</td><td>Start clean</td></tr>
+<tr><td>Saved Value, Saved Text, Server Value</td><td>Kept</td><td>Kept</td><td>Kept</td></tr>
+<tr><td>Data tables</td><td colspan="3">Part of the mode: only change when you edit and install it again</td></tr>
+</tbody></table></div>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="events-flow.html">Events and flow</a>: loops over arrays and players.</li>
+  <li><a href="../../docs.html#guide-types">Types and casting</a>: the types a variable can hold.</li>
+  <li><a href="../nodes/variables.html">Variables</a>, <a href="../nodes/arrays.html">Arrays</a>, <a href="../nodes/maps.html">Maps</a>, <a href="../nodes/data-tables.html">Data tables</a> and <a href="../nodes/saved.html">Saved</a> in the reference.</li>
+  <li><a href="../../docs.html#studio-variables">Variables, functions and macros</a> and <a href="../../docs.html#studio-tables">Data tables</a> in the docs.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#make-one">Make a variable</a></li><li><a href="#scope">Mode, player and team variables</a></li><li><a href="#settings">Variables hosts can change</a></li><li><a href="#structs-enums">Structs and enums</a></li><li><a href="#arrays">Arrays</a></li><li><a href="#maps">Maps</a></li><li><a href="#tables">Data tables</a></li><li><a href="#saved">Saved values</a></li><li><a href="#what-survives">What survives what</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

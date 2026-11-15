@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steering bots · Loner-Strike reference</title>
+<meta name="description" content="Goals, offers, friends and avoid areas: telling bots what matters in your mode.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Steering bots <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">6</span></summary><ul><li class="guide-soon"><a href="../../docs.html#guide-types">Types and casting (soon)</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html" aria-current="page">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Steering bots</h1>
+    <p class="lead">Goals, offers, friends and avoid areas: telling bots what matters in your mode.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Loner-Strike's bots play any mode you make, but they only know what the game and your mode tell them. This guide covers what they understand by themselves, and the Bots nodes that tell them what matters in your mode. A goal is a strong suggestion, not a script: bots still fight on the way and keep their own judgment.</p>
+
+<h2 id="by-themselves">What bots understand by themselves</h2>
+<ul>
+  <li><b>The game</b>: teams, enemies, weapons, buying, the bomb, hostages and the VIP. In a deathmatch they play for themselves; in team modes they play the objective.</li>
+  <li><b>The map</b>: where to walk, hide and look, from its nav and map knowledge (Map Doctor and Nav Fixer make these for new maps).</li>
+  <li><b>Components</b>: capture points, extraction zones, checkpoints, loot containers, supply drops, perk machines, upgrade benches, mystery boxes and traps. Loner-Strike's components plugin tells bots about each one, so you don't need to.</li>
+  <li><b>Creatures</b>: bots fight the mode's creatures where creatures attack (turn it off with <a class="node" data-node="bots.creature_enemies" href="../nodes/bots.html#n-bots-creature-enemies">Bots: Fight Creatures</a>).</li>
+  <li><b>Interactables</b> made with Bots may use on: bots press them now and then when it's calm.</li>
+  <li><b>Buttons and events</b>: bots press buttons too, so <a class="node" data-node="in.pressed" href="../nodes/events.html#n-in-pressed">Player Pressed Button</a> hears them (untick Include bots for people only), and every event runs for bots as for people.</li>
+</ul>
+<p>What they don't know: anything your graph adds. A prop that heals on touch, a volume that scores a point, an NPC with a quest. That's what the nodes below are for.</p>
+
+<h2 id="goals">Bots: Goal</h2>
+<p><a class="node" data-node="bots.goal" href="../nodes/bots.html#n-bots-goal">Bots: Goal</a> gives bots something to do at an entity: <b>Defend it</b>, <b>Capture it</b>, <b>Use it</b> (hold E), <b>Loot it</b>, <b>Go and hold there</b>, or <b>Hunt it</b> (a player or creature, wherever it goes). Pick which bots (all, a team, the wired bot, or a tag), a Priority (0-100), how long, and how close counts.</p>
+<p>A King of the Hill flag that both teams fight over:</p>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a> (flag model, At entity: hill marker) <span class="to">→</span> <a class="node" data-node="bots.goal" href="../nodes/bots.html#n-bots-goal">Bots: Goal</a> (All bots, Capture it, At: Prop, Priority 80, For 0)</p>
+<p><a class="node" data-node="bots.goal_clear" href="../nodes/bots.html#n-bots-goal-clear">Bots: Clear Goals</a> takes goals back (all, or one kind).</p>
+
+<h2 id="offers">Bots: Offer</h2>
+<p><a class="node" data-node="bots.offer" href="../nodes/bots.html#n-bots-offer">Bots: Offer</a> tells bots something here can be bought or used for a price. They take it like a person would: when they can afford it and it's calm. What it is:</p>
+<ul>
+  <li><b>A perk</b>, <b>an upgrade bench</b>, <b>a mystery box</b>, <b>a trap's switch</b>, <b>a turret spot</b>: bought for Price.</li>
+  <li><b>An interactable</b>: they walk up and press E on it.</li>
+  <li><b>A pickup</b>: they walk over it. Price is how much they want it (0-100); Order says what it is (0 an item, 1 a weapon, 2 health, which hurt bots want most).</li>
+</ul>
+<p>A health pack on a trigger volume, offered as a pickup:</p>
+<p class="chain"><a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a> (medkit; keep it in Pack) <span class="to">→</span> <a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> (At entity: Pack, Name: "medkit") <span class="to">→</span> <a class="node" data-node="bots.offer" href="../nodes/bots.html#n-bots-offer">Bots: Offer</a> (A pickup, At: Pack, Price 70, Order 2)<br><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> ("medkit") <span class="to">→</span> <a class="node" data-node="cast.player" href="../nodes/players.html#n-cast-player">As Player</a> (Who) <span class="to">→</span> Success <span class="to">→</span> <a class="node" data-node="player.set_health" href="../nodes/players.html#n-player-set-health">Set Health</a> (Player, 100) <span class="to">→</span> <a class="node" data-node="bots.offer_clear" href="../nodes/bots.html#n-bots-offer-clear">Bots: Clear Offer</a> (At: Pack) <span class="to">→</span> <a class="node" data-node="ent.remove" href="../nodes/entities.html#n-ent-remove">Remove Entity</a> (Pack) <span class="to">→</span> <a class="node" data-node="vol.remove" href="../nodes/collision.html#n-vol-remove">Remove Trigger Volume</a> (Volume)</p>
+<p><a class="node" data-node="bots.offer_clear" href="../nodes/bots.html#n-bots-offer-clear">Bots: Clear Offer</a> takes an offer back once it's used up.</p>
+
+<h2 id="one-bot">Orders for one bot</h2>
+<ul>
+  <li><a class="node" data-node="bot.follow" href="../nodes/bots.html#n-bot-follow">Bot Follow</a>: follow a player for some seconds (an escort, a squadmate).</li>
+  <li><a class="node" data-node="bot.goto" href="../nodes/bots.html#n-bot-goto">Bot Go To</a>: go to the entity with this name; <a class="node" data-node="bot.hold" href="../nodes/bots.html#n-bot-hold">Bot Hold</a>: hold where it is.</li>
+  <li><a class="node" data-node="bot.release" href="../nodes/bots.html#n-bot-release">Bot Free</a>: back to doing as it likes.</li>
+  <li><a class="node" data-node="bot.skill" href="../nodes/bots.html#n-bot-skill">Bot Nature</a> and <a class="node" data-node="bot.trait" href="../nodes/bots.html#n-bot-trait">Bot Trait</a>: read a bot's nature (skill, aggression, teamwork, greed, playstyle) to pick who gets which job.</li>
+</ul>
+<p class="chain"><a class="node" data-node="npc.on_talk" href="../nodes/npcs.html#n-npc-on-talk">Talked To NPC</a> <span class="to">→</span> <a class="node" data-node="flow.branch" href="../nodes/conditions.html#n-flow-branch">Branch</a> (<a class="node" data-node="player.is_bot" href="../nodes/players.html#n-player-is-bot">Is Bot</a>) <span class="to">→</span> False <span class="to">→</span> <a class="node" data-node="flow.for_each_player" href="../nodes/flow.html#n-flow-for-each-player">For Each Player</a> (Bots) <span class="to">→</span> Each <span class="to">→</span> <a class="node" data-node="bot.follow" href="../nodes/bots.html#n-bot-follow">Bot Follow</a> (Bot: Player, Follow: the talker, 60 s)</p>
+<p>Each of these, and every Bots node with a <b>Personality influence</b> pin, can let the bot's personality decide: 0 they obey exactly, 50 as usual, 100 their personality and skill decide (a careful bot may turn a risky job down; a slow one starts later).</p>
+
+<h2 id="phases">Phases, layers, friends and tags</h2>
+<ul>
+  <li><a class="node" data-node="bots.phase" href="../nodes/bots.html#n-bots-phase">Bots: Phase</a>: <b>Loot</b> (nobody is an enemy: they gear up and keep apart), <b>Fight</b>, or back to <b>Normal</b>. A battle royale's quiet start, then the fight.</li>
+  <li><a class="node" data-node="bots.layer" href="../nodes/bots.html#n-bots-layer">Bots: Prefer Layer</a>: where they look for loot and hold: <b>Below</b> (tunnels, basements), <b>Surface</b>, <b>High</b> (roofs, ridges), or their own choice.</li>
+  <li><a class="node" data-node="bots.tag" href="../nodes/bots.html#n-bots-tag">Bots: Tag</a> gives a player a tag (a squad, a job), so other Bots nodes can name them all at once. <a class="node" data-node="bots.friends" href="../nodes/bots.html#n-bots-friends">Bots: Friends</a> makes two groups friends (they won't attack each other) or not.</li>
+  <li><a class="node" data-node="bots.no_buy" href="../nodes/bots.html#n-bots-no-buy">Bots: Don't Buy</a>: skip the buy time and get on with the mode.</li>
+  <li><a class="node" data-node="botctl.add" href="../nodes/bots.html#n-botctl-add">Add Bots</a> and <a class="node" data-node="botctl.remove" href="../nodes/bots.html#n-botctl-remove">Remove Bots</a>: more or fewer bots, never more than the free slots.</li>
+</ul>
+<p class="chain"><a class="node" data-node="event.round_started" href="../nodes/events.html#n-event-round-started">Round Started</a> <span class="to">→</span> <a class="node" data-node="bots.phase" href="../nodes/bots.html#n-bots-phase">Bots: Phase</a> (Loot) <span class="to">→</span> <a class="node" data-node="timer.delay" href="../nodes/timers.html#n-timer-delay">Delay</a> (45) <span class="to">→</span> <a class="node" data-node="bots.phase" href="../nodes/bots.html#n-bots-phase">Bots: Phase</a> (Fight)</p>
+
+<h2 id="avoid">Bots Avoid Area</h2>
+<p><a class="node" data-node="bots.avoid" href="../nodes/bots.html#n-bots-avoid">Bots Avoid Area</a> marks a place bots keep away from: a Position with a Radius, or At entity, which rides along (a carrier, a burning player, a trigger volume) and ends when it's gone. Strength 5 and up: they won't stand in it; below 5 they only path round it. The same tag again moves or changes it; <a class="node" data-node="bots.avoid_stop" href="../nodes/bots.html#n-bots-avoid-stop">Bots Stop Avoiding</a> ends it. Areas bots avoid at once is a comfort limit (16 to start; the bot brain keeps 32).</p>
+<p class="chain"><a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> <span class="to">→</span> On Hit <span class="to">→</span> <a class="node" data-node="fx.explosion" href="../nodes/effects.html#n-fx-explosion">Explosion</a> <span class="to">→</span> <a class="node" data-node="bots.avoid" href="../nodes/bots.html#n-bots-avoid">Bots Avoid Area</a> (Position: Hit Position, Radius 200, Strength 8, Seconds 10, Tag "fire")</p>
+<p>For projectiles, ticking <b>Dangerous to bots</b> on <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> is enough for them to dodge it.</p>
+
+<h2 id="warning">"Bots won't know about…"</h2>
+<p>The Problems tab warns when your mode makes something bots could use that nothing tells them about:</p>
+<ul>
+  <li>An interactable with Bots may use off (<a class="node" data-node="npc.spawn_use" href="../nodes/npcs.html#n-npc-spawn-use">Spawn Interactable</a>, or <a class="node" data-node="comp.create" href="../nodes/components.html#n-comp-create">Create Component</a> without <code>bots=1</code>).</li>
+  <li>An NPC your mode talks through (it has <a class="node" data-node="npc.on_talk" href="../nodes/npcs.html#n-npc-on-talk">Talked To NPC</a>) with no <a class="node" data-node="bots.goal" href="../nodes/bots.html#n-bots-goal">Bots: Goal</a> or <a class="node" data-node="bots.offer" href="../nodes/bots.html#n-bots-offer">Bots: Offer</a> at it.</li>
+</ul>
+<p>The warning reads like "Bots won't know about the interactable “Pull the lever”. Add an Offer to bots or a Bot goal." It offers the fix, and <b>Don't warn for this one</b> when bots shouldn't use it (a secret switch). It's a warning, never an error. Components bots already know about (and shops, which bots can't pick from) are never flagged.</p>
+
+<h2 id="dialog">Bots and Say and Choose</h2>
+<p>Bots answer <a class="node" data-node="npc.choose" href="../nodes/npcs.html#n-npc-choose">Say and Choose</a>: after a moment, a bot picks one of the replies, so a quest flow runs for bots too. Menus from <a class="node" data-node="msg.menu" href="../nodes/messages.html#n-msg-menu">Menu</a> and votes need a person to answer: bots won't. If a reply should only be for people, check <a class="node" data-node="player.is_bot" href="../nodes/players.html#n-player-is-bot">Is Bot</a> first.</p>
+
+<h2 id="library">The starter library and bots</h2>
+<p>Each starter library item (My library, built in) says in its note what bots do with it:</p>
+<ul>
+  <li><b>Ability with Cooldown</b> has Bot Wants Ability: wire it from a Repeat and bots use the ability in fights. <b>Dash</b>, <b>Double Jump</b> and <b>Fireball</b> work with it.</li>
+  <li><b>Health Pack</b> and <b>Weapon Pickup</b> are offered to bots as pickups; hurt bots want health most.</li>
+  <li><b>Capture Zone</b> is a capture goal for every bot.</li>
+  <li><b>Proximity Mine</b> puts a Bots Avoid Area on each mine; <b>Burn, Slow and Freeze</b> makes bots keep clear of a burning player.</li>
+  <li><b>Hot Potato</b>: bots chase the holder, and a bot holder runs.</li>
+  <li><b>Jump Pad</b> and <b>Teleporter Pair</b>: bots that walk in use them.</li>
+  <li><b>Quest Step Tracker</b>: bots never start quests.</li>
+</ul>
+<p>Copy one into your mode to see how it steers bots, then change it however you like.</p>
+
+<h2 id="test">Check it with bots</h2>
+<p>Press Playtest with a few bots and watch: the nodes light up as bots take goals and offers. A Test run plays your mode on a hidden server with bots. When you publish, set How well bots play it; Community shows it as a badge.</p>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="spawning.html">Spawning and transforms</a>: the things you point goals at.</li>
+  <li><a href="../nodes/bots.html">Bots nodes</a> and <a href="../nodes/npcs.html">NPCs</a> in the reference.</li>
+  <li><a href="../../docs.html#studio-bots">Bots and creatures</a>, <a href="../../docs.html#npcs">NPCs and interactables</a> and <a href="../../docs.html#how-bots-work">How the bots work</a> in the docs.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#by-themselves">What bots understand by themselves</a></li><li><a href="#goals">Bots: Goal</a></li><li><a href="#offers">Bots: Offer</a></li><li><a href="#one-bot">Orders for one bot</a></li><li><a href="#phases">Phases, layers, friends and tags</a></li><li><a href="#avoid">Bots Avoid Area</a></li><li><a href="#warning">&quot;Bots won't know about…&quot;</a></li><li><a href="#dialog">Bots and Say and Choose</a></li><li><a href="#library">The starter library and bots</a></li><li><a href="#test">Check it with bots</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>
