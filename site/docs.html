@@ -114,6 +114,8 @@ a { color: var(--signal); }
 .toc { display: none; }
 @media (min-width: 1200px) {
   .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
+  /* (the top bar and the footer line up with the three columns) */
+  .top .wrap, footer { width: min(1400px, 100% - 32px); }
   .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
   .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
   .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
@@ -1020,10 +1022,10 @@ footer a { color: var(--dim); }
   <ul>
     <li>Right-click or <span class="kbd">Space</span> opens the node list. It's in folders by kind (Players › Actions, Game › Settings…); typing searches titles, help and other words (gravity finds sv_gravity). <b>Favorites</b> (the star) and <b>Recently used</b> sit at the top. Arrow keys open folders and <span class="kbd">Enter</span> places a node.</li>
     <li>Drag from a pin to empty space to see only nodes that fit (<b>Context Sensitive</b>; untick it to see everything).</li>
-    <li>White pentagon pins carry the flow; round pins carry values, colored by type.</li>
+    <li>White pentagon pins carry the flow; round pins carry values, colored by type. Square pins hold files, a letter on an entity pin says what kind it is (C a creature, N an NPC), and <b>#</b> marks a whole number (<a href="#studio-types">types</a>).</li>
     <li><span class="kbd">C</span> adds a comment box, double-clicking a wire adds a reroute point, and <b>Tidy up</b> lays nodes out.</li>
   </ul>
-  <p>Over 450 nodes, for example:</p>
+  <p>Over 650 nodes, for example:</p>
   <div class="table"><table>
     <thead><tr><th>Kind</th><th>For example</th></tr></thead>
     <tbody>
@@ -1039,6 +1041,7 @@ footer a { color: var(--dim); }
       <tr><td><b>Components</b></td><td>Zones, crates, waves, supply drops, shops, perks, capture points</td></tr>
       <tr><td><b>Data tables</b></td><td>Get Row, Get Cell, For Each Row, Find Rows</td></tr>
       <tr><td><b>Saved</b></td><td>Numbers kept between maps and restarts</td></tr>
+      <tr><td><b>Types</b></td><td>Color, Make Color, Blend Colors; Model, Sprite, Sound; As Player, As Creature, As NPC and the other casts</td></tr>
     </tbody>
   </table></div>
   <h2 id="studio-hud" data-keywords="hud icon marker waypoint arrow objective kill feed killfeed status icon sprite">Icons, markers and the kill feed</h2>
@@ -1047,7 +1050,8 @@ footer a { color: var(--dim); }
     <li><b>Objective Marker</b>: a sprite floating over something (a player, an NPC, an interactable, a component; it follows it) or at a spot, for everyone, a team or one player. Use one of the game's sprites or your own <code>.spr</code>, which goes with the mode when you share it. <b>Remove Marker</b> takes it away; it also goes when what it follows is gone. For your own pictures, use this instead of Status Icon.</li>
     <li><b>Kill Feed Line</b>: a line in the top-right kill feed (killer, weapon icon, victim, headshot). It's only the line: nobody dies and nothing is counted.</li>
   </ul>
-  <p id="studio-assets">Model, sprite and sound inputs have <b>Choose…</b>: the game's files, <b>Import…</b> (or drop a file on the input), and files from your map projects, which are copied into your game when picked. Sprite inputs also have <b>Make sprite…</b>, which makes one from pictures and picks it. Files you add go into your game, so modes can use them; sharing packages them for you.</p>
+  <p id="studio-assets">Model, sprite and sound inputs have <b>Choose…</b>: the game's files, <b>Import…</b> (or drop a file on the input), and files from your map projects, which are copied into your game when picked. Sprite inputs also have <b>Make sprite…</b>, which makes one from pictures and picks it. The picker previews it: a model in 3D, a sprite's first frame, a sound's play button. Files you add go into your game, so modes can use them; sharing packages them for you.</p>
+  <p>Files are values too: a Model, Sprite or Sound variable, table column or node. They're always picked, never typed as text, because the game loads every file a mode can use with the map. A file that isn't on the server is skipped and logged.</p>
   <h2 id="studio-engine" data-keywords="damage property glow render dhud colored chat movement push jump bhop double jump grenade animation attach map entity fired objectives voice radio zone motd info window npc move path">Engine nodes</h2>
   <ul>
     <li><b>Damage</b>: <b>Deal Damage</b> hurts a player or anything that can be hurt (a breakable, an NPC, a creature) as if the Attacker did it, so kills, the kill feed and scores count. Pick the kind (burn, fall, blast…) and the hit zone (a head hit shows as a headshot).</li>
@@ -1068,13 +1072,22 @@ footer a { color: var(--dim); }
   </figure>
   <h2 id="studio-variables">Variables, functions and macros</h2>
   <ul>
-    <li><b>Variables</b>: number, yes/no, text, player, team, vector and more, per mode, player or team, kept for the map or reset each round. Lists and maps too.</li>
+    <li><b>Variables</b>: number, yes/no, text, vector, color, transform, player, team, a weapon, a file and more, per mode, player or team, kept for the map or reset each round. Lists and maps too.</li>
     <li><b>Functions</b>: reusable graphs with inputs, outputs and locals. They run straight through, so waiting nodes like Delay go in a macro.</li>
     <li><b>Macros</b>: copied in where used, with several flows in and out.</li>
     <li><b>Structs</b> group values (a loadout); <b>enums</b> are named choices (scout, tank, medic).</li>
     <li><b>Collapse to Function</b> or <b>Collapse to Macro</b> tidies picked nodes.</li>
   </ul>
   <p>Deleting a variable, function or custom event that's in use asks what to do with the nodes that use it (it says how many and where, with <b>Find uses</b>): <b>Replace with</b> another of the same kind (wires stay), <b>Remove it and its nodes</b> (the flow is joined up round them), or <b>Remove it, keep the nodes</b>. Each is one <b>Undo</b>.</p>
+  <h2 id="studio-types" data-keywords="type cast casting color transform model sprite sound decal weapon hit zone damage kind handle orphan refresh whole number">Types and casting</h2>
+  <p>A wire only connects pins whose types fit. The ones worth knowing (<a href="reference/guides/types.html">the full guide</a>):</p>
+  <ul>
+    <li><b>Color</b> (red, green, blue, alpha), <b>Transform</b> (position, rotation, scale, velocity), <b>Weapon</b>, <b>Hit Zone</b> and <b>Damage Kind</b>, and the files: <b>Model</b>, <b>Sprite</b>, <b>Sound</b>, <b>Decal</b>.</li>
+    <li>Nodes that make a thing give it typed: Spawn Creature gives a Creature, Spawn NPC an NPC, Loop Sound a Sound Loop. These go into any Entity pin as they are.</li>
+    <li>From an Entity back to a kind takes a cast: <b>As Player</b>, <b>As Creature</b>, <b>As NPC</b>… each with Success and Failed. Drop an Entity wire on a Creature pin and the Studio offers <b>Insert As Creature</b>.</li>
+    <li>An enum into <b>Switch on Enum</b> gives one output per value: Player Hurt's Hit zone → head.</li>
+  </ul>
+  <p>Modes from 1.0 open as they are and make the same plugin. If an update ever removes a pin you had wired, the wire stays on a red <b>Orphaned</b> pin until you re-wire or delete it.</p>
   <h2 id="studio-graphs" data-keywords="event graph tabs organize custom event dispatcher">Event graphs and custom events</h2>
   <ul>
     <li><b>Graphs</b> in My mode adds more event graphs, to keep a big mode tidy (one for the shop, one for scoring). They're only for you: two of the same event, in different graphs, both run, in tab order.</li>
@@ -1089,7 +1102,7 @@ footer a { color: var(--dim); }
   </figure>
   <p>In a function with a Player input, each player gets their own copy. That's up to 32 copies, each ticking 20 times a second; the Quick check warns when that adds up. A Tick of 0.1 s still looks smooth.</p>
   <h2 id="studio-tables" data-keywords="data table spreadsheet csv lookup list">Data tables</h2>
-  <p>A <b>data table</b> is a grid of values to look up: a gun list, prices, waves. Under <b>Data tables</b>, add one and fill it in: each column has a type (number, text, yes/no, an enum, a weapon or an entity name), and the <b>key column</b> names each row. <b>Paste or import CSV…</b> takes rows straight from a spreadsheet; <b>Copy as CSV</b> goes the other way.</p>
+  <p>A <b>data table</b> is a grid of values to look up: a gun list, prices, waves. Under <b>Data tables</b>, add one and fill it in: each column has a type (number, text, yes/no, an enum, a weapon, an entity name, or a model, sprite or sound), and the <b>key column</b> names each row. <b>Paste or import CSV…</b> takes rows straight from a spreadsheet; <b>Copy as CSV</b> goes the other way.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/studio-tables.webp" type="image/webp"><img src="img/1.0/studio-tables.png" alt="The data table editor: Gun Game Lite's gun list with Level, Gun and Spare bullets columns" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Gun Game Lite's gun list is a data table.</figcaption>
@@ -1098,7 +1111,7 @@ footer a { color: var(--dim); }
     <li><b>Get Row</b>: the row with this key, every cell as a pin. <b>Get Cell</b>: one cell by row number (from 0).</li>
     <li><b>For Each Row</b>, <b>Find Rows</b> (where a column has a value), <b>Row Count</b>, <b>Row Keys</b>.</li>
   </ul>
-  <p>Tables are built into the plugin, so reading them costs almost nothing. A mode can have 16 tables of up to 12 columns and 256 rows. Gun Game Lite's gun list is a table: change the order there.</p>
+  <p>Tables are built into the plugin, so reading them costs almost nothing. A mode can have 16 tables of up to 16 columns and 256 rows. Gun Game Lite's gun list is a table: change the order there.</p>
   <h2 id="studio-snippets">Snippets</h2>
   <p><b>Snippets</b> has 14 ready-made pieces, like a wave system, shop menu, revive and shrinking zone. Click or drag one in; its variables join yours. <b>Save the selection as a snippet</b> makes your own.</p>
   <h2 id="studio-library">My library</h2>
@@ -1137,7 +1150,7 @@ footer a { color: var(--dim); }
   <h2 id="studio-install">Install and play</h2>
   <p><b>Install</b> builds the plugin and adds the mode to Play and the <span class="kbd">F3</span> menu. <b>More › Remove from the game</b> takes it out, <b>More › Show code</b> shows the plugin, and <b>Open in Plugin Studio</b> carries on in code. To test as you build, use the <a href="#studio-checks">checks</a> and <a href="#studio-debugging">Playtest</a>.</p>
   <h2 id="studio-share">Share a mode</h2>
-  <p>Package it from <b>Tools › Community › Publish › A game mode</b> and upload it to GameBanana (<a href="#publishing">how</a>). Only the graph is shared: each player's app builds the mode, so nothing that runs code travels. A mode that uses a power tool (server or AMX commands, kicking, calling other plugins) shows a badge for each, and players confirm before installing. Others can <b>Remix in Game Mode Studio</b>, which makes a new mode that credits yours.</p>
+  <p>Package it from <b>Tools › Community › Publish › A game mode</b> and upload it to GameBanana (<a href="#publishing">how</a>). Only the graph is shared: each player's app builds the mode, so nothing that runs code travels. Your own models, sprites and sounds go with it wherever the mode names them (node settings, file variables, table cells). A mode that uses a power tool (server or AMX commands, kicking, calling other plugins) shows a badge for each, and players confirm before installing. Others can <b>Remix in Game Mode Studio</b>, which makes a new mode that credits yours.</p>
   <p>Before you share: run a <b>Test run</b>, give it a clear description, and list the map markers it needs, so a mapper can make maps for it.</p>
 </section>
 
@@ -1182,6 +1195,7 @@ footer a { color: var(--dim); }
     <li><b>Pick a variable, table, Timeline or custom event.</b> A node that names one needs it set in Details.</li>
     <li><b>A pin needs a wire.</b> Required pins (often Player) have nothing to fall back on.</li>
     <li><b>The flow loops back.</b> Wires can't go round in a circle: use a loop node, a Repeat or a custom event.</li>
+    <li><b>A red Orphaned pin.</b> An update removed that pin: re-wire or delete the wire. <b>View › Refresh nodes</b> lists what an update left behind.</li>
     <li><b>A compiler line not tied to a node.</b> That's our fault, not yours: <b>More › Show code</b> shows the line, and please report it.</li>
   </ul>
   <h2 id="studio-why-not-work" data-keywords="doesn't work nothing happens test">It compiles, but nothing happens</h2>
@@ -1217,7 +1231,7 @@ footer a { color: var(--dim); }
   <h2 id="studio-limits">Good to know</h2>
   <ul>
     <li>Menus need a person to answer: bots won't.</li>
-    <li>Up to 400 nodes and 64 variables per mode.</li>
+    <li>Up to 2000 nodes and 64 variables per mode. How much a mode may do at once (effects, loops, things out) is under its <b>Limits</b> settings (<a href="reference/guides/limits.html">Limits</a>).</li>
     <li>Component and creature nodes need Loner-Strike's mode pieces on the server (your own game has them).</li>
     <li>The Playtest build records every node it runs, so don't judge the mode's speed by it: Test run measures the real build.</li>
   </ul>
@@ -1935,7 +1949,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="publish-mode">Publish a game mode</h2>
   <p>The same steps, with <b>A game mode</b>:</p>
   <ul>
-    <li><b>Checks</b> first: the graph has to compile, and every file the mode uses has to be on your computer or linked to the GameBanana item that has it (<b>My mode › Details › Requirements</b> in the Studio).</li>
+    <li><b>Checks</b> first: the graph has to compile, and every file the mode uses (in node settings, file variables and table cells) has to be on your computer or linked to the GameBanana item that has it (<b>My mode › Details › Requirements</b> in the Studio).</li>
     <li>Set <b>How well bots play it</b> (the Studio may suggest it); it shows as a badge and in the Bots filter.</li>
     <li><b>Screenshots</b>: a <b>cover card</b> drawn from the name and line comes first (untick it to leave it out), then up to 5 of yours.</li>
     <li>If the mode runs server commands, kicks players or calls other plugins, the listing says so with a <a href="#community-badges">badge</a>.</li>

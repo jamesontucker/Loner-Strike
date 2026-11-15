@@ -37,3 +37,17 @@ handles and Sound Loop, upcasts, casts with Success / Failed, Kind Of into Switc
 nodes. Checked against the committed catalog, schema.ts, graph.rs / Canvas.tsx strings and StudioCompat.md. No color
 table columns or color mode settings (not in the app). All seven guides are written; no stubs left.
 The reference was regenerated from the committed catalog in the same commit (Colors and Files pages are new).
+
+## Release text pass (2026-11-15)
+- docs.html (Game Mode Studio): pins (square file pins, kind letters, #), Over 650 nodes, a Types row, files as values
+  and picker previews, variable types, a new "Types and casting" h2 (#studio-types) linking the guide, table columns
+  (models, sprites, sounds; 16 columns), files travel with a shared mode, Orphaned pins in "Why won't it compile?",
+  2000 nodes and the Limits settings in "Good to know", Publish's Requirements covering file variables and table cells.
+- Guides: Limits (the table from HEAD's limits: Effect messages a frame max 64, Loop steps a frame / in a Function,
+  Visible things at once, Things in one trigger volume; the breaking points: 128-slot reserve, things in sight, the
+  per-player byte budget and state messages that wait, loops spread over frames; the aggregated log lines),
+  Events and flow (loops spread over frames), Variables (types, file columns, 16 columns), Sharing (files in
+  variables and table cells travel).
+- Studio tour, The canvas step: square file pins, kind letters, the cast offered on a dropped Entity wire.
+- Example mode and starter premade descriptions: read, nothing outdated (no colors, paths or text weapons in them;
+  Weapon Pickup's Weapon input is still text, and a Weapon value goes into it).

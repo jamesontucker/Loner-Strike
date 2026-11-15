@@ -37,7 +37,7 @@
 <h2 id="make-one">Make a variable</h2>
 <ol>
   <li>In My mode (left), press + by Variables and name it.</li>
-  <li>In Details, pick its <b>Type</b> (number, yes/no, text, player, team, vector, an enum, a struct, an array or a map), <b>One for</b>, <b>Kept</b> and <b>Starts at</b>.</li>
+  <li>In Details, pick its <b>Type</b> (number, yes/no, text, vector, color, transform, player, team, a weapon, a file, an enum, a struct, an array or a map: see <a href="types.html">Types and casting</a>), <b>One for</b>, <b>Kept</b> and <b>Starts at</b>.</li>
   <li>Drag it onto the graph: you get <a class="node" data-node="var.get" href="../nodes/variables.html#n-var-get">Get Variable</a> or <a class="node" data-node="var.set" href="../nodes/variables.html#n-var-set">Set Variable</a>.</li>
 </ol>
 <p><a class="node" data-node="var.add" href="../nodes/variables.html#n-var-add">Add To Variable</a> adds to a number and <a class="node" data-node="var.toggle" href="../nodes/variables.html#n-var-toggle">Toggle Variable</a> flips a yes/no. A mode has up to 64 variables.</p>
@@ -90,7 +90,7 @@
   <li><a class="node" data-node="table.get_cell" href="../nodes/data-tables.html#n-table-get-cell">Get Cell</a>: one cell by row number (from 0).</li>
   <li><a class="node" data-node="table.for_each" href="../nodes/data-tables.html#n-table-for-each">For Each Row</a>, <a class="node" data-node="table.find" href="../nodes/data-tables.html#n-table-find">Find Rows</a>, <a class="node" data-node="table.count" href="../nodes/data-tables.html#n-table-count">Row Count</a>, <a class="node" data-node="table.keys" href="../nodes/data-tables.html#n-table-keys">Row Keys</a>.</li>
 </ul>
-<p>A mode can have 16 tables of up to 12 columns and 256 rows.</p>
+<p>A column can also hold a weapon, an entity name, or a model, sprite or sound (a loot table with a model per row). A mode can have 16 tables of up to 16 columns and 256 rows.</p>
 <p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="var.add" href="../nodes/variables.html#n-var-add">Add To Variable</a> (Level, Attacker, 1) <span class="to">→</span> <a class="node" data-node="table.get_cell" href="../nodes/data-tables.html#n-table-get-cell">Get Cell</a> (Guns, Weapon, Row: Level) <span class="to">→</span> <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a> (Attacker, Value)</p>
 
 <h2 id="saved">Saved values</h2>
@@ -121,7 +121,7 @@
 <h2 id="see-also" class="see">See also</h2>
 <ul>
   <li><a href="events-flow.html">Events and flow</a>: loops over arrays and players.</li>
-  <li><a href="../../docs.html#guide-types">Types and casting</a>: the types a variable can hold.</li>
+  <li><a href="types.html">Types and casting</a>: the types a variable can hold.</li>
   <li><a href="../nodes/variables.html">Variables</a>, <a href="../nodes/arrays.html">Arrays</a>, <a href="../nodes/maps.html">Maps</a>, <a href="../nodes/data-tables.html">Data tables</a> and <a href="../nodes/saved.html">Saved</a> in the reference.</li>
   <li><a href="../../docs.html#studio-variables">Variables, functions and macros</a> and <a href="../../docs.html#studio-tables">Data tables</a> in the docs.</li>
 </ul>
