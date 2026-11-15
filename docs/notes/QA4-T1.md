@@ -332,3 +332,12 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 | Kill credit to the owner | PASS | log: `"[LtD] Tilted<10><BOT><CT>" killed "chameleon_cs<8>..." with "ls_projectile"` (and pesto_sux); same-team hits did no damage with friendly fire off |
 | A hit on the spot it was spawned at | NOTE | One test projectile fired from a hand-typed point reported a world hit at its own start (probably inside a brush there); not seen from players' eyes |
 | Bots treating projectiles as dangerous | NEEDS BRAIN | Not built; bots ignore projectiles |
+
+## Send my creatures, NPC placement (1.0, 2026-11-14): QA rows
+| Check | Result | Evidence |
+|---|---|---|
+| A pushed creature spawns on the server | PASS | Sim/T1SV (brain run 43669651332, 1316-dev; plugins fresh), `-insecure`: Send put `qa_crawler` in an `own:creatures` block after the server's own `[srv_own]`; on the server (Classic, types loaded with the map) `ls_creature spawn qa_crawler` → "qa_crawler alive hp 77 chase -> <a bot>"; the server's own type spawned too |
+| Remove takes only that block off | PASS | after Remove the server's creatures.ini is byte-identical to before the send (`cmp`); the message now says "Removed from 1 server." (b69956eb) |
+| NPC and interactable spawn right next to a bot | PASS | plugins from b69956eb, Last Stand on de_dust2: `ls_npc_spawn_test` at three bots' feet, NPC and interactable, default, `fail` and `near:16`: all made, moved 0 (players don't block) |
+| A spawn that has to move, and Studio's "If the spot is blocked" / Spawned-Failed outputs | NOT YET | the move is covered by a Rust test only; the node option waits for FX's shared helper |
+| Note | — | Last Stand and a mode's base.cfg set `ls_creature_precache` at map start: a pushed type a server's mode doesn't list isn't loaded there (add it to that mode's waves, or the cvar for other modes) |
