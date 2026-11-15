@@ -1087,7 +1087,7 @@ stock lsg_eng_spec_put(id)
 // Play Soundtrack: as a map's trigger_cdaudio does it (the player's own music files)
 stock lsg_eng_cd(id, track, bool:loop)
 {
-	if (!is_user_connected(id) || is_user_bot(id) || !lsg_msg_room("Play Soundtrack", 1, id))
+	if (!is_user_connected(id) || is_user_bot(id) || !lsg_msg_room("Play Soundtrack", 1, id, 0, 48))
 		return
 	if (!track)
 		client_cmd(id, "cd stop")

@@ -1903,13 +1903,57 @@ mod tests {
         // (it compiles: generated_plugins_compile_with_amxxpc has spawn_burst)
     }
 
+    /// Effects are budgeted in bytes per client, not only messages a frame (P5's fc_st_fx: 160
+    /// effects a frame to everyone overflowed a player's datagram 813 times in 80 s). The bucket
+    /// as the plugin runs it, step for step: a flood at the most the setting allows never puts more
+    /// than LSG_MSG_BURST bytes into one client's frame, nor more than 40% of its rate a second.
+    #[test]
+    fn effect_floods_stay_under_each_clients_datagram_and_rate() {
+        let src = gen::generate(&fun_mode(true), false).source;
+        for want in ["#define LSG_MSG_BURST 1000.0", "stock Float:lsg_msg_tokens(p, Float:now)", "get_user_info(p, \"rate\", r, charsmax(r))", "get_cvar_num(\"sv_maxrate\")",
+            "stock bool:lsg_msg_fits(cost, to, lim, bytes = 0)", "stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0, bytes = 0)", "g_lsgMsgTok[p] -= b"] {
+            assert!(src.contains(want), "{want}");
+        }
+        let lim = super::limits::get("messages").unwrap();
+        assert!(lim.max <= 64 && lim.default <= lim.max && lim.lag_above < lim.max, "the setting can't go past what a client takes");
+        // the model: one person at rate 25000 (and a bot that doesn't count), 100 frames a second
+        let (burst, msg) = (1000.0_f64, 32.0_f64);
+        for rate in [25000.0_f64, 100000.0, 2500.0] {
+            let fill = rate.clamp(2500.0, 100000.0) * 0.4;
+            let (mut tok, mut at, mut total, mut worst_frame) = (burst, 0.0_f64, 0.0_f64, 0.0_f64);
+            for f in 0..1000 {
+                let now = f as f64 / 100.0;
+                let mut frame = 0.0;
+                for _ in 0..lim.max {
+                    tok = (tok + (now - at) * fill).min(burst);
+                    at = now;
+                    if tok >= msg {
+                        tok -= msg;
+                        frame += msg;
+                    }
+                }
+                total += frame;
+                worst_frame = f64::max(worst_frame, frame);
+            }
+            assert!(worst_frame <= burst, "rate {rate}: {worst_frame} bytes in one frame");
+            assert!(total <= burst + fill * 10.0 + 1.0, "rate {rate}: {total} bytes in 10 s");
+        }
+        // Show HUD Text is a state message per player and slot: the latest text, never dropped
+        let hud = gen::generate(&graph::parse(include_str!("testdata/every_node.graph.json")).unwrap(), false).source;
+        assert!(hud.contains("stock lsg_hud(who, slot, Float:secs, const text[])") && hud.contains("lsg_msg_state(\"Show HUD Text\", \"lsg_hud_again\", p * 4 + slot, 1, p, 0, 32 + strlen(text))"));
+        assert!(hud.contains("formatex(lsgH, charsmax(lsgH), ") && hud.contains("lsg_hud("));
+        // the big ones count for their size
+        let cov = gen::generate(&graph::parse(include_str!("testdata/every_node_ec.graph.json")).unwrap(), false).source;
+        assert!(cov.contains("lsg_msg_room(\"Big HUD Text\", 1, ") && cov.contains(", 160))") && cov.contains(", 200))"));
+    }
+
     /// The shared engine guards: effects check the per-frame message budget (the Effect messages
     /// a frame limit), the mode's own files are counted (a warning past 64, an error past 160, and
     /// the plugin refuses past 160 too).
     #[test]
     fn message_budget_and_precache_count() {
         let src = gen::generate(&fun_mode(true), false).source;
-        assert!(src.contains("stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)"));
+        assert!(src.contains("stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0, bytes = 0)"));
         assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)"), "smoke twice, the default budget");
         assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)") && src.contains("g_lsgMsgLim = 48"), "the trail sets the budget");
         let src = gen::generate(&ui_nodes_mode(), false).source;

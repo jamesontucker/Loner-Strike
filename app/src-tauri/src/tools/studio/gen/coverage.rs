@@ -271,7 +271,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
                 "type" => (2, "0.5", "0.05"),
                 _ => (0, "0.0", "0.2"),
             };
-            b.line(format!("\tif (lsg_msg_room(\"Big HUD Text\", 1, {}, {}))\n\t{{\n\t\tset_dhudmessage({}, {}, {}, {}, {}, {fx}, {fxt}, {}, {fin}, 0.5)\n\t\tshow_dhudmessage({}, {args})\n\t}}", who(), gen.limit_expr("messages"), c("r"), c("g"), c("b"), num("x"), num("y"), num("seconds"), who()));
+            b.line(format!("\tif (lsg_msg_room(\"Big HUD Text\", 1, {}, {}, 160))\n\t{{\n\t\tset_dhudmessage({}, {}, {}, {}, {}, {fx}, {fxt}, {}, {fin}, 0.5)\n\t\tshow_dhudmessage({}, {args})\n\t}}", who(), gen.limit_expr("messages"), c("r"), c("g"), c("b"), num("x"), num("y"), num("seconds"), who()));
             ex(b, "shown");
         }
         "msg.color_chat" => {
@@ -288,7 +288,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             };
             // (the tag is safe text: no quotes, carets or backslashes; % doubled for the format)
             let head = if tag.is_empty() { String::new() } else { format!("^4{}^1 ", tag.replace('%', "%%")) };
-            b.line(format!("\tif (lsg_msg_room(\"Colored Chat\", 1, {}, {}))\n\t{{\n\t\tnew lsgM[190]\n\t\tformatex(lsgM, charsmax(lsgM), {args})\n\t\tlsg_ec_clean(lsgM)\n\t\tclient_print_color({}, {sender}, \"{head}{code}%s\", lsgM)\n\t}}", who(), gen.limit_expr("messages"), who()));
+            b.line(format!("\tif (lsg_msg_room(\"Colored Chat\", 1, {}, {}, 200))\n\t{{\n\t\tnew lsgM[190]\n\t\tformatex(lsgM, charsmax(lsgM), {args})\n\t\tlsg_ec_clean(lsgM)\n\t\tclient_print_color({}, {sender}, \"{head}{code}%s\", lsgM)\n\t}}", who(), gen.limit_expr("messages"), who()));
             ex(b, "said");
         }
         "player.push" => {
@@ -358,7 +358,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             };
             let from = if wired("from") { inp("from", "player") } else { "0".into() };
             let txt = if gen.boolean(n, def, "text") { txt } else { "" };
-            b.line(format!("\tif (lsg_msg_room(\"Play Radio\", 2, {}, {}))\n\t\tlsg_ec_radio({}, {team}, {from}, {}, {}, {})", who(), gen.limit_expr("messages"), who(), pawn_str(snd), pawn_str(txt), if ann { "true" } else { "false" }));
+            b.line(format!("\tif (lsg_msg_room(\"Play Radio\", 2, {}, {}, 160))\n\t\tlsg_ec_radio({}, {team}, {from}, {}, {}, {})", who(), gen.limit_expr("messages"), who(), pawn_str(snd), pawn_str(txt), if ann { "true" } else { "false" }));
             ex(b, "played");
         }
         "msg.info_window" => {

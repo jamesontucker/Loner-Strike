@@ -111,8 +111,15 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
-// The per-frame message budget (the Effect messages a frame limit; a unicast counts against its
-// player too, at half the budget). Two kinds of message use it:
+// The message budget. Two limits, both must have room:
+//  - messages a server frame (the Effect messages a frame limit; a unicast counts against its
+//    player too, at half the budget)
+//  - bytes each client can take: every client has a bucket of unreliable bytes that fills at 40%
+//    of its rate (bytes a second, capped by sv_maxrate; the rest is the game's own entities and
+//    sounds) and holds at most LSG_MSG_BURST, under one datagram after the engine's own traffic.
+//    A message to everyone needs room in every client's bucket (bots don't count). So no setting
+//    can overflow a client's datagram: an effects flood stutters nobody (P5's fc_st_fx)
+// Two kinds of message use it:
 //  - cosmetic (effects, a sound, a chat line): lsg_msg_room; past the budget it's skipped, said in
 //    the log once a second
 //  - state (a scoreboard's team or tag, a score, an icon, weather: what lasts): lsg_msg_state;
@@ -120,7 +127,33 @@ stock lsg_pre_sound(const p[])
 //    order; the same resend and key queued again keeps its place, and the resend reads the state
 //    when it goes, so the latest value wins
 stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
-stock bool:lsg_msg_fits(cost, to, lim)
+#define LSG_MSG_BURST 1000.0
+#define LSG_MSG_BYTES 32
+stock Float:g_lsgMsgTok[33], Float:g_lsgMsgTokAt[33], Float:g_lsgMsgFill[33], Float:g_lsgMsgFillAt[33]
+// a client's bytes of room now (its bucket filled since it was last used)
+stock Float:lsg_msg_tokens(p, Float:now)
+{
+	if (g_lsgMsgFill[p] <= 0.0 || now - g_lsgMsgFillAt[p] >= 2.0 || now < g_lsgMsgFillAt[p])
+	{
+		g_lsgMsgFillAt[p] = now
+		new r[12], rate
+		get_user_info(p, "rate", r, charsmax(r))
+		rate = str_to_num(r)
+		if (rate <= 0)
+			rate = 25000
+		static maxr
+		maxr = get_cvar_num("sv_maxrate")
+		if (maxr > 0 && rate > maxr)
+			rate = maxr
+		g_lsgMsgFill[p] = float(clamp(rate, 2500, 100000)) * 0.4
+	}
+	new Float:t = now < g_lsgMsgTokAt[p] ? LSG_MSG_BURST : g_lsgMsgTok[p] + (now - g_lsgMsgTokAt[p]) * g_lsgMsgFill[p]
+	g_lsgMsgTokAt[p] = now
+	g_lsgMsgTok[p] = t > LSG_MSG_BURST ? LSG_MSG_BURST : t
+	return g_lsgMsgTok[p]
+}
+
+stock bool:lsg_msg_fits(cost, to, lim, bytes = 0)
 {
 	if (lim <= 0)
 		lim = g_lsgMsgLim
@@ -133,15 +166,23 @@ stock bool:lsg_msg_fits(cost, to, lim)
 	}
 	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
 		return false
+	new Float:b = floatmin(float(bytes > 0 ? bytes : cost * LSG_MSG_BYTES), LSG_MSG_BURST)
+	new one = to >= 1 && to <= 32
+	for (new p = one ? to : 1; p <= (one ? to : MaxClients); p++)
+		if (is_user_connected(p) && !is_user_bot(p) && lsg_msg_tokens(p, now) < b)
+			return false
+	for (new p = one ? to : 1; p <= (one ? to : MaxClients); p++)
+		if (is_user_connected(p) && !is_user_bot(p))
+			g_lsgMsgTok[p] -= b
 	g_lsgMsgN += cost
-	if (to >= 1 && to <= 32)
+	if (one)
 		g_lsgMsgP[to] += cost
 	return true
 }
 
-stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0, bytes = 0)
 {
-	if (lsg_msg_fits(cost, to, lim))
+	if (lsg_msg_fits(cost, to, lim, bytes))
 		return true
 	new Float:now = get_gametime()
 	if (now - g_lsgMsgSaid >= 1.0)
@@ -155,14 +196,14 @@ stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
 // a state message: true, send it now; false, it's queued (resend: a public taking the key, which
 // sends the state as it is then; key: whose, usually the player)
 #define LSG_MSGQ 512
-stock g_lsgMsgQFn[LSG_MSGQ][32], g_lsgMsgQKey[LSG_MSGQ], g_lsgMsgQCost[LSG_MSGQ], g_lsgMsgQTo[LSG_MSGQ], g_lsgMsgQN, bool:g_lsgMsgQAsked, bool:g_lsgMsgQSending, g_lsgMsgQWaited, g_lsgMsgQFrames
-stock bool:lsg_msg_state(const what[], const resend[], key, cost = 1, to = 0, lim = 0)
+stock g_lsgMsgQFn[LSG_MSGQ][32], g_lsgMsgQKey[LSG_MSGQ], g_lsgMsgQCost[LSG_MSGQ], g_lsgMsgQTo[LSG_MSGQ], g_lsgMsgQBytes[LSG_MSGQ], g_lsgMsgQN, bool:g_lsgMsgQAsked, bool:g_lsgMsgQSending, g_lsgMsgQWaited, g_lsgMsgQFrames
+stock bool:lsg_msg_state(const what[], const resend[], key, cost = 1, to = 0, lim = 0, bytes = 0)
 {
 	// (the queue sending it: its room is taken already)
 	if (g_lsgMsgQSending)
 		return true
 	// (others waiting: it waits behind them, so the order holds)
-	if (!g_lsgMsgQN && lsg_msg_fits(cost, to, lim))
+	if (!g_lsgMsgQN && lsg_msg_fits(cost, to, lim, bytes))
 		return true
 	for (new i = 0; i < g_lsgMsgQN; i++)
 		if (g_lsgMsgQKey[i] == key && equal(g_lsgMsgQFn[i], resend))
@@ -177,6 +218,7 @@ stock bool:lsg_msg_state(const what[], const resend[], key, cost = 1, to = 0, li
 	g_lsgMsgQKey[g_lsgMsgQN] = key
 	g_lsgMsgQCost[g_lsgMsgQN] = cost
 	g_lsgMsgQTo[g_lsgMsgQN] = to
+	g_lsgMsgQBytes[g_lsgMsgQN] = bytes
 	g_lsgMsgQN++
 	g_lsgMsgQWaited++
 	if (!g_lsgMsgQAsked)
@@ -192,41 +234,34 @@ public lsg_msg_flush()
 {
 	g_lsgMsgQAsked = false
 	g_lsgMsgQFrames++
-	new done = 0, fn[32]
-	while (done < g_lsgMsgQN && lsg_msg_fits(g_lsgMsgQCost[done], g_lsgMsgQTo[done], 0))
+	// (each waiting one that has room now goes, in order; one whose client has no room yet waits
+	// without holding up the others: the buckets fill again, so everything goes)
+	new keep = 0, fn[32]
+	for (new i = 0; i < g_lsgMsgQN; i++)
 	{
-		copy(fn, charsmax(fn), g_lsgMsgQFn[done])
-		new key = g_lsgMsgQKey[done]
-		done++
+		if (!lsg_msg_fits(g_lsgMsgQCost[i], g_lsgMsgQTo[i], 0, g_lsgMsgQBytes[i]))
+		{
+			if (keep != i)
+			{
+				copy(g_lsgMsgQFn[keep], 31, g_lsgMsgQFn[i])
+				g_lsgMsgQKey[keep] = g_lsgMsgQKey[i]
+				g_lsgMsgQCost[keep] = g_lsgMsgQCost[i]
+				g_lsgMsgQTo[keep] = g_lsgMsgQTo[i]
+				g_lsgMsgQBytes[keep] = g_lsgMsgQBytes[i]
+			}
+			keep++
+			continue
+		}
+		copy(fn, charsmax(fn), g_lsgMsgQFn[i])
 		g_lsgMsgQSending = true
 		if (callfunc_begin(fn) == 1)
 		{
-			callfunc_push_int(key)
+			callfunc_push_int(g_lsgMsgQKey[i])
 			callfunc_end()
 		}
 		g_lsgMsgQSending = false
 	}
-	// (a frame with no room at all still sends one: the queue always moves)
-	if (!done && g_lsgMsgQN)
-	{
-		copy(fn, charsmax(fn), g_lsgMsgQFn[0])
-		g_lsgMsgQSending = true
-		if (callfunc_begin(fn) == 1)
-		{
-			callfunc_push_int(g_lsgMsgQKey[0])
-			callfunc_end()
-		}
-		g_lsgMsgQSending = false
-		done = 1
-	}
-	for (new i = done; i < g_lsgMsgQN; i++)
-	{
-		copy(g_lsgMsgQFn[i - done], 31, g_lsgMsgQFn[i])
-		g_lsgMsgQKey[i - done] = g_lsgMsgQKey[i]
-		g_lsgMsgQCost[i - done] = g_lsgMsgQCost[i]
-		g_lsgMsgQTo[i - done] = g_lsgMsgQTo[i]
-	}
-	g_lsgMsgQN -= done
+	g_lsgMsgQN = keep
 	if (g_lsgMsgQN && !g_lsgMsgQAsked)
 	{
 		g_lsgMsgQAsked = true
@@ -1349,6 +1384,29 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+// ---- Show HUD Text: the latest text per player and slot ----
+stock g_lsgHudTxt[33][4][128], Float:g_lsgHudSecs[33][4]
+stock lsg_hud(who, slot, Float:secs, const text[])
+{
+	slot = clamp(slot, 0, 3)
+	for (new p = who ? who : 1; p <= (who ? who : MaxClients); p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		copy(g_lsgHudTxt[p][slot], 127, text)
+		g_lsgHudSecs[p][slot] = secs
+		if (lsg_msg_state("Show HUD Text", "lsg_hud_again", p * 4 + slot, 1, p, 0, 32 + strlen(text)))
+			lsg_hud_again(p * 4 + slot)
+	}
+}
+
+public lsg_hud_again(key)
+{
+	new p = key / 4, slot = key % 4
+	if (p >= 1 && p <= MaxClients && is_user_connected(p))
+		ls_hud(p, LsHud:slot, g_lsgHudSecs[p][slot], "%s", g_lsgHudTxt[p][slot])
+}
+
 // one server command, only an allowed one (graph::cmd_rules: the app checks the same). The
 // engine splits words on spaces and on { } ( ) ' : , and drops quotes: none of those may be in
 // it, so the first word checked is the one that runs. amx: an AMX Mod X command instead.
@@ -3181,7 +3239,7 @@ stock lsg_snd_2d(who, arg, const snd[], Float:vol, pitch, lim)
 			continue
 		if ((who == 1 && p != arg) || (who == 2 && get_user_team(p) != arg))
 			continue
-		if (!lsg_msg_room("Play Sound 2D", 1, p, lim))
+		if (!lsg_msg_room("Play Sound 2D", 1, p, lim, 96))
 			continue
 		client_cmd(p, "spk ^"(v%d p%d) %s^"", v, pitch, name)
 		n++
@@ -4306,7 +4364,9 @@ public lsg_t4(const data[], task)
 // Show HUD Text (rs_hud)
 lsg_n5(ctx[])
 {
-	ls_hud(0, LsHud:2, 5.0, "%s %s", "Alive:", lsg_ntext(float(ls_count_alive(CsTeams:(0)))))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Alive:", lsg_ntext(float(ls_count_alive(CsTeams:(0)))))
+	lsg_hud(0, 2, 5.0, lsgH)
 	#pragma unused ctx
 }
 
@@ -4413,7 +4473,9 @@ lsg_n16(ctx[])
 // Show HUD Text (pk_hud)
 lsg_n17(ctx[])
 {
-	ls_hud(ctx[1], LsHud:3, 4.0, "%s %s", "You got", lsg_name(ctx[0]))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "You got", lsg_name(ctx[0]))
+	lsg_hud(ctx[1], 3, 4.0, lsgH)
 }
 
 // Player Spawned (ps)
@@ -4484,7 +4546,9 @@ lsg_n25(ctx[])
 // Show HUD Text (pj_hud)
 lsg_n26(ctx[])
 {
-	ls_hud(ctx[0], LsHud:1, 4.0, "%s %s", "Bot:", g_lsgYesNo[(lsg_is_bot(ctx[0])) ? 1 : 0])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Bot:", g_lsgYesNo[(lsg_is_bot(ctx[0])) ? 1 : 0])
+	lsg_hud(ctx[0], 1, 4.0, lsgH)
 	lsg_n27(ctx)
 }
 
@@ -4517,7 +4581,9 @@ lsg_n30(ctx[])
 // Show HUD Text (bp_hud)
 lsg_n31(ctx[])
 {
-	ls_hud(0, LsHud:3, 4.0, "%s %s", "Planted by", g_lsgTeamName[clamp(lsg_team(ctx[0]), 0, 3)])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Planted by", g_lsgTeamName[clamp(lsg_team(ctx[0]), 0, 3)])
+	lsg_hud(0, 3, 4.0, lsgH)
 }
 
 // Bomb Defused (bd)
@@ -4636,7 +4702,9 @@ lsg_n46(ctx[])
 // Show HUD Text (cc_hud)
 lsg_n47(ctx[])
 {
-	ls_hud(0, LsHud:0, 4.0, "%s %s", "Taken by", g_lsgTeamName[clamp(ctx[1], 0, 3)])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Taken by", g_lsgTeamName[clamp(ctx[1], 0, 3)])
+	lsg_hud(0, 0, 4.0, lsgH)
 }
 
 // Point Lost (cl)
@@ -4687,7 +4755,9 @@ lsg_n53(ctx[])
 // Show HUD Text (zt_hud)
 lsg_n54(ctx[])
 {
-	ls_hud(ctx[1], LsHud:3, 4.0, "%s %s", "Ouch", lsg_ntext(Float:ctx[2]))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Ouch", lsg_ntext(Float:ctx[2]))
+	lsg_hud(ctx[1], 3, 4.0, lsgH)
 }
 
 // Player Extracted (ex)
@@ -4711,7 +4781,9 @@ lsg_n57(ctx[])
 // Show HUD Text (ws_hud)
 lsg_n58(ctx[])
 {
-	ls_hud(0, LsHud:0, 4.0, "%s %s", "Wave", lsg_ntext(Float:ctx[0]))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Wave", lsg_ntext(Float:ctx[0]))
+	lsg_hud(0, 0, 4.0, lsgH)
 }
 
 // Wave Spawned One (wp)
@@ -4723,7 +4795,9 @@ lsg_n59(ctx[])
 // Show HUD Text (wp_hud)
 lsg_n60(ctx[])
 {
-	ls_hud(0, LsHud:2, 4.0, "%s %d", "In:", ctx[0])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %d", "In:", ctx[0])
+	lsg_hud(0, 2, 4.0, lsgH)
 }
 
 // Wave Cleared (wc)
@@ -4750,7 +4824,9 @@ lsg_n63(ctx[])
 // Show HUD Text (lo_hud)
 lsg_n64(ctx[])
 {
-	ls_hud(ctx[1], LsHud:1, 4.0, "%s", "Looted")
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s", "Looted")
+	lsg_hud(ctx[1], 1, 4.0, lsgH)
 }
 
 // Checkpoint Reached (ck)
@@ -4787,7 +4863,9 @@ lsg_n69(ctx[])
 // Show HUD Text (me_hud)
 lsg_n70(ctx[])
 {
-	ls_hud(0, LsHud:3, 4.0, "%s %s", "Out:", lsg_name(ctx[1]))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Out:", lsg_name(ctx[1]))
+	lsg_hud(0, 3, 4.0, lsgH)
 }
 
 // Creature Killed (ck2)
@@ -4862,14 +4940,18 @@ lsg_n74(ctx[])
 // Show HUD Text (ck2_hud)
 lsg_n75(ctx[])
 {
-	ls_hud(0, LsHud:2, 4.0, "%s %d", "New one:", g_lsgO[4])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %d", "New one:", g_lsgO[4])
+	lsg_hud(0, 2, 4.0, lsgH)
 	lsg_n76(ctx)
 }
 
 // Show HUD Text (ck2_hud2)
 lsg_n76(ctx[])
 {
-	ls_hud(ctx[1], LsHud:1, 4.0, "%s %s", "Killed:", g_v3)
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Killed:", g_v3)
+	lsg_hud(ctx[1], 1, 4.0, lsgH)
 }
 
 // Player Hurt (hurt)
@@ -5008,7 +5090,9 @@ lsg_n90(ctx[])
 // Show HUD Text (nr_hud)
 lsg_n91(ctx[])
 {
-	ls_hud(0, LsHud:0, 4.0, "%s %d", "Spot:", ctx[9])
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %d", "Spot:", ctx[9])
+	lsg_hud(0, 0, 4.0, lsgH)
 }
 
 // Chat Command (cmd)
@@ -5290,7 +5374,9 @@ lsg_n118(ctx[])
 // Show HUD Text (lo2_hud)
 lsg_n119(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %s", "Heroes and creatures:", lsg_ntext(((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Heroes and creatures:", lsg_ntext(((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))))
+	lsg_hud(0, 1, 4.0, lsgH)
 	lsg_n120(ctx)
 }
 
@@ -5479,7 +5565,9 @@ lsg_n138(ctx[])
 // Show HUD Text (rv_hud)
 lsg_n139(ctx[])
 {
-	ls_hud(ctx[0], LsHud:3, 4.0, "%s %s", "Saved by", lsg_name(ctx[1]))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Saved by", lsg_name(ctx[1]))
+	lsg_hud(ctx[0], 3, 4.0, lsgH)
 }
 
 // Downed Player Out (to)
@@ -5511,7 +5599,9 @@ lsg_n142(ctx[])
 // Show HUD Text (to_hud)
 lsg_n143(ctx[])
 {
-	ls_hud(ctx[0], LsHud:1, 4.0, "%s %s", "Times out:", lsg_ntext(lsg_saved_get(ctx[0], "outs")))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Times out:", lsg_ntext(lsg_saved_get(ctx[0], "outs")))
+	lsg_hud(ctx[0], 1, 4.0, lsgH)
 	lsg_n144(ctx)
 }
 
@@ -5555,7 +5645,9 @@ lsg_n148(ctx[])
 // Show HUD Text (sq_hud)
 lsg_n149(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %s", "Squad:", lsg_ntext(((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Squad:", lsg_ntext(((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))))
+	lsg_hud(0, 1, 4.0, lsgH)
 	lsg_n150(ctx)
 }
 
@@ -5630,7 +5722,9 @@ lsg_n158(ctx[])
 // Show HUD Text (ck3_hud)
 lsg_n159(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %s", "Time:", lsg_ntext(lsg_clock_left()))
+	new lsgH[128]
+	formatex(lsgH, charsmax(lsgH), "%s %s", "Time:", lsg_ntext(lsg_clock_left()))
+	lsg_hud(0, 1, 4.0, lsgH)
 	#pragma unused ctx
 }
 

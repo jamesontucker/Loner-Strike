@@ -28,7 +28,7 @@ export const LIMITS: Limit[] = [
   { id: "volume_members", label: "Things in one trigger volume", default: 32, lagAbove: 48, max: 64, kinds: ["vol.spawn"] },
   { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lagAbove: 24, max: 32, kinds: ["bots.avoid"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
-  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
+  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 56, max: 64, kinds: ["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
 ];
 
 export const limitVar = (l: Limit): GVariable =>

@@ -46,9 +46,10 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "volume_members", label: "Things in one trigger volume", default: 32, lag_above: 48, max: 64, kinds: &["vol.spawn"] },
     Limit { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lag_above: 24, max: 32, kinds: &["bots.avoid"] },
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
-    // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
-    // and kick players; gen.rs lsg_msg_room)
-    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
+    // (effects, HUD and chat sent in one server frame: at most 64, and every client's bytes a frame
+    // are budgeted too, gen.rs lsg_msg_fits: 160 effects a frame overflowed a player's datagram in
+    // P5's fc_st_fx, so no setting may go past what a client takes)
+    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 56, max: 64, kinds: &["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
 ];
 
 /// A mode's own files (models, sounds, sprites) loaded with the map: the game holds 512 models and

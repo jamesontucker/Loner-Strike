@@ -1049,7 +1049,7 @@ stock lsg_snd_2d(who, arg, const snd[], Float:vol, pitch, lim)
 			continue
 		if ((who == 1 && p != arg) || (who == 2 && get_user_team(p) != arg))
 			continue
-		if (!lsg_msg_room("Play Sound 2D", 1, p, lim))
+		if (!lsg_msg_room("Play Sound 2D", 1, p, lim, 96))
 			continue
 		client_cmd(p, "spk ^"(v%d p%d) %s^"", v, pitch, name)
 		n++

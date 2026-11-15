@@ -281,8 +281,18 @@ async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
     assert!(help["help"]["what"].is_string(), "{help}");
 
     // ---- 6. compile it -----------------------------------------------------------------------
-    let code = ag.call("studio_code", json!({"id": "agent_e2e", "draft": true})).await;
-    assert!(code["text"].as_str().unwrap().contains("Nice shot!"), "the plugin says it");
+    // (the plugin comes in pages: read them all)
+    let mut text = String::new();
+    let mut offset = 0;
+    loop {
+        let code = ag.call("studio_code", json!({"id": "agent_e2e", "draft": true, "offset": offset})).await;
+        text.push_str(code["text"].as_str().unwrap_or_default());
+        match code["next"].as_u64() {
+            Some(n) if n > offset as u64 => offset = n as usize,
+            _ => break,
+        }
+    }
+    assert!(text.contains("Nice shot!"), "the plugin says it");
     let built = ag.call("studio_compile", json!({"id": "agent_e2e", "draft": true})).await;
     assert_eq!(built["ok"], true, "{built}");
     assert_eq!(built["plugin"], gen::plugin_name("agent_e2e"));
