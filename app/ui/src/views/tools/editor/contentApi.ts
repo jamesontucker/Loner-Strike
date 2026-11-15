@@ -4,6 +4,7 @@
 // the credits and permission of an asset from T's credits data (docs/notes/Assets.md 2.3, route
 // agreed in docs/notes/P5.md), shown as "not checked yet" until that route is there.
 
+import { soundOptions } from "../common/SoundOptions";
 import { create } from "zustand";
 
 export type AssetKind = "model" | "sprite" | "sound";
@@ -49,7 +50,7 @@ export const soundPlayUrl = (path: string) => `/api/tools/editor/sound?path=${en
 // ---- Import and Export (Parity A) ----------------------------------------------------------------
 
 export type ImportSummary = {
-  imported?: { name: string; path: string }[];
+  imported?: { name: string; path: string; converted?: string }[];
   renamed?: { from: string; to: string }[];
   taken?: { name: string; path: string; suggest: string }[];
   refused?: { name: string; why: string }[];
@@ -61,7 +62,8 @@ const postJson = <T,>(url: string, body: unknown) =>
   fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify(body) })
     .then((r) => r.json() as Promise<T>)
     .catch(() => ({ error: "Couldn't reach the app. Try again." }) as T);
-export const importFiles = (files: { name: string; data: string; rename?: boolean }[]) => postJson<ImportSummary>(`${E}/import`, { files });
+// (sounds go with how to convert them: tools/soundconv.rs)
+export const importFiles = (files: { name: string; data: string; rename?: boolean }[]) => postJson<ImportSummary>(`${E}/import`, { files, sound: soundOptions() });
 export const showInFolder = (a: { folder: string; path: string }) => postJson<{ ok?: boolean; error?: string }>(`${E}/reveal`, { folder: a.folder, path: a.path });
 export const exportAsset = (a: { folder: string; path: string }) => postJson<{ ok?: boolean; files?: string[]; folder?: string; cancelled?: boolean; error?: string }>(`${E}/export`, { folder: a.folder, path: a.path });
 /** A dropped or picked file's bytes as base64 (for the import route). */
@@ -73,7 +75,7 @@ export function fileData(f: File): Promise<string> {
     r.readAsDataURL(f);
   });
 }
-export const IMPORT_TYPES = ".mdl,.spr,.wav,.wad";
+export const IMPORT_TYPES = ".mdl,.spr,.wav,.mp3,.ogg,.flac,.wad";
 
 // ---- credits and permission (T's data) --------------------------------------------------------
 

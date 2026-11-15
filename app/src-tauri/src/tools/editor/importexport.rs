@@ -66,7 +66,7 @@ pub fn place_for(name: &str) -> Result<(String, &'static str), String> {
         "spr" => "spr",
         "wav" => "wav",
         "wad" => "wad",
-        _ => return Err("only models (.mdl), sprites (.spr), sounds (.wav) and texture files (.wad) can be imported".into()),
+        _ => return Err("only models (.mdl), sprites (.spr), sounds (.wav, .mp3, .ogg, .flac) and texture files (.wad) can be imported".into()),
     };
     let bad = || "its name has characters the game or Windows can't use (letters, digits, _ - . only)".to_string();
     let part_ok = !name.is_empty() && !name.starts_with('.') && name.len() <= 64 && !crate::setup::record::windows_unsafe(name) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-.".contains(&b));
@@ -208,6 +208,34 @@ pub fn import_into(root: &Path, game: &str, files: Vec<Incoming>, place: &dyn Fn
     json!({"imported": imported, "renamed": renamed, "taken": taken, "refused": refused, "message": msg.join(" ")})
 }
 
+/// An import's answer with what each sound's conversion did (`converted` on the file, and in the
+/// message), and the sounds that couldn't be converted among the refused.
+pub fn with_conversions(mut r: Value, converted: &[(String, String)], refused: Vec<Value>) -> Value {
+    let mut said = Vec::new();
+    if let Some(list) = r["imported"].as_array_mut() {
+        for f in list.iter_mut() {
+            if let Some((_, s)) = converted.iter().find(|(n, _)| f["name"].as_str() == Some(n.as_str())) {
+                f["converted"] = json!(s);
+                said.push(format!("{}: {s}.", f["path"].as_str().unwrap_or("").rsplit('/').next().unwrap_or("")));
+            }
+        }
+    }
+    let n_refused = refused.len();
+    if let Some(list) = r["refused"].as_array_mut() {
+        list.extend(refused);
+    }
+    let mut msg = r["message"].as_str().unwrap_or("").to_string();
+    if n_refused > 0 {
+        msg.push_str(&format!(" {n_refused} sound{} couldn't be converted.", if n_refused == 1 { "" } else { "s" }));
+    }
+    for s in said {
+        msg.push(' ');
+        msg.push_str(&s);
+    }
+    r["message"] = json!(msg);
+    r
+}
+
 /// `name_2.ext`, `name_3.ext`... the first that isn't there.
 pub fn free_name(project: &Path, rel: &str, exists: &dyn Fn(&str) -> bool) -> String {
     let _ = project;
@@ -268,6 +296,9 @@ struct InFile {
 #[derive(Deserialize)]
 struct ImportReq {
     files: Vec<InFile>,
+    /// how sounds are converted (WAV, MP3, Ogg or FLAC in: tools/soundconv.rs)
+    #[serde(default)]
+    sound: crate::tools::soundconv::SoundOpts,
 }
 
 fn project_and_game(st: &Shared, ed: &Ed) -> Result<(Option<PathBuf>, String), String> {
@@ -291,15 +322,26 @@ async fn api_import(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: H
         }
         let mut total = 0usize;
         let mut files = Vec::new();
+        let mut converted: Vec<(String, String)> = Vec::new();
+        let mut refused: Vec<Value> = Vec::new();
         for f in req.files {
             let bytes = base64::engine::general_purpose::STANDARD.decode(f.data.as_bytes()).map_err(|_| format!("{} couldn't be read.", f.name))?;
             total += bytes.len();
             if total > MAX_TOTAL {
                 return Err(format!("That's more than {} MB in one go. Import fewer files at once.", MAX_TOTAL >> 20));
             }
-            files.push(Incoming { name: f.name, bytes, rename: f.rename });
+            // a sound in another format (or a WAV the engine doesn't play well) becomes a WAV
+            match crate::tools::soundconv::prepare(&f.name, bytes, req.sound) {
+                Ok(p) => {
+                    if let Some(s) = p.summary {
+                        converted.push((p.name.clone(), s));
+                    }
+                    files.push(Incoming { name: p.name, bytes: p.bytes, rename: f.rename });
+                }
+                Err(why) => refused.push(json!({"name": f.name, "why": why})),
+            }
         }
-        Ok(import(&project, &game, files))
+        Ok(with_conversions(import(&project, &game, files), &converted, refused))
     })
     .await
 }
@@ -359,6 +401,17 @@ mod tests {
         b.extend(0u32.to_le_bytes());
         b.extend(12u32.to_le_bytes());
         b
+    }
+
+    #[test]
+    fn content_browser_import_says_what_a_sound_conversion_did() {
+        let r = json!({"imported": [{"name": "tone.wav", "path": "sound/tone.wav"}, {"name": "box.mdl", "path": "models/box.mdl"}], "renamed": [], "taken": [], "refused": [], "message": "Imported 2 files."});
+        let out = with_conversions(r, &[("tone.wav".into(), "converted from 44.1 kHz stereo MP3 to 22 kHz mono WAV".into())], vec![json!({"name": "bad.ogg", "why": "bad.ogg couldn't be read as Ogg"})]);
+        assert_eq!(out["imported"][0]["converted"], "converted from 44.1 kHz stereo MP3 to 22 kHz mono WAV");
+        assert!(out["imported"][1].get("converted").is_none());
+        assert_eq!(out["refused"][0]["name"], "bad.ogg");
+        assert_eq!(out["message"], "Imported 2 files. 1 sound couldn't be converted. tone.wav: converted from 44.1 kHz stereo MP3 to 22 kHz mono WAV.");
+        assert!(place_for("x.mp3").unwrap_err().contains(".mp3"));
     }
 
     #[test]

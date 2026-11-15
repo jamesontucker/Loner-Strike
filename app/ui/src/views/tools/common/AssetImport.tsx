@@ -13,18 +13,18 @@ import { post, tryGet } from "./api";
 import { matches, searchWords } from "./search";
 import { fileData } from "../editor/contentApi";
 import { MakeSpriteButton } from "./SpriteMaker"; // T1fix: the Sprite maker
-import { MakeSpriteButton } from "./SpriteMaker"; // T1fix: the Sprite maker
+import { SOUND_ACCEPT, SOUND_EXT, SoundOptions, soundOptions } from "./SoundOptions";
 import "./assetImport.css";
 
 export type ImportKind = "model" | "sprite" | "sound";
 /** What's known about where a file came from and what it allows. */
 export type AssetCredit = { verdict?: "ok" | "ask" | "no" | "stock" | "unknown"; authors?: { name: string }[]; page?: { url: string; name: string } | null; note?: string } | null;
-export type Imported = { ok?: boolean; path?: string; files?: string[]; credit?: AssetCredit; cancelled?: boolean; taken?: { name: string; suggestion: string }; error?: string };
+export type Imported = { ok?: boolean; path?: string; files?: string[]; credit?: AssetCredit; converted?: string; cancelled?: boolean; taken?: { name: string; suggestion: string }; error?: string };
 /** `project` is the project file (sent back as it is to copy one in); `projectName` is for people */
 export type ProjectFile = { project: string; projectName?: string; path: string; name: string; size: number; credit?: AssetCredit };
 
 const EXT: Record<ImportKind, string> = { model: ".mdl", sprite: ".spr", sound: ".wav" };
-export const ACCEPT: Record<ImportKind, string> = { model: ".mdl", sprite: ".spr", sound: ".wav" };
+export const ACCEPT: Record<ImportKind, string> = { model: ".mdl", sprite: ".spr", sound: SOUND_ACCEPT };
 export const IMPORT_NOTE = "Files you add here go into your game, so creatures and modes can use them. Sharing packages them for you.";
 
 export const importAsset = (body: Record<string, unknown>) => post<Imported>("/api/tools/assets/import", body);
@@ -71,18 +71,19 @@ export function useAssetImport(kind: ImportKind, onPicked: (path: string, credit
       onPicked(r.path, r.credit);
       onRescan?.();
       void qc.invalidateQueries({ queryKey: ["tools", "assets", "project-files", kind] });
-      toast(`${r.path.replace(/^.*\//, "")} is in your game now.`);
+      toast(`${r.path.replace(/^.*\//, "")} is in your game now${r.converted ? `: ${r.converted}` : ""}.`);
       return;
     }
   };
 
   const importFile = async (f?: File) => {
     if (busy) return;
-    if (f && !f.name.toLowerCase().endsWith(EXT[kind])) return void toast(`That isn't a ${EXT[kind]} file.`, true);
+    if (f && !(kind === "sound" ? SOUND_EXT.test(f.name) : f.name.toLowerCase().endsWith(EXT[kind]))) return void toast(kind === "sound" ? "That isn't a sound file (WAV, MP3, Ogg or FLAC)." : `That isn't a ${EXT[kind]} file.`, true);
     setBusy("import");
     try {
       const data = f ? await fileData(f) : null;
-      await send((rename) => importAsset(f ? { kind, name: f.name, data, rename } : { kind, pick: true, rename }));
+      const sound = kind === "sound" ? { sound: soundOptions() } : {};
+      await send((rename) => importAsset(f ? { kind, name: f.name, data, rename, ...sound } : { kind, pick: true, rename, ...sound }));
     } finally {
       setBusy(null);
     }
@@ -146,14 +147,6 @@ export function ImportBar({ kind, imp, onRefresh, refreshing }: { kind: ImportKi
           }}
         />
       )}
-      {kind === "sprite" && (
-        <MakeSpriteButton
-          onMade={async (f) => {
-            await imp.importFile(f);
-            return true;
-          }}
-        />
-      )}
       <button type="button" className="btn small icon ai-refresh" aria-label="Refresh the list" title="Look again" disabled={refreshing} onClick={onRefresh}>
         {refreshing ? <span className="spinner" aria-hidden="true" /> : "↻"}
       </button>
@@ -162,6 +155,7 @@ export function ImportBar({ kind, imp, onRefresh, refreshing }: { kind: ImportKi
           <span className="spinner" aria-hidden="true" /> Copying into the game…
         </span>
       )}
+      {kind === "sound" && <SoundOptions />}
     </div>
   );
 }

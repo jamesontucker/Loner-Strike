@@ -296,6 +296,9 @@ struct ImportReq {
     /// a new file name (after a "taken" answer), or true for the offered one
     #[serde(default)]
     rename: Option<Value>,
+    /// a sound's conversion (WAV, MP3, Ogg or FLAC in; tools/soundconv.rs)
+    #[serde(default)]
+    sound: super::soundconv::SoundOpts,
 }
 
 /// `rename` as a name: a string, or (true) the offered free name.
@@ -311,8 +314,32 @@ fn decode(name: &str, data: &str) -> Result<Vec<u8>, String> {
     base64::engine::general_purpose::STANDARD.decode(data.as_bytes()).map_err(|_| format!("{name} couldn't be read."))
 }
 
-/// An import that takes the offered name when asked to (rename: true).
-fn import_with(hl: &Path, game: &str, kind: &str, files: Vec<(String, Vec<u8>)>, rename: &Option<Value>) -> Result<Value, String> {
+/// An import that takes the offered name when asked to (rename: true). A sound is converted
+/// first (an MP3, Ogg or FLAC, or a WAV the engine doesn't play well, becomes a WAV), and the
+/// answer says what changed.
+fn import_with(hl: &Path, game: &str, kind: &str, files: Vec<(String, Vec<u8>)>, rename: &Option<Value>, sound: super::soundconv::SoundOpts) -> Result<Value, String> {
+    let (files, converted) = convert_sound(kind, files, sound)?;
+    let mut r = import_plain(hl, game, kind, files, rename)?;
+    if let (Some(c), true) = (converted, r["ok"] == json!(true)) {
+        let msg = r["message"].as_str().unwrap_or("").trim_end_matches('.').to_string();
+        r["message"] = json!(format!("{msg}: {c}."));
+        r["converted"] = json!(c);
+    }
+    Ok(r)
+}
+
+/// A picker's sound converted for the game (its name becomes `<stem>.wav`); anything else as it is.
+pub fn convert_sound(kind: &str, mut files: Vec<(String, Vec<u8>)>, sound: super::soundconv::SoundOpts) -> Result<(Vec<(String, Vec<u8>)>, Option<String>), String> {
+    if kind != "sound" || files.is_empty() {
+        return Ok((files, None));
+    }
+    let (name, bytes) = files.remove(0);
+    let p = super::soundconv::prepare(&name, bytes, sound)?;
+    files.insert(0, (p.name, p.bytes));
+    Ok((files, p.summary))
+}
+
+fn import_plain(hl: &Path, game: &str, kind: &str, files: Vec<(String, Vec<u8>)>, rename: &Option<Value>) -> Result<Value, String> {
     if matches!(rename, Some(Value::Bool(true))) {
         let first = import_to_game(hl, game, kind, files.clone(), None)?;
         if let Some(s) = first["taken"]["suggestion"].as_str() {
@@ -337,7 +364,8 @@ async fn api_import(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Impo
         let Some(app) = st.app.get().cloned() else { return answer(Err("The file picker isn't available.".into())) };
         return blocking(move || {
             let title = format!("Add {} to your game", kind_words(&req.kind));
-            let Some(picked) = app.dialog().file().set_title(&title).add_filter(kind_words(&req.kind), &[ext]).blocking_pick_file() else {
+            let exts: &[&str] = if req.kind == "sound" { &["wav", "mp3", "ogg", "flac"] } else { &[ext] };
+            let Some(picked) = app.dialog().file().set_title(&title).add_filter(kind_words(&req.kind), exts).blocking_pick_file() else {
                 return Ok(json!({"cancelled": true}));
             };
             let p = picked.into_path().map_err(|e| e.to_string())?;
@@ -351,7 +379,7 @@ async fn api_import(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Impo
                 }
                 files.push((n, std::fs::read(&f).map_err(|e| format!("Couldn't read the file ({e})."))?));
             }
-            import_with(&hl, &game, &req.kind, files, &req.rename)
+            import_with(&hl, &game, &req.kind, files, &req.rename, req.sound)
         })
         .await;
     }
@@ -366,7 +394,7 @@ async fn api_import(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Impo
         if files.iter().map(|f| f.1.len()).sum::<usize>() > MAX_TOTAL {
             return Err(format!("That's more than {} MB.", MAX_TOTAL >> 20));
         }
-        import_with(&hl, &game, &req.kind, files, &req.rename)
+        import_with(&hl, &game, &req.kind, files, &req.rename, req.sound)
     })
     .await
 }
@@ -436,6 +464,30 @@ mod tests {
         hl
     }
 
+    /// An MP3 picked for a sound becomes a WAV in sound/custom/, and the answer says what changed;
+    /// a WAV taken again under the offered name is converted the same way.
+    #[test]
+    fn a_picked_mp3_becomes_a_wav_and_says_so() {
+        let hl = game("snd");
+        let mp3 = include_bytes!("testdata/sound/tone.mp3").to_vec();
+        let r = import_with(&hl, "cstrike", "sound", vec![("Tone.mp3".into(), mp3.clone())], &None, Default::default()).unwrap();
+        assert_eq!((r["path"].as_str(), r["use"].as_str()), (Some("sound/custom/Tone.wav"), Some("custom/Tone.wav")), "{r}");
+        assert_eq!(r["converted"], "converted from 44.1 kHz stereo MP3 to 22 kHz mono WAV");
+        assert!(r["message"].as_str().unwrap().contains("converted from 44.1 kHz stereo MP3"), "{r}");
+        let w = super::super::soundconv::parse_wav(&std::fs::read(hl.join("cstrike/sound/custom/Tone.wav")).unwrap()).unwrap();
+        assert_eq!((w.format, w.channels, w.rate, w.bits), (1, 1, 22050, 16));
+        // taken: nothing written, the offered name works with the same conversion
+        let again = import_with(&hl, "cstrike", "sound", vec![("Tone.mp3".into(), mp3.clone())], &None, Default::default()).unwrap();
+        assert_eq!(again["taken"]["name"], "Tone.wav");
+        let opts = super::super::soundconv::SoundOpts { rate: 11025, bits: 8, ..Default::default() };
+        let r = import_with(&hl, "cstrike", "sound", vec![("Tone.mp3".into(), mp3)], &Some(Value::Bool(true)), opts).unwrap();
+        assert_eq!(r["path"], "sound/custom/Tone_2.wav", "{r}");
+        assert_eq!(r["converted"], "converted from 44.1 kHz stereo MP3 to 11 kHz mono WAV, 8-bit");
+        // not a sound at all
+        assert!(import_with(&hl, "cstrike", "sound", vec![("x.ogg".into(), b"text".to_vec())], &None, Default::default()).unwrap_err().contains("couldn't be read as Ogg"));
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
     #[test]
     fn imports_into_the_games_custom_folders_with_the_content_browsers_checks() {
         let hl = game("imp");
@@ -473,7 +525,7 @@ mod tests {
         assert_eq!(r["path"], "models/custom/crawler_big.mdl");
         assert_eq!(std::fs::read(hl.join("cstrike/models/custom/crawler_bigT.mdl")).unwrap(), b"IDST tex");
         // the offered name (rename: true)
-        let r = import_with(&hl, "cstrike", "model", set(), &Some(Value::Bool(true))).unwrap();
+        let r = import_with(&hl, "cstrike", "model", set(), &Some(Value::Bool(true)), Default::default()).unwrap();
         assert_eq!(r["path"], "models/custom/crawler_2.mdl", "{r}");
         // never over its own earlier import either
         let again = import_to_game(&hl, "cstrike", "model", set(), Some("crawler_big")).unwrap();

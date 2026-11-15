@@ -6,6 +6,7 @@
 // → the prefab); right-click for Find uses. Also the content drawer (Ctrl+Space; ⌘⇧Space on a Mac), which shows
 // the same browser over the bottom panels and closes on a click away.
 
+import { SoundOptions } from "../common/SoundOptions";
 import { memo, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton, useConfirm } from "../../../ui";
 import {
@@ -221,8 +222,8 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
 
   // Parity A: files into the project's folder; a name that's taken asks before taking a new one
   const runImport = async (picked: File[]) => {
-    const files = picked.filter((f) => /\.(mdl|spr|wav|wad)$/i.test(f.name));
-    const skipped = picked.filter((f) => !files.includes(f)).map((f) => ({ name: f.name, why: "only .mdl, .spr, .wav and .wad files can be imported" }));
+    const files = picked.filter((f) => /\.(mdl|spr|wav|mp3|ogg|oga|flac|wad)$/i.test(f.name));
+    const skipped = picked.filter((f) => !files.includes(f)).map((f) => ({ name: f.name, why: "only models (.mdl), sprites (.spr), sounds (.wav .mp3 .ogg .flac) and texture files (.wad) can be imported" }));
     if (!files.length) return setSummary({ refused: skipped, message: "Nothing imported." });
     setImporting(true);
     setSummary(null);
@@ -309,9 +310,10 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
             <button type="button" className="btn small" title="Read the folders again" onClick={() => setRev((n) => n + 1)}>
               Refresh
             </button>
-            <button type="button" className="btn small" disabled={importing} title="Copy your own models, sprites, sounds or texture files (.mdl .spr .wav .wad) into the project's folder. You can also drop them here." onClick={() => picker.current?.click()}>
+            <button type="button" className="btn small" disabled={importing} title="Copy your own models, sprites, sounds or texture files (.mdl .spr .wav .mp3 .ogg .flac .wad) into the project's folder. Sounds become WAVs the game plays well. You can also drop them here." onClick={() => picker.current?.click()}>
               {importing ? <><span className="spinner" aria-hidden="true" /> Importing…</> : "Import…"}
             </button>
+            <SoundOptions />
             {/* T1fix: a sprite made from pictures goes in like an imported one */}
             <MakeSpriteButton onMade={async (f) => { await runImport([f]); return true; }} />
           </>
@@ -331,7 +333,7 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
             </div>
           )}
           <ul className="small-note">
-            {(summary.imported ?? []).map((x) => <li key={`i${x.path}`}>Imported {x.path}</li>)}
+            {(summary.imported ?? []).map((x) => <li key={`i${x.path}`}>Imported {x.path}{x.converted ? ` (${x.converted})` : ""}</li>)}
             {(summary.renamed ?? []).map((x) => <li key={`r${x.to}`}>{x.from} was taken: saved as {x.to}</li>)}
             {(summary.taken ?? []).map((x) => <li key={`t${x.path}`}>Not imported: {x.path} is there already</li>)}
             {(summary.refused ?? []).map((x) => <li key={`x${x.name}`} className="compile-bad">Refused {x.name}: {x.why}</li>)}

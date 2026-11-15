@@ -130,6 +130,7 @@ The app is built with these, among many smaller ones. Every Rust crate and npm p
 | [reqwest](https://github.com/seanmonstar/reqwest), [rustls](https://github.com/rustls/rustls), [ring](https://github.com/briansmith/ring) | MIT or Apache-2.0; rustls also ISC; ring Apache-2.0 and ISC |
 | [ssh2](https://crates.io/crates/ssh2), with bundled [libssh2](https://libssh2.org) and [OpenSSL](https://www.openssl.org) | MIT or Apache-2.0; libssh2 BSD-3-Clause; OpenSSL Apache-2.0 |
 | [zip](https://github.com/zip-rs/zip2), [image](https://github.com/image-rs/image), [qrcode](https://github.com/kennytm/qrcode-rust), [igd-next](https://github.com/dariusc93/rust-igd) | MIT, or MIT or Apache-2.0 |
+| [Symphonia](https://github.com/pdeljanov/Symphonia) (reading MP3, Ogg Vorbis and FLAC sounds when they are imported) | MPL-2.0 |
 | [React](https://react.dev) | MIT |
 | [TanStack Query](https://tanstack.com/query) | MIT |
 | [zustand](https://github.com/pmndrs/zustand) | MIT |

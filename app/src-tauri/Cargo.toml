@@ -34,6 +34,8 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 regex = "1"
 zip = { version = "9", default-features = false, features = ["deflate", "deflate64", "bzip2", "lzma"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga", "webp"] }
+# sounds imported as MP3, Ogg Vorbis or FLAC become WAVs (tools/soundconv.rs): pure Rust, MPL-2.0
+symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "ogg", "vorbis", "flac", "wav", "pcm", "adpcm"] }
 # Setup (setup/): pinned downloads checked by sha256, unpacking .tar.gz/.tar.xz/.zip without Python
 sha2 = "0.10"
 sha1 = "0.10"
