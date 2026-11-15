@@ -50,6 +50,7 @@ native people_get(id, const key[]);
 #define TASK_TICK  7738100
 #define TASK_SETUP 7738200
 #define TASK_GEAR  7738300
+#define TASK_MIDNOTE 7738290
 
 enum { PH_IDLE = 0, PH_WAIT, PH_LOBBY, PH_DROP, PH_PLAY, PH_OVER };
 enum { TR_HUNTER = 0, TR_LOOTER, TR_CAMPER };
@@ -93,6 +94,7 @@ new g_knocks, g_revives;
 new g_unstuckTries[33];
 new Float:g_releaseAt[33];
 new g_stagesOrig[256];
+new g_botsMid;
 
 public plugin_natives()
 {
@@ -685,6 +687,30 @@ stock bool:check_winner()
 	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, name, ls_kills(last), floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
+}
+
+/* bots that come in during a game (the host raised the count on the Bots page) watch until the
+   next one: one note for all that come in within a few seconds, so nobody thinks the count was cut */
+public client_putinserver(id)
+{
+	if (!is_user_bot(id) || (g_phase != PH_DROP && g_phase != PH_PLAY))
+		return;
+	g_botsMid++;
+	remove_task(TASK_MIDNOTE);
+	set_task(4.0, "task_mid_note", TASK_MIDNOTE);
+}
+
+public task_mid_note()
+{
+	if (g_botsMid > 0 && (g_phase == PH_DROP || g_phase == PH_PLAY))
+	{
+		if (g_botsMid == 1)
+			toast(0, 6.0, "A new bot joins from the next game.");
+		else
+			toast(0, 6.0, "%d new bots join from the next game.", g_botsMid);
+		log_amx("Battle Royale: %d bots came in during the game; they play from the next one", g_botsMid);
+	}
+	g_botsMid = 0;
 }
 
 /* squads: someone who joins in the first br_late_fill s of fighting fills a squad that's short, next
