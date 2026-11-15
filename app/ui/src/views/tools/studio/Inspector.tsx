@@ -13,6 +13,7 @@ import { useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
 import { useFreshFocus } from "./freshFocus";
 import { CreaturePicker } from "../common/CreaturePicker"; // shared creatures (CP-ui)
+import { AssetField, assetKindOf } from "../common/AssetField"; // T1fix: asset pickers
 
 /** Node params that name a creature type (tools/creatures.rs NODE_TYPE_PARAMS). */
 const CREATURE_PARAMS = ["creature.spawn:kind", "turret.setup:type", "creature.for_each:type", "creature.of_type:type", "creature.nearest:type"];
@@ -153,6 +154,9 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
         <option value="0">No</option>
       </select>
     );
+  // T1fix (asset pickers): a model, sprite or sound path gets Choose… / Import… / your map projects
+  if (p.kind === "path" && assetKindOf(String(p.default ?? value)))
+    return <AssetField kind={assetKindOf(String(p.default ?? value))!} value={String(value)} max={64} allowed={PATH_CHARS} label={p.label} onChange={onChange} />;
   if (p.kind === "path") return <TextField value={String(value)} max={64} allowed={PATH_CHARS} onChange={onChange} />;
   // shared creatures (CP-ui, for X): a creature type param picks from built-in, your own and installed types
   if (p.kind === "name" && CREATURE_PARAMS.includes(`${node.type}:${p.id}`))

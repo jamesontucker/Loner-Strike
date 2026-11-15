@@ -2,7 +2,8 @@
 // key, "Choose…" opens a searchable list of that kind with thumbnails, ↗ shows the file in the
 // Content Browser, and "Use selected" takes what's picked there.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EmptyImport, ImportBar, ImportZone, ProjectFilesGroup, useAssetImport, useFocusRefresh } from "../common/AssetImport"; // T1fix: asset pickers
 import { assetList, keyValue, revealAsset, sameAsset, spriteUrl, useBrowser, used, type AssetItem, type AssetKind } from "./contentApi";
 import { cachedThumb, modelThumb } from "./modelThumbs";
 import { showPanel } from "./dockState";
@@ -65,7 +66,8 @@ export function AssetButtons({ kind, value, set, label }: { kind: AssetKind; val
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    // (the rename dialog of an import is outside: it doesn't close the list)
+    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('[role="alertdialog"]') && setOpen(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", esc);
@@ -124,26 +126,33 @@ export function AssetButtons({ kind, value, set, label }: { kind: AssetKind; val
 function Chooser({ kind, value, onPick }: { kind: AssetKind; value: string; onPick: (a: AssetItem) => void }) {
   const [items, setItems] = useState<AssetItem[] | null>(null);
   const [q, setQ] = useState("");
+  const [n, setN] = useState(0);
   useEffect(() => {
     let live = true;
-    void assetList(kind).then((r) => live && setItems(r.items));
+    void assetList(kind, n > 0).then((r) => live && setItems(r.items));
     return () => {
       live = false;
     };
-  }, [kind]);
+  }, [kind, n]);
+  // T1fix: Import… (or a file dropped here) and your map projects' files go into the game, then picked
+  const rescan = useCallback(() => setN((x) => x + 1), []);
+  useFocusRefresh(rescan);
+  const imp = useAssetImport(kind, (path) => onPick({ kind, path, folder: "", name: path.replace(/^.*\//, ""), size: 0, source: "mine", page: null }), rescan);
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return (items ?? []).filter((a) => words.every((w) => a.path.toLowerCase().includes(w))).slice(0, 150);
   }, [items, q]);
   return (
     <div className="p5-ap-pop" role="dialog" aria-label={`Choose a ${kind}`}>
+      <ImportZone imp={imp}>
       <input autoFocus type="search" placeholder={`Search ${kind}s`} value={q} onChange={(e) => setQ(e.target.value)} aria-label={`Search ${kind}s`} />
+      <ImportBar kind={kind} imp={imp} onRefresh={rescan} />
       {!items ? (
         <p className="small-note muted" role="status">
           <span className="spinner" aria-hidden="true" /> Reading the game's folders…
         </p>
       ) : !shown.length ? (
-        <p className="small-note muted">Nothing matches.</p>
+        <EmptyImport kind={kind} imp={imp} what={kind} />
       ) : (
         <ul role="listbox" aria-label={`${kind}s`}>
           {shown.map((a) => (
@@ -157,6 +166,8 @@ function Chooser({ kind, value, onPick }: { kind: AssetKind; value: string; onPi
           ))}
         </ul>
       )}
+      <ProjectFilesGroup kind={kind} q={q} imp={imp} />
+      </ImportZone>
     </div>
   );
 }

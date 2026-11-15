@@ -1508,3 +1508,11 @@ Small, marked hunks; please keep them when you touch these files.
   event (Talked To NPC's player and NPC, a macro input wired from them) are still right when a reply runs
   later. Outputs of other action nodes (g_lsgO / g_lsgOut, e.g. a Spawn NPC's NPC) are globals: the latest
   value, not per player. For per-player state across replies, use player-scope variables.
+
+## Requests from T1fix (parent): asset pickers (2026-11-14)
+- Studio's `path` params that name a model, sprite or sound (by the default's extension: .mdl, .spr, .wav; e.g.
+  Objective Marker's sprite, Spawn NPC's model, Play Sound's sound) now render `common/AssetField.tsx` instead of the
+  plain TextField: the same text input (PATH_CHARS, 64 max) plus Choose… (the game's files), Import…, drop a file
+  on it, "From your map projects" (copied into the game when picked), refresh and a rescan on focus. One marked hunk
+  in `Inspector.tsx` (the `p.kind === "path"` line) and one import line. Values are unchanged (sounds relative to
+  sound/). Nothing in the graph format changed.

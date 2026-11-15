@@ -3,8 +3,9 @@
 // searchable list, fallbacks shown as a quieter second line).
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { matches, searchWords } from "../common/search";
+import { CreditLine, EmptyImport, ImportBar, ImportZone, ProjectFilesGroup, useAssetImport, useFocusRefresh, type AssetCredit } from "../common/AssetImport";
 import { listModels, listSounds, soundUrl, type Checked, type ModelItem, type SoundReport } from "./creaturesApi";
 import { KIND_WORDS, SOUND_WORDS } from "./words";
 
@@ -63,16 +64,32 @@ export function ModelPicker({ value, onChange, report }: { value: string; onChan
     setQ("");
   };
   const setStandIn = (on: boolean) => onChange((on ? [first, ...parts.slice(1).filter((p) => p !== STAND_IN), STAND_IN] : parts.filter((p, i) => i === 0 || p !== STAND_IN)).join(" "));
+  // Import…, a file dropped here, or one from a map project: in the game, then picked
+  const [credit, setCredit] = useState<AssetCredit | undefined>(undefined);
+  const rescan = useCallback(() => void models.refetch(), [models]);
+  useFocusRefresh(rescan);
+  const imp = useAssetImport(
+    "model",
+    (path, cr) => {
+      onChange([path, ...parts.slice(1).filter((p) => p !== path)].join(" "));
+      setCredit(cr ?? undefined);
+      setOpen(false);
+      setQ("");
+    },
+    rescan,
+  );
   const c = report?.candidates?.[0];
   return (
-    <div className="cs-model">
+    <div className="cs-model" {...imp.dropProps}>
       <div className="cs-pop-anchor">
         <button type="button" className="btn cs-model-btn" aria-expanded={open} onClick={() => setOpen(!open)} title="Pick another model">
           <code>{first.replace(/^models\//, "") || "No model"}</code>
           <span aria-hidden="true">▾</span>
         </button>
         <Popover open={open} onClose={() => setOpen(false)} label="Pick a model">
+          <ImportZone imp={imp}>
           <input className="search" type="search" autoFocus placeholder="Search models: zombie, garg, player/gign…" value={q} aria-label="Search models" onChange={(e) => setQ(e.target.value)} />
+          <ImportBar kind="model" imp={imp} onRefresh={rescan} refreshing={models.isFetching} />
           {models.isPending && <p className="muted"><span className="spinner" aria-hidden="true" /> Finding models…</p>}
           <ul className="cs-pop-list">
             {shown.map((m) => (
@@ -83,8 +100,10 @@ export function ModelPicker({ value, onChange, report }: { value: string; onChan
                 </button>
               </li>
             ))}
-            {models.data && shown.length === 0 && <li className="muted cs-none">No model matches.</li>}
           </ul>
+          {models.data && shown.length === 0 && <EmptyImport kind="model" imp={imp} what="model" />}
+          <ProjectFilesGroup kind="model" q={q} imp={imp} />
+          </ImportZone>
         </Popover>
       </div>
       {c && (
@@ -93,6 +112,7 @@ export function ModelPicker({ value, onChange, report }: { value: string; onChan
           {report?.standIn && ` Your game doesn't have it, so ${report.candidates[report.picked ?? 0]?.path} stands in.`}
         </p>
       )}
+      <CreditLine credit={credit} />
       <label className="tl-check cs-check">
         <input type="checkbox" checked={standIn} disabled={!first || first === STAND_IN} onChange={(e) => setStandIn(e.target.checked)} />
         Stand-in where it's missing (the hostage, tinted)
@@ -117,6 +137,10 @@ function SoundRow({ i, value, onChange, report }: { i: number; value: string; on
   const add = (f: string) => {
     if (!groups[0].includes(f)) onChange(join([[...groups[0], f], ...groups.slice(1)]));
   };
+  const rescan = useCallback(() => void sounds.refetch(), [sounds]);
+  useFocusRefresh(rescan);
+  // (sounds are named from inside sound/, as the game reads them)
+  const imp = useAssetImport("sound", (path) => (add(path.replace(/^sound\//i, "")), setQ("")), rescan);
   const chip = (f: string, gi: number, fi: number) => {
     const found = report?.groups[gi]?.files.find((x) => x.file === f)?.found;
     return (
@@ -139,7 +163,7 @@ function SoundRow({ i, value, onChange, report }: { i: number; value: string; on
         <span className="cs-label-note">{w.help}</span>
       </div>
       <div className="cs-ctl" role="cell">
-        <div className="cs-chips">
+        <div className="cs-chips" {...imp.dropProps}>
           {groups[0].map((f, fi) => chip(f, 0, fi))}
           {groups[0].length === 0 && <span className="muted cs-silent">Silent</span>}
           <span className="cs-pop-anchor">
@@ -147,7 +171,9 @@ function SoundRow({ i, value, onChange, report }: { i: number; value: string; on
               + Add
             </button>
             <Popover open={open} onClose={() => setOpen(false)} label={`Add a ${w.label.toLowerCase()} sound`}>
+              <ImportZone imp={imp}>
               <input className="search" type="search" autoFocus placeholder="Search sounds: zombie, garg, pain…" value={q} aria-label="Search sounds" onChange={(e) => setQ(e.target.value)} />
+              <ImportBar kind="sound" imp={imp} onRefresh={rescan} refreshing={sounds.isFetching} />
               {sounds.isPending && <p className="muted"><span className="spinner" aria-hidden="true" /> Finding sounds…</p>}
               <ul className="cs-pop-list">
                 {hits.map((s) => (
@@ -161,8 +187,10 @@ function SoundRow({ i, value, onChange, report }: { i: number; value: string; on
                     </button>
                   </li>
                 ))}
-                {sounds.data && hits.length === 0 && <li className="muted cs-none">No sound matches.</li>}
               </ul>
+              {sounds.data && hits.length === 0 && <EmptyImport kind="sound" imp={imp} what="sound" />}
+              <ProjectFilesGroup kind="sound" q={q} imp={imp} />
+              </ImportZone>
             </Popover>
           </span>
         </div>
