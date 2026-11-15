@@ -669,17 +669,47 @@ stock lsg_skip_log(const cap[], const what[], const fmt[], any:...)
 // dropping and throwing). O(1) a call: a flood asks thousands of times a second (W2, P5's final check)
 #define LSG_EDICT_RESERVE 128
 stock Float:g_lsgEdAt = -1.0, g_lsgEdLive, g_lsgEdMade, g_lsgEdWin, g_lsgEdFreed, g_lsgEdFreedBefore, bool:g_lsgEdHooked
+// (what the mode has out that players see: lsg_vis_note, below)
+#define LSG_VISIBLE_MOST 128
+stock bool:g_lsgVis[2048], g_lsgVisN
 
 public lsg_ed_freed(ent)
 {
 	lsg_ed_window()
 	g_lsgEdFreed++
+	if (ent > 0 && ent < sizeof g_lsgVis && g_lsgVis[ent])
+	{
+		g_lsgVis[ent] = false
+		g_lsgVisN--
+	}
+}
+
+// What players' games are sent: an entity with a model, not EF_NODRAW (ReGameDLL's AddToFullPack).
+// Old clients take 256 entities in a packet, players and the map's own included, and a final-check
+// player had 247 datagram overflows with hundreds of the mode's props and projectiles in sight. So
+// the mode keeps at most LSG_VISIBLE_MOST visible things of its own out at once (trigger volumes and
+// loop sounds are never sent, so they don't count). Counted as made (lsg_vis_note on what a spawn
+// returns) and freed (the free hook): O(1). W2
+stock lsg_vis_note(e)
+{
+	if (e > 0 && e < sizeof g_lsgVis && !g_lsgVis[e] && pev(e, pev_modelindex) && !(pev(e, pev_effects) & EF_NODRAW))
+	{
+		g_lsgVis[e] = true
+		g_lsgVisN++
+	}
+	return e
 }
 
 // (frees counted in half-second windows: this one and the one before)
 stock lsg_ed_window()
 {
 	new w = floatround(get_gametime() * 2.0, floatround_floor)
+	// (a new map: its clock starts again, and the last map's things are gone)
+	if (w < g_lsgEdWin)
+	{
+		arrayset(g_lsgVis, false, sizeof g_lsgVis)
+		g_lsgVisN = 0
+	}
 	if (w != g_lsgEdWin)
 	{
 		g_lsgEdFreedBefore = w == g_lsgEdWin + 1 ? g_lsgEdFreed : 0
@@ -701,7 +731,7 @@ stock bool:lsg_set_view(id, mode)
 	return true
 }
 
-stock bool:lsg_ent_room(const what[])
+stock bool:lsg_ent_room(const what[], bool:visible = true)
 {
 	if (!g_lsgEdHooked)
 	{
@@ -716,6 +746,8 @@ stock bool:lsg_ent_room(const what[])
 		g_lsgEdMade = 0
 	}
 	lsg_ed_window()
+	if (lsg_vis_full(what, visible))
+		return false
 	new most = global_get(glb_maxEntities)
 	if (g_lsgEdLive + g_lsgEdMade + g_lsgEdFreed + g_lsgEdFreedBefore < most - max(LSG_EDICT_RESERVE, most / 8))
 	{
@@ -724,6 +756,15 @@ stock bool:lsg_ent_room(const what[])
 	}
 	lsg_skip_log("slots", what, "%s skipped: the server is out of entity slots", what)
 	return false
+}
+
+// (a spawn that players see, when the mode already has LSG_VISIBLE_MOST of them out: lsg_ent_room)
+stock bool:lsg_vis_full(const what[], bool:visible)
+{
+	if (!visible || g_lsgVisN < LSG_VISIBLE_MOST)
+		return false
+	lsg_skip_log("visible", what, "%s skipped: the mode has %d things players see out (their games are sent at most 256 at once)", what, g_lsgVisN)
+	return true
 }
 
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
@@ -1864,7 +1905,7 @@ stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:s
 		o = at
 	o[2] += h
 	engfunc(EngFunc_SetOrigin, e, o)
-	g_lsgMk[slot] = e
+	g_lsgMk[slot] = lsg_vis_note(e)
 	g_lsgMkF[slot] = follow
 	g_lsgMkH[slot] = h
 	g_lsgMkWho[e] = who
@@ -4945,7 +4986,7 @@ stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:eve
 		lsg_vto(pos, o)
 	else if (!lsg_ent_origin(on, o))
 		return 0
-	if (!lsg_ent_room("Loop Sound"))
+	if (!lsg_ent_room("Loop Sound", false))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)
@@ -6117,7 +6158,7 @@ lsg_n12(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1 blocked=here")))
+	else if (!(e = lsg_vis_note(ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1 blocked=here"))))
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[12] = e
@@ -6145,7 +6186,7 @@ lsg_n13(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, 0, 3, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0 blocked=here")))
+	else if (!(e = lsg_vis_note(ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0 blocked=here"))))
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[13] = e
@@ -6181,7 +6222,7 @@ lsg_n14(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, -1, 0, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK)))
+	else if (!(e = lsg_vis_note(ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK))))
 		lsgWhy = 6
 	if (e)
 	{
@@ -6558,7 +6599,7 @@ lsg_n60(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[60] = e

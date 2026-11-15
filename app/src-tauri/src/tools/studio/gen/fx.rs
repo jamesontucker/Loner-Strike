@@ -380,7 +380,7 @@ pub(super) fn spawn_flow(
     let place = if mode == 4 { format!("(lsgRe ? lsg_xr_get({i}, o) : lsg_xr_put({i}, ({place}) ? 1 : 0, o))") } else { place.to_string() };
     chain.push_str(&format!("\t{}if (!({place}))\n\t\tlsgWhy = {WHY_BAD}\n", if pre.is_empty() { "" } else { "else " }));
     chain.push_str(&format!("\telse if (!lsg_xf_free(o, {size}, {mode}, {maxd}, lsgMv))\n\t\tlsgWhy = {WHY_BLOCKED}\n"));
-    chain.push_str(&format!("\telse if (!(e = {create}))\n\t\tlsgWhy = {}", create_why.0));
+    chain.push_str(&format!("\telse if (!(e = lsg_vis_note({create})))\n\t\tlsgWhy = {}", create_why.0));
     b.line(chain);
     if let Some(l) = apply {
         b.line(l);
@@ -1157,7 +1157,7 @@ stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:eve
 		lsg_vto(pos, o)
 	else if (!lsg_ent_origin(on, o))
 		return 0
-	if (!lsg_ent_room("Loop Sound"))
+	if (!lsg_ent_room("Loop Sound", false))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)

@@ -228,7 +228,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 		g_lsgVolWhy = 3
 		return 0
 	}
-	if (!lsg_ent_room("Spawn Trigger Volume"))
+	if (!lsg_ent_room("Spawn Trigger Volume", false))
 	{
 		g_lsgVolWhy = 2
 		return 0
@@ -672,7 +672,7 @@ mod tests {
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
                 "if (lsg_vol_live(vol) && lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
                 "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
-                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32, ", "g_lsgVolWhy = 3",
+                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\", false)", ", 32, 32, ", "g_lsgVolWhy = 3",
             ] {
                 assert!(src.contains(want), "{want} (debug {debug})");
             }
@@ -803,7 +803,26 @@ mod tests {
         }
         assert!(h.contains("#define LSG_EDICT_RESERVE 128") && h.contains("public lsg_ed_freed(ent)"));
         // every Studio spawn path checks it (the nodes' pre-checks and the helpers that make entities)
-        assert!(super::PAWN.contains("lsg_ent_room(\"Spawn Trigger Volume\")"));
+        assert!(super::PAWN.contains("lsg_ent_room(\"Spawn Trigger Volume\", false)"));
+    }
+
+    /// The final check with a person in the game: 247 datagram overflows from the mode's visible
+    /// things (props, projectiles, markers). Spawns players see are counted (lsg_vis_note on what
+    /// a spawn returns, down again in the free hook) and held to LSG_VISIBLE_MOST; things never
+    /// sent (trigger volumes, loop sounds) don't count. Still O(1).
+    #[test]
+    fn visible_spawns_are_counted_and_capped() {
+        let h = super::super::HELPERS;
+        for want in ["#define LSG_VISIBLE_MOST 128", "stock lsg_vis_note(e)", "pev(e, pev_modelindex) && !(pev(e, pev_effects) & EF_NODRAW)", "g_lsgVisN--",
+                     "stock bool:lsg_ent_room(const what[], bool:visible = true)", "if (lsg_vis_full(what, visible))"] {
+            assert!(h.contains(want), "missing {want}");
+        }
+        assert!(include_str!("gen.rs").contains("g_lsgMk[slot] = lsg_vis_note(e)"), "markers are counted");
+        let fx = include_str!("gen/fx.rs");
+        assert!(fx.contains("e = lsg_vis_note({create})"), "every spawn node's thing is counted");
+        assert!(fx.contains("lsg_ent_room(\"Loop Sound\", false)") && super::PAWN.contains("lsg_ent_room(\"Spawn Trigger Volume\", false)"), "never-sent things aren't held back");
+        let at = h.find("stock lsg_vis_note(e)").unwrap();
+        assert!(!h[at..at + h[at..].find("\n}").unwrap()].contains("for ("), "no loop");
     }
 
     /// Every limit's setting label fits a setting label (30): a longer one failed every mode using it.

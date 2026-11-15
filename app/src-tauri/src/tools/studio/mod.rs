@@ -1596,7 +1596,7 @@ mod tests {
         let base = ui_nodes_mode();
         let src = gen::generate(&base, false).source;
         assert!(src.contains(", 32)\n") || src.contains(", 32)"), "no setting: the default");
-        assert!(src.contains("stock bool:lsg_ent_room(const what[])") && src.contains("lsg_ent_room(\"Objective Marker\")"));
+        assert!(src.contains("stock bool:lsg_ent_room(const what[]") && src.contains("lsg_ent_room(\"Objective Marker\")"));
         let mut g = base.clone();
         let l = limits::get("markers").unwrap();
         let mut v: graph::Variable = serde_json::from_value(limits::var_json(l)).unwrap();
