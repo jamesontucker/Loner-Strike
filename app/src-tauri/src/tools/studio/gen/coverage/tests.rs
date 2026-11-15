@@ -44,8 +44,8 @@ fn coverage_nodes_generate() {
     assert!(src.contains("client_print_color(") && src.contains("\"^4[EC]^1 ^3%s\"") && src.contains("lsg_ec_sender("), "chat");
     assert!(src.contains("\"^4%s\", lsgM)") || src.contains("print_team_default, \"^4%s\""), "green");
     assert!(src.contains("lsg_ec_clean(lsgM)"));
-    // the per-frame message limit is there
-    assert!(src.contains("#define LSG_EC_MSGS 24") && src.contains("lsg_ec_msg_ok()"));
+    // the shared per-frame message budget
+    assert!(src.contains("lsg_msg_room(\"Big HUD Text\", 1, ") && src.contains("lsg_msg_room(\"Colored Chat\", 1, ") && src.contains("lsg_msg_room(\"Play Radio\", 2, "));
     // movement state, zones, map type
     assert!(src.contains("lsg_ec_mv(") && src.contains("lsg_ec_mvf(") && src.contains("lsg_ec_inzone(") && src.contains(", 2)") && src.contains("lsg_ec_mtype()"));
     // push, jumps
@@ -55,10 +55,10 @@ fn coverage_nodes_generate() {
     assert!(src.contains("register_forward(FM_SetModel, \"lsg_ec_setmodel\", 1)") && src.contains("RegisterHam(Ham_Think, \"grenade\", \"lsg_ec_gthink\", 0)") && src.contains("if (t == 1)"));
     assert!(src.contains("lsg_ec_fuse("));
     // animation, attach
-    assert!(src.contains("lsg_ec_anim(") && src.contains("\"idle\", -1, 1.0, true, true, 1.5)") && src.contains("register_forward(FM_StartFrame, \"lsg_ec_frame\", 0)"));
-    assert!(src.contains("lsg_ec_attach(") && src.contains(", 0, false)") && src.contains("lsg_ec_detach("));
+    assert!(src.contains("lsg_ec_anim(") && src.contains("\"idle\", -1, 1.0, true, true, 1.5, 64)") && src.contains("register_forward(FM_StartFrame, \"lsg_ec_frame\", 0)"));
+    assert!(src.contains("lsg_ec_attach(") && src.contains(", 0, false, 64)") && src.contains("lsg_ec_detach("));
     // map entity fired: any name, and door1 only
-    assert!(src.contains("lsg_ec_hook_use()") && src.contains("RegisterHamFromEntity(Ham_Use, e, \"lsg_ec_used\", 1)") && src.contains("if (equal(tn, \"door1\"))"));
+    assert!(src.contains("lsg_ec_hook_use(96)") && src.contains("RegisterHamFromEntity(Ham_Use, e, \"lsg_ec_used\", 1)") && src.contains("if (equal(tn, \"door1\"))"));
     // weapon switched: every weapon's deploy
     assert!(src.contains("RegisterHam(Ham_Item_Deploy, \"weapon_ak47\", \"lsg_ec_deploy\", 1)") && src.contains("lsg_ec_wname(was)"));
     // objectives (bomb, hostages, rescue, VIP, escape = 62), voice, radio, info window
@@ -124,7 +124,7 @@ fn coverage_problems() {
     assert!(!has(&mk("ent.prop_set", serde_json::json!({"field": "renderfx", "pick": "fx_glowshell"})), "error", "own values"));
     assert!(has(&mk("player.push", serde_json::json!({"along": "dir"})), "error", "Direction"));
     assert!(has(&mk("npc.move_to", serde_json::json!({})), "error", "To entity"));
-    assert!(has(&mk("npc.follow_path", serde_json::json!({})), "error", "path_track"));
+    assert!(has(&mk("npc.follow_path", serde_json::json!({"track": ""})), "error", "path_track"));
     assert!(has(&mk("msg.info_window", serde_json::json!({"text": "see www.example.com"})), "warning", "plain text"));
     assert!(has(&mk("player.jump_rules", serde_json::json!({"nojump": true, "air": 2})), "warning", "never start"));
     assert!(has(&mk("game.remove_objectives", serde_json::json!({"buy": true})), "warning", "nobody can buy"));
@@ -156,4 +156,15 @@ fn coverage_compiles_with_amxxpc() {
         assert!(diags.is_empty(), "{file} has warnings:\n{output}");
     }
     let _ = std::fs::remove_dir_all(&work);
+}
+
+/// For a sim run: EC_GRAPH (a graph file) to EC_OUT (the plugin source). Ignored in the suite.
+#[test]
+#[ignore]
+fn ec_write_plugin() {
+    let (Ok(src), Ok(out)) = (std::env::var("EC_GRAPH"), std::env::var("EC_OUT")) else { return };
+    let g = parse(&std::fs::read_to_string(src).unwrap()).unwrap();
+    let errs: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level == "error").collect();
+    assert!(errs.is_empty(), "{errs:#?}");
+    std::fs::write(out, generate(&g, false).source).unwrap();
 }

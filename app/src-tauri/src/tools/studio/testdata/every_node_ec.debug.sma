@@ -2982,12 +2982,12 @@ lsd_graph_set(const vid[], who, const val[])
 }
 
 // ---- engine coverage nodes (EC): only stocks here; the hooks are written for the nodes used ----
-// comfort limits: plain defaults (a call past one is skipped; the debugger says so)
-#define LSG_EC_ATTACH 64
-#define LSG_EC_LOOPS 64
-#define LSG_EC_CLASSES 96
-// an engine limit: big HUD texts and colored chat lines sent in one server frame
-#define LSG_EC_MSGS 24
+// comfort limits are mode settings (limits.rs: ec_attach, ec_anim_loops, ec_map_hooks), passed in as
+// lim; these are what the arrays hold (a call past the limit is skipped; the debugger says so)
+#define LSG_EC_ATTACH 256
+#define LSG_EC_LOOPS 256
+#define LSG_EC_CLASSES 256
+// (big HUD texts, colored chat and radio lines go through the shared per-frame budget, lsg_msg_room)
 stock const g_lsgEcGren[][] = { "", "HE grenade", "Flashbang", "Smoke grenade" }
 stock g_lsgEcGType[2048], bool:g_lsgEcGBoom[2048], g_lsgEcGOwner[2048]
 stock g_lsgEcLastW[33], g_lsgEcLastE[33], g_lsgEcZone[33], bool:g_lsgEcZoneTurn
@@ -2996,28 +2996,8 @@ stock g_lsgEcJrAll, g_lsgEcAirAll, Float:g_lsgEcPowAll = 268.0
 stock g_lsgEcVoice = -1, Float:g_lsgEcVoiceDist, g_lsgEcVoiceOv[33]
 stock g_lsgEcAtt[LSG_EC_ATTACH], g_lsgEcAttTo[LSG_EC_ATTACH], g_lsgEcAttPt[LSG_EC_ATTACH], bool:g_lsgEcAttDie[LSG_EC_ATTACH], g_lsgEcAttSolid[LSG_EC_ATTACH], Float:g_lsgEcAttOff[LSG_EC_ATTACH][3]
 stock g_lsgEcLoop[LSG_EC_LOOPS], g_lsgEcLoopSeq[LSG_EC_LOOPS], Float:g_lsgEcLoopLen[LSG_EC_LOOPS], Float:g_lsgEcLoopAt[LSG_EC_LOOPS]
-stock Float:g_lsgEcMsgAt, g_lsgEcMsgN, bool:g_lsgEcMsgSaid
 stock g_lsgEcUseLast, Float:g_lsgEcUseAt, g_lsgEcUseCaller
 stock bool:g_lsgEcNoObj
-
-// an engine limit: so many messages in one frame and the rest are skipped (said once in the log)
-stock bool:lsg_ec_msg_ok()
-{
-	new Float:now = get_gametime()
-	if (now != g_lsgEcMsgAt)
-	{
-		g_lsgEcMsgAt = now
-		g_lsgEcMsgN = 0
-	}
-	if (++g_lsgEcMsgN <= LSG_EC_MSGS)
-		return true
-	if (!g_lsgEcMsgSaid)
-	{
-		g_lsgEcMsgSaid = true
-		log_amx("Studio: more than %d big HUD texts or colored chat lines in one frame; the rest were skipped", LSG_EC_MSGS)
-	}
-	return false
-}
 
 // Deal Damage: through the game's own TakeDamage (kills, the kill feed and scores count)
 stock lsg_ec_damage(t, a, Float:dmg, bits, zone, bool:noarmor)
@@ -3366,7 +3346,7 @@ stock lsg_ec_fuse(e, Float:secs)
 }
 
 // Play Animation (looping one-time sequences are played again from the tick)
-stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Float:len)
+stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Float:len, lim)
 {
 	if (e <= MaxClients || !pev_valid(e))
 		return 0
@@ -3397,9 +3377,21 @@ stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Flo
 			g_lsgEcLoop[k] = 0
 		return 1
 	}
-	for (new i = 0; i < LSG_EC_LOOPS && k < 0; i++)
-		if (!g_lsgEcLoop[i] || !pev_valid(g_lsgEcLoop[i]))
-			k = i
+	if (k < 0)
+	{
+		new used = 0
+		for (new i = 0; i < LSG_EC_LOOPS; i++)
+		{
+			if (g_lsgEcLoop[i] && !pev_valid(g_lsgEcLoop[i]))
+				g_lsgEcLoop[i] = 0
+			if (g_lsgEcLoop[i])
+				used++
+			else if (k < 0)
+				k = i
+		}
+		if (used >= lim)
+			return 0
+	}
 	if (k < 0)
 		return 0
 	g_lsgEcLoop[k] = e
@@ -3432,7 +3424,7 @@ stock lsg_ec_anim_tick()
 }
 
 // Attach To: moved with its parent every server frame (its own velocity too, so it's smooth)
-stock lsg_ec_attach(e, to, ov, pt, bool:ondeath)
+stock lsg_ec_attach(e, to, ov, pt, bool:ondeath, lim)
 {
 	if (e <= MaxClients || !pev_valid(e) || to <= 0 || !pev_valid(to) || e == to)
 		return 0
@@ -3444,9 +3436,19 @@ stock lsg_ec_attach(e, to, ov, pt, bool:ondeath)
 	for (new i = 0; i < LSG_EC_ATTACH; i++)
 		if (g_lsgEcAtt[i] == to && g_lsgEcAttTo[i] == e)
 			return 0
-	for (new i = 0; i < LSG_EC_ATTACH && k < 0; i++)
-		if (!g_lsgEcAtt[i])
-			k = i
+	if (k < 0)
+	{
+		new used = 0
+		for (new i = 0; i < LSG_EC_ATTACH; i++)
+		{
+			if (g_lsgEcAtt[i])
+				used++
+			else if (k < 0)
+				k = i
+		}
+		if (used >= lim)
+			return 0
+	}
 	if (k < 0)
 		return 0
 	if (g_lsgEcAtt[k] != e)
@@ -3526,11 +3528,12 @@ public lsg_ec_frame()
 
 // On Map Entity Fired: Use hooked on one entity of each kind (by its code, so twice never)
 // that has a name when the map starts
-stock lsg_ec_hook_use()
+stock lsg_ec_hook_use(lim)
 {
 	new seen[LSG_EC_CLASSES], n = 0, tn[2]
 	new top = global_get(glb_maxEntities)
-	for (new e = MaxClients + 1; e < top && n < LSG_EC_CLASSES; e++)
+	lim = clamp(lim, 1, LSG_EC_CLASSES)
+	for (new e = MaxClients + 1; e < top && n < lim; e++)
 	{
 		if (pev_valid(e) != 2)
 			continue
@@ -3545,8 +3548,8 @@ stock lsg_ec_hook_use()
 		seen[n++] = vt
 		RegisterHamFromEntity(Ham_Use, e, "lsg_ec_used", 1)
 	}
-	if (n >= LSG_EC_CLASSES)
-		log_amx("Studio: On Map Entity Fired hooks %d kinds of entity (Limits); others on this map aren't heard", LSG_EC_CLASSES)
+	if (n >= lim)
+		log_amx("Studio: On Map Entity Fired hooks %d kinds of entity (Limits: Map entity kinds heard); others on this map aren't heard", lim)
 }
 
 // the same entity fired twice in one go (a class hooked through a parent) counts once
@@ -3875,8 +3878,9 @@ public lsg_ec_left(id)
 }
 
 // ---- NPC moves (EC): gm_components walks them (ls_npc_move); Arrived / Failed come back here
-// with the flow's own values. A comfort limit: moves waiting for an answer at once.
-#define LSG_EC_NPCS 32
+// with the flow's own values. A comfort limit (limits.rs ec_npc_moves, passed in as lim): moves waiting
+// for an answer at once; the array holds this many
+#define LSG_EC_NPCS 64
 stock g_lsgEcNpcEnt[LSG_EC_NPCS], g_lsgEcNpcNode[LSG_EC_NPCS], g_lsgEcNpcCtx[LSG_EC_NPCS][LSG_CTX]
 
 stock lsg_ec_npc_find(npc)
@@ -3889,15 +3893,21 @@ stock lsg_ec_npc_find(npc)
 	return -1
 }
 
-stock lsg_ec_npc_keep(npc, node, const ctx[])
+stock lsg_ec_npc_keep(npc, node, const ctx[], lim)
 {
-	new s = lsg_ec_npc_find(npc)
-	for (new k = 0; k < LSG_EC_NPCS && s < 0; k++)
-		if (!g_lsgEcNpcEnt[k] || !pev_valid(g_lsgEcNpcEnt[k]))
-			s = k
-	if (s < 0)
+	new s = lsg_ec_npc_find(npc), used = 0
+	for (new k = 0; k < LSG_EC_NPCS; k++)
 	{
-		log_amx("Studio: more than %d NPC moves at once (Limits); this one's Arrived won't run", LSG_EC_NPCS)
+		if (g_lsgEcNpcEnt[k] && !pev_valid(g_lsgEcNpcEnt[k]))
+			g_lsgEcNpcEnt[k] = 0
+		if (g_lsgEcNpcEnt[k])
+			used++
+		else if (s < 0)
+			s = k
+	}
+	if (s < 0 || (used >= lim && lsg_ec_npc_find(npc) < 0))
+	{
+		log_amx("Studio: more than %d NPC moves at once (Limits: NPC moves at once); this one's Arrived won't run", lim)
 		return
 	}
 	g_lsgEcNpcEnt[s] = npc
@@ -4067,7 +4077,7 @@ public plugin_init()
 	register_event("HLTV", "lsg_ec_round", "a", "1=0", "2=0")
 	register_forward(FM_SetModel, "lsg_ec_setmodel", 1)
 	RegisterHam(Ham_Think, "grenade", "lsg_ec_gthink", 0)
-	lsg_ec_hook_use()
+	lsg_ec_hook_use(96)
 	RegisterHam(Ham_Item_Deploy, "weapon_knife", "lsg_ec_deploy", 1)
 	RegisterHam(Ham_Item_Deploy, "weapon_glock18", "lsg_ec_deploy", 1)
 	RegisterHam(Ham_Item_Deploy, "weapon_usp", "lsg_ec_deploy", 1)
@@ -4393,7 +4403,7 @@ lsg_n4(ctx[])
 	}
 	if (lsd_enter(4, ctx))
 		return
-	if (lsg_ec_msg_ok())
+	if (lsg_msg_room("Big HUD Text", 1, lsi0, 48))
 	{
 		set_dhudmessage(255, 80, 40, -1.0, 0.3, 2, 0.5, 3.0, 0.05, 0.5)
 		show_dhudmessage(lsi0, "%s %s", "Go!", lsg_ntext(lsi1))
@@ -4415,7 +4425,7 @@ lsg_n5(ctx[])
 	}
 	if (lsd_enter(5, ctx))
 		return
-	if (lsg_ec_msg_ok())
+	if (lsg_msg_room("Colored Chat", 1, lsi0, 48))
 	{
 		new lsgM[190]
 		formatex(lsgM, charsmax(lsgM), "%s", "Hi")
@@ -4438,7 +4448,7 @@ lsg_n6(ctx[])
 	}
 	if (lsd_enter(6, ctx))
 		return
-	if (lsg_ec_msg_ok())
+	if (lsg_msg_room("Colored Chat", 1, 0, 48))
 	{
 		new lsgM[190]
 		formatex(lsgM, charsmax(lsgM), "%s %s", "Green 100%", lsi1)
@@ -4512,7 +4522,8 @@ lsg_n10(ctx[])
 	}
 	if (lsd_enter(10, ctx))
 		return
-	lsg_ec_radio(lsi0, 0, lsi1, "%!MRAD_GO", "#Go_go_go", false)
+	if (lsg_msg_room("Play Radio", 2, lsi0, 48))
+		lsg_ec_radio(lsi0, 0, lsi1, "%!MRAD_GO", "#Go_go_go", false)
 	lsd_exit(10, "played")
 	lsg_n11(ctx)
 }
@@ -4526,7 +4537,8 @@ lsg_n11(ctx[])
 	}
 	if (lsd_enter(11, ctx))
 		return
-	lsg_ec_radio(0, 1, 0, "%!MRAD_terwin", "#Terrorists_Win", true)
+	if (lsg_msg_room("Play Radio", 2, 0, 48))
+		lsg_ec_radio(0, 1, 0, "%!MRAD_terwin", "#Terrorists_Win", true)
 	lsd_exit(11, "played")
 	lsg_n12(ctx)
 }
@@ -4931,7 +4943,7 @@ lsg_n32(ctx[])
 		return
 	new lsgNpc = lsi0
 	if (lsg_ec_npc_to(lsi0, 0, lsi2, 220.0, 6))
-		lsg_ec_npc_keep(lsgNpc, 0, ctx)
+		lsg_ec_npc_keep(lsgNpc, 0, ctx, 32)
 	else
 	{
 		lsd_error(32, "Not moving: not an NPC (or dead), gm_components isn't running, or no points.")
@@ -4993,8 +5005,8 @@ lsg_n35(ctx[])
 	if (lsd_enter(35, ctx))
 		return
 	new lsgNpc = lsi0
-	if (lsg_ec_npc_path(lsi0, lsi1, "", 90.0, 0))
-		lsg_ec_npc_keep(lsgNpc, 1, ctx)
+	if (lsg_ec_npc_path(lsi0, lsi1, "path1", 90.0, 0))
+		lsg_ec_npc_keep(lsgNpc, 1, ctx, 32)
 	else
 	{
 		lsd_error(35, "Not moving: not an NPC (or dead), gm_components isn't running, or no points.")
@@ -5050,7 +5062,7 @@ lsg_n38(ctx[])
 		return
 	new lsgNpc = lsi0
 	if (lsg_ec_npc_path(lsi0, -1, "path1", 90.0, 1))
-		lsg_ec_npc_keep(lsgNpc, 2, ctx)
+		lsg_ec_npc_keep(lsgNpc, 2, ctx, 32)
 	else
 	{
 		lsd_error(38, "Not moving: not an NPC (or dead), gm_components isn't running, or no points.")
@@ -5104,7 +5116,7 @@ lsg_n41(ctx[])
 	}
 	if (lsd_enter(41, ctx))
 		return
-	if (!lsg_ec_anim(lsi0, "idle", -1, 1.0, true, true, 1.5))
+	if (!lsg_ec_anim(lsi0, "idle", -1, 1.0, true, true, 1.5, 64))
 		lsd_error(41, "Not played: not a model entity (players are animated by the game), no sequence by that name, or too many looping already (Limits).")
 	else
 		lsd_exit(41, "playing")
@@ -5126,7 +5138,7 @@ lsg_n42(ctx[])
 	}
 	if (lsd_enter(42, ctx))
 		return
-	if (!lsg_ec_attach(lsi0, lsi1, lsi2, -1, true))
+	if (!lsg_ec_attach(lsi0, lsi1, lsi2, -1, true, 64))
 		lsd_error(42, "Not attached: a player can't be attached, the parent isn't there, it's itself, or too many are attached already (Limits).")
 	else
 		lsd_exit(42, "attached")
@@ -5146,7 +5158,7 @@ lsg_n43(ctx[])
 	}
 	if (lsd_enter(43, ctx))
 		return
-	if (!lsg_ec_attach(lsi0, lsi1, -1, 0, false))
+	if (!lsg_ec_attach(lsi0, lsi1, -1, 0, false, 64))
 		lsd_error(43, "Not attached: a player can't be attached, the parent isn't there, it's itself, or too many are attached already (Limits).")
 	else
 		lsd_exit(43, "attached")
@@ -5599,7 +5611,7 @@ lsg_n68(ctx[])
 	}
 	if (lsd_enter(68, ctx))
 		return
-	if (lsg_ec_msg_ok())
+	if (lsg_msg_room("Colored Chat", 1, lsi0, 48))
 	{
 		new lsgM[190]
 		formatex(lsgM, charsmax(lsgM), "%s", "Buy zone")
@@ -5633,7 +5645,7 @@ lsg_n70(ctx[])
 	}
 	if (lsd_enter(70, ctx))
 		return
-	if (lsg_ec_msg_ok())
+	if (lsg_msg_room("Big HUD Text", 1, lsi0, 48))
 	{
 		set_dhudmessage(255, 255, 255, 0.1, 0.8, 1, 1.0, 3.0, 0.1, 0.5)
 		show_dhudmessage(lsi0, "%s", "Left the site")

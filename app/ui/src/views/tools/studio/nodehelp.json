@@ -47659,7 +47659,7 @@
 {
 "id":"pos",
 "dir":"in",
-"help":"Or point: a position or direction (X, Y, Z). Optional."
+"help":"Or point: a position or direction (X, Y, Z)."
 },
 {
 "id":"then",
@@ -47728,6 +47728,19 @@
 "by":"class",
 "name":"info_player_deathmatch"
 }
+},
+{
+"id":"vec",
+"type":"vec.make",
+"pos":{
+"x":0,
+"y":280
+},
+"params":{
+"x":0,
+"y":0,
+"z":64
+}
 }
 ],
 "edges":[
@@ -47745,6 +47758,17 @@
 {
 "id":"w2",
 "from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"pos"
+}
+},
+{
+"id":"w3",
+"from":{
 "node":"ev",
 "pin":"then"
 },
@@ -47754,7 +47778,7 @@
 }
 },
 {
-"id":"w3",
+"id":"w4",
 "from":{
 "node":"ent",
 "pin":"then"
@@ -47852,7 +47876,7 @@
 "y":0
 },
 "params":{
-"track":"",
+"track":"path1",
 "speed":"walk",
 "loop":false,
 "stay":false

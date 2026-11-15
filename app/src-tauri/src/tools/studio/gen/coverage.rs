@@ -271,7 +271,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
                 "type" => (2, "0.5", "0.05"),
                 _ => (0, "0.0", "0.2"),
             };
-            b.line(format!("\tif (lsg_ec_msg_ok())\n\t{{\n\t\tset_dhudmessage({}, {}, {}, {}, {}, {fx}, {fxt}, {}, {fin}, 0.5)\n\t\tshow_dhudmessage({}, {args})\n\t}}", c("r"), c("g"), c("b"), num("x"), num("y"), num("seconds"), who()));
+            b.line(format!("\tif (lsg_msg_room(\"Big HUD Text\", 1, {}, {}))\n\t{{\n\t\tset_dhudmessage({}, {}, {}, {}, {}, {fx}, {fxt}, {}, {fin}, 0.5)\n\t\tshow_dhudmessage({}, {args})\n\t}}", who(), gen.limit_expr("messages"), c("r"), c("g"), c("b"), num("x"), num("y"), num("seconds"), who()));
             ex(b, "shown");
         }
         "msg.color_chat" => {
@@ -288,7 +288,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             };
             // (the tag is safe text: no quotes, carets or backslashes; % doubled for the format)
             let head = if tag.is_empty() { String::new() } else { format!("^4{}^1 ", tag.replace('%', "%%")) };
-            b.line(format!("\tif (lsg_ec_msg_ok())\n\t{{\n\t\tnew lsgM[190]\n\t\tformatex(lsgM, charsmax(lsgM), {args})\n\t\tlsg_ec_clean(lsgM)\n\t\tclient_print_color({}, {sender}, \"{head}{code}%s\", lsgM)\n\t}}", who()));
+            b.line(format!("\tif (lsg_msg_room(\"Colored Chat\", 1, {}, {}))\n\t{{\n\t\tnew lsgM[190]\n\t\tformatex(lsgM, charsmax(lsgM), {args})\n\t\tlsg_ec_clean(lsgM)\n\t\tclient_print_color({}, {sender}, \"{head}{code}%s\", lsgM)\n\t}}", who(), gen.limit_expr("messages"), who()));
             ex(b, "said");
         }
         "player.push" => {
@@ -310,7 +310,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
         }
         "ent.play_anim" => {
             let seq = if wired("number") { format!("floatround({})", inp("number", "number")) } else { "-1".into() };
-            let call = format!("lsg_ec_anim({}, {}, {seq}, {}, {}, {}, {})", inp("ent", "entity"), pawn_str(&name_text(gen.text(n, def, "sequence"))), num("rate"), on("restart"), on("loop"), num("length"));
+            let call = format!("lsg_ec_anim({}, {}, {seq}, {}, {}, {}, {}, {})", inp("ent", "entity"), pawn_str(&name_text(gen.text(n, def, "sequence"))), num("rate"), on("restart"), on("loop"), num("length"), gen.limit_expr("ec_anim_loops"));
             checked(b, call, "Not played: not a model entity (players are animated by the game), no sequence by that name, or too many looping already (Limits).", "playing");
         }
         "ent.attach" => {
@@ -322,7 +322,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
                 _ => -1,
             };
             let off = if wired("offset") { inp("offset", "vector") } else { "-1".into() };
-            let call = format!("lsg_ec_attach({}, {}, {off}, {pt}, {})", inp("ent", "entity"), inp("to", "entity"), on("on_death"));
+            let call = format!("lsg_ec_attach({}, {}, {off}, {pt}, {}, {})", inp("ent", "entity"), inp("to", "entity"), on("on_death"), gen.limit_expr("ec_attach"));
             checked(b, call, "Not attached: a player can't be attached, the parent isn't there, it's itself, or too many are attached already (Limits).", "attached");
         }
         "ent.detach" => {
@@ -358,7 +358,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             };
             let from = if wired("from") { inp("from", "player") } else { "0".into() };
             let txt = if gen.boolean(n, def, "text") { txt } else { "" };
-            b.line(format!("\tlsg_ec_radio({}, {team}, {from}, {}, {}, {})", who(), pawn_str(snd), pawn_str(txt), if ann { "true" } else { "false" }));
+            b.line(format!("\tif (lsg_msg_room(\"Play Radio\", 2, {}, {}))\n\t\tlsg_ec_radio({}, {team}, {from}, {}, {}, {})", who(), gen.limit_expr("messages"), who(), pawn_str(snd), pawn_str(txt), if ann { "true" } else { "false" }));
             ex(b, "played");
         }
         "msg.info_window" => {
@@ -390,7 +390,7 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             };
             // started: kept with this flow's values for Arrived / Failed; refused: Failed now
             let fail = gen.v.exec_target(id, "failed").map(|(t, tp)| format!("{}(ctx)", gen.pin_fname(t, tp)));
-            b.line(format!("\tnew lsgNpc = {npc}\n\tif ({call})\n\t\tlsg_ec_npc_keep(lsgNpc, {k}, ctx)"));
+            b.line(format!("\tnew lsgNpc = {npc}\n\tif ({call})\n\t\tlsg_ec_npc_keep(lsgNpc, {k}, ctx, {})", gen.limit_expr("ec_npc_moves")));
             if debug {
                 b.line(format!("\telse\n\t{{\n\t\t{}", err("Not moving: not an NPC (or dead), gm_components isn't running, or no points.")));
                 if let Some(f) = &fail {
@@ -492,7 +492,7 @@ pub(super) fn init(gen: &Gen, o: &mut Out) {
         o.line("\tRegisterHam(Ham_Think, \"grenade\", \"lsg_ec_gthink\", 0)");
     }
     if live("event.map_fired") {
-        o.line("\tlsg_ec_hook_use()");
+        o.line(format!("\tlsg_ec_hook_use({})", gen.limit_expr("ec_map_hooks")));
     }
     if live("event.weapon_switched") {
         for w in WEAPONS.iter().filter(|w| **w != "shield") {

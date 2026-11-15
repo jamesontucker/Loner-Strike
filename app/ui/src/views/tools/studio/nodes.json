@@ -24557,8 +24557,7 @@
     {
      "id": "pos",
      "type": "vector",
-     "label": "Or point",
-     "optional": true
+     "label": "Or point"
     }
    ],
    "outputs": [
@@ -24656,7 +24655,7 @@
      "id": "track",
      "label": "Or path_track (first name)",
      "kind": "name",
-     "default": ""
+     "default": "path1"
     },
     {
      "id": "speed",

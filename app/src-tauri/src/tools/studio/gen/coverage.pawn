@@ -1,10 +1,10 @@
 // ---- engine coverage nodes (EC): only stocks here; the hooks are written for the nodes used ----
-// comfort limits: plain defaults (a call past one is skipped; the debugger says so)
-#define LSG_EC_ATTACH 64
-#define LSG_EC_LOOPS 64
-#define LSG_EC_CLASSES 96
-// an engine limit: big HUD texts and colored chat lines sent in one server frame
-#define LSG_EC_MSGS 24
+// comfort limits are mode settings (limits.rs: ec_attach, ec_anim_loops, ec_map_hooks), passed in as
+// lim; these are what the arrays hold (a call past the limit is skipped; the debugger says so)
+#define LSG_EC_ATTACH 256
+#define LSG_EC_LOOPS 256
+#define LSG_EC_CLASSES 256
+// (big HUD texts, colored chat and radio lines go through the shared per-frame budget, lsg_msg_room)
 stock const g_lsgEcGren[][] = { "", "HE grenade", "Flashbang", "Smoke grenade" }
 stock g_lsgEcGType[2048], bool:g_lsgEcGBoom[2048], g_lsgEcGOwner[2048]
 stock g_lsgEcLastW[33], g_lsgEcLastE[33], g_lsgEcZone[33], bool:g_lsgEcZoneTurn
@@ -13,28 +13,8 @@ stock g_lsgEcJrAll, g_lsgEcAirAll, Float:g_lsgEcPowAll = 268.0
 stock g_lsgEcVoice = -1, Float:g_lsgEcVoiceDist, g_lsgEcVoiceOv[33]
 stock g_lsgEcAtt[LSG_EC_ATTACH], g_lsgEcAttTo[LSG_EC_ATTACH], g_lsgEcAttPt[LSG_EC_ATTACH], bool:g_lsgEcAttDie[LSG_EC_ATTACH], g_lsgEcAttSolid[LSG_EC_ATTACH], Float:g_lsgEcAttOff[LSG_EC_ATTACH][3]
 stock g_lsgEcLoop[LSG_EC_LOOPS], g_lsgEcLoopSeq[LSG_EC_LOOPS], Float:g_lsgEcLoopLen[LSG_EC_LOOPS], Float:g_lsgEcLoopAt[LSG_EC_LOOPS]
-stock Float:g_lsgEcMsgAt, g_lsgEcMsgN, bool:g_lsgEcMsgSaid
 stock g_lsgEcUseLast, Float:g_lsgEcUseAt, g_lsgEcUseCaller
 stock bool:g_lsgEcNoObj
-
-// an engine limit: so many messages in one frame and the rest are skipped (said once in the log)
-stock bool:lsg_ec_msg_ok()
-{
-	new Float:now = get_gametime()
-	if (now != g_lsgEcMsgAt)
-	{
-		g_lsgEcMsgAt = now
-		g_lsgEcMsgN = 0
-	}
-	if (++g_lsgEcMsgN <= LSG_EC_MSGS)
-		return true
-	if (!g_lsgEcMsgSaid)
-	{
-		g_lsgEcMsgSaid = true
-		log_amx("Studio: more than %d big HUD texts or colored chat lines in one frame; the rest were skipped", LSG_EC_MSGS)
-	}
-	return false
-}
 
 // Deal Damage: through the game's own TakeDamage (kills, the kill feed and scores count)
 stock lsg_ec_damage(t, a, Float:dmg, bits, zone, bool:noarmor)
@@ -383,7 +363,7 @@ stock lsg_ec_fuse(e, Float:secs)
 }
 
 // Play Animation (looping one-time sequences are played again from the tick)
-stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Float:len)
+stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Float:len, lim)
 {
 	if (e <= MaxClients || !pev_valid(e))
 		return 0
@@ -414,9 +394,21 @@ stock lsg_ec_anim(e, const name[], num, Float:rate, bool:restart, bool:loop, Flo
 			g_lsgEcLoop[k] = 0
 		return 1
 	}
-	for (new i = 0; i < LSG_EC_LOOPS && k < 0; i++)
-		if (!g_lsgEcLoop[i] || !pev_valid(g_lsgEcLoop[i]))
-			k = i
+	if (k < 0)
+	{
+		new used = 0
+		for (new i = 0; i < LSG_EC_LOOPS; i++)
+		{
+			if (g_lsgEcLoop[i] && !pev_valid(g_lsgEcLoop[i]))
+				g_lsgEcLoop[i] = 0
+			if (g_lsgEcLoop[i])
+				used++
+			else if (k < 0)
+				k = i
+		}
+		if (used >= lim)
+			return 0
+	}
 	if (k < 0)
 		return 0
 	g_lsgEcLoop[k] = e
@@ -449,7 +441,7 @@ stock lsg_ec_anim_tick()
 }
 
 // Attach To: moved with its parent every server frame (its own velocity too, so it's smooth)
-stock lsg_ec_attach(e, to, ov, pt, bool:ondeath)
+stock lsg_ec_attach(e, to, ov, pt, bool:ondeath, lim)
 {
 	if (e <= MaxClients || !pev_valid(e) || to <= 0 || !pev_valid(to) || e == to)
 		return 0
@@ -461,9 +453,19 @@ stock lsg_ec_attach(e, to, ov, pt, bool:ondeath)
 	for (new i = 0; i < LSG_EC_ATTACH; i++)
 		if (g_lsgEcAtt[i] == to && g_lsgEcAttTo[i] == e)
 			return 0
-	for (new i = 0; i < LSG_EC_ATTACH && k < 0; i++)
-		if (!g_lsgEcAtt[i])
-			k = i
+	if (k < 0)
+	{
+		new used = 0
+		for (new i = 0; i < LSG_EC_ATTACH; i++)
+		{
+			if (g_lsgEcAtt[i])
+				used++
+			else if (k < 0)
+				k = i
+		}
+		if (used >= lim)
+			return 0
+	}
 	if (k < 0)
 		return 0
 	if (g_lsgEcAtt[k] != e)
@@ -543,11 +545,12 @@ public lsg_ec_frame()
 
 // On Map Entity Fired: Use hooked on one entity of each kind (by its code, so twice never)
 // that has a name when the map starts
-stock lsg_ec_hook_use()
+stock lsg_ec_hook_use(lim)
 {
 	new seen[LSG_EC_CLASSES], n = 0, tn[2]
 	new top = global_get(glb_maxEntities)
-	for (new e = MaxClients + 1; e < top && n < LSG_EC_CLASSES; e++)
+	lim = clamp(lim, 1, LSG_EC_CLASSES)
+	for (new e = MaxClients + 1; e < top && n < lim; e++)
 	{
 		if (pev_valid(e) != 2)
 			continue
@@ -562,8 +565,8 @@ stock lsg_ec_hook_use()
 		seen[n++] = vt
 		RegisterHamFromEntity(Ham_Use, e, "lsg_ec_used", 1)
 	}
-	if (n >= LSG_EC_CLASSES)
-		log_amx("Studio: On Map Entity Fired hooks %d kinds of entity (Limits); others on this map aren't heard", LSG_EC_CLASSES)
+	if (n >= lim)
+		log_amx("Studio: On Map Entity Fired hooks %d kinds of entity (Limits: Map entity kinds heard); others on this map aren't heard", lim)
 }
 
 // the same entity fired twice in one go (a class hooked through a parent) counts once

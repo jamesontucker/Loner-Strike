@@ -917,12 +917,12 @@ node("msg.info_window", "Show Info Window", "Messages", "Opens the game's info w
      keywords="motd info window rules help text page message of the day")
 # NPC moves
 node("npc.move_to", "NPC Move To", "NPCs", "Sends an NPC walking (or running) to an entity or a point now, along the map's bot navigation (straight when the map has none), facing where it goes. Arrived runs when it gets there, Failed when it can't (no way, stuck, or too long). Then it goes back to what it did, or stays there.",
-     inputs=[X, P("npc","entity","NPC",required=True), P("to","entity","To entity",optional=True), P("pos","vector","Or point",optional=True)], outputs=[E(), E("arrived","Arrived"), E("failed","Failed")],
+     inputs=[X, P("npc","entity","NPC",required=True), P("to","entity","To entity",optional=True), P("pos","vector","Or point")], outputs=[E(), E("arrived","Arrived"), E("failed","Failed")],
      params=[prm("speed","Speed","choice","walk",choices=[["walk","Walk"],["run","Run"]]), prm("stay","Stay there after","bool",False)],
      keywords="npc move walk go to path navigate run goto", needs="components")
 node("npc.follow_path", "NPC Follow Path", "NPCs", "Sends an NPC along points in order: an array of positions, or a map's path_track chain by its first name. At point runs at each one, Finished at the end (never with Loop), Failed when it can't get on. Then it goes back to what it did, or stays there.",
      inputs=[X, P("npc","entity","NPC",required=True), P("points","array<vector>","Points",optional=True)], outputs=[E(), E("point","At point"), E("finished","Finished"), E("failed","Failed")],
-     params=[prm("track","Or path_track (first name)","name",""), prm("speed","Speed","choice","walk",choices=[["walk","Walk"],["run","Run"]]), prm("loop","Loop","bool",False), prm("stay","Stay at the end","bool",False)],
+     params=[prm("track","Or path_track (first name)","name","path1"), prm("speed","Speed","choice","walk",choices=[["walk","Walk"],["run","Run"]]), prm("loop","Loop","bool",False), prm("stay","Stay at the end","bool",False)],
      keywords="npc path patrol route waypoints path_track follow walk", needs="components")
 node("npc.stop", "NPC Stop", "NPCs", "Stops an NPC's Move To or Follow Path where it is (neither Arrived nor Failed runs); it goes back to what it did, or stays.",
      inputs=[X, P("npc","entity","NPC",required=True)], outputs=[E()], params=[prm("stay","Stay there","bool",True)], keywords="npc stop halt wait", needs="components")

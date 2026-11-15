@@ -1,6 +1,7 @@
 // ---- NPC moves (EC): gm_components walks them (ls_npc_move); Arrived / Failed come back here
-// with the flow's own values. A comfort limit: moves waiting for an answer at once.
-#define LSG_EC_NPCS 32
+// with the flow's own values. A comfort limit (limits.rs ec_npc_moves, passed in as lim): moves waiting
+// for an answer at once; the array holds this many
+#define LSG_EC_NPCS 64
 stock g_lsgEcNpcEnt[LSG_EC_NPCS], g_lsgEcNpcNode[LSG_EC_NPCS], g_lsgEcNpcCtx[LSG_EC_NPCS][LSG_CTX]
 
 stock lsg_ec_npc_find(npc)
@@ -13,15 +14,21 @@ stock lsg_ec_npc_find(npc)
 	return -1
 }
 
-stock lsg_ec_npc_keep(npc, node, const ctx[])
+stock lsg_ec_npc_keep(npc, node, const ctx[], lim)
 {
-	new s = lsg_ec_npc_find(npc)
-	for (new k = 0; k < LSG_EC_NPCS && s < 0; k++)
-		if (!g_lsgEcNpcEnt[k] || !pev_valid(g_lsgEcNpcEnt[k]))
-			s = k
-	if (s < 0)
+	new s = lsg_ec_npc_find(npc), used = 0
+	for (new k = 0; k < LSG_EC_NPCS; k++)
 	{
-		log_amx("Studio: more than %d NPC moves at once (Limits); this one's Arrived won't run", LSG_EC_NPCS)
+		if (g_lsgEcNpcEnt[k] && !pev_valid(g_lsgEcNpcEnt[k]))
+			g_lsgEcNpcEnt[k] = 0
+		if (g_lsgEcNpcEnt[k])
+			used++
+		else if (s < 0)
+			s = k
+	}
+	if (s < 0 || (used >= lim && lsg_ec_npc_find(npc) < 0))
+	{
+		log_amx("Studio: more than %d NPC moves at once (Limits: NPC moves at once); this one's Arrived won't run", lim)
 		return
 	}
 	g_lsgEcNpcEnt[s] = npc

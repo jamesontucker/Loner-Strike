@@ -9,10 +9,15 @@ export type Limit = { id: string; label: string; default: number; lagAbove: numb
 export const LIMITS: Limit[] = [
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
+  // EC (gen/coverage.rs)
+  { id: "ec_attach", label: "Attached things at once", default: 64, lagAbove: 128, max: 256, kinds: ["ent.attach"] },
+  { id: "ec_anim_loops", label: "Looping animations at once", default: 64, lagAbove: 128, max: 256, kinds: ["ent.play_anim"] },
+  { id: "ec_npc_moves", label: "NPC moves at once", default: 32, lagAbove: 48, max: 64, kinds: ["npc.move_to", "npc.follow_path"] },
+  { id: "ec_map_hooks", label: "Map entity kinds heard", default: 96, lagAbove: 160, max: 256, kinds: ["event.map_fired"] },
   { id: "command_rate", label: "Player Command uses a second", default: 5, lagAbove: 20, max: 1000, kinds: ["in.command"] },
   { id: "top_players", label: "Top Players places", default: 10, lagAbove: 50, max: 100, kinds: ["save.top"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
-  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn"] },
+  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio"] },
 ];
 
 export const limitVar = (l: Limit): GVariable =>
