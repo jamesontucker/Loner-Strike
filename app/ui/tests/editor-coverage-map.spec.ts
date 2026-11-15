@@ -157,12 +157,13 @@ test.describe("leaks from a pointfile", () => {
 });
 
 test("Publish…: says the budget first when near a limit, then opens Community's Publish for this map", async ({ page }) => {
-  await page.goto("/tools-dev.html?open=editor");
-  await page.evaluate(() => {
+  // (set before the page loads: a reload while the app moves to its own address can be cut short
+  // in WebKit, "Frame load interrupted")
+  await page.addInitScript(() => {
     localStorage.setItem("ls.editor.nav", JSON.stringify({ preset: "blender", speed: 3 }));
     localStorage.setItem("ls.editor.tour", JSON.stringify({ offered: true, never: true }));
   });
-  await page.reload();
+  await page.goto("/tools-dev.html?open=editor");
   const bar = page.locator(".ed-menubar");
   if (!(await bar.isVisible().catch(() => false))) {
     const back = page.getByRole("button", { name: /^Back to |^New map$/ }).first();
@@ -173,8 +174,9 @@ test("Publish…: says the budget first when near a limit, then opens Community'
   await page.locator(".ed-bar-actions").getByRole("button", { name: "Publish…" }).click();
   await expect.poll(() => decodeURIComponent(page.url())).toMatch(/community:publish:/);
   void name;
-  // and Map > Publish… the same way
-  await page.goBack();
+  // and Map > Publish… the same way (back through the app's own history: WebKit can report a
+  // same-page Back as an interrupted load)
+  await page.evaluate(() => history.back());
   await expect(bar).toBeVisible({ timeout: 30_000 });
   await menu(page, "Map", "Publish…");
   await expect.poll(() => decodeURIComponent(page.url())).toMatch(/community:publish:/);

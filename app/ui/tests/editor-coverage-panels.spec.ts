@@ -523,13 +523,21 @@ test("tools in the views: Box draws, Entity places, Texture picks a face, Measur
   await page.evaluate(() => (window as any).__lsEditor.getState().set({ tool: "select", view: "3d" })); // eslint-disable-line @typescript-eslint/no-explicit-any
   await page.waitForTimeout(500);
   const r3 = (await page.locator(".ed-pane").first().boundingBox())!;
-  await page.mouse.click(r3.x + r3.width / 2, r3.y + r3.height * 0.85);
-  await expect.poll(async () => (await sel(page)).brushes.length).toBe(1);
+  // (low in the view is the floor; in a small window the camera shows less of it, so a little
+  // higher is tried when a click finds only sky)
+  const ys = [0.85, 0.78, 0.7];
+  const clickUntil = async (ok: () => Promise<boolean>) => {
+    for (const fy of ys) {
+      await page.mouse.click(r3.x + r3.width / 2, r3.y + r3.height * fy);
+      if (await expect.poll(ok, { timeout: 2500 }).toBe(true).then(() => true, () => false)) return;
+    }
+    expect(await ok(), "a click in the 3D view found nothing to pick").toBe(true);
+  };
+  await clickUntil(async () => (await sel(page)).brushes.length === 1);
   // Texture: a click picks the face under it
   await page.evaluate(() => (window as any).__lsEditor.getState().set({ tool: "texture", texClick: "pick" })); // eslint-disable-line @typescript-eslint/no-explicit-any
   await select(page, {});
-  await page.mouse.click(r3.x + r3.width / 2, r3.y + r3.height * 0.85);
-  await expect.poll(() => st(page, (s) => !!s.sel.face)).toBe(true);
+  await clickUntil(() => st(page, (s) => !!s.sel.face));
 });
 
 test("status bar: what's picked and its size, the counts", async ({ page }) => {

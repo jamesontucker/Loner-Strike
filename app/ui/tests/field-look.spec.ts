@@ -128,12 +128,28 @@ test.describe("Field look", () => {
 
   test("map editor and its dialogs", async ({ page }) => {
     const bad: Bad[] = [];
+    // (as the editor specs open it: no tour, no navigation hint; a map someone left open, a
+    // recovery offer or unsaved changes from another run don't get in the way)
+    await page.addInitScript(() => {
+      localStorage.setItem("ls.editor.nav", JSON.stringify({ preset: "unreal", speed: 3 }));
+      localStorage.setItem("ls.editor.navHint", "1");
+      localStorage.setItem("ls.editor.tour", JSON.stringify({ offered: true, never: true }));
+    });
     await page.goto("/editor-dev.html");
-    await page.waitForTimeout(3000);
+    const newMap = page.getByRole("button", { name: "New map", exact: true });
+    const back = page.getByRole("button", { name: /^Back to/ });
+    await expect(newMap.or(back).or(page.locator(".ed-pane")).first()).toBeVisible({ timeout: 30_000 });
     bad.push(...(await sweep(page, "editor start")));
-    await page.getByRole("button", { name: "New map", exact: true }).click({ timeout: 10_000 }).catch(() => {});
-    await page.getByRole("menubar", { name: "Editor menu" }).waitFor({ timeout: 30_000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    if (await back.isVisible()) await back.click();
+    if (await newMap.isVisible()) {
+      await newMap.click();
+      const leave = page.getByRole("button", { name: "Leave them" });
+      if (await leave.waitFor({ timeout: 2000 }).then(() => true, () => false)) await leave.click();
+    }
+    await page.locator(".ed-pane").first().waitFor({ timeout: 30_000 });
+    // the dock's Content tab: the panel with the most fields first
+    await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1500);
     bad.push(...(await sweep(page, "editor")));
     const menu = page.getByRole("menubar", { name: "Editor menu" });
     for (const [top, item] of [["Edit", "Transform…"], ["View", "Grid and snapping…"], ["Select", "Go to brush or entity number…"], ["Map", /Map properties|Map settings/]] as const) {

@@ -197,7 +197,11 @@ test("clip tool: Tab picks the side that stays, Enter cuts", async ({ page }) =>
   await key(page, "KeyX");
   await expect.poll(() => st(page, (s) => s.tool)).toBe("clip");
   await page.waitForTimeout(300);
-  for (const y of [Math.min(...ys) - 40, Math.max(...ys) + 40]) {
+  // (above and below the box, but inside the view: in a small window the box nearly fills it,
+  // and a click past the view's edge lands on the panels instead)
+  const pane = (await page.locator(".ed-pane").first().boundingBox())!;
+  const inside = (y: number) => Math.max(pane.y + 12, Math.min(pane.y + pane.height - 12, y));
+  for (const y of [inside(Math.min(...ys) - 40), inside(Math.max(...ys) + 40)]) {
     const n = await st(page, (s) => s.clipInfo?.points ?? 0);
     await page.mouse.move(mid, y, { steps: 4 });
     await page.mouse.click(mid, y);
