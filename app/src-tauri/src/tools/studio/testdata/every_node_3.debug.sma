@@ -1080,6 +1080,20 @@ stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_ls
 
 // a model or sound the graph names, loaded only if the file is there (on the server or in the
 // game's folders): a missing one would stop the map loading. What uses it does without.
+// (a mode loads at most 160 files of its own: the game's 512 models and 512 sounds are for
+// everything on the server; limits.rs PRECACHE_MAX)
+stock g_lsgPreN
+stock bool:lsg_pre_room(const p[])
+{
+	if (g_lsgPreN < 160)
+	{
+		g_lsgPreN++
+		return true
+	}
+	log_amx("[%s] %s not loaded: the mode has loaded 160 files of its own already", LSG_MODE, p)
+	return false
+}
+
 stock lsg_pre_model(const p[])
 {
 	if (!file_exists(p, true))
@@ -1087,6 +1101,8 @@ stock lsg_pre_model(const p[])
 		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, p)
 		return 0
 	}
+	if (!lsg_pre_room(p))
+		return 0
 	if (g_lsgHave == Invalid_Trie)
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
@@ -1102,10 +1118,42 @@ stock lsg_pre_sound(const p[])
 		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, full)
 		return 0
 	}
+	if (!lsg_pre_room(full))
+		return 0
 	if (g_lsgHave == Invalid_Trie)
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
 	return precache_sound(p)
+}
+
+// room for more messages this server frame (temp entities, HUD, chat): past the budget (the
+// Effect messages a frame limit) the effect is skipped, said in the log once a second; a unicast
+// (to a player) counts against that player too, at half the budget
+stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
+stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+{
+	if (lim <= 0)
+		lim = g_lsgMsgLim
+	new Float:now = get_gametime()
+	if (now != g_lsgMsgAt)
+	{
+		g_lsgMsgAt = now
+		g_lsgMsgN = 0
+		arrayset(g_lsgMsgP, 0, sizeof g_lsgMsgP)
+	}
+	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
+	{
+		if (now - g_lsgMsgSaid >= 1.0)
+		{
+			g_lsgMsgSaid = now
+			log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
+		}
+		return false
+	}
+	g_lsgMsgN += cost
+	if (to >= 1 && to <= 32)
+		g_lsgMsgP[to] += cost
+	return true
 }
 
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
@@ -2142,7 +2190,7 @@ stock lsg_round_time(secs)
 stock g_lsgIcon[33][16]
 stock lsg_icon_send(to, status, const name[], r, g, b)
 {
-	if (to && !is_user_connected(to))
+	if ((to && !is_user_connected(to)) || !lsg_msg_room("Status Icon", 1, to))
 		return
 	static msg
 	if (!msg)
@@ -2311,7 +2359,7 @@ stock lsg_killfeed(killer, victim, hs, const w[])
 		msg = get_user_msgid("DeathMsg")
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!is_user_connected(p) || is_user_bot(p))
+		if (!is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Kill Feed Line", 1, p))
 			continue
 		message_begin(MSG_ONE, msg, _, p)
 		write_byte(killer)
@@ -2387,6 +2435,8 @@ stock lsg_drunk_off(id)
 stock lsg_trail_send(k)
 {
 	new e = g_lsgTrail[k]
+	if (!lsg_msg_room("Trail", 2))
+		return
 	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
 	write_byte(TE_KILLBEAM)
 	write_short(e)
@@ -6725,6 +6775,7 @@ lsg_n70(ctx[])
 	}
 	if (lsd_enter(70, ctx))
 		return
+	g_lsgMsgLim = 48
 	lsg_icon(0, 1, "buyzone", 0, 160, 0, 1)
 	lsd_exit(70, "shown")
 	lsg_n71(ctx)
@@ -6775,6 +6826,7 @@ lsg_n73(ctx[])
 	}
 	if (lsd_enter(73, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_killfeed(0, lsi1, ((lsi2) ? 1 : 0), "knife"))
 		lsd_error(73, "Not sent: the Victim isn't a player in the game.")
 	else
@@ -6827,6 +6879,7 @@ lsg_n76(ctx[])
 	}
 	if (lsd_enter(76, ctx))
 		return
+	g_lsgMsgLim = 48
 	if (!lsg_trail(lsi0, 1, 0, 160, 255, 6, 20, 32))
 		lsd_error(76, "No trail: nothing there, or as many trails are on as Trails at once allows (Limits).")
 	else
@@ -6844,10 +6897,12 @@ lsg_n77(ctx[])
 	if (lsd_enter(77, ctx))
 		return
 	new Float:lsgAt[3], lsgOk
+	if (lsgOk && !lsg_msg_room("Effect Burst", 1, 0, 48))
+		lsgOk = 0
 	if (lsgOk)
 		lsg_burst(0, lsgAt, 1, 255, 120, 0)
 	if (!lsgOk)
-		lsd_error(77, "No burst: no entity there, and no Position.")
+		lsd_error(77, "No burst: no entity there and no Position, or too many effects this frame (Effect messages a frame, Limits).")
 	else
 		lsd_exit(77, "done")
 	lsg_n78(ctx)

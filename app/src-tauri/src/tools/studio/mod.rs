@@ -1594,6 +1594,38 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// The shared engine guards: effects check the per-frame message budget (the Effect messages
+    /// a frame limit), the mode's own files are counted (a warning past 64, an error past 160, and
+    /// the plugin refuses past 160 too).
+    #[test]
+    fn message_budget_and_precache_count() {
+        let src = gen::generate(&fun_mode(true), false).source;
+        assert!(src.contains("stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)"));
+        assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)"), "smoke twice, the default budget");
+        assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)") && src.contains("g_lsgMsgLim = 48"), "the trail sets the budget");
+        let src = gen::generate(&ui_nodes_mode(), false).source;
+        assert!(src.contains("lsg_msg_room(\"Kill Feed Line\", 1, p)") && src.contains("lsg_msg_room(\"Status Icon\", 1, to)"));
+        assert!(src.contains("stock bool:lsg_pre_room(const p[])") && src.contains("if (!lsg_pre_room(p))"));
+        // the mode's own files
+        let mut g = ui_nodes_mode();
+        let n = g.nodes.iter().find(|n| n.kind == "fx.marker").unwrap().clone();
+        for i in 0..70 {
+            let mut m = n.clone();
+            m.id = format!("many{i}");
+            m.params.insert("sprite".into(), json!(format!("sprites/many/s{i}.spr")));
+            g.nodes.push(m);
+        }
+        let p = graph::validate(&g);
+        assert!(p.iter().any(|p| p.level == "warning" && p.message.contains("files of its own")), "{p:#?}");
+        for i in 70..170 {
+            let mut m = n.clone();
+            m.id = format!("many{i}");
+            m.params.insert("sprite".into(), json!(format!("sprites/many/s{i}.spr")));
+            g.nodes.push(m);
+        }
+        assert!(graph::validate(&g).iter().any(|p| p.level == "error" && p.message.contains("the most is 160")));
+    }
+
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
         let mut g = v.clone();
         let o = g.as_object_mut().unwrap();

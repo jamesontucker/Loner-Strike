@@ -28,7 +28,21 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
+    // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
+    // and kick players; gen.rs lsg_msg_room)
+    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon"] },
 ];
+
+/// A mode's own files (models, sounds, sprites) loaded with the map: the game holds 512 models and
+/// 512 sounds for the map, every plugin and the game itself together, so a mode keeps to its share.
+/// Problems warns past PRECACHE_WARN and refuses past PRECACHE_MAX; the plugin refuses past it too.
+pub const PRECACHE_WARN: usize = 64;
+pub const PRECACHE_MAX: usize = 160;
+
+/// The files a mode loads with the map (its nodes' model, sound and sprite paths).
+pub fn precache_count(g: &Graph) -> usize {
+    crate::tools::requirements::content_of(g).len()
+}
 
 pub fn get(id: &str) -> Option<&'static Limit> {
     LIMITS.iter().find(|l| l.id == id)
@@ -53,6 +67,12 @@ pub fn var_json(l: &Limit) -> Value {
 /// A limit raised a lot: a warning on the mode (never an error, never blocks Compile).
 pub fn problems(g: &Graph) -> Vec<Problem> {
     let mut p = Vec::new();
+    let files = precache_count(g);
+    if files > PRECACHE_MAX {
+        p.push(Problem { level: "error", node: None, pin: None, edge: None, message: format!("This mode loads {files} files of its own (models, sounds, sprites); the most is {PRECACHE_MAX}: the game holds 512 models and 512 sounds for everything on the server.") });
+    } else if files > PRECACHE_WARN {
+        p.push(Problem { level: "warning", node: None, pin: None, edge: None, message: format!("This mode loads {files} files of its own (models, sounds, sprites): on a map with many of its own, the game's 512 could run out.") });
+    }
     for l in LIMITS {
         if !g.nodes.iter().any(|n| l.kinds.contains(&n.kind.as_str())) {
             continue;

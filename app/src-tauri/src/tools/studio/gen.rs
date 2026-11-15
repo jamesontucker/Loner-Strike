@@ -3206,6 +3206,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "fun.trail" => {
+            b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
             let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
             let call = format!(
                 "lsg_trail({}, {}, {}, {}, {}, {}, {}, {})",
@@ -3236,9 +3237,13 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             let kind = ["sparks", "smoke", "blood", "firework", "implosion", "tar", "teleport", "lava", "flash"].iter().position(|k| *k == gen.choice(n, def, "kind")).unwrap_or(0);
             let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
-            b.line(format!("\tif (lsgOk)\n\t\tlsg_burst({kind}, lsgAt, {}, {}, {}, {})", gen.num(n, def, "count").round().clamp(1.0, 10.0) as i64, c("r"), c("g"), c("b")));
+            let count = gen.num(n, def, "count").round().clamp(1.0, 10.0) as i64;
+            // (a firework is two messages a burst)
+            let cost = if kind == 3 { count * 2 } else { count };
+            b.line(format!("\tif (lsgOk && !lsg_msg_room(\"Effect Burst\", {cost}, 0, {}))\n\t\tlsgOk = 0", gen.limit_expr("messages")));
+            b.line(format!("\tif (lsgOk)\n\t\tlsg_burst({kind}, lsgAt, {count}, {}, {}, {})", c("r"), c("g"), c("b")));
             if debug {
-                b.line(format!("\tif (!lsgOk)\n\t\t{}\n\telse\n\t{}", err("No burst: no entity there, and no Position."), exit("done")));
+                b.line(format!("\tif (!lsgOk)\n\t\t{}\n\telse\n\t{}", err("No burst: no entity there and no Position, or too many effects this frame (Effect messages a frame, Limits)."), exit("done")));
             }
             then_line(&mut b, "then");
         }
@@ -3256,6 +3261,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "msg.status_icon" => {
+            b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
             let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
             let icon = gen.choice(n, def, "icon");
             // (one of the game's own hud.txt names, from the list: never a typed name)
@@ -3307,6 +3313,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "msg.killfeed" => {
+            b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
             let killer = if v.data_source(id, "killer").is_some() { inp("killer", "player") } else { "0".into() };
             let w = gen.choice(n, def, "weapon");
             let w = if KILL_ICONS.contains(&w) { w } else { "skull" };
@@ -5343,6 +5350,20 @@ stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_ls
 
 // a model or sound the graph names, loaded only if the file is there (on the server or in the
 // game's folders): a missing one would stop the map loading. What uses it does without.
+// (a mode loads at most 160 files of its own: the game's 512 models and 512 sounds are for
+// everything on the server; limits.rs PRECACHE_MAX)
+stock g_lsgPreN
+stock bool:lsg_pre_room(const p[])
+{
+	if (g_lsgPreN < 160)
+	{
+		g_lsgPreN++
+		return true
+	}
+	log_amx("[%s] %s not loaded: the mode has loaded 160 files of its own already", LSG_MODE, p)
+	return false
+}
+
 stock lsg_pre_model(const p[])
 {
 	if (!file_exists(p, true))
@@ -5350,6 +5371,8 @@ stock lsg_pre_model(const p[])
 		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, p)
 		return 0
 	}
+	if (!lsg_pre_room(p))
+		return 0
 	if (g_lsgHave == Invalid_Trie)
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
@@ -5365,10 +5388,42 @@ stock lsg_pre_sound(const p[])
 		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, full)
 		return 0
 	}
+	if (!lsg_pre_room(full))
+		return 0
 	if (g_lsgHave == Invalid_Trie)
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
 	return precache_sound(p)
+}
+
+// room for more messages this server frame (temp entities, HUD, chat): past the budget (the
+// Effect messages a frame limit) the effect is skipped, said in the log once a second; a unicast
+// (to a player) counts against that player too, at half the budget
+stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
+stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+{
+	if (lim <= 0)
+		lim = g_lsgMsgLim
+	new Float:now = get_gametime()
+	if (now != g_lsgMsgAt)
+	{
+		g_lsgMsgAt = now
+		g_lsgMsgN = 0
+		arrayset(g_lsgMsgP, 0, sizeof g_lsgMsgP)
+	}
+	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
+	{
+		if (now - g_lsgMsgSaid >= 1.0)
+		{
+			g_lsgMsgSaid = now
+			log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
+		}
+		return false
+	}
+	g_lsgMsgN += cost
+	if (to >= 1 && to <= 32)
+		g_lsgMsgP[to] += cost
+	return true
 }
 
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
@@ -6407,7 +6462,7 @@ const UI_HELPERS: &str = r##"// ---- Status Icon, Objective Marker, Kill Feed Li
 stock g_lsgIcon[33][16]
 stock lsg_icon_send(to, status, const name[], r, g, b)
 {
-	if (to && !is_user_connected(to))
+	if ((to && !is_user_connected(to)) || !lsg_msg_room("Status Icon", 1, to))
 		return
 	static msg
 	if (!msg)
@@ -6576,7 +6631,7 @@ stock lsg_killfeed(killer, victim, hs, const w[])
 		msg = get_user_msgid("DeathMsg")
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!is_user_connected(p) || is_user_bot(p))
+		if (!is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Kill Feed Line", 1, p))
 			continue
 		message_begin(MSG_ONE, msg, _, p)
 		write_byte(killer)
@@ -6655,6 +6710,8 @@ stock lsg_drunk_off(id)
 stock lsg_trail_send(k)
 {
 	new e = g_lsgTrail[k]
+	if (!lsg_msg_room("Trail", 2))
+		return
 	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
 	write_byte(TE_KILLBEAM)
 	write_short(e)
