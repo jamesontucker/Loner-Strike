@@ -1277,6 +1277,19 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== types: enums (X) ====
+# typed outputs beside the old text ones (StudioCompat.md: new outputs only, nothing removed)
+def _add_out(t, *pins):
+    d = next(d for d in nodes if d["type"] == t)
+    for p in pins:
+        if not any(o["id"] == p["id"] for o in d["outputs"]):
+            d["outputs"].append(p)
+_add_out("player.weapon_held", P("weapon","enum:ls_weapon","Weapon kind"))
+_add_out("event.player_killed", P("weapon_kind","enum:ls_weapon","Weapon kind"))
+_add_out("event.player_hurt", P("zone","enum:ls_hitzone","Hit zone"))
+_add_out("event.player_about_hurt", P("zone","enum:ls_hitzone","Hit zone"), P("dmg_kind","enum:ls_dmgkind","Damage kind"))
+_add_out("proj.on_hit", P("zone","enum:ls_hitzone","Hit zone"))
+
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
 # the node help (X2's node_help.py), remade with the registry
@@ -1285,3 +1298,4 @@ try:
     node_help.write(data, sys.argv[1].replace("nodes.json", "nodehelp.json"))
 except ImportError:
     pass
+

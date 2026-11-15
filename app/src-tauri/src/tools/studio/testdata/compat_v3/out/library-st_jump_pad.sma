@@ -1761,6 +1761,11 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	return e
 }
 
+// the volume is still out (a handler before may have removed it: Remove Trigger Volume frees the
+// entity at once, and its index can come back as something else)
+stock bool:lsg_vol_live(vol)
+	return lsg_vol_slot(vol) >= 0 && pev_valid(vol) != 0
+
 stock lsg_vol_slot(e)
 {
 	if (e <= 0)

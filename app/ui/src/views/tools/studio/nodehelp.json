@@ -147,6 +147,11 @@
 "id":"world",
 "dir":"out",
 "help":"Yes when no player did it."
+},
+{
+"id":"weapon_kind",
+"dir":"out",
+"help":"Weapon kind: enum:ls_weapon."
 }
 ],
 "settings":[],
@@ -6644,6 +6649,11 @@
 "id":"hit_dir",
 "dir":"out",
 "help":"Direction: a position or direction (X, Y, Z)."
+},
+{
+"id":"zone",
+"dir":"out",
+"help":"Hit zone: enum:ls_hitzone."
 }
 ],
 "settings":[],
@@ -13556,6 +13566,11 @@
 "id":"hitgroup",
 "dir":"out",
 "help":"Hitgroup: a number."
+},
+{
+"id":"zone",
+"dir":"out",
+"help":"Hit zone: enum:ls_hitzone."
 }
 ],
 "settings":[],
@@ -20470,6 +20485,11 @@
 "id":"out",
 "dir":"out",
 "help":"Weapon: text."
+},
+{
+"id":"weapon",
+"dir":"out",
+"help":"Weapon kind: enum:ls_weapon."
 }
 ],
 "settings":[],
@@ -30755,6 +30775,16 @@
 "id":"hitgroup",
 "dir":"out",
 "help":"Hit where: text."
+},
+{
+"id":"zone",
+"dir":"out",
+"help":"Hit zone: enum:ls_hitzone."
+},
+{
+"id":"dmg_kind",
+"dir":"out",
+"help":"Damage kind: enum:ls_dmgkind."
 }
 ],
 "settings":[],

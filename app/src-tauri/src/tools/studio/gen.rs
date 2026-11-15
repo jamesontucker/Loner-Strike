@@ -241,7 +241,7 @@ const EVENTS: &[EventKind] = &[
         register: &["register_event(\"DeathMsg\", \"lsg_on_player_killed\", \"a\")"],
         prelude: "",
         guard: "\tnew v = read_data(2), a = read_data(1), wpn[24]\n\tread_data(4, wpn, charsmax(wpn))",
-        values: &[("victim", "v"), ("attacker", "a"), ("headshot", "read_data(3) ? 1 : 0"), ("weapon", "@str:wpn"), ("distance", "_:lsg_dist(a, v)"), ("team_kill", "a != v && lsg_ok(a) && lsg_ok(v) && get_user_team(a) == get_user_team(v) ? 1 : 0"), ("suicide", "a == v ? 1 : 0"), ("world", "lsg_ok(a) ? 0 : 1")],
+        values: &[("victim", "v"), ("attacker", "a"), ("headshot", "read_data(3) ? 1 : 0"), ("weapon", "@str:wpn"), ("distance", "_:lsg_dist(a, v)"), ("team_kill", "a != v && lsg_ok(a) && lsg_ok(v) && get_user_team(a) == get_user_team(v) ? 1 : 0"), ("suicide", "a == v ? 1 : 0"), ("world", "lsg_ok(a) ? 0 : 1"), ("weapon_kind", "lsg_wpn_k(wpn)")],
         tail: "",
         named: None,
     },
@@ -306,7 +306,7 @@ const EVENTS: &[EventKind] = &[
         // damage was blocked, less when it was scaled down or armour took some
         prelude: "new Float:g_lsgHurtHp[33]\n\npublic lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor\n\t#pragma unused attacker\n\t#pragma unused damage\n\t#pragma unused bits\n\tif (victim >= 1 && victim <= MaxClients)\n\t\tpev(victim, pev_health, g_lsgHurtHp[victim])\n\treturn HAM_IGNORED\n}",
         guard: "\t#pragma unused inflictor\n\t#pragma unused bits\n\tif (victim < 1 || victim > MaxClients)\n\t\treturn HAM_IGNORED\n\tnew Float:hp\n\tpev(victim, pev_health, hp)\n\tdamage = g_lsgHurtHp[victim] - hp\n\tif (damage <= 0.0)\n\t\treturn HAM_IGNORED",
-        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim, bits)"), ("weapon", "@fn:lsg_wpn_of(attacker, inflictor)"), ("hit_pos", "lsg_hit_pos(victim)"), ("hit_dir", "lsg_hit_dir(victim, attacker >= 1 && attacker <= MaxClients ? attacker : inflictor)")],
+        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim, bits)"), ("weapon", "@fn:lsg_wpn_of(attacker, inflictor)"), ("hit_pos", "lsg_hit_pos(victim)"), ("hit_dir", "lsg_hit_dir(victim, attacker >= 1 && attacker <= MaxClients ? attacker : inflictor)"), ("zone", "lsg_hz_of(victim, bits)")],
         tail: "\treturn HAM_IGNORED",
         named: None,
     },
@@ -359,7 +359,7 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "npc.on_talk", sig: "public ls_on_npc_talk(id, npc)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("npc", "npc")], tail: "\treturn PLUGIN_CONTINUE", named: Some("npc") },
     EventKind { kind: "npc.on_use", sig: "public ls_on_interact(id, ent)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("entity", "ent")], tail: "\treturn PLUGIN_CONTINUE", named: Some("ent") },
     // T1fix: projectiles (gm_components)
-    EventKind { kind: "proj.on_hit", sig: "public ls_on_proj_hit(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)", register: &[], prelude: "", guard: "\t#pragma unused pos\n\t#pragma unused normal", values: &[("proj", "proj"), ("owner", "owner"), ("pos", "lsg_vfrom(pos)"), ("normal", "lsg_vfrom(normal)"), ("hit", "hit"), ("world", "(hit == 0 ? 1 : 0)"), ("hitgroup", "_:float(hitgroup)")], tail: "", named: None },
+    EventKind { kind: "proj.on_hit", sig: "public ls_on_proj_hit(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)", register: &[], prelude: "", guard: "\t#pragma unused pos\n\t#pragma unused normal", values: &[("proj", "proj"), ("owner", "owner"), ("pos", "lsg_vfrom(pos)"), ("normal", "lsg_vfrom(normal)"), ("hit", "hit"), ("world", "(hit == 0 ? 1 : 0)"), ("hitgroup", "_:float(hitgroup)"), ("zone", "clamp(hitgroup, 0, 7)")], tail: "", named: None },
     EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
     EventKind { kind: "turret.on_placed", sig: "public ls_on_turret(ent, owner)", register: &[], prelude: "", guard: "", values: &[("turret", "ent"), ("owner", "owner >= 1 && owner <= MaxClients ? owner : 0")], tail: "", named: None },
@@ -390,6 +390,10 @@ fn event_kind(kind: &str) -> Option<&'static EventKind> {
 }
 
 /// The slot an event output lives in: (is text, index).
+/// Event outputs added with graph version 4 (typed beside the old text ones): read only when
+/// something is wired to them, so a 1.0 graph's plugin stays as it was.
+const TYPED_EVENT_PINS: [(&str, &str); 3] = [("event.player_hurt", "zone"), ("event.player_killed", "weapon_kind"), ("proj.on_hit", "zone")];
+
 fn event_slot(def: &NodeDef, pin: &str) -> Option<(bool, usize)> {
     let (mut cell, mut txt) = (0, 0);
     for o in def.outputs.iter().filter(|o| o.ty != "exec") {
@@ -658,7 +662,12 @@ impl<'a> Gen<'a> {
         let (n, def) = self.node(node);
         let want = self.v.in_type(node, pin).unwrap_or_else(|| "any".into());
         if let Some((src, spin)) = self.v.data_source(node, pin) {
-            return Some(self.output(src, spin));
+            let o = self.output(src, spin);
+            // (a Weapon into a text pin: its name, as the old text pins had it)
+            if want == "text" && o.ty == "enum:ls_weapon" {
+                return Some(Val { expr: to_text(self, &o), ty: want });
+            }
+            return Some(o);
         }
         let ip = self.v.input(node, pin)?;
         let prm = ip.param.as_deref()?;
@@ -821,6 +830,7 @@ impl<'a> Gen<'a> {
             },
             "player.armor" => format!("float(lsg_ok({p}) ? get_user_armor({p}) : 0)", p = i("player", "player")),
             "player.has_helmet" => format!("(lsg_helmet({}) ? 1 : 0)", i("player", "player")),
+            "player.weapon_held" if pin == "weapon" => format!("lsg_wpn_k(lsg_held({}))", i("player", "player")),
             "player.weapon_held" => format!("lsg_held({})", i("player", "player")),
             "player.ammo" => format!("float(lsg_ammo({}, {}))", i("player", "player"), if pin == "reserve" { 1 } else { 0 }),
             "player.has_weapon" => format!("(lsg_ok({p}) && user_has_weapon({p}, get_weaponid({})) ? 1 : 0)", pawn_str(&format!("weapon_{}", self.choice(n, def, "weapon"))), p = i("player", "player")),
@@ -1223,7 +1233,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         || coverage::used(g) // EC
         || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))))
         || g.nodes.iter().any(|n| fx::is_action(&n.kind))
-        || fx::xf_used(g);
+        || fx::xf_used(g)
+        // (graph version 4's built-in enums wired from a typed output)
+        || g.edges.iter().any(|e| v.out_type(&e.from.node, &e.from.pin).is_some_and(|t| matches!(t.as_str(), "enum:ls_weapon" | "enum:ls_hitzone" | "enum:ls_dmgkind")));
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -1867,6 +1879,13 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             o.line("\t#pragma unused damage\n\t#pragma unused bits\n\treturn HAM_IGNORED\n}\n");
         } else {
             o.line("\t// (saved and put back: damage done inside the flow comes back here)\n\tnew Float:was = g_lsgDmg, bool:wasBlock = g_lsgDmgBlock\n\tg_lsgDmg = damage\n\tg_lsgDmgBlock = false\n\tnew ctx[LSG_CTX]\n\tctx[0] = victim // victim\n\tctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker\n\tctx[2] = _:damage // damage\n\tlsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind\n\tctx[3] = bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0 // headshot (W2: as Player Hurt)\n\tcopy(g_lsgTxt[1], 63, lsg_hitgroup(victim, bits)) // hitgroup");
+            let used = |pin: &str| hurt.iter().any(|id| v.out_edges.contains_key(&(id.to_string(), pin.to_string())));
+            if used("zone") {
+                o.line("\tctx[4] = lsg_hz_of(victim, bits) // zone");
+            }
+            if used("dmg_kind") {
+                o.line("\tctx[5] = lsg_dmg_k(bits) // dmg_kind");
+            }
             for id in hurt {
                 o.line(format!("\t{}(ctx)", gen.fname(id)));
             }
@@ -1959,7 +1978,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         o.line("\tnew ctx[LSG_CTX]");
         let def = registry_def(k.kind);
-        for (pin, read) in k.values.iter().filter(|(pin, _)| !matches!(*pin, "hit_pos" | "hit_dir") || (k.kind == "event.player_hurt" && hit_players) || (k.kind == "up.on_creature_hurt" && hit_creatures)) {
+        let typed_used = |pin: &str| gen.live.iter().any(|id| v.defs[*id].kind == k.kind && v.out_edges.contains_key(&(id.to_string(), pin.to_string())));
+        for (pin, read) in k.values.iter().filter(|(pin, _)| !matches!(*pin, "hit_pos" | "hit_dir") || (k.kind == "event.player_hurt" && hit_players) || (k.kind == "up.on_creature_hurt" && hit_creatures)).filter(|(pin, _)| !TYPED_EVENT_PINS.contains(&(k.kind, *pin)) || typed_used(pin)) {
             match event_slot(def, pin) {
                 Some((true, i)) => {
                     if *read == "@netname" {
@@ -4122,12 +4142,31 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
     };
     // (the built-in Who enum's names only when something uses it: X2)
     let who_used = serde_json::to_string(&(&g.nodes, &g.variables, &g.functions, &g.structs, &g.macros)).is_ok_and(|t| t.contains("ls_who")) || g.edges.iter().any(|e| e.to.pin == "who" && g.nodes.iter().any(|n| n.id == e.to.node && matches!(n.kind.as_str(), "flow.for_each_player" | "flow.pick_player")));
+    // (graph version 4's built-in enums: only in a plugin that uses one, so 1.0 plugins stay as they were)
+    let text = serde_json::to_string(&(&g.nodes, &g.variables, &g.functions, &g.structs, &g.macros, &g.data_tables)).unwrap_or_default();
+    let used = |id: &str| {
+        let ty = format!("enum:{id}");
+        text.contains(id) || g.edges.iter().any(|e| v.out_type(&e.from.node, &e.from.pin).as_deref() == Some(ty.as_str()) || v.in_type(&e.to.node, &e.to.pin).as_deref() == Some(ty.as_str()))
+    };
     for (k, e) in g.enums.iter().enumerate() {
         if e.id == "ls_who" && !who_used {
             continue;
         }
+        if e.builtin && ["ls_weapon", "ls_hitzone", "ls_dmgkind"].contains(&e.id.as_str()) && !used(&e.id) {
+            continue;
+        }
         let names: Vec<String> = e.values.iter().map(|x| pawn_str(&safe_text(x, 30))).collect();
         o.line(format!("// enum {}\nstock const g_lsgE{k}[][] = {{ {} }}", comment_text(&e.name), if names.is_empty() { pawn_str("") } else { names.join(", ") }));
+    }
+    if used("ls_weapon") {
+        let k = g.enums.iter().position(|e| e.id == "ls_weapon").unwrap_or(0);
+        o.line(format!("// a weapon's name -> its Weapon (0: none; DeathMsg says grenade for the HE grenade)\nstock lsg_wpn_k(const n[])\n{{\n\tif (equal(n, \"grenade\"))\n\t\treturn 23\n\tfor (new i = 1; i < sizeof g_lsgE{k}; i++)\n\t\tif (equal(g_lsgE{k}[i], n))\n\t\t\treturn i\n\treturn 0\n}}"));
+    }
+    if used("ls_hitzone") {
+        o.line("// where a player was hit, as a Hit Zone (the engine's hit group; only a bullet or the knife hits a place)\nstock lsg_hz_of(v, bits)\n{\n\tif (!lsg_ok(v) || !(bits & DMG_BULLET))\n\t\treturn 0\n\treturn clamp(get_ent_data(v, \"CBaseMonster\", \"m_LastHitGroup\"), 0, 7)\n}");
+    }
+    if used("ls_dmgkind") {
+        o.line("// the damage bits as a Damage Kind (other, shot, slash, blast, burn, fall, shock, drown, poison)\nstock lsg_dmg_k(bits)\n{\n\tif (bits & DMG_FALL)\n\t\treturn 5\n\tif (bits & DMG_BLAST)\n\t\treturn 3\n\tif (bits & DMG_BURN)\n\t\treturn 4\n\tif (bits & DMG_BULLET)\n\t\treturn 1\n\tif (bits & DMG_SLASH)\n\t\treturn 2\n\tif (bits & DMG_SHOCK)\n\t\treturn 6\n\tif (bits & DMG_DROWN)\n\t\treturn 7\n\tif (bits & (DMG_POISON | DMG_NERVEGAS))\n\t\treturn 8\n\treturn 0\n}");
     }
     for (k, st) in g.structs.iter().enumerate() {
         let params: Vec<String> = st.fields.iter().enumerate().map(|(j, f)| typed(&f.ty, &format!("f{j}"))).collect();

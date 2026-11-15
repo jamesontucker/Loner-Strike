@@ -299,6 +299,10 @@ export const BUILTIN_ENUMS: GEnum[] = [
   { id: "ls_spawn_fail", name: "Spawn Failure", values: ["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"] },
   // (For Each Player / Pick Random Player's Who, in the order of their setting: X2)
   { id: "ls_who", name: "Who", values: ["Everyone in the game", "Everyone alive", "Everyone dead", "Terrorists", "Counter-Terrorists", "Living Terrorists", "Living Counter-Terrorists", "Bots", "People (not bots)"] },
+  // (graph version 4: graph.rs BUILTIN_ENUMS)
+  { id: "ls_weapon", name: "Weapon", values: ["none", "ak47", "m4a1", "awp", "scout", "famas", "galil", "aug", "sg552", "mp5navy", "p90", "ump45", "mac10", "tmp", "m3", "xm1014", "m249", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "hegrenade", "flashbang", "smokegrenade", "knife", "c4", "g3sg1", "sg550"] },
+  { id: "ls_hitzone", name: "Hit Zone", values: ["generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg"] },
+  { id: "ls_dmgkind", name: "Damage Kind", values: ["other", "shot", "slash", "blast", "burn", "fall", "shock", "drown", "poison"] },
 ];
 
 /** The mode's enums and then the app's own (a mode's own of the same id wins). */

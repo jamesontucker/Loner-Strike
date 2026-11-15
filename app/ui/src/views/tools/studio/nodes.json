@@ -260,6 +260,11 @@
      "id": "world",
      "type": "bool",
      "label": "Killed by the world"
+    },
+    {
+     "id": "weapon_kind",
+     "type": "enum:ls_weapon",
+     "label": "Weapon kind"
     }
    ],
    "params": [],
@@ -3517,6 +3522,11 @@
      "id": "hit_dir",
      "type": "vector",
      "label": "Direction"
+    },
+    {
+     "id": "zone",
+     "type": "enum:ls_hitzone",
+     "label": "Hit zone"
     }
    ],
    "params": [],
@@ -7322,6 +7332,11 @@
      "id": "hitgroup",
      "type": "number",
      "label": "Hitgroup"
+    },
+    {
+     "id": "zone",
+     "type": "enum:ls_hitzone",
+     "label": "Hit zone"
     }
    ],
    "params": [],
@@ -9895,6 +9910,11 @@
      "id": "out",
      "type": "text",
      "label": "Weapon"
+    },
+    {
+     "id": "weapon",
+     "type": "enum:ls_weapon",
+     "label": "Weapon kind"
     }
    ],
    "params": [],
@@ -15409,6 +15429,16 @@
      "id": "hitgroup",
      "type": "text",
      "label": "Hit where"
+    },
+    {
+     "id": "zone",
+     "type": "enum:ls_hitzone",
+     "label": "Hit zone"
+    },
+    {
+     "id": "dmg_kind",
+     "type": "enum:ls_dmgkind",
+     "label": "Damage kind"
     }
    ],
    "params": [],

@@ -599,7 +599,7 @@ pub struct EnumDef {
 
 /// The app's own enums, in every graph (never saved with it): what Kind Of and Component Kind Of
 /// give, so they plug into Switch on Enum (its cases fill from them) and Select like any enum.
-pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 4] = [
+pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 7] = [
     ("ls_kind", "Entity Kind", &["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]),
     (
         "ls_comp_kind",
@@ -612,6 +612,11 @@ pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 4] = [
     ("ls_spawn_fail", "Spawn Failure", &["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"]),
     // (For Each Player / Pick Random Player's Who, in the order of their setting: X2)
     ("ls_who", "Who", &["Everyone in the game", "Everyone alive", "Everyone dead", "Terrorists", "Counter-Terrorists", "Living Terrorists", "Living Counter-Terrorists", "Bots", "People (not bots)"]),
+    // (graph version 4: the game's weapons by their names, where something was hit (the engine's
+    // hit group numbers), what kind of damage; values only ever added at the end: StudioCompat.md)
+    ("ls_weapon", "Weapon", &["none", "ak47", "m4a1", "awp", "scout", "famas", "galil", "aug", "sg552", "mp5navy", "p90", "ump45", "mac10", "tmp", "m3", "xm1014", "m249", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "hegrenade", "flashbang", "smokegrenade", "knife", "c4", "g3sg1", "sg550"]),
+    ("ls_hitzone", "Hit Zone", &["generic", "head", "chest", "stomach", "left arm", "right arm", "left leg", "right leg"]),
+    ("ls_dmgkind", "Damage Kind", &["other", "shot", "slash", "blast", "burn", "fall", "shock", "drown", "poison"]),
 ];
 
 fn user_enums_only<S: serde::Serializer>(v: &[EnumDef], s: S) -> Result<S::Ok, S::Error> {
@@ -3017,7 +3022,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 24] = ["enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
+    const TYPES: [&str; 27] = ["enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];

@@ -1609,6 +1609,52 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// The built-in Weapon, Hit Zone and Damage Kind enums from the typed outputs beside the old
+    /// text ones: into Switch on Enum (one output per value), into a text pin (a Weapon is its name).
+    pub fn typed_enums_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("hurt", "event.player_hurt", json!({})),
+            n("sw", "flow.switch_enum", json!({"enum": "ls_hitzone"})),
+            n("head", "debug.print", json!({"text": "headshot zone", "chat": false})),
+            n("kill", "event.player_killed", json!({})),
+            n("give", "player.give_weapon", json!({"weapon": "ak47", "ammo": 30})),
+            n("held", "player.weapon_held", json!({})),
+            n("sw2", "flow.switch_enum", json!({"enum": "ls_weapon"})),
+            n("knife", "debug.print", json!({"text": "knife out", "chat": false})),
+            n("pre", "event.player_about_hurt", json!({})),
+            n("pk", "debug.print", json!({"text": "kind", "chat": false})),
+            n("hit", "proj.on_hit", json!({})),
+            n("pz", "debug.print", json!({"text": "zone", "chat": false})),
+        ];
+        let edges = vec![
+            e(1, "hurt", "then", "sw", "exec"), e(2, "hurt", "zone", "sw", "in"), e(3, "sw", "v1", "head", "exec"),
+            e(4, "kill", "then", "give", "exec"), e(5, "kill", "attacker", "give", "player"), e(6, "kill", "weapon_kind", "give", "weapon"),
+            e(7, "give", "then", "sw2", "exec"), e(8, "kill", "attacker", "held", "player"), e(9, "held", "weapon", "sw2", "in"), e(10, "sw2", "v26", "knife", "exec"),
+            e(11, "pre", "then", "pk", "exec"), e(12, "pre", "dmg_kind", "pk", "value"),
+            e(13, "hit", "then", "pz", "exec"), e(14, "hit", "zone", "pz", "value"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "typed_enums", "name": "Typed enums"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    #[test]
+    fn typed_enums_switch_and_flow_into_text() {
+        let g = typed_enums_mode();
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level != "info").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in ["stock lsg_wpn_k(const n[])", "stock lsg_hz_of(v, bits)", "stock lsg_dmg_k(bits)", "lsg_hz_of(victim, bits) // zone", "lsg_wpn_k(wpn) // weapon_kind",
+            "ctx[5] = lsg_dmg_k(bits) // dmg_kind", "clamp(hitgroup, 0, 7) // zone", "lsg_wpn_k(lsg_held("] {
+            assert!(src.contains(want), "{want}");
+        }
+        // the Weapon into Give Weapon's text pin goes as its name
+        assert!(src.contains("g_lsgE") && src.contains("\"knife\""), "the Weapon names table");
+        // a plugin that doesn't use them has none of it (1.0 plugins stay as they were)
+        let plain = gen::generate(&graph::parse(TEMPLATE).unwrap(), false).source;
+        assert!(!plain.contains("lsg_wpn_k") && !plain.contains("\"Hit Zone\"") && !plain.contains("// enum Weapon"));
+    }
+
     /// A burst of state at once (32 players spawning in the same frame, each told their scoreboard
     /// team, tag, a team score and an icon): state messages are never dropped, the budget's
     /// overflow is queued per resend and key and goes out on the next frames.
@@ -1956,6 +2002,7 @@ mod tests {
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("spawn_burst".into(), serde_json::to_string(&spawn_burst_mode()).unwrap()));
+        graphs.push(("typed_enums".into(), serde_json::to_string(&typed_enums_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));
