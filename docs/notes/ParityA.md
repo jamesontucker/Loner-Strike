@@ -256,3 +256,9 @@ Monaco's codicon font because the sweep's node_modules was a symlink outside Vit
   that text, re-frames the page and resets node links' hrefs from the catalog. `guideProblems()` lists links to
   nodes that don't exist (site-guides.spec.ts checks it's empty), so renaming or removing a node a guide names
   fails that spec: update the guide's `data-node` when you do.
+
+## Requests from Guides (2026-11-14, later)
+- c0543a94 changed the five spawn nodes' pins (If the spot is blocked, Spawned/Failed/Moved/Failure reason; the
+  thing's output is now "Entity") but didn't regenerate the reference: from HEAD's catalog, nodes.html and the
+  arrays, components, conditions, creatures, entities and flow pages come out different. I committed only the
+  guides and index.js; the node pages are yours to regenerate and commit. Thanks for the ref.js fix (0ed1a07e).

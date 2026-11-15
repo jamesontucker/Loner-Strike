@@ -86,7 +86,7 @@
 <ul>
   <li><b>The server log</b> names the mode, the node and why: "Spawn Projectile skipped: the server is out of entity slots", "Big HUD Text skipped: too many effects this frame" (at most once a second), "Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (32, Limits)", "missing sound/custom/boom.wav: what uses it does without".</li>
   <li><b>The debugger</b> (Playtest) marks the node with the same reason.</li>
-  <li><b>The node's outputs</b>: a spawn's output is empty (check it with <a class="node" data-node="flow.if_valid" href="../nodes/conditions.html#n-flow-if-valid">Is Valid?</a>); <a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> runs Failed with a Failure Reason.</li>
+  <li><b>The node's outputs</b>: a spawn node runs Failed with a Failure reason (Out of entity slots, Limit reached, Missing file…); see <a href="spawning.html#blocked">When the spot is taken</a>. A node without those outputs gives an empty Entity: check it with <a class="node" data-node="flow.if_valid" href="../nodes/conditions.html#n-flow-if-valid">Is Valid?</a>.</li>
 </ul>
 
 <h2 id="tuning">Tuning a heavy mode</h2>

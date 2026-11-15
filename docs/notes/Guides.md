@@ -20,8 +20,14 @@ Checked: Chromium and WebKit at 1440 and 390 (no sideways scroll, no console err
 (`npx playwright test -c tests/site.config.ts`, new site-guides.spec.ts included). Re-running the script twice
 leaves the guide pages and docs.html byte-identical.
 
-## Not in the guides because it isn't in the app yet
-- The spawn nodes' "If the spot is blocked" setting (five options) and Spawned / Failed / Failure Reason on every
-  spawn node: only Spawn Trigger Volume has the outcome pins so far (785fb399); QA4-T1 lists the rest as "waits for
-  FX's shared helper". The Spawning guide's "When the spot is taken" section covers what exists (Find Free Spot
-  Near, an empty output checked with Is Valid?, Spawn Trigger Volume's outcome). Add the options there when they land.
+## Spawn outcome update (2026-11-14, after c0543a94)
+The Spawning guide's "When the spot is taken" now documents If the spot is blocked (the five choices), Max distance,
+Retry every / Retry tries, and Then / Spawned / Failed / Entity / Success / Moved / Failure reason, linked to the five
+nodes that have them (Spawn Prop, Spawn Creature, Spawn Entity, Spawn Weapon On Ground, Create Component), with a
+fallback chain and a Retry example; Limits' "What's skipped" points there.
+
+## Waiting on
+- Spawn Projectile, Spawn NPC and Spawn Interactable: the creature fixer is adding the same setting and outputs.
+  The guide says they're coming and to check their output with Is Valid? until then. When they commit, add them to
+  the node list at the top of "When the spot is taken" and drop that sentence.
+- Types and casting: when the type system lands.
