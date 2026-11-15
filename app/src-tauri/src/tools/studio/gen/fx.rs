@@ -530,10 +530,16 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
             done(b, &call, "Skipped: no position and nothing to follow, or too many effects this frame (see the server log).", "lit");
         }
         "fx.decal" => {
-            let names = DECALS.iter().find(|d| d.0 == gen.choice(n, def, "decal")).map(|d| d.2).unwrap_or(DECALS[0].2);
-            let list = names.iter().map(|x| pawn_str(x)).collect::<Vec<_>>().join(", ");
-            b.line(format!("\tstatic const lsgD[][] = {{ {list} }}"));
-            let call = format!("lsg_fx_decal({}, lsgD[random_num(0, sizeof lsgD - 1)], {}, {lim})", pos_or("pos"), num("reach"));
+            // (a Decal value wired in: a name of its kind, picked here; assets (X-fx))
+            let call = if let Some(pick) = super::assets::decal_wired(gen, id) {
+                b.line(format!("\tnew lsgDn[24]\n\t{pick}"));
+                format!("lsg_fx_decal({}, lsgDn, {}, {lim})", pos_or("pos"), num("reach"))
+            } else {
+                let names = DECALS.iter().find(|d| d.0 == gen.choice(n, def, "decal")).map(|d| d.2).unwrap_or(DECALS[0].2);
+                let list = names.iter().map(|x| pawn_str(x)).collect::<Vec<_>>().join(", ");
+                b.line(format!("\tstatic const lsgD[][] = {{ {list} }}"));
+                format!("lsg_fx_decal({}, lsgD[random_num(0, sizeof lsgD - 1)], {}, {lim})", pos_or("pos"), num("reach"))
+            };
             done(b, &call, "No decal: no surface within reach, the decal isn't in the game's decals.wad, or too many effects this frame.", "placed");
         }
         "fx.gibs" => {

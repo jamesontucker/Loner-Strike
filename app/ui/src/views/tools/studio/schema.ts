@@ -32,6 +32,8 @@ export function validAsset(kind: string, s: string): boolean {
   if (kind === "visual") return validAsset("model", s) || validAsset("sprite", s);
   return false;
 }
+/** Decal values: one of Place Decal's kinds (gen/fx.rs DECALS; studio.test.ts checks they match). */
+export const DECAL_KINDS = ["shot", "bigshot", "scorch", "smscorch", "blood", "yblood", "break", "lambda"];
 export const label = (max: number) => z.string().max(max).regex(LABEL_CHARS, "letters, digits, spaces and plain punctuation only (no * / \\ \" ^)");
 const pos = z.object({ x: z.number().finite(), y: z.number().finite() });
 const pinRef = z.object({ node: id, pin: z.string().min(1).max(32) });
@@ -102,7 +104,9 @@ export const variableSchema = z
             ? typeof v.default === "string" && LABEL_CHARS.test(v.default) && v.default.length <= 60
             : isAssetType(v.type)
               ? typeof v.default === "string" && validAsset(v.type, v.default)
-              : true),
+              : v.type === "decal"
+                ? typeof v.default === "string" && (v.default === "" || DECAL_KINDS.includes(v.default))
+                : true),
     "the start value doesn't fit the type",
   );
 

@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assetValuesRaw from "../../src-tauri/src/tools/studio/testdata/asset_values.json?raw";
-import { validAsset } from "../src/views/tools/studio/schema";
+import { DECAL_KINDS, validAsset } from "../src/views/tools/studio/schema";
 import { readCell as tableCell } from "../src/views/tools/studio/tables";
 import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
@@ -728,4 +728,9 @@ test("file columns: a file of the column's kind, else none", () => {
   assert.equal(tableCell(col("model"), "sprites/a.spr"), "");
   assert.equal(tableCell(col("sound"), "items/ammopickup2.wav"), "items/ammopickup2.wav");
   assert.equal(tableCell(col("sound"), "../x.wav"), "");
+});
+
+test("decal kinds: the start values the schema takes are Place Decal's kinds", () => {
+  const kinds = (nodeDef("fx.decal")!.params.find((p) => p.id === "decal")!.choices as [string, string][]).map(([k]) => k);
+  assert.deepEqual(DECAL_KINDS, kinds);
 });

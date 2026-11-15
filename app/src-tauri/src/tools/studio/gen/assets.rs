@@ -21,7 +21,37 @@ use std::collections::BTreeSet;
 /// The file types (graph.rs BASE_TYPES): a value of one is an index into `g_lsgAsset`.
 pub(crate) const TYPES: [&str; 3] = ["model", "sprite", "sound"];
 /// The nodes: a constant file of each kind, and a file's name as text.
-pub(crate) const PURE: [&str; 4] = ["asset.model", "asset.sprite", "asset.sound", "asset.file_name"];
+pub(crate) const PURE: [&str; 5] = ["asset.model", "asset.sprite", "asset.sound", "asset.file_name", "asset.decal"];
+
+/// A Decal value: one of the Decal node's kinds (gen/fx.rs DECALS), its number from 1 (0: none);
+/// the kind's names are a constant table, one picked at random where it's placed.
+pub(crate) fn decal_index(s: &str) -> usize {
+    super::fx::DECALS.iter().position(|d| d.0 == s).map_or(0, |i| i + 1)
+}
+pub fn valid_decal(s: &str) -> bool {
+    s.is_empty() || decal_index(s) > 0
+}
+/// A start value of any of this module's types (gen.rs var_lit).
+pub(crate) fn lit_of(ty: &str, v: Option<&Value>) -> String {
+    if ty == "decal" {
+        return decal_index(v.and_then(Value::as_str).unwrap_or("")).to_string();
+    }
+    lit(v)
+}
+pub(crate) fn is_value_type(t: &str) -> bool {
+    is_type(t) || t == "decal"
+}
+/// Is a Decal value anywhere (a variable, a Decal node, one wired into Place Decal)?
+fn decals_used(g: &Graph) -> bool {
+    g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())).any(|x| x.ty == "decal" || x.ty.contains("<decal>") || x.ty.ends_with(",decal>"))
+        || g.nodes.iter().any(|n| n.kind == "asset.decal")
+        || g.nodes.iter().filter(|n| n.kind == "fx.decal").any(|n| g.edges.iter().any(|e| e.to.node == n.id && e.to.pin == "decal"))
+}
+/// Place Decal with a Decal value wired in: a name of that kind, picked at random, into `out`.
+pub(crate) fn decal_wired(gen: &Gen, node: &str) -> Option<String> {
+    gen.v.data_source(node, "decal")?;
+    Some(format!("lsg_decal_pick({}, lsgDn, charsmax(lsgDn))", gen.need(node, "decal", "decal")))
+}
 
 /// Past these many files of its own a mode gets a warning (the game's 512 models and 512 sounds
 /// are shared with the map, its weapons and players and every other plugin), past `CAP` of a
@@ -187,7 +217,15 @@ pub(crate) fn lit(v: Option<&Value>) -> String {
 }
 
 pub(crate) fn used(g: &Graph) -> bool {
-    !table(g).is_empty() || g.nodes.iter().any(|n| n.kind == "asset.file_name") || wired_in(g, &TYPED.map(|t| t.0))
+    // (a file type anywhere a value can be: a file shows as its name, so the table is there)
+    let names_file = |t: &str| TYPES.iter().any(|f| t == *f || t.contains(&format!("<{f}>")) || t.ends_with(&format!(",{f}>")));
+    !table(g).is_empty()
+        || g.nodes.iter().any(|n| n.kind == "asset.file_name")
+        || wired_in(g, &TYPED.map(|t| t.0))
+        || g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())).any(|x| names_file(&x.ty))
+        || g.functions.iter().any(|f| f.inputs.iter().chain(f.outputs.iter()).any(|m| names_file(&m.ty)))
+        || g.structs.iter().any(|s| s.fields.iter().any(|m| names_file(&m.ty)))
+        || g.data_tables.iter().any(|t| t.columns.iter().any(|c| names_file(&c.ty)))
 }
 
 /// A pure node's output.
@@ -195,6 +233,7 @@ pub(super) fn pure(gen: &Gen, node: &str, _pin: &str) -> String {
     let (n, def) = gen.node(node);
     match def.kind.as_str() {
         "asset.file_name" => format!("g_lsgAsset[lsg_asset_i({})]", gen.need(node, "file", "model")),
+        "asset.decal" => decal_index(gen.choice(n, def, "decal")).to_string(),
         _ => index_of(gen.text(n, def, "file")).to_string(),
     }
 }
@@ -203,8 +242,25 @@ pub(crate) fn is_pure(k: &str) -> bool {
     PURE.contains(&k)
 }
 
-/// The table and its helpers (with the other globals, before plugin_precache).
-pub(super) fn blocks(g: &Graph, o: &mut Out) {
+/// The table and the Decal kinds (with the mode's variables, before anything that shows a value:
+/// the debugger's variable watch comes early).
+pub(super) fn globals(g: &Graph, o: &mut Out) {
+    if decals_used(g) {
+        // (every kind's names in one list: where each kind starts and how many it has)
+        let mut all = Vec::new();
+        let (mut at, mut cnt) = (vec!["0".to_string()], vec!["0".to_string()]);
+        for d in super::fx::DECALS.iter() {
+            at.push(all.len().to_string());
+            cnt.push(d.2.len().to_string());
+            all.extend(d.2.iter().map(|x| pawn_str(x)));
+        }
+        o.line(format!(
+            "// Decal values: a kind (1 up; 0 none), a name of it picked where it's placed\nstock const g_lsgDecalAll[][] = {{ {} }}\nstock const g_lsgDecalAt[] = {{ {} }}\nstock const g_lsgDecalN[] = {{ {} }}\n\nstock bool:lsg_decal_pick(k, out[], len)\n{{\n\tout[0] = 0\n\tif (k < 1 || k >= sizeof g_lsgDecalN)\n\t\treturn false\n\tcopy(out, len, g_lsgDecalAll[g_lsgDecalAt[k] + random_num(0, g_lsgDecalN[k] - 1)])\n\treturn true\n}}\n",
+            all.join(", "),
+            at.join(", "),
+            cnt.join(", ")
+        ));
+    }
     if !used(g) {
         return;
     }
@@ -212,10 +268,18 @@ pub(super) fn blocks(g: &Graph, o: &mut Out) {
     let mut lines = vec!["\"\"".to_string()];
     lines.extend(t.iter().map(|s| pawn_str(s)));
     o.line(format!(
-        "// The files this mode's Model, Sprite and Sound values can name (0: none), all loaded with the map\nstock const g_lsgAsset[][] = {{ {} }}\nstock bool:g_lsgAssetOk[{}]\n\n// a value as an index of the table (0 when it isn't one)\nstock lsg_asset_i(i)\n\treturn i > 0 && i < sizeof g_lsgAsset ? i : 0\n\n// was that file loaded with the map?\nstock bool:lsg_asset_ok(i)\n\treturn i > 0 && i < sizeof g_lsgAsset && g_lsgAssetOk[i]\n\nstock bool:lsg_pre_asset(const p[])\n{{\n\tnew n = strlen(p)\n\tif (n > 4 && equali(p[n - 4], \".wav\"))\n\t\tlsg_pre_sound(p)\n\telse\n\t\tlsg_pre_model(p)\n\treturn lsg_have(p)\n}}\n",
+        "// The files this mode's Model, Sprite and Sound values can name (0: none), all loaded with the map\nstock const g_lsgAsset[][] = {{ {} }}\nstock bool:g_lsgAssetOk[{}]\n\n// a value as an index of the table (0 when it isn't one)\nstock lsg_asset_i(i)\n\treturn i > 0 && i < sizeof g_lsgAsset ? i : 0\n\n// was that file loaded with the map?\nstock bool:lsg_asset_ok(i)\n\treturn i > 0 && i < sizeof g_lsgAsset && g_lsgAssetOk[i]\n",
         lines.join(", "),
         t.len() + 1
     ));
+}
+
+/// The loader (after the shared helpers it uses).
+pub(super) fn blocks(g: &Graph, o: &mut Out) {
+    if !used(g) {
+        return;
+    }
+    o.line("stock bool:lsg_pre_asset(const p[])\n{\n\tnew n = strlen(p)\n\tif (n > 4 && equali(p[n - 4], \".wav\"))\n\t\tlsg_pre_sound(p)\n\telse\n\t\tlsg_pre_model(p)\n\treturn lsg_have(p)\n}\n");
 }
 
 /// plugin_precache's lines: every file of the table, through the guarded loaders.
@@ -405,6 +469,31 @@ mod tests {
         assert!(src.contains("\"models/w_battery.mdl\"") && src.contains("\"items/ammopickup2.wav\""), "in the file table: {src}");
         let bad = with(|x| x["dataTables"] = serde_json::json!([{"id": "loot", "name": "Loot", "key": "k", "columns": [{"id": "k", "name": "Kind", "type": "text"}, {"id": "m", "name": "Model", "type": "model"}], "rows": [["box", "sprites/a.spr"]]}]));
         assert!(validate(&bad).iter().any(|x| x.level == "error" && x.message.contains("models/")), "{:#?}", validate(&bad));
+    }
+
+    /// A Decal value: a kind's number; Place Decal with one wired picks a name of that kind.
+    #[test]
+    fn decal_values_pick_a_kind() {
+        let g = with(|x| {
+            x["variables"].as_array_mut().unwrap().push(serde_json::json!({"id": "dk", "name": "Mark kind", "type": "decal", "scope": "mode", "default": "scorch"}));
+            let nodes = x["nodes"].as_array_mut().unwrap();
+            nodes.push(serde_json::json!({"id": "dg", "type": "var.get", "pos": {"x": 0, "y": 0}, "params": {"var": "dk"}}));
+            nodes.push(serde_json::json!({"id": "dp", "type": "fx.decal", "pos": {"x": 0, "y": 0}, "params": {}}));
+            nodes.push(serde_json::json!({"id": "dv", "type": "vec.make", "pos": {"x": 0, "y": 0}, "params": {}}));
+            let e = x["edges"].as_array_mut().unwrap();
+            e.push(serde_json::json!({"id": "d1", "from": {"node": "dg", "pin": "out"}, "to": {"node": "dp", "pin": "decal"}}));
+            e.push(serde_json::json!({"id": "d2", "from": {"node": "dv", "pin": "out"}, "to": {"node": "dp", "pin": "pos"}}));
+            e.push(serde_json::json!({"id": "d3", "from": {"node": "call", "pin": "then"}, "to": {"node": "dp", "pin": "exec"}}));
+        });
+        let p = validate(&g);
+        assert!(!p.iter().any(|x| x.level == "error"), "{p:#?}");
+        let src = generate(&g, false).source;
+        assert!(src.contains("stock const g_lsgDecalAll[][] = { \"{shot1\""), "{src}");
+        assert!(src.contains(&format!("stock g_v{} = 3 ", 4)), "scorch is kind 3: {src}");
+        assert!(src.contains("lsg_decal_pick(g_v4, lsgDn, charsmax(lsgDn))"), "{src}");
+        assert!(!valid_decal("nope") && valid_decal("") && valid_decal("blood"));
+        let bad = with(|x| x["variables"].as_array_mut().unwrap().push(serde_json::json!({"id": "dk", "name": "K", "type": "decal", "scope": "mode", "default": "nope"})));
+        assert!(validate(&bad).iter().any(|x| x.level == "error"));
     }
 
     /// A mode with no file values gets none of it (old plugins stay the same).

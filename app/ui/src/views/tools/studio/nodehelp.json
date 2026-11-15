@@ -50475,6 +50475,11 @@
 "help":"Reach: a number. Leave it empty to use the setting."
 },
 {
+"id":"decal",
+"dir":"in",
+"help":"The decal. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -50483,7 +50488,7 @@
 "settings":[
 {
 "id":"decal",
-"help":"Pick one: Bullet hole, Big bullet hole, Scorch mark, Small scorch, Blood, Yellow blood, Broken glass, Lambda."
+"help":"Pick one: Bullet hole, Big bullet hole, Scorch mark, Small scorch, Blood, Yellow blood, Broken glass, Lambda. A wire into the pin of the same name is used instead."
 },
 {
 "id":"reach",
@@ -57553,8 +57558,31 @@
 "settings":[],
 "related":[
 "asset.sound",
-"asset.sprite",
-"asset.model"
+"asset.decal",
+"asset.sprite"
+]
+},
+"asset.decal":{
+"title":"Decal",
+"category":"Files",
+"what":"A kind of decal from the game's decals.wad (bullet hole, scorch, blood...): keep it in a variable or an array, and wire it into Place Decal, which picks one of that kind.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"The decal."
+}
+],
+"settings":[
+{
+"id":"decal",
+"help":"Pick one: Bullet hole, Big bullet hole, Scorch mark, Small scorch, Blood, Yellow blood, Broken glass, Lambda."
+}
+],
+"related":[
+"asset.file_name",
+"asset.sound",
+"asset.sprite"
 ]
 }
 }

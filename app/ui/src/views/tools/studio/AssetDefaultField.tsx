@@ -8,6 +8,7 @@ import { AssetField } from "../common/AssetField";
 import { AssetPreview } from "../editor/AssetPreview";
 import { spriteUrl } from "../editor/contentApi";
 import { validAsset, type AssetType } from "./schema";
+import { nodeDef } from "./registry";
 
 const FOLDERS = ["cstrike", "cstrike_downloads", "czero", "valve"];
 
@@ -20,8 +21,20 @@ function SpriteThumb({ path }: { path: string }) {
 }
 
 export function AssetDefaultField({ kind, value, onChange, disabled, label }: { kind: AssetType | "decal" | "visual"; value: string; onChange: (v: string) => void; disabled?: boolean; label?: string }) {
-  // (Decal values are names from the game's list: picked elsewhere)
-  if (kind === "decal") return <input className="st-field" value={value} disabled={disabled} readOnly />;
+  // (a Decal value is one of Place Decal's kinds)
+  if (kind === "decal") {
+    const kinds = (nodeDef("fx.decal")?.params.find((p) => p.id === "decal")?.choices ?? []) as [string, string][];
+    return (
+      <select className="st-field" aria-label={label ?? "Decal"} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        <option value="">None</option>
+        {kinds.map(([k, l]) => (
+          <option key={k} value={k}>
+            {l}
+          </option>
+        ))}
+      </select>
+    );
+  }
   const pick: AssetType = kind === "visual" ? (value.toLowerCase().endsWith(".spr") ? "sprite" : "model") : kind;
   const ok = validAsset(kind, value);
   return (

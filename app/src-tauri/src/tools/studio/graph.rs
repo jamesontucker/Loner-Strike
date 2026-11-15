@@ -1037,6 +1037,7 @@ pub fn value_fits(ty: &str, v: &Value) -> bool {
         "text" => v.as_str().is_some_and(|s| valid_label(s, 60)),
         // assets (X-fx): a file of that kind, or "" (none)
         "model" | "sprite" | "sound" => v.as_str().is_some_and(|s| super::gen::assets::valid_asset(ty, s)),
+        "decal" => v.as_str().is_some_and(super::gen::assets::valid_decal),
         "color" => v.as_str().is_some_and(|s| color_hex(s).is_some()),
         _ => false,
     }
@@ -2280,7 +2281,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
         if def.kind == "var.set" {
             if let Some(var) = v.var_of(&n.id) {
                 // (assets (X-fx): a file variable takes a picked file too)
-                let literal = matches!(var.ty.as_str(), "number" | "bool" | "text") || var.ty.starts_with("enum:") || super::gen::assets::is_type(&var.ty);
+                let literal = matches!(var.ty.as_str(), "number" | "bool" | "text") || var.ty.starts_with("enum:") || super::gen::assets::is_value_type(&var.ty);
                 if !literal && v.ins(&n.id, "value").is_empty() {
                     p.push(Problem::err(Some(&n.id), format!("Wire in the value to put in \u{201c}{}\u{201d}.", short(&var.name))).pin("value"));
                 }

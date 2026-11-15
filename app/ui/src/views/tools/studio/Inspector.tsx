@@ -74,7 +74,7 @@ function ValueField({ type, value, onChange, graph }: { type: GVariable["type"];
     );
   }
   // assets (X-fx): a file variable starts as the file picked (or none)
-  if (isAssetType(type)) return <AssetDefaultField kind={type} value={typeof value === "string" ? value : ""} onChange={onChange} />;
+  if (isAssetType(type) || type === "decal") return <AssetDefaultField kind={type} value={typeof value === "string" ? value : ""} onChange={onChange} />;
   if (type === "color") return <ColorField value={value} onChange={onChange} label="Start value" />;
   if (type !== "bool" && type !== "text") return <em className="st-muted">{/^(array|map)</.test(type) ? "Starts empty" : type === "vector" ? "Starts at 0 0 0" : type.startsWith("struct:") ? "Starts with every field empty" : "Starts as nothing"}</em>;
   if (type === "bool")

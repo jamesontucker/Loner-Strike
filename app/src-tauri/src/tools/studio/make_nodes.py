@@ -1340,6 +1340,13 @@ for t, pid, ty, pin in TYPED_FILES:
     prm_["kind"] = ty
     if pin and not any(i["id"] == pid for i in d["inputs"]):
         d["inputs"].append(P(pid, ty, prm_["label"], optional=True, param=pid))
+# Decal values: one of Place Decal's kinds (gen/assets.rs: its number, a name of it picked where
+# it's placed); Place Decal takes one wired into a bound pin
+_fxd = next(d for d in nodes if d["type"] == "fx.decal")
+_dch = next(p for p in _fxd["params"] if p["id"] == "decal")
+node("asset.decal", "Decal", "Files", "A kind of decal from the game's decals.wad (bullet hole, scorch, blood...): keep it in a variable or an array, and wire it into Place Decal, which picks one of that kind.", outputs=[P("out","decal","Decal")], params=[prm("decal","Decal","choice",_dch["default"],choices=_dch["choices"])], keywords="decal spray mark scorch blood bullet hole kind constant", pure=True)
+if not any(i["id"] == "decal" for i in _fxd["inputs"]):
+    _fxd["inputs"].append(P("decal","decal","Decal",optional=True,param="decal"))
 # ==== end assets (X-fx) ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")

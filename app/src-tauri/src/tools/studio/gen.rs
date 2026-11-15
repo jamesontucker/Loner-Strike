@@ -552,7 +552,7 @@ impl<'a> Gen<'a> {
             "bool" => if v.and_then(Value::as_bool).unwrap_or(false) { "1".into() } else { "0".into() },
             "text" => pawn_str(&safe_text(v.and_then(Value::as_str).unwrap_or(""), 60)),
             t if t.starts_with("enum:") => (v.and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 31.0) as i64).to_string(),
-            t if assets::is_type(t) => assets::lit(v), // X-fx
+            t if assets::is_value_type(t) => assets::lit_of(t, v), // X-fx
             "color" => color_lit(v.and_then(Value::as_str).unwrap_or("#ffffffff")),
             _ => "0".into(),
         }
@@ -1293,6 +1293,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     o.blank();
 
+    assets::globals(g, &mut o); // X-fx: the file table (before the variable watch shows one)
     // variables
     if !gen.vars.is_empty() {
         o.line("// The mode's variables");
@@ -4150,6 +4151,8 @@ fn to_text(gen: &Gen, val: &Val) -> String {
         "bool" => format!("g_lsgYesNo[({e}) ? 1 : 0]"),
         "vector" => format!("lsg_vtext({e})"),
         "color" => format!("lsg_col_text({e})"),
+        // assets (X-fx): a file shows as its name
+        "model" | "sprite" | "sound" => format!("g_lsgAsset[lsg_asset_i({e})]"),
         "timer" => format!("g_lsgRun[lsg_tactive({e}) ? 1 : 0]"),
         t if t.starts_with("enum:") => match gen.v.enum_type(t) {
             Some(en) => format!("g_lsgE{}[clamp({e}, 0, {})]", gen.enum_index(&en.id), en.values.len().max(1) - 1),

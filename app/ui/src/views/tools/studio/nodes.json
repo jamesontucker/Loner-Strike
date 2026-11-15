@@ -27021,6 +27021,13 @@
      "type": "number",
      "label": "Reach",
      "param": "reach"
+    },
+    {
+     "id": "decal",
+     "type": "decal",
+     "label": "Decal",
+     "optional": true,
+     "param": "decal"
     }
    ],
    "outputs": [
@@ -31389,6 +31396,64 @@
    ],
    "params": [],
    "keywords": "file name path text model sound sprite to text",
+   "pure": true
+  },
+  {
+   "type": "asset.decal",
+   "title": "Decal",
+   "category": "Files",
+   "help": "A kind of decal from the game's decals.wad (bullet hole, scorch, blood...): keep it in a variable or an array, and wire it into Place Decal, which picks one of that kind.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "decal",
+     "label": "Decal"
+    }
+   ],
+   "params": [
+    {
+     "id": "decal",
+     "label": "Decal",
+     "kind": "choice",
+     "default": "scorch",
+     "choices": [
+      [
+       "shot",
+       "Bullet hole"
+      ],
+      [
+       "bigshot",
+       "Big bullet hole"
+      ],
+      [
+       "scorch",
+       "Scorch mark"
+      ],
+      [
+       "smscorch",
+       "Small scorch"
+      ],
+      [
+       "blood",
+       "Blood"
+      ],
+      [
+       "yblood",
+       "Yellow blood"
+      ],
+      [
+       "break",
+       "Broken glass"
+      ],
+      [
+       "lambda",
+       "Lambda"
+      ]
+     ]
+    }
+   ],
+   "keywords": "decal spray mark scorch blood bullet hole kind constant",
    "pure": true
   }
  ]
