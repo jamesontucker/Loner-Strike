@@ -1187,7 +1187,7 @@ node("debug.draw_box", "Draw Debug Box", "Advanced", "Draws a box between two op
      inputs=[X, P("a","vector","Corner",required=True), P("b","vector","Opposite corner",required=True)], outputs=[E()], params=[COLOR, SECS], keywords="debug draw box area bounds visualize")
 node("debug.draw_point", "Draw Debug Point", "Advanced", "Draws a small box round a point for some seconds." + TESTONLY,
      inputs=[X, P("pos","vector","Position",required=True)], outputs=[E()], params=[COLOR, SECS, prm("size","Size","number",8,min=1,max=256)], keywords="debug draw point marker dot visualize")
-node("debug.log_line", "Log Line", "Messages", "Writes a line to the AMX Mod X log (addons/amxmodx/logs), at most Most a second from this node (the rest are counted in the next line).",
+node("debug.log_line", "Log Line", "Messages", "Writes a line to the AMX Mod X log (addons/amxmodx/logs), up to Most a second (that setting's number of lines) from this node; the rest are counted in the next line.",
      inputs=[X, P("text","text","Text",param="text")], outputs=[E()], params=[prm("text","Text","text","Something happened",max=120), prm("most","Most a second","number",5,min=1,max=100)], keywords="log file write record amxx logs")
 node("math.bitwise", "Bitwise", "Numbers", "Bits of whole numbers (the fractions are dropped): And, Or, Xor, Not (of A), or A shifted left or right by B bits. Exact up to 16,777,216.",
      inputs=[P("a","number","A",param="a"), P("b","number","B",param="b")], outputs=[P("out","number","Result")],

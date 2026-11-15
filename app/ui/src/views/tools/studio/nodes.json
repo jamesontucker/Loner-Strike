@@ -29870,7 +29870,7 @@
    "type": "debug.log_line",
    "title": "Log Line",
    "category": "Messages",
-   "help": "Writes a line to the AMX Mod X log (addons/amxmodx/logs), at most Most a second from this node (the rest are counted in the next line).",
+   "help": "Writes a line to the AMX Mod X log (addons/amxmodx/logs), up to Most a second (that setting's number of lines) from this node; the rest are counted in the next line.",
    "inputs": [
     {
      "id": "exec",

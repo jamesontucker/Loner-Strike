@@ -1541,3 +1541,8 @@ Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small ma
   line it makes in every_node_2(.debug).sma ("// Match Feed Line (feed)"). The id br.feed is unchanged, so saved graphs
   open as before. Your other uncommitted Studio work (gen.rs, graph.rs, limits.rs and the goldens) wasn't touched; the
   snapshot tests fail on it at the moment, not on this.
+
+- **Parity A, 2026-11-14: Log Line help typo.** debug.log_line's help said "at most Most a second from this node (the rest
+  are counted in the next line)". It now says "up to Most a second (that setting's number of lines) from this node; the
+  rest are counted in the next line." Same one line in make_nodes.py, nodes.json and nodehelp.json, committed from HEAD
+  so none of your uncommitted work went in. The id and settings are unchanged; the goldens don't carry the help text.
