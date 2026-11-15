@@ -133,7 +133,7 @@ test("the switcher stays one line at 1024; the phone menu keeps only the current
 
 test("a search typed while the index is still loading runs as soon as it arrives", async ({ page }) => {
   // (the index answers late, so the typing surely lands while it loads)
-  await page.route("**/reference/index.js", async (route) => {
+  await page.route("**/reference/index.js*", async (route) => {
     await new Promise((r) => setTimeout(r, 2500));
     await route.continue();
   });
@@ -182,4 +182,55 @@ test("the Types page: a card per type with its pin, upcasts and casts; pins link
   // search: types are in the index
   await page.locator("#ref-q").fill("hit zone");
   await expect(page.locator("#ref-results li", { hasText: "Pin type" }).first()).toBeVisible();
+});
+
+test("a sidebar group's triangle opens its items (mouse and keyboard); rows with nothing to open have none", async ({ page }) => {
+  for (const [path, group] of [["/reference/nodes/players.html", "Events"], ["/reference/nodes/types.html", "Flow"], ["/reference/entities/loner-strike-creatures.html", "Point entities"], ["/reference/nodes.html", "Pin types"]] as const) {
+    await page.goto(path);
+    const d = page.locator(".ref-side details", { has: page.locator("summary a", { hasText: new RegExp(`^${group}$`) }) });
+    const sum = d.locator("summary");
+    await expect(sum, `${path} ${group}`).toHaveAttribute("aria-expanded", "false");
+    const box = (await sum.boundingBox())!;
+    await page.mouse.click(box.x + 16, box.y + box.height / 2);
+    await expect(d.locator("ul li a").first(), `${path} ${group}`).toBeVisible();
+    await expect(sum).toHaveAttribute("aria-expanded", "true");
+    await sum.focus();
+    await page.keyboard.press("Enter");
+    await expect(d.locator("ul li a").first()).toBeHidden();
+    await page.keyboard.press(" ");
+    await expect(d.locator("ul li a").first()).toBeVisible();
+  }
+  // (the current group's own name opens and closes it, without leaving the page)
+  await page.goto("/reference/nodes/players.html");
+  const here = page.locator(".ref-side details.here");
+  await here.locator("summary a").click();
+  await expect(here.locator("ul li a").first()).toBeHidden();
+  await expect(page).toHaveURL(/players\.html$/);
+  // phones: All categories, then a triangle
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click(".ref-menu-btn");
+  await page.click(".ref-all");
+  const ev = page.locator(".ref-side details", { has: page.locator("summary a", { hasText: /^Events$/ }) });
+  const b2 = (await ev.locator("summary").boundingBox())!;
+  await page.mouse.click(b2.x + 16, b2.y + b2.height / 2);
+  await expect(ev.locator("ul li a").first()).toBeVisible();
+  // the editor's rows have no items: no triangle
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/reference/editor.html");
+  await expect(page.locator(".ref-side details.leaf").first()).toBeVisible();
+  expect(await page.locator(".ref-side details.leaf > summary").first().evaluate((s) => getComputedStyle(s, "::before").visibility)).toBe("hidden");
+  // the docs sidebar: a group's button opens its topics
+  await page.goto("/docs.html");
+  const g = page.locator('.group[data-group="Create"]');
+  await g.locator(".chev").click();
+  await expect(g.locator("ul li a").first()).toBeVisible();
+  await expect(g.locator(".group-btn")).toHaveAttribute("aria-expanded", "true");
+});
+
+test("search: nothing found says so, without an empty box", async ({ page }) => {
+  await page.goto("/reference/nodes/effects.html");
+  await page.locator("#ref-q").fill("zzzzqq");
+  await expect(page.locator("#ref-count")).toHaveText(/No results\. Try fewer/);
+  await expect(page.locator("#ref-results-box")).toBeHidden();
+  await expect(page.locator("#ref-q")).toHaveAttribute("aria-expanded", "false");
 });

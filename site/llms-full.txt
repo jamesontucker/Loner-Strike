@@ -802,23 +802,16 @@ One line each: Title (type, category): what it does. In: inputs. Out: outputs.
 A wire joins the same type, or a narrower into a wider one (Goes into); the other way takes a cast node.
 
 - Flow (exec): The white arrows: the order things run in. It carries no value. Cast: As Player, As Creature, As NPC, As Projectile, As Trigger Volume, As Objective Marker, As Component.
-- Player (player): A player in the game: a person or a bot. Goes into: Entity. Cast: As Player.
-- Entity (entity): Anything in the world: a player, a prop, a creature, an NPC, a component, a map entity. The handles below are entities known to be one kind.
-- Team (team): A team: Terrorists or Counter-Terrorists (no team for a draw).
 - Number (number): A number, with or without a fraction. A pin marked # takes a whole number: a fraction is rounded (and Problems says so for one you typed in).
 - Yes/No (bool): Yes or no. Branch, the conditions and the gates use it.
 - Text (text): Words: names, messages, map names. It doesn't last through a Delay unless it's kept in a variable. Cast: As Creature.
 - Vector (vector): Three numbers, X, Y and Z: a place in the map, a direction or a speed. It doesn't last through a Delay unless it's kept in a variable.
+- Team (team): A team: Terrorists or Counter-Terrorists (no team for a draw).
 - Timer (timer): A timer a Delay, Repeat or Countdown started, to stop or check later.
-- Enum (enum): A value from a fixed list of named choices: the app's own lists below, or your mode's own enums.
-- Struct (struct): A bundle of named values kept together: Transform, or your mode's own structs. It doesn't last through a Delay unless it's kept in a variable.
-- Anything (any): A pin that takes a value of any type, like the value shown by Show HUD Text.
-- Model (model): A model file (.mdl) the mode loads: props, creatures, attachments. Your own go with the mode. Goes into: Model or Sprite.
-- Sprite (sprite): A sprite file (.spr): effects, glows, markers. Your own go with the mode. Goes into: Model or Sprite.
-- Sound (sound): A sound file (.wav) the mode plays. Your own go with the mode.
-- Decal (decal): A kind of decal from the game's decals.wad (a bullet hole, a scorch, blood).
-- Model or Sprite (visual): A pin that takes a Model or a Sprite.
 - Color (color): A color, picked with the color picker (red, green and blue).
+- Anything (any): A pin that takes a value of any type, like the value shown by Show HUD Text.
+- Player (player): A player in the game: a person or a bot. Goes into: Entity. Cast: As Player.
+- Entity (entity): Anything in the world: a player, a prop, a creature, an NPC, a component, a map entity. The handles below are entities known to be one kind.
 - NPC (npc): An NPC from Spawn NPC: a person who talks, walks paths and follows. Goes into: Entity. Cast: As NPC.
 - Creature (creature): A creature from Spawn Creature: it moves, attacks and can be hurt. Goes into: Entity. Cast: As Creature.
 - Projectile (projectile): A projectile from Spawn Projectile, flying until it hits or expires. Goes into: Entity. Cast: As Projectile.
@@ -826,7 +819,17 @@ A wire joins the same type, or a narrower into a wider one (Goes into); the othe
 - Objective Marker (objmarker): An objective marker: a sprite floating over an entity or a spot, until Remove Marker. Goes into: Entity. Cast: As Objective Marker.
 - Component (component): A component the mode made or the map placed: a capture point, a shop, a barricade, a door… Goes into: Entity. Cast: As Component.
 - Sound Loop (soundloop): A sound that keeps playing (Loop Sound) until Stop Sound gets it. Goes into: Entity.
+- Model (model): A model file (.mdl) the mode loads: props, creatures, attachments. Your own go with the mode. Goes into: Model or Sprite.
+- Sprite (sprite): A sprite file (.spr): effects, glows, markers. Your own go with the mode. Goes into: Model or Sprite.
+- Sound (sound): A sound file (.wav) the mode plays. Your own go with the mode.
+- Decal (decal): A kind of decal from the game's decals.wad (a bullet hole, a scorch, blood).
+- Model or Sprite (visual): A pin that takes a Model or a Sprite.
+- Enum (enum): A value from a fixed list of named choices: the app's own lists below, or your mode's own enums.
+- Struct (struct): A bundle of named values kept together: Transform, or your mode's own structs. It doesn't last through a Delay unless it's kept in a variable.
+- Array (array): A list of values of one type, in order. An array doesn't go into an array of a wider type (an Array of Creatures isn't an Array of Entities): a value written through the wider type could be the wrong kind.
+- Map (map): Values looked up by a key: text, a number or a player.
 - Variable (var): A variable node's pin: it takes the type of the variable picked.
+- Generic pins (generic): A pin whose type the node takes from a setting or from the first wire: an array node set to Players has Player pins.
 - Entity Kind (enum:ls_kind): What an entity is. Values: Player, Bot, Creature, NPC, Interactable, Component, Prop, Map entity, None.
 - Component Kind (enum:ls_comp_kind): Which kind of component it is. Values: Capture point, Extraction zone, Checkpoint, Shop, Barricade, Trap, Loot container, Supply drop, Supply crate, Perk machine, Upgrade bench, Mystery box, Meeting point, Moving platform, Timed door, Wave spawner, Safe zone, Shrinking zone, Damage zone, Weapon spawner, Respawn point, Player class, Pickup, NPC, Interactable, None.
 - Spawn Failure (enum:ls_spawn_fail): Why a spawn failed: a spawn node's Failure reason. Values: None, Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input.
@@ -835,9 +838,6 @@ A wire joins the same type, or a narrower into a wider one (Goes into); the othe
 - Hit Zone (enum:ls_hitzone): Where a hit landed on the body. Values: generic, head, chest, stomach, left arm, right arm, left leg, right leg.
 - Damage Kind (enum:ls_dmgkind): What kind of damage it was. Values: other, shot, slash, blast, burn, fall, shock, drown, poison.
 - Transform (struct:ls_transform): Where something is and how it moves, in one value. Fields: Position, Rotation, Scale, Velocity.
-- Array (array): A list of values of one type, in order. An array doesn't go into an array of a wider type (an Array of Creatures isn't an Array of Entities): a value written through the wider type could be the wrong kind.
-- Map (map): Values looked up by a key: text, a number or a player.
-- Generic pins (generic): A pin whose type the node takes from a setting or from the first wire: an array node set to Players has Player pins.
 
 ## Map editor entities (compact)
 

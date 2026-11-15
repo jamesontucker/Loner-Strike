@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const studio = join(root, "app/ui/src/views/tools/studio");
@@ -265,6 +266,19 @@ function baseCss() {
   return `/* Made by scripts/gen-reference.mjs from docs.html's own styles: the reference looks like the docs. */\n${d.slice(d.indexOf("<style>") + 7, d.indexOf("</style>")).replace(/url\("fonts\//g, 'url("../fonts/')}`;
 }
 
+/** A short hash of a reference file, so a changed style or script is never served stale from a cache. */
+const verCache = {};
+/** The search index's hash (set before the pages are written; ref.js and docs.html load it with it). */
+let indexVer = "";
+function ver(f) {
+  if (!verCache[f]) {
+    const p = join(site, "reference", f);
+    const text = f === "base.css" ? baseCss() : existsSync(p) ? read(p) : "";
+    verCache[f] = createHash("sha1").update(text).digest("hex").slice(0, 8);
+  }
+  return verCache[f];
+}
+
 /** A reference page: the docs' top bar, the search with filters, the sidebar, the main column, On this page. */
 function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true, section = "", head = "", meta = "" }) {
   // (the three references and the guides are always one click away)
@@ -290,10 +304,10 @@ function page({ title, lead, side, main, toc = "", file, up = "../", kinds = tru
 <link rel="icon" href="${up}favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="${up}reference/base.css">
-<link rel="stylesheet" href="${up}reference/ref.css">${head}
+<link rel="stylesheet" href="${up}reference/base.css?v=${ver("base.css")}">
+<link rel="stylesheet" href="${up}reference/ref.css?v=${ver("ref.css")}">${head}
 </head>
-<body data-root="${up}">
+<body data-root="${up}" data-iv="${indexVer}">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
 <nav aria-label="Site"><a href="/">Home</a><a href="${up}docs.html#whats-new">What's new</a><a href="${up}docs.html#tools">Tools</a><a href="${up}docs.html#vps">Run a server</a><a href="${up}reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
@@ -317,7 +331,7 @@ ${main}
   ${toc ? `<nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul>${toc}</ul></nav>` : "<div></div>"}
 </div>
 <footer><a href="/">lonerstrike.com</a> · <a href="${up}docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
-<script src="${up}reference/ref.js" defer></script>
+<script src="${up}reference/ref.js?v=${ver("ref.js")}" defer></script>
 </body>
 </html>
 `;
@@ -326,11 +340,12 @@ ${main}
 /** The sidebar for nodes: categories (folding, with counts), the open one's nodes listed. */
 function nodeSide(data, here, up) {
   const t = here === "__types";
-  return `<details${t ? " open" : ""} class="${t ? "here" : ""}"><summary><a href="${up}reference/nodes/types.html"${t ? ' aria-current="page"' : ""}>Pin types</a><span class="n">${typeEntries(data).length}</span></summary>${t ? `<ul>${TYPE_GROUPS.map((g) => `<li><a href="#g-${slug(g)}">${esc(g)}</a></li>`).join("")}</ul>` : ""}</details>` + catsOf(data)
+  return `<details${t ? " open" : ""} class="${t ? "here" : ""}"><summary><a href="${up}reference/nodes/types.html"${t ? ' aria-current="page"' : ""}>Pin types</a><span class="n">${typeEntries(data).length}</span></summary><ul>${TYPE_GROUPS.map((g) => `<li><a href="${t ? "" : `${up}reference/nodes/types.html`}#g-${slug(g)}">${esc(g)}</a></li>`).join("")}</ul></details>` + catsOf(data)
     .map((c) => {
       const list = data.nodes.filter((n) => n.category === c);
       const open = c === here;
-      return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/nodes/${slug(c)}.html"${open ? ' aria-current="page"' : ""}>${esc(c)}</a><span class="n">${list.length}</span></summary>${open ? `<ul>${list.map((n) => `<li><a href="#${nodeId(n.type)}">${esc(n.title)}</a></li>`).join("")}</ul>` : ""}</details>`;
+      const at = open ? "" : `${up}reference/nodes/${slug(c)}.html`;
+      return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/nodes/${slug(c)}.html"${open ? ' aria-current="page"' : ""}>${esc(c)}</a><span class="n">${list.length}</span></summary><ul>${list.map((n) => `<li><a href="${at}#${nodeId(n.type)}">${esc(n.title)}</a></li>`).join("")}</ul></details>`;
     })
     .join("");
 }
@@ -465,7 +480,9 @@ const typeAnchor = (data, t) => `t-${slug(typeKey(data, t))}`;
 
 /** The entries, in page order, with what the catalog says about each. */
 function typeEntries(data) {
-  const keys = [...Object.keys(data.pinTypes), ...data.enums.map((e) => `enum:${e.id}`), ...data.structs.map((x) => `struct:${x.id}`), "array", "map", "generic"];
+  const order = Object.keys(TYPE_DOCS);
+  // (in the order TYPE_DOCS lists them; one it doesn't know goes last, and --check says so)
+  const keys = [...new Set([...Object.keys(data.pinTypes), ...data.enums.map((e) => `enum:${e.id}`), ...data.structs.map((x) => `struct:${x.id}`), "array", "map", "generic"])].sort((a, b) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999));
   const label = (k) => (k === "array" ? "Array" : k === "map" ? "Map" : k === "generic" ? "Generic pins" : typeLabel(data, k));
   return keys.map((k) => {
     const [group, what] = TYPE_DOCS[k] ?? ["Basics", ""];
@@ -597,7 +614,7 @@ function entityPages(ents) {
   const side = (here, up) => groups.map((g) => {
     const list = ents.filter((e) => entGroup(e) === g);
     const open = g === here;
-    return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/entities/${slug(g)}.html"${open ? ' aria-current="page"' : ""}>${esc(g)}</a><span class="n">${list.length}</span></summary>${open ? `<ul>${list.map((e) => `<li><a href="#${entId(e.name)}">${esc(e.name)}</a></li>`).join("")}</ul>` : ""}</details>`;
+    return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/entities/${slug(g)}.html"${open ? ' aria-current="page"' : ""}>${esc(g)}</a><span class="n">${list.length}</span></summary><ul>${list.map((e) => `<li><a href="${open ? "" : `${up}reference/entities/${slug(g)}.html`}#${entId(e.name)}">${esc(e.name)}</a></li>`).join("")}</ul></details>`;
   }).join("");
   const kind = (e) => (e.source.startsWith("Loner") ? "component" : e.kind === "SolidClass" ? "brush" : "point");
   const card = (e) => {
@@ -637,7 +654,7 @@ ${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span><
 
 /** The editor's tools and keys: a card per menu, panel or dialog group. */
 function editorPage(inv) {
-  const side = inv.map((s) => `<details><summary><a href="#t-${slug(s.name)}">${esc(s.name)}</a><span class="n">${s.rows.length}</span></summary></details>`).join("");
+  const side = inv.map((s) => `<details class="leaf"><summary><a href="#t-${slug(s.name)}">${esc(s.name)}</a><span class="n">${s.rows.length}</span></summary></details>`).join("");
   const main = inv.map((s) => `<article class="card" id="t-${slug(s.name)}"><header><h3><a href="#t-${slug(s.name)}">${esc(s.name)}</a></h3><span class="badge">${s.rows.length}</span><button class="copy-link" type="button" data-id="t-${slug(s.name)}" aria-label="Copy a link to ${esc(s.name)}">Copy link</button></header><dl>${s.rows.map((r) => `<dt>${esc(r.item)}</dt><dd>${esc(r.where)}</dd>`).join("")}</dl></article>`).join("\n");
   return page({ section: "editor", title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, where to find it, and its keys.", side, main, toc: inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join(""), file: "the editor's coverage inventory", kinds: false });
 }
@@ -761,7 +778,7 @@ function guidePage(g, body, byType, bad) {
   const secs = guideSections(body);
   const side = `<details open class="here"><summary><a href="../#guides">Guides</a><span class="n">${GUIDES.filter((x) => guideBody(x[3])).length}</span></summary><ul>${GUIDES.map(([id, t, , f]) => (guideBody(f) ? `<li><a href="${f}.html"${f === file ? ' aria-current="page"' : ""}>${esc(t)}</a></li>` : `<li class="guide-soon"><a href="../../docs.html#${id}">${esc(t)} (soon)</a></li>`)).join("")}</ul></details>`;
   const main = `<article class="guide">\n${GUIDE_BEGIN}\n${linkGuides(linkNodes(body, byType, bad))}\n${GUIDE_END}\n</article>`;
-  return page({ section: "guides", title, lead: about, side, main, toc: secs.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join(""), file: "", up: "../../", kinds: false, head: `\n<link rel="stylesheet" href="guides.css">`, meta: "A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog." });
+  return page({ section: "guides", title, lead: about, side, main, toc: secs.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join(""), file: "", up: "../../", kinds: false, head: `\n<link rel="stylesheet" href="guides.css?v=${createHash("sha1").update(GUIDE_CSS).digest("hex").slice(0, 8)}">`, meta: "A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog." });
 }
 
 /** The guides in the search index: one entry per guide and one per section. */
@@ -877,6 +894,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const inv = editorInventory();
   const out = join(site, "reference");
   mkdirSync(out, { recursive: true });
+  const indexJs = `// Made by scripts/gen-reference.mjs: the docs search's reference entries (u url, n name, t where, k keywords, x text)\nwindow.LS_REFERENCE = ${JSON.stringify(searchIndex(data, ents, inv))};\n`;
+  indexVer = createHash("sha1").update(indexJs).digest("hex").slice(0, 8);
   writeFileSync(join(out, "base.css"), baseCss());
   const np = nodePages(data, builtinEnums(), library());
   writeFileSync(join(out, "nodes.html"), np.index);
@@ -891,9 +910,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     for (const f of readdirSync(join(out, dir))) if (f.endsWith(".html") && !pages[f]) unlinkSync(join(out, dir, f));
     for (const [f, html] of Object.entries(pages)) writeFileSync(join(out, dir, f), html);
   }
-  writeFileSync(join(out, "index.js"), `// Made by scripts/gen-reference.mjs: the docs search's reference entries (u url, n name, t where, k keywords, x text)\nwindow.LS_REFERENCE = ${JSON.stringify(searchIndex(data, ents, inv))};\n`);
+  writeFileSync(join(out, "index.js"), indexJs);
   const docs = join(site, "docs.html");
-  writeFileSync(docs, replaceBlock(read(docs), docsBlock(data, ents, inv), '<section class="topic" id="something-wrong"'));
+  writeFileSync(docs, replaceBlock(read(docs), docsBlock(data, ents, inv), '<section class="topic" id="something-wrong"').replace(/src="reference\/index\.js(\?v=\w+)?"/, `src="reference/index.js?v=${indexVer}"`));
   const llms = join(site, "llms-full.txt");
   if (existsSync(llms)) writeFileSync(llms, replaceBlock(read(llms), llmsBlock(data, ents), null));
   console.log(`Wrote ${data.nodes.length} nodes, ${ents.length} entities, ${inv.length} editor sections${missing.length ? `; ${missing.length} without help (see --check)` : ""}. Keys without a description: ${keysWithoutHelp().length}.${typeBad.length ? ` Pin type problems: ${typeBad.length} (see --check).` : ""}`);

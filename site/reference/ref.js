@@ -21,7 +21,7 @@
     if (loading) return;
     loading = true;
     var s = document.createElement("script");
-    s.src = root + "reference/index.js";
+    s.src = root + "reference/index.js" + (document.body.dataset.iv ? "?v=" + document.body.dataset.iv : "");
     s.onload = loaded;
     s.onerror = function () { loading = false; waiting = []; count.textContent = "The index didn't load. Try again in a moment."; };
     document.head.appendChild(s);
@@ -84,9 +84,10 @@
       return '<li role="option" id="rr' + i + '" aria-selected="false" data-u="' + esc(h.r.u) + '"><span class="r-name">' + esc(h.r.n) + "</span>" + (h.r.c ? '<span class="badge k-' + esc(h.r.c) + '">' + esc(h.r.c) + "</span>" : "") +
         '<span class="r-where">' + esc(h.r.t) + "</span><span class=\"r-sum\">" + esc(h.r.x) + "</span></li>";
     }).join("");
-    count.textContent = hits.length ? hits.length + (hits.length === 1 ? " result" : " results") + (hits.length > 40 ? " (the first 40 shown)" : "") : "No results";
-    box.hidden = false;
-    q.setAttribute("aria-expanded", "true");
+    count.textContent = hits.length ? hits.length + (hits.length === 1 ? " result" : " results") + (hits.length > 40 ? " (the first 40 shown)" : "") : "No results. Try fewer or shorter words" + (filtering ? ", or clear the filters." : ".");
+    // (no empty box under the search when nothing matches)
+    box.hidden = !hits.length;
+    q.setAttribute("aria-expanded", hits.length ? "true" : "false");
     select(shown.length ? 0 : -1);
   }
   function select(i) {
@@ -128,6 +129,26 @@
     var open = side.classList.toggle("open");
     menu.setAttribute("aria-expanded", open ? "true" : "false");
   });
+  // the sidebar's groups: the triangle (or anywhere on the header but its name) opens and closes
+  // the group; the name goes to its page, or on the page itself opens and closes it too
+  if (side) {
+    [].forEach.call(side.querySelectorAll("details:not(.leaf)"), function (d) {
+      var sum = d.querySelector("summary");
+      var sync = function () { sum.setAttribute("aria-expanded", d.open ? "true" : "false"); };
+      sync();
+      d.addEventListener("toggle", sync);
+      var a = sum.querySelector("a");
+      if (a) a.addEventListener("click", function (e) {
+        var u = new URL(a.href, location.href);
+        if (u.pathname === location.pathname && !u.hash) { e.preventDefault(); d.open = !d.open; }
+      });
+    });
+    // (a group with nothing to open: its header is only a link)
+    [].forEach.call(side.querySelectorAll("details.leaf > summary"), function (s) {
+      s.addEventListener("click", function (e) { if (!e.target.closest("a")) e.preventDefault(); });
+      s.tabIndex = -1;
+    });
+  }
   var all = document.querySelector(".ref-all");
   if (all && side) all.addEventListener("click", function () {
     var on = side.classList.toggle("all");
