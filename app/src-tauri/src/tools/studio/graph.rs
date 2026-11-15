@@ -1001,7 +1001,7 @@ impl Problem {
     fn err(node: Option<&str>, msg: impl Into<String>) -> Problem {
         Problem { level: "error", node: node.map(str::to_string), pin: None, edge: None, message: msg.into() }
     }
-    fn warn(node: Option<&str>, msg: impl Into<String>) -> Problem {
+    pub(super) fn warn(node: Option<&str>, msg: impl Into<String>) -> Problem {
         Problem { level: "warning", node: node.map(str::to_string), pin: None, edge: None, message: msg.into() }
     }
     fn pin(mut self, pin: &str) -> Problem {
@@ -1760,6 +1760,8 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     advanced_problems(g, &View::new(g), &mut p);
     if !has_errors(&p) {
         p.extend(cost_warnings(g, &View::new(g)));
+        // (performance hints: warnings only, perf_hints.rs)
+        p.extend(super::perf_hints::hints(g, &View::new(g)));
     }
     p.extend(nothing_happens(g));
     p.extend(bot_awareness(g, &View::new(g)));
@@ -2620,7 +2622,7 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
 }
 
 /// The loops (and the output pins their body hangs off).
-const LOOPS: [(&str, &str); 8] = [
+pub(super) const LOOPS: [(&str, &str); 8] = [
     ("creature.for_each", "each"),
     ("flow.for_each_player", "each"),
     ("flow.for_each_entity", "each"),
@@ -2636,7 +2638,7 @@ const FREQUENT: [&str; 7] = ["event.player_hurt", "event.player_about_hurt", "up
 const HURT: [&str; 3] = ["event.player_hurt", "event.player_about_hurt", "up.on_creature_hurt"];
 
 /// Everything the flow from these output pins runs (through any further flow pins).
-fn flow_from<'a>(v: &View<'a>, node: &'a str, pins: &[&str]) -> BTreeSet<&'a str> {
+pub(super) fn flow_from<'a>(v: &View<'a>, node: &'a str, pins: &[&str]) -> BTreeSet<&'a str> {
     let mut seen = BTreeSet::new();
     let mut todo: Vec<&'a str> = Vec::new();
     for pin in pins {
