@@ -2235,10 +2235,25 @@
    "graph": "mine_place"
   },
   {
+   "id": "mine_place_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "tag": "mine",
+    "radius": 120,
+    "strength": 8,
+    "secs": 0
+   },
+   "graph": "mine_place"
+  },
+  {
    "id": "mine_place_add0",
    "type": "array.add",
    "pos": {
-    "x": 2860,
+    "x": 3120,
     "y": 0
    },
    "params": {
@@ -2250,7 +2265,7 @@
    "id": "mine_place_g0",
    "type": "var.get",
    "pos": {
-    "x": 3120,
+    "x": 3380,
     "y": 540
    },
    "params": {
@@ -2262,7 +2277,7 @@
    "id": "mine_place_add1",
    "type": "array.add",
    "pos": {
-    "x": 3380,
+    "x": 3640,
     "y": 0
    },
    "params": {
@@ -2274,7 +2289,7 @@
    "id": "mine_place_g1",
    "type": "var.get",
    "pos": {
-    "x": 3640,
+    "x": 3900,
     "y": 720
    },
    "params": {
@@ -2286,7 +2301,7 @@
    "id": "mine_place_add2",
    "type": "array.add",
    "pos": {
-    "x": 3900,
+    "x": 4160,
     "y": 0
    },
    "params": {
@@ -2298,7 +2313,7 @@
    "id": "mine_place_g2",
    "type": "var.get",
    "pos": {
-    "x": 4160,
+    "x": 4420,
     "y": 900
    },
    "params": {
@@ -2310,7 +2325,7 @@
    "id": "mine_place_add3",
    "type": "array.add",
    "pos": {
-    "x": 4420,
+    "x": 4680,
     "y": 0
    },
    "params": {
@@ -2322,7 +2337,7 @@
    "id": "mine_place_g3",
    "type": "var.get",
    "pos": {
-    "x": 4680,
+    "x": 4940,
     "y": 1080
    },
    "params": {
@@ -2334,7 +2349,7 @@
    "id": "mine_place_ret",
    "type": "fn.return",
    "pos": {
-    "x": 4940,
+    "x": 5200,
     "y": 0
    },
    "params": {},
@@ -2786,16 +2801,15 @@
   },
   {
    "id": "heal_at_bots",
-   "type": "bots.goal",
+   "type": "bots.offer",
    "pos": {
     "x": 2860,
     "y": 0
    },
    "params": {
-    "kind": "loot",
-    "prio": 40,
-    "secs": 3600,
-    "radius": 48
+    "kind": "pickup",
+    "cost": 60,
+    "order": 2
    },
    "graph": "heal_at"
   },
@@ -3085,14 +3099,12 @@
   },
   {
    "id": "heal_take_botsoff",
-   "type": "bots.goal_clear",
+   "type": "bots.offer_clear",
    "pos": {
     "x": 5460,
     "y": 0
    },
-   "params": {
-    "kind": "loot"
-   },
+   "params": {},
    "graph": "heal_take"
   },
   {
@@ -3418,16 +3430,15 @@
   },
   {
    "id": "weap_at_bots",
-   "type": "bots.goal",
+   "type": "bots.offer",
    "pos": {
     "x": 2860,
     "y": 0
    },
    "params": {
-    "kind": "loot",
-    "prio": 40,
-    "secs": 3600,
-    "radius": 48
+    "kind": "pickup",
+    "cost": 60,
+    "order": 1
    },
    "graph": "weap_at"
   },
@@ -3624,14 +3635,12 @@
   },
   {
    "id": "weap_take_botsoff",
-   "type": "bots.goal_clear",
+   "type": "bots.offer_clear",
    "pos": {
     "x": 3380,
     "y": 0
    },
-   "params": {
-    "kind": "loot"
-   },
+   "params": {},
    "graph": "weap_take"
   },
   {
@@ -4540,6 +4549,56 @@
     "y": 180
    },
    "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_five",
+   "type": "math.compare",
+   "pos": {
+    "x": 3900,
+    "y": 900
+   },
+   "params": {
+    "op": "eq",
+    "b": 5
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br5",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_h2",
+   "type": "var.get",
+   "pos": {
+    "x": 4420,
+    "y": 1080
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {
+    "tag": "potato",
+    "radius": 260,
+    "strength": 8,
+    "secs": 5
+   },
    "graph": "hp_tick"
   },
   {
@@ -7289,7 +7348,7 @@
     "pin": "then"
    },
    "to": {
-    "node": "mine_place_add0",
+    "node": "mine_place_avoid",
     "pin": "exec"
    }
   },
@@ -7300,12 +7359,34 @@
     "pin": "volume"
    },
    "to": {
+    "node": "mine_place_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "mine_w16",
+   "from": {
+    "node": "mine_place_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w17",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
     "node": "mine_place_add0",
     "pin": "item"
    }
   },
   {
-   "id": "mine_w16",
+   "id": "mine_w18",
    "from": {
     "node": "mine_place_g0",
     "pin": "out"
@@ -7316,7 +7397,7 @@
    }
   },
   {
-   "id": "mine_w17",
+   "id": "mine_w19",
    "from": {
     "node": "mine_place_add0",
     "pin": "then"
@@ -7327,7 +7408,7 @@
    }
   },
   {
-   "id": "mine_w18",
+   "id": "mine_w20",
    "from": {
     "node": "mine_place_mark",
     "pin": "out"
@@ -7338,7 +7419,7 @@
    }
   },
   {
-   "id": "mine_w19",
+   "id": "mine_w21",
    "from": {
     "node": "mine_place_g1",
     "pin": "out"
@@ -7349,7 +7430,7 @@
    }
   },
   {
-   "id": "mine_w20",
+   "id": "mine_w22",
    "from": {
     "node": "mine_place_add1",
     "pin": "then"
@@ -7360,7 +7441,7 @@
    }
   },
   {
-   "id": "mine_w21",
+   "id": "mine_w23",
    "from": {
     "node": "mine_place_entry",
     "pin": "who"
@@ -7371,7 +7452,7 @@
    }
   },
   {
-   "id": "mine_w22",
+   "id": "mine_w24",
    "from": {
     "node": "mine_place_g2",
     "pin": "out"
@@ -7382,7 +7463,7 @@
    }
   },
   {
-   "id": "mine_w23",
+   "id": "mine_w25",
    "from": {
     "node": "mine_place_add2",
     "pin": "then"
@@ -7393,7 +7474,7 @@
    }
   },
   {
-   "id": "mine_w24",
+   "id": "mine_w26",
    "from": {
     "node": "mine_place_dmg",
     "pin": "out"
@@ -7404,7 +7485,7 @@
    }
   },
   {
-   "id": "mine_w25",
+   "id": "mine_w27",
    "from": {
     "node": "mine_place_g3",
     "pin": "out"
@@ -7415,7 +7496,7 @@
    }
   },
   {
-   "id": "mine_w26",
+   "id": "mine_w28",
    "from": {
     "node": "mine_place_add3",
     "pin": "then"
@@ -7426,7 +7507,7 @@
    }
   },
   {
-   "id": "mine_w27",
+   "id": "mine_w29",
    "from": {
     "node": "mine_place_vol",
     "pin": "volume"
@@ -7437,7 +7518,7 @@
    }
   },
   {
-   "id": "mine_w28",
+   "id": "mine_w30",
    "from": {
     "node": "mine_step_gv",
     "pin": "out"
@@ -7448,7 +7529,7 @@
    }
   },
   {
-   "id": "mine_w29",
+   "id": "mine_w31",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -7459,7 +7540,7 @@
    }
   },
   {
-   "id": "mine_w30",
+   "id": "mine_w32",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7470,7 +7551,7 @@
    }
   },
   {
-   "id": "mine_w31",
+   "id": "mine_w33",
    "from": {
     "node": "mine_step_entry",
     "pin": "then"
@@ -7481,7 +7562,7 @@
    }
   },
   {
-   "id": "mine_w32",
+   "id": "mine_w34",
    "from": {
     "node": "mine_step_known",
     "pin": "out"
@@ -7492,7 +7573,7 @@
    }
   },
   {
-   "id": "mine_w33",
+   "id": "mine_w35",
    "from": {
     "node": "mine_step_g_own",
     "pin": "out"
@@ -7503,7 +7584,7 @@
    }
   },
   {
-   "id": "mine_w34",
+   "id": "mine_w36",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7514,7 +7595,7 @@
    }
   },
   {
-   "id": "mine_w35",
+   "id": "mine_w37",
    "from": {
     "node": "mine_step_br0",
     "pin": "true"
@@ -7525,7 +7606,7 @@
    }
   },
   {
-   "id": "mine_w36",
+   "id": "mine_w38",
    "from": {
     "node": "mine_step_entry",
     "pin": "who"
@@ -7536,7 +7617,7 @@
    }
   },
   {
-   "id": "mine_w37",
+   "id": "mine_w39",
    "from": {
     "node": "mine_step_asp",
     "pin": "out"
@@ -7547,7 +7628,7 @@
    }
   },
   {
-   "id": "mine_w38",
+   "id": "mine_w40",
    "from": {
     "node": "mine_step_own",
     "pin": "out"
@@ -7558,7 +7639,7 @@
    }
   },
   {
-   "id": "mine_w39",
+   "id": "mine_w41",
    "from": {
     "node": "mine_step_asp",
     "pin": "ok"
@@ -7569,7 +7650,7 @@
    }
   },
   {
-   "id": "mine_w40",
+   "id": "mine_w42",
    "from": {
     "node": "mine_step_isown",
     "pin": "out"
@@ -7580,7 +7661,7 @@
    }
   },
   {
-   "id": "mine_w41",
+   "id": "mine_w43",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -7591,7 +7672,7 @@
    }
   },
   {
-   "id": "mine_w42",
+   "id": "mine_w44",
    "from": {
     "node": "mine_step_g_dmv",
     "pin": "out"
@@ -7602,7 +7683,7 @@
    }
   },
   {
-   "id": "mine_w43",
+   "id": "mine_w45",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7613,7 +7694,7 @@
    }
   },
   {
-   "id": "mine_w44",
+   "id": "mine_w46",
    "from": {
     "node": "mine_step_br",
     "pin": "false"
@@ -7624,7 +7705,7 @@
    }
   },
   {
-   "id": "mine_w45",
+   "id": "mine_w47",
    "from": {
     "node": "mine_step_asp",
     "pin": "fail"
@@ -7635,7 +7716,7 @@
    }
   },
   {
-   "id": "mine_w46",
+   "id": "mine_w48",
    "from": {
     "node": "mine_step_bpos",
     "pin": "out"
@@ -7646,7 +7727,7 @@
    }
   },
   {
-   "id": "mine_w47",
+   "id": "mine_w49",
    "from": {
     "node": "mine_step_dmv",
     "pin": "out"
@@ -7657,7 +7738,7 @@
    }
   },
   {
-   "id": "mine_w48",
+   "id": "mine_w50",
    "from": {
     "node": "mine_step_g_mkf",
     "pin": "out"
@@ -7668,7 +7749,7 @@
    }
   },
   {
-   "id": "mine_w49",
+   "id": "mine_w51",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7679,7 +7760,7 @@
    }
   },
   {
-   "id": "mine_w50",
+   "id": "mine_w52",
    "from": {
     "node": "mine_step_boom",
     "pin": "then"
@@ -7690,7 +7771,7 @@
    }
   },
   {
-   "id": "mine_w51",
+   "id": "mine_w53",
    "from": {
     "node": "mine_step_mkf",
     "pin": "out"
@@ -7701,7 +7782,7 @@
    }
   },
   {
-   "id": "mine_w52",
+   "id": "mine_w54",
    "from": {
     "node": "mine_step_rmmark",
     "pin": "then"
@@ -7712,7 +7793,7 @@
    }
   },
   {
-   "id": "mine_w53",
+   "id": "mine_w55",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -7723,7 +7804,7 @@
    }
   },
   {
-   "id": "mine_w54",
+   "id": "mine_w56",
    "from": {
     "node": "mine_step_rmvol",
     "pin": "then"
@@ -7734,7 +7815,7 @@
    }
   },
   {
-   "id": "mine_w55",
+   "id": "mine_w57",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7745,7 +7826,7 @@
    }
   },
   {
-   "id": "mine_w56",
+   "id": "mine_w58",
    "from": {
     "node": "mine_step_gr0",
     "pin": "out"
@@ -7756,7 +7837,7 @@
    }
   },
   {
-   "id": "mine_w57",
+   "id": "mine_w59",
    "from": {
     "node": "mine_step_rm0",
     "pin": "then"
@@ -7767,7 +7848,7 @@
    }
   },
   {
-   "id": "mine_w58",
+   "id": "mine_w60",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7778,7 +7859,7 @@
    }
   },
   {
-   "id": "mine_w59",
+   "id": "mine_w61",
    "from": {
     "node": "mine_step_gr1",
     "pin": "out"
@@ -7789,7 +7870,7 @@
    }
   },
   {
-   "id": "mine_w60",
+   "id": "mine_w62",
    "from": {
     "node": "mine_step_rm1",
     "pin": "then"
@@ -7800,7 +7881,7 @@
    }
   },
   {
-   "id": "mine_w61",
+   "id": "mine_w63",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7811,7 +7892,7 @@
    }
   },
   {
-   "id": "mine_w62",
+   "id": "mine_w64",
    "from": {
     "node": "mine_step_gr2",
     "pin": "out"
@@ -7822,7 +7903,7 @@
    }
   },
   {
-   "id": "mine_w63",
+   "id": "mine_w65",
    "from": {
     "node": "mine_step_rm2",
     "pin": "then"
@@ -7833,7 +7914,7 @@
    }
   },
   {
-   "id": "mine_w64",
+   "id": "mine_w66",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -7844,7 +7925,7 @@
    }
   },
   {
-   "id": "mine_w65",
+   "id": "mine_w67",
    "from": {
     "node": "mine_step_gr3",
     "pin": "out"
@@ -7855,7 +7936,7 @@
    }
   },
   {
-   "id": "mine_w66",
+   "id": "mine_w68",
    "from": {
     "node": "mine_step_rm3",
     "pin": "then"
@@ -7866,7 +7947,7 @@
    }
   },
   {
-   "id": "mine_w67",
+   "id": "mine_w69",
    "from": {
     "node": "mine_step_br",
     "pin": "true"
@@ -7877,7 +7958,7 @@
    }
   },
   {
-   "id": "mine_w68",
+   "id": "mine_w70",
    "from": {
     "node": "mine_step_br0",
     "pin": "false"
@@ -8484,6 +8565,17 @@
   {
    "id": "health_pack_w55",
    "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_botsoff",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w56",
+   "from": {
     "node": "heal_take_botsoff",
     "pin": "then"
    },
@@ -8493,7 +8585,7 @@
    }
   },
   {
-   "id": "health_pack_w56",
+   "id": "health_pack_w57",
    "from": {
     "node": "heal_take_mkf",
     "pin": "out"
@@ -8504,7 +8596,7 @@
    }
   },
   {
-   "id": "health_pack_w57",
+   "id": "health_pack_w58",
    "from": {
     "node": "heal_take_rmmk",
     "pin": "then"
@@ -8515,7 +8607,7 @@
    }
   },
   {
-   "id": "health_pack_w58",
+   "id": "health_pack_w59",
    "from": {
     "node": "heal_take_in",
     "pin": "vol"
@@ -8526,7 +8618,7 @@
    }
   },
   {
-   "id": "health_pack_w59",
+   "id": "health_pack_w60",
    "from": {
     "node": "heal_take_rmvol",
     "pin": "then"
@@ -8537,7 +8629,7 @@
    }
   },
   {
-   "id": "health_pack_w60",
+   "id": "health_pack_w61",
    "from": {
     "node": "heal_take_posf",
     "pin": "out"
@@ -8548,7 +8640,7 @@
    }
   },
   {
-   "id": "health_pack_w61",
+   "id": "health_pack_w62",
    "from": {
     "node": "heal_take_keep",
     "pin": "then"
@@ -8559,7 +8651,7 @@
    }
   },
   {
-   "id": "health_pack_w62",
+   "id": "health_pack_w63",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -8570,7 +8662,7 @@
    }
   },
   {
-   "id": "health_pack_w63",
+   "id": "health_pack_w64",
    "from": {
     "node": "heal_take_gr0",
     "pin": "out"
@@ -8581,7 +8673,7 @@
    }
   },
   {
-   "id": "health_pack_w64",
+   "id": "health_pack_w65",
    "from": {
     "node": "heal_take_rm0",
     "pin": "then"
@@ -8592,7 +8684,7 @@
    }
   },
   {
-   "id": "health_pack_w65",
+   "id": "health_pack_w66",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -8603,7 +8695,7 @@
    }
   },
   {
-   "id": "health_pack_w66",
+   "id": "health_pack_w67",
    "from": {
     "node": "heal_take_gr1",
     "pin": "out"
@@ -8614,7 +8706,7 @@
    }
   },
   {
-   "id": "health_pack_w67",
+   "id": "health_pack_w68",
    "from": {
     "node": "heal_take_rm1",
     "pin": "then"
@@ -8625,7 +8717,7 @@
    }
   },
   {
-   "id": "health_pack_w68",
+   "id": "health_pack_w69",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -8636,7 +8728,7 @@
    }
   },
   {
-   "id": "health_pack_w69",
+   "id": "health_pack_w70",
    "from": {
     "node": "heal_take_gr2",
     "pin": "out"
@@ -8647,7 +8739,7 @@
    }
   },
   {
-   "id": "health_pack_w70",
+   "id": "health_pack_w71",
    "from": {
     "node": "heal_take_rm2",
     "pin": "then"
@@ -8658,7 +8750,7 @@
    }
   },
   {
-   "id": "health_pack_w71",
+   "id": "health_pack_w72",
    "from": {
     "node": "heal_take_seq",
     "pin": "then0"
@@ -8669,7 +8761,7 @@
    }
   },
   {
-   "id": "health_pack_w72",
+   "id": "health_pack_w73",
    "from": {
     "node": "heal_take_in",
     "pin": "respawn"
@@ -8680,7 +8772,7 @@
    }
   },
   {
-   "id": "health_pack_w73",
+   "id": "health_pack_w74",
    "from": {
     "node": "heal_take_rs_set",
     "pin": "out"
@@ -8691,7 +8783,7 @@
    }
   },
   {
-   "id": "health_pack_w74",
+   "id": "health_pack_w75",
    "from": {
     "node": "heal_take_in",
     "pin": "respawn"
@@ -8702,7 +8794,7 @@
    }
   },
   {
-   "id": "health_pack_w75",
+   "id": "health_pack_w76",
    "from": {
     "node": "heal_take_rs_d",
     "pin": "out"
@@ -8713,7 +8805,7 @@
    }
   },
   {
-   "id": "health_pack_w76",
+   "id": "health_pack_w77",
    "from": {
     "node": "heal_take_seq",
     "pin": "then1"
@@ -8724,7 +8816,7 @@
    }
   },
   {
-   "id": "health_pack_w77",
+   "id": "health_pack_w78",
    "from": {
     "node": "heal_take_rs",
     "pin": "out"
@@ -8735,7 +8827,7 @@
    }
   },
   {
-   "id": "health_pack_w78",
+   "id": "health_pack_w79",
    "from": {
     "node": "heal_take_wait",
     "pin": "then"
@@ -8746,7 +8838,7 @@
    }
   },
   {
-   "id": "health_pack_w79",
+   "id": "health_pack_w80",
    "from": {
     "node": "heal_take_spot",
     "pin": "out"
@@ -9221,6 +9313,17 @@
   {
    "id": "weapon_pick_w43",
    "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_botsoff",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w44",
+   "from": {
     "node": "weap_take_botsoff",
     "pin": "then"
    },
@@ -9230,7 +9333,7 @@
    }
   },
   {
-   "id": "weapon_pick_w44",
+   "id": "weapon_pick_w45",
    "from": {
     "node": "weap_take_mkf",
     "pin": "out"
@@ -9241,7 +9344,7 @@
    }
   },
   {
-   "id": "weapon_pick_w45",
+   "id": "weapon_pick_w46",
    "from": {
     "node": "weap_take_rmmk",
     "pin": "then"
@@ -9252,7 +9355,7 @@
    }
   },
   {
-   "id": "weapon_pick_w46",
+   "id": "weapon_pick_w47",
    "from": {
     "node": "weap_take_in",
     "pin": "vol"
@@ -9263,7 +9366,7 @@
    }
   },
   {
-   "id": "weapon_pick_w47",
+   "id": "weapon_pick_w48",
    "from": {
     "node": "weap_take_rmvol",
     "pin": "then"
@@ -9274,7 +9377,7 @@
    }
   },
   {
-   "id": "weapon_pick_w48",
+   "id": "weapon_pick_w49",
    "from": {
     "node": "weap_take_posf",
     "pin": "out"
@@ -9285,7 +9388,7 @@
    }
   },
   {
-   "id": "weapon_pick_w49",
+   "id": "weapon_pick_w50",
    "from": {
     "node": "weap_take_keep",
     "pin": "then"
@@ -9296,7 +9399,7 @@
    }
   },
   {
-   "id": "weapon_pick_w50",
+   "id": "weapon_pick_w51",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -9307,7 +9410,7 @@
    }
   },
   {
-   "id": "weapon_pick_w51",
+   "id": "weapon_pick_w52",
    "from": {
     "node": "weap_take_gr0",
     "pin": "out"
@@ -9318,7 +9421,7 @@
    }
   },
   {
-   "id": "weapon_pick_w52",
+   "id": "weapon_pick_w53",
    "from": {
     "node": "weap_take_rm0",
     "pin": "then"
@@ -9329,7 +9432,7 @@
    }
   },
   {
-   "id": "weapon_pick_w53",
+   "id": "weapon_pick_w54",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -9340,7 +9443,7 @@
    }
   },
   {
-   "id": "weapon_pick_w54",
+   "id": "weapon_pick_w55",
    "from": {
     "node": "weap_take_gr1",
     "pin": "out"
@@ -9351,7 +9454,7 @@
    }
   },
   {
-   "id": "weapon_pick_w55",
+   "id": "weapon_pick_w56",
    "from": {
     "node": "weap_take_rm1",
     "pin": "then"
@@ -9362,7 +9465,7 @@
    }
   },
   {
-   "id": "weapon_pick_w56",
+   "id": "weapon_pick_w57",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -9373,7 +9476,7 @@
    }
   },
   {
-   "id": "weapon_pick_w57",
+   "id": "weapon_pick_w58",
    "from": {
     "node": "weap_take_gr2",
     "pin": "out"
@@ -9384,7 +9487,7 @@
    }
   },
   {
-   "id": "weapon_pick_w58",
+   "id": "weapon_pick_w59",
    "from": {
     "node": "weap_take_rm2",
     "pin": "then"
@@ -9395,7 +9498,7 @@
    }
   },
   {
-   "id": "weapon_pick_w59",
+   "id": "weapon_pick_w60",
    "from": {
     "node": "weap_take_seq",
     "pin": "then0"
@@ -9406,7 +9509,7 @@
    }
   },
   {
-   "id": "weapon_pick_w60",
+   "id": "weapon_pick_w61",
    "from": {
     "node": "weap_take_in",
     "pin": "respawn"
@@ -9417,7 +9520,7 @@
    }
   },
   {
-   "id": "weapon_pick_w61",
+   "id": "weapon_pick_w62",
    "from": {
     "node": "weap_take_rs_set",
     "pin": "out"
@@ -9428,7 +9531,7 @@
    }
   },
   {
-   "id": "weapon_pick_w62",
+   "id": "weapon_pick_w63",
    "from": {
     "node": "weap_take_in",
     "pin": "respawn"
@@ -9439,7 +9542,7 @@
    }
   },
   {
-   "id": "weapon_pick_w63",
+   "id": "weapon_pick_w64",
    "from": {
     "node": "weap_take_rs_d",
     "pin": "out"
@@ -9450,7 +9553,7 @@
    }
   },
   {
-   "id": "weapon_pick_w64",
+   "id": "weapon_pick_w65",
    "from": {
     "node": "weap_take_seq",
     "pin": "then1"
@@ -9461,7 +9564,7 @@
    }
   },
   {
-   "id": "weapon_pick_w65",
+   "id": "weapon_pick_w66",
    "from": {
     "node": "weap_take_rs",
     "pin": "out"
@@ -9472,7 +9575,7 @@
    }
   },
   {
-   "id": "weapon_pick_w66",
+   "id": "weapon_pick_w67",
    "from": {
     "node": "weap_take_wait",
     "pin": "then"
@@ -9483,7 +9586,7 @@
    }
   },
   {
-   "id": "weapon_pick_w67",
+   "id": "weapon_pick_w68",
    "from": {
     "node": "weap_take_spot",
     "pin": "out"
@@ -10420,7 +10523,7 @@
   {
    "id": "hot_potato_w59",
    "from": {
-    "node": "hp_tick_br",
+    "node": "hp_tick_br2",
     "pin": "false"
    },
    "to": {
@@ -10431,17 +10534,6 @@
   {
    "id": "hot_potato_w60",
    "from": {
-    "node": "hp_tick_br2",
-    "pin": "false"
-   },
-   "to": {
-    "node": "hp_tick_ret2",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "hot_potato_w61",
-   "from": {
     "node": "hp_tick_zero",
     "pin": "out"
    },
@@ -10451,7 +10543,84 @@
    }
   },
   {
-   "id": "ev_w479",
+   "id": "hot_potato_w61",
+   "from": {
+    "node": "hp_tick_lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_five",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w62",
+   "from": {
+    "node": "hp_tick_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w63",
+   "from": {
+    "node": "hp_tick_five",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w64",
+   "from": {
+    "node": "hp_tick_br5",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w65",
+   "from": {
+    "node": "hp_tick_h2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "hot_potato_w66",
+   "from": {
+    "node": "hp_tick_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w67",
+   "from": {
+    "node": "hp_tick_br5",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w489",
    "from": {
     "node": "ev1",
     "pin": "then"
@@ -10462,7 +10631,7 @@
    }
   },
   {
-   "id": "ev_w480",
+   "id": "ev_w490",
    "from": {
     "node": "ev2",
     "pin": "then0"
@@ -10473,7 +10642,7 @@
    }
   },
   {
-   "id": "ev_w481",
+   "id": "ev_w491",
    "from": {
     "node": "ev3",
     "pin": "then"
@@ -10484,7 +10653,7 @@
    }
   },
   {
-   "id": "ev_w482",
+   "id": "ev_w492",
    "from": {
     "node": "ev3",
     "pin": "entity"
@@ -10495,7 +10664,7 @@
    }
   },
   {
-   "id": "ev_w483",
+   "id": "ev_w493",
    "from": {
     "node": "ev4",
     "pin": "next"
@@ -10506,7 +10675,7 @@
    }
   },
   {
-   "id": "ev_w484",
+   "id": "ev_w494",
    "from": {
     "node": "ev5",
     "pin": "then"
@@ -10517,7 +10686,7 @@
    }
   },
   {
-   "id": "ev_w485",
+   "id": "ev_w495",
    "from": {
     "node": "ev5",
     "pin": "entity"
@@ -10528,7 +10697,7 @@
    }
   },
   {
-   "id": "ev_w486",
+   "id": "ev_w496",
    "from": {
     "node": "ev6",
     "pin": "next"
@@ -10539,7 +10708,7 @@
    }
   },
   {
-   "id": "ev_w487",
+   "id": "ev_w497",
    "from": {
     "node": "ev7",
     "pin": "then"
@@ -10550,7 +10719,7 @@
    }
   },
   {
-   "id": "ev_w488",
+   "id": "ev_w498",
    "from": {
     "node": "ev7",
     "pin": "entity"
@@ -10561,7 +10730,7 @@
    }
   },
   {
-   "id": "ev_w489",
+   "id": "ev_w499",
    "from": {
     "node": "ev8",
     "pin": "then"
@@ -10572,7 +10741,7 @@
    }
   },
   {
-   "id": "ev_w490",
+   "id": "ev_w500",
    "from": {
     "node": "ev9",
     "pin": "then"
@@ -10583,7 +10752,7 @@
    }
   },
   {
-   "id": "ev_w491",
+   "id": "ev_w501",
    "from": {
     "node": "ev9",
     "pin": "entity"
@@ -10594,7 +10763,7 @@
    }
   },
   {
-   "id": "ev_w492",
+   "id": "ev_w502",
    "from": {
     "node": "ev11",
     "pin": "out"
@@ -10605,7 +10774,7 @@
    }
   },
   {
-   "id": "ev_w493",
+   "id": "ev_w503",
    "from": {
     "node": "ev10",
     "pin": "then"
@@ -10616,7 +10785,7 @@
    }
   },
   {
-   "id": "ev_w494",
+   "id": "ev_w504",
    "from": {
     "node": "ev12",
     "pin": "out"
@@ -10627,7 +10796,7 @@
    }
   },
   {
-   "id": "ev_w495",
+   "id": "ev_w505",
    "from": {
     "node": "ev13",
     "pin": "out"
@@ -10638,7 +10807,7 @@
    }
   },
   {
-   "id": "ev_w496",
+   "id": "ev_w506",
    "from": {
     "node": "ev14",
     "pin": "started"
@@ -10649,7 +10818,7 @@
    }
   },
   {
-   "id": "ev_w497",
+   "id": "ev_w507",
    "from": {
     "node": "ev15",
     "pin": "then"
@@ -10660,7 +10829,7 @@
    }
   },
   {
-   "id": "ev_w498",
+   "id": "ev_w508",
    "from": {
     "node": "ev15",
     "pin": "player"
@@ -10671,7 +10840,7 @@
    }
   },
   {
-   "id": "ev_w499",
+   "id": "ev_w509",
    "from": {
     "node": "ev16",
     "pin": "out"
@@ -10682,7 +10851,7 @@
    }
   },
   {
-   "id": "ev_w500",
+   "id": "ev_w510",
    "from": {
     "node": "ev17",
     "pin": "then"
@@ -10693,7 +10862,7 @@
    }
   },
   {
-   "id": "ev_w501",
+   "id": "ev_w511",
    "from": {
     "node": "ev18",
     "pin": "then"
@@ -10704,7 +10873,7 @@
    }
   },
   {
-   "id": "ev_w502",
+   "id": "ev_w512",
    "from": {
     "node": "ev18",
     "pin": "player"
@@ -10715,7 +10884,7 @@
    }
   },
   {
-   "id": "ev_w503",
+   "id": "ev_w513",
    "from": {
     "node": "ev19",
     "pin": "out"
@@ -10726,7 +10895,7 @@
    }
   },
   {
-   "id": "ev_w504",
+   "id": "ev_w514",
    "from": {
     "node": "ev20",
     "pin": "out"
@@ -10737,7 +10906,7 @@
    }
   },
   {
-   "id": "ev_w505",
+   "id": "ev_w515",
    "from": {
     "node": "ev2",
     "pin": "then1"
@@ -10748,7 +10917,7 @@
    }
   },
   {
-   "id": "ev_w506",
+   "id": "ev_w516",
    "from": {
     "node": "ev22",
     "pin": "tick"
@@ -10759,7 +10928,7 @@
    }
   },
   {
-   "id": "ev_w507",
+   "id": "ev_w517",
    "from": {
     "node": "ev23",
     "pin": "then0"
@@ -10770,7 +10939,7 @@
    }
   },
   {
-   "id": "ev_w508",
+   "id": "ev_w518",
    "from": {
     "node": "ev23",
     "pin": "then1"
@@ -10781,7 +10950,7 @@
    }
   },
   {
-   "id": "ev_w509",
+   "id": "ev_w519",
    "from": {
     "node": "ev25",
     "pin": "each"
@@ -10792,7 +10961,7 @@
    }
   },
   {
-   "id": "ev_w510",
+   "id": "ev_w520",
    "from": {
     "node": "ev25",
     "pin": "player"
@@ -10803,7 +10972,7 @@
    }
   },
   {
-   "id": "ev_w511",
+   "id": "ev_w521",
    "from": {
     "node": "ev26",
     "pin": "out"
@@ -10814,7 +10983,7 @@
    }
   },
   {
-   "id": "ev_w512",
+   "id": "ev_w522",
    "from": {
     "node": "ev27",
     "pin": "out"
@@ -10825,7 +10994,7 @@
    }
   },
   {
-   "id": "ev_w513",
+   "id": "ev_w523",
    "from": {
     "node": "ev28",
     "pin": "then"
@@ -10836,7 +11005,7 @@
    }
   },
   {
-   "id": "ev_w514",
+   "id": "ev_w524",
    "from": {
     "node": "ev28",
     "pin": "yes"
@@ -10847,7 +11016,7 @@
    }
   },
   {
-   "id": "ev_w515",
+   "id": "ev_w525",
    "from": {
     "node": "ev29",
     "pin": "true"
@@ -10858,7 +11027,7 @@
    }
   },
   {
-   "id": "ev_w516",
+   "id": "ev_w526",
    "from": {
     "node": "ev25",
     "pin": "player"
@@ -10869,7 +11038,7 @@
    }
   },
   {
-   "id": "ev_w517",
+   "id": "ev_w527",
    "from": {
     "node": "ev30",
     "pin": "out"
@@ -10880,7 +11049,7 @@
    }
   },
   {
-   "id": "ev_w518",
+   "id": "ev_w528",
    "from": {
     "node": "ev31",
     "pin": "use"
@@ -10891,7 +11060,7 @@
    }
   },
   {
-   "id": "ev_w519",
+   "id": "ev_w529",
    "from": {
     "node": "ev25",
     "pin": "player"
@@ -10902,7 +11071,7 @@
    }
   },
   {
-   "id": "ev_w520",
+   "id": "ev_w530",
    "from": {
     "node": "ev32",
     "pin": "out"
@@ -10913,7 +11082,7 @@
    }
   },
   {
-   "id": "ev_w521",
+   "id": "ev_w531",
    "from": {
     "node": "ev33",
     "pin": "out"
@@ -10924,7 +11093,7 @@
    }
   },
   {
-   "id": "ev_w522",
+   "id": "ev_w532",
    "from": {
     "node": "ev31",
     "pin": "wait"
@@ -10935,7 +11104,7 @@
    }
   },
   {
-   "id": "ev_w523",
+   "id": "ev_w533",
    "from": {
     "node": "ev25",
     "pin": "player"
@@ -10946,7 +11115,7 @@
    }
   },
   {
-   "id": "ev_w524",
+   "id": "ev_w534",
    "from": {
     "node": "ev35",
     "pin": "out"
@@ -10957,7 +11126,7 @@
    }
   },
   {
-   "id": "ev_w525",
+   "id": "ev_w535",
    "from": {
     "node": "ev36",
     "pin": "out"
@@ -10968,7 +11137,7 @@
    }
   },
   {
-   "id": "ev_w526",
+   "id": "ev_w536",
    "from": {
     "node": "ev29",
     "pin": "false"
@@ -10979,7 +11148,7 @@
    }
   },
   {
-   "id": "ev_w527",
+   "id": "ev_w537",
    "from": {
     "node": "ev25",
     "pin": "player"
@@ -10990,7 +11159,7 @@
    }
   },
   {
-   "id": "ev_w528",
+   "id": "ev_w538",
    "from": {
     "node": "ev38",
     "pin": "out"
@@ -11001,7 +11170,7 @@
    }
   },
   {
-   "id": "ev_w529",
+   "id": "ev_w539",
    "from": {
     "node": "ev45",
     "pin": "then"
@@ -11012,7 +11181,7 @@
    }
   },
   {
-   "id": "ev_w530",
+   "id": "ev_w540",
    "from": {
     "node": "ev40",
     "pin": "out"
@@ -11023,7 +11192,7 @@
    }
   },
   {
-   "id": "ev_w531",
+   "id": "ev_w541",
    "from": {
     "node": "ev41",
     "pin": "out"
@@ -11034,7 +11203,7 @@
    }
   },
   {
-   "id": "ev_w532",
+   "id": "ev_w542",
    "from": {
     "node": "ev45",
     "pin": "volume"
@@ -11045,7 +11214,7 @@
    }
   },
   {
-   "id": "ev_w533",
+   "id": "ev_w543",
    "from": {
     "node": "ev45",
     "pin": "who"
@@ -11056,7 +11225,7 @@
    }
   },
   {
-   "id": "ev_w534",
+   "id": "ev_w544",
    "from": {
     "node": "ev47",
     "pin": "then"
@@ -11067,7 +11236,7 @@
    }
   },
   {
-   "id": "ev_w535",
+   "id": "ev_w545",
    "from": {
     "node": "ev42",
     "pin": "out"
@@ -11078,7 +11247,7 @@
    }
   },
   {
-   "id": "ev_w536",
+   "id": "ev_w546",
    "from": {
     "node": "ev43",
     "pin": "out"
@@ -11089,7 +11258,7 @@
    }
   },
   {
-   "id": "ev_w537",
+   "id": "ev_w547",
    "from": {
     "node": "ev47",
     "pin": "volume"
@@ -11100,7 +11269,7 @@
    }
   },
   {
-   "id": "ev_w538",
+   "id": "ev_w548",
    "from": {
     "node": "ev47",
     "pin": "who"
@@ -11111,7 +11280,7 @@
    }
   },
   {
-   "id": "ev_w539",
+   "id": "ev_w549",
    "from": {
     "node": "ev49",
     "pin": "then"
@@ -11122,7 +11291,7 @@
    }
   },
   {
-   "id": "ev_w540",
+   "id": "ev_w550",
    "from": {
     "node": "ev44",
     "pin": "out"
@@ -11133,7 +11302,7 @@
    }
   },
   {
-   "id": "ev_w541",
+   "id": "ev_w551",
    "from": {
     "node": "ev49",
     "pin": "who"
@@ -11144,7 +11313,7 @@
    }
   },
   {
-   "id": "ev_w542",
+   "id": "ev_w552",
    "from": {
     "node": "ev51",
     "pin": "then"
@@ -11155,7 +11324,7 @@
    }
   },
   {
-   "id": "ev_w543",
+   "id": "ev_w553",
    "from": {
     "node": "ev51",
     "pin": "volume"
@@ -11166,7 +11335,7 @@
    }
   },
   {
-   "id": "ev_w544",
+   "id": "ev_w554",
    "from": {
     "node": "ev51",
     "pin": "who"
@@ -11177,7 +11346,7 @@
    }
   },
   {
-   "id": "ev_w545",
+   "id": "ev_w555",
    "from": {
     "node": "ev53",
     "pin": "then"
@@ -11188,7 +11357,7 @@
    }
   },
   {
-   "id": "ev_w546",
+   "id": "ev_w556",
    "from": {
     "node": "ev53",
     "pin": "attacker"
@@ -11199,7 +11368,7 @@
    }
   },
   {
-   "id": "ev_w547",
+   "id": "ev_w557",
    "from": {
     "node": "ev53",
     "pin": "victim"
@@ -11210,7 +11379,7 @@
    }
   },
   {
-   "id": "ev_w548",
+   "id": "ev_w558",
    "from": {
     "node": "ev55",
     "pin": "then"
@@ -11221,7 +11390,7 @@
    }
   },
   {
-   "id": "ev_w549",
+   "id": "ev_w559",
    "from": {
     "node": "ev56",
     "pin": "then"
@@ -11232,7 +11401,7 @@
    }
   },
   {
-   "id": "ev_w550",
+   "id": "ev_w560",
    "from": {
     "node": "ev55",
     "pin": "who"
@@ -11243,7 +11412,7 @@
    }
   },
   {
-   "id": "ev_w551",
+   "id": "ev_w561",
    "from": {
     "node": "ev56",
     "pin": "entity"
@@ -11254,7 +11423,7 @@
    }
   },
   {
-   "id": "ev_w552",
+   "id": "ev_w562",
    "from": {
     "node": "ev57",
     "pin": "out"
@@ -11394,7 +11563,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: the mine is marked for bots to avoid once Bots Avoid Area exists (until then they may walk into it)."
+   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: they keep away from mines (Bots Avoid Area on each one)."
   },
   {
    "id": "health_pack_help",
@@ -11407,7 +11576,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is a loot goal, so hurt or not, bots go and grab it."
+   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is offered to them as a pickup (hurt bots want it most)."
   },
   {
    "id": "health_pack_c1",
@@ -11433,7 +11602,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each spawner is a loot goal, so bots go and grab it."
+   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each one is offered to them as a pickup."
   },
   {
    "id": "weapon_pick_c1",
@@ -11472,7 +11641,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else hunts the holder, and the holder runs (a bot holder follows the farthest player away for a few seconds)."
+   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else chases the holder, a bot holder runs (it follows someone else away for a few seconds), and in the last 5 seconds every bot runs from the holder."
   },
   {
    "id": "hot_potato_c1",

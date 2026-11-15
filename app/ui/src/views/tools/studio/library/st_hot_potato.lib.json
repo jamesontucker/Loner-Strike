@@ -574,6 +574,56 @@
    },
    "params": {},
    "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_five",
+   "type": "math.compare",
+   "pos": {
+    "x": 3900,
+    "y": 900
+   },
+   "params": {
+    "op": "eq",
+    "b": 5
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br5",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_h2",
+   "type": "var.get",
+   "pos": {
+    "x": 4420,
+    "y": 1080
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {
+    "tag": "potato",
+    "radius": 260,
+    "strength": 8,
+    "secs": 5
+   },
+   "graph": "hp_tick"
   }
  ],
  "edges": [
@@ -1218,7 +1268,7 @@
   {
    "id": "w59",
    "from": {
-    "node": "hp_tick_br",
+    "node": "hp_tick_br2",
     "pin": "false"
    },
    "to": {
@@ -1229,8 +1279,74 @@
   {
    "id": "w60",
    "from": {
-    "node": "hp_tick_br2",
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "boom"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "hp_tick_lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_five",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "hp_tick_br",
     "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "hp_tick_five",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "hp_tick_br5",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "hp_tick_h2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "hp_tick_avoid",
+    "pin": "then"
    },
    "to": {
     "node": "hp_tick_ret2",
@@ -1238,14 +1354,14 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w67",
    "from": {
-    "node": "hp_tick_zero",
-    "pin": "out"
+    "node": "hp_tick_br5",
+    "pin": "false"
    },
    "to": {
     "node": "hp_tick_ret2",
-    "pin": "boom"
+    "pin": "exec"
    }
   }
  ],
@@ -1261,7 +1377,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else hunts the holder, and the holder runs (a bot holder follows the farthest player away for a few seconds)."
+   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else chases the holder, a bot holder runs (it follows someone else away for a few seconds), and in the last 5 seconds every bot runs from the holder."
   },
   {
    "id": "c1",

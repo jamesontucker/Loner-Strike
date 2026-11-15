@@ -41,7 +41,7 @@ fn starter_test_modes_check_clean_and_generate() {
             assert!(src.contains("public plugin_init()"), "{part}");
             // what each premade there brings (premades waiting for other agents' nodes aren't in yet)
             let has = |f: &str| g.functions.iter().any(|x| x.id == f) || g.macros.iter().any(|x| x.id == f);
-            for (f, want) in [("heal_take", "loot"), ("jp_launch", "jumppad"), ("mine_step", "\"mine\""), ("ks_kill", "is on a killing spree!"), ("lv_lose", "Lives left: "), ("cz_make", "capture"), ("hp_mark", "has the hot potato!"), ("fb_throw", "sprites/fexplo.spr"), ("dash_go", "weapons/knife_slash1.wav")] {
+            for (f, want) in [("heal_take", "pickup"), ("jp_launch", "jumppad"), ("mine_step", "\"mine\""), ("ks_kill", "is on a killing spree!"), ("lv_lose", "Lives left: "), ("cz_make", "capture"), ("hp_mark", "has the hot potato!"), ("fb_throw", "sprites/fexplo.spr"), ("dash_go", "weapons/knife_slash1.wav")] {
                 if has(f) {
                     assert!(src.contains(want), "{part} {f}: {want}");
                 }

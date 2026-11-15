@@ -304,7 +304,7 @@ it.note("Fireball: the projectile carries the damage (Radius 150, an explosion w
 # ---- Proximity Mine ---------------------------------------------------------------------
 # (each mine's marker, owner and damage in lists beside the list of mine volumes, at the same place)
 it = item("st_mine", "Proximity Mine", "Places a mine at the player's feet that blows up when someone steps near (Radius 0: 96, Damage 0: 120).", "Starter: abilities",
-          "Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: the mine is marked for bots to avoid once Bots Avoid Area exists (until then they may walk into it).")
+          "Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: they keep away from mines (Bots Avoid Area on each one).")
 VOLS = it.var("mine_vols", "Mines", "array<entity>", "mode")
 MARKS = it.var("mine_marks", "Mine markers", "array<entity>", "mode")
 OWNER = it.var("mine_owner", "Mine owners", "array<player>", "mode")
@@ -316,6 +316,10 @@ pos = it.N("pos", "vec.player", row=2, what="origin"); it.W(e, "who", pos, "play
 v = it.N("vol", "vol.spawn", shape="sphere", radius=96, name="mine"); it.W(e, "then", v, "exec"); it.W(pos, "out", v, "pos")
 mk = it.N("mark", "fx.marker", sprite="sprites/ledglow.spr", height=4, scale=0.3, r=255, g=40, b=0, pulse=True); it.W(v, "then", mk, "exec"); it.W(pos, "out", mk, "pos")
 prev = (mk, "then")
+if "bots.avoid" in NODES_OK:
+    # bots keep away from it (riding on the mine's volume: gone with it)
+    av = it.N("avoid", "bots.avoid", tag="mine", radius=120, strength=8, secs=0); it.W(mk, "then", av, "exec"); it.W(v, "volume", av, "at_ent")
+    prev = (av, "then")
 for k, (var, of, src) in enumerate([(VOLS, "entity", (v, "volume")), (MARKS, "entity", (mk, "out")), (OWNER, "player", (e, "who")), (DMG, "number", (dm, "out"))]):
     ad = it.N(f"add{k}", "array.add", of=of); it.W(prev[0], prev[1], ad, "exec"); it.W(src[0], src[1], ad, "item")
     g = it.get(f"g{k}", var, row=3 + k); it.W(g, "out", ad, "array")
@@ -366,8 +370,11 @@ def pickup(file, pre, name, desc, help, give):
         ad = it.N(f"add{k}", "array.add", of=of); it.W(prev[0], prev[1], ad, "exec"); it.W(src[0], src[1], ad, "item")
         g = it.get(f"g{k}", var, row=4 + k); it.W(g, "out", ad, "array")
         prev = (ad, "then")
-    # bots go and get it (a loot goal there)
-    bg = it.N("bots", "bots.goal", kind="loot", prio=40, secs=3600, radius=48); it.W(prev[0], prev[1], bg, "exec"); it.W(vol, "volume", bg, "at")
+    # bots go and get it: offered to them as a pickup (W2's kind; weight 60), else a loot goal
+    if "pickup" in [c[0] for p in NODES["bots.offer"]["params"] if p["id"] == "kind" for c in p["choices"]]:
+        bg = it.N("bots", "bots.offer", kind="pickup", cost=60, order=give["order"]); it.W(prev[0], prev[1], bg, "exec"); it.W(vol, "volume", bg, "at")
+    else:
+        bg = it.N("bots", "bots.goal", kind="loot", prio=40, secs=3600, radius=48); it.W(prev[0], prev[1], bg, "exec"); it.W(vol, "volume", bg, "at")
     it.W(bg, "then", eout, "next"); it.W(vol, "volume", eout, "pick")
     ein, eout = it.macro(f"{pre}_spawn", f"Spawn {name}", [("go", "In", "exec"), ("at", "At", "entity")], [("next", "Then", "exec"), ("pick", "Pickup", "entity")])
     ep = it.N("epos", "vec.entity", row=2); it.W(ein, "at", ep, "in")
@@ -390,7 +397,10 @@ def pickup(file, pre, name, desc, help, give):
         return a
     pf = at("posf", POS, "vector", 5)
     mf = at("mkf", MK, "entity", 6)
-    clr = it.N("botsoff", "bots.goal_clear", kind="loot"); it.W(done[0], done[1], clr, "exec")
+    if it.nodes[[n["id"] for n in it.nodes].index(f"{pre}_at_bots")]["type"] == "bots.offer":
+        clr = it.N("botsoff", "bots.offer_clear"); it.W(done[0], done[1], clr, "exec"); it.W(ein, "vol", clr, "at")
+    else:
+        clr = it.N("botsoff", "bots.goal_clear", kind="loot"); it.W(done[0], done[1], clr, "exec")
     rm = it.N("rmmk", "fx.marker_remove"); it.W(clr, "then", rm, "exec"); it.W(mf, "out", rm, "marker")
     rv = it.N("rmvol", "vol.remove"); it.W(rm, "then", rv, "exec"); it.W(ein, "vol", rv, "volume")
     # the spot kept for the respawn (local copy, before the lists drop this pickup)
@@ -424,8 +434,8 @@ def heal_build(it, ein, asp):
 
 
 pickup("st_health_pack", "heal", "Health Pack", "A health pack on a trigger volume: heals (0: 50, up to 100) and comes back after Respawn seconds (0: 20).",
-       "Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is a loot goal, so hurt or not, bots go and grab it.",
-       {"marker": {"sprite": "sprites/glow01.spr", "height": 16, "scale": 0.5, "r": 40, "g": 255, "b": 60, "pulse": True}, "inputs": [("heal", "Heal", "number")], "build": heal_build})
+       "Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is offered to them as a pickup (hurt bots want it most).",
+       {"marker": {"sprite": "sprites/glow01.spr", "height": 16, "scale": 0.5, "r": 40, "g": 255, "b": 60, "pulse": True}, "inputs": [("heal", "Heal", "number")], "build": heal_build, "order": 2})
 
 
 def weapon_build(it, ein, asp):
@@ -435,8 +445,8 @@ def weapon_build(it, ein, asp):
 
 
 pickup("st_weapon_pick", "weap", "Weapon Pickup", "A weapon lying on a trigger volume: gives it (Weapon, e.g. awp) and comes back after Respawn seconds (0: 20).",
-       "Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each spawner is a loot goal, so bots go and grab it.",
-       {"marker": {"sprite": "sprites/arrow1.spr", "height": 24, "scale": 0.4, "r": 255, "g": 200, "b": 0, "pulse": True}, "inputs": [("weapon", "Weapon", "text")], "build": weapon_build})
+       "Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each one is offered to them as a pickup.",
+       {"marker": {"sprite": "sprites/arrow1.spr", "height": 24, "scale": 0.4, "r": 255, "g": 200, "b": 0, "pulse": True}, "inputs": [("weapon", "Weapon", "text")], "build": weapon_build, "order": 1})
 
 # =========================================================================================
 # Player state
@@ -481,10 +491,14 @@ r = it.ret(); it.W(hud, "then", r, "exec"); it.W(g, "out", r, "left"); it.W(out,
 
 # ---- Status effects ---------------------------------------------------------------------
 it = item("st_status", "Burn, Slow and Freeze", "Status effects with timers: Burn (Seconds 0: 4, Damage a second 0: 5), Slow (0: 4 s at 0: 150 speed) and Freeze (0: 2 s).", "Starter: player state",
-          "Call one from a hit, a trap or an ability. Each ends by itself; Slow puts the speed back to 250. Bots: a burning player's spot is marked for bots to avoid once Bots Avoid Area exists.")
+          "Call one from a hit, a trap or an ability. Each ends by itself; Slow puts the speed back to 250. Bots: they keep clear of a burning player while it burns.")
 ein, eout = it.macro("st_burn", "Burn", [("go", "In", "exec"), ("who", "Player", "player"), ("by", "By", "player"), ("secs", "Seconds", "number"), ("dps", "Damage a second", "number")], [("next", "Then", "exec")], root=True)
 b = it.N("burn", "fun.burn", secs=4, dps=5); it.W(ein, "go", b, "exec"); it.W(ein, "who", b, "player"); it.W(ein, "by", b, "by")
-it.W(b, "then", eout, "next")
+if "bots.avoid" in NODES_OK:
+    av = it.N("avoid", "bots.avoid", tag="burning", radius=110, strength=5, secs=4); it.W(b, "then", av, "exec"); it.W(ein, "who", av, "at_ent")
+    it.W(av, "then", eout, "next")
+else:
+    it.W(b, "then", eout, "next")
 it.note("Burn uses Set On Fire's own timer; Seconds and Damage a second are its settings (wire them in to change them per call).")
 ein, eout = it.macro("st_slow", "Slow", [("go", "In", "exec"), ("who", "Player", "player"), ("secs", "Seconds", "number"), ("speed", "Speed", "number")], [("next", "Then", "exec"), ("over", "Over", "exec")])
 sc = it.default("secs", ein, "secs", 4)
@@ -611,7 +625,7 @@ it.W(h, "then", eout, "next")
 
 # ---- Hot Potato -------------------------------------------------------------------------
 it = item("st_hot_potato", "Hot Potato", "A bomb one player holds for Seconds (0: 20): a hit passes it on, and when time runs out it blows up its holder.", "Starter: spectacle",
-          "Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else hunts the holder, and the holder runs (a bot holder follows the farthest player away for a few seconds).")
+          "Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else chases the holder, a bot holder runs (it follows someone else away for a few seconds), and in the last 5 seconds every bot runs from the holder.")
 HOLD = it.var("hp_holder", "Potato holder", "player", "mode")
 LEFTV = it.var("hp_left", "Potato left", "number", "mode", 0)
 e = it.function("hp_give", "Give Potato", [("who", "Player", "player"), ("secs", "Seconds", "number")], root=True)
@@ -654,7 +668,16 @@ boom = it.N("boom", "fx.explosion", dmg=500, radius=180); it.W(br2, "true", boom
 off = it.N("off", "player.set_glow", color="off"); it.W(boom, "then", off, "exec"); it.W(h1, "out", off, "player")
 clr = it.N("clear", "bots.goal_clear", kind="0", who="all"); it.W(off, "then", clr, "exec")
 r = it.ret(); it.W(clr, "then", r, "exec"); it.W(z, "out", r, "boom")
-r2 = it.N("ret2", "fn.return", row=1); it.pins[r2] = ({"exec", "boom"}, set()); it.W(br, "false", r2, "exec"); it.W(br2, "false", r2, "exec"); it.W(z, "out", r2, "boom")
+r2 = it.N("ret2", "fn.return", row=1); it.pins[r2] = ({"exec", "boom"}, set()); it.W(br2, "false", r2, "exec"); it.W(z, "out", r2, "boom")
+if "bots.avoid" in NODES_OK:
+    # the last 5 seconds: everyone runs from the holder (once, at 5)
+    five = it.N("five", "math.compare", row=5, op="eq", b=5); it.W(lv, "out", five, "a")
+    br5 = it.N("br5", "flow.branch"); it.W(br, "false", br5, "exec"); it.W(five, "out", br5, "cond")
+    h2 = it.get("h2", HOLD, row=6)
+    av = it.N("avoid", "bots.avoid", tag="potato", radius=260, strength=8, secs=5); it.W(br5, "true", av, "exec"); it.W(h2, "out", av, "at_ent")
+    it.W(av, "then", r2, "exec"); it.W(br5, "false", r2, "exec")
+else:
+    it.W(br, "false", r2, "exec")
 it.note("Potato Tick: call it every second (a Repeat from Round Started). Blew up is Yes on the tick it went off; give a new potato then.")
 
 # =========================================================================================

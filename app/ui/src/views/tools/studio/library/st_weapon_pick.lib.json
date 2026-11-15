@@ -273,16 +273,15 @@
   },
   {
    "id": "weap_at_bots",
-   "type": "bots.goal",
+   "type": "bots.offer",
    "pos": {
     "x": 2860,
     "y": 0
    },
    "params": {
-    "kind": "loot",
-    "prio": 40,
-    "secs": 3600,
-    "radius": 48
+    "kind": "pickup",
+    "cost": 60,
+    "order": 1
    },
    "graph": "weap_at"
   },
@@ -479,14 +478,12 @@
   },
   {
    "id": "weap_take_botsoff",
-   "type": "bots.goal_clear",
+   "type": "bots.offer_clear",
    "pos": {
     "x": 3380,
     "y": 0
    },
-   "params": {
-    "kind": "loot"
-   },
+   "params": {},
    "graph": "weap_take"
   },
   {
@@ -1143,6 +1140,17 @@
   {
    "id": "w43",
    "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_botsoff",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
     "node": "weap_take_botsoff",
     "pin": "then"
    },
@@ -1152,7 +1160,7 @@
    }
   },
   {
-   "id": "w44",
+   "id": "w45",
    "from": {
     "node": "weap_take_mkf",
     "pin": "out"
@@ -1163,7 +1171,7 @@
    }
   },
   {
-   "id": "w45",
+   "id": "w46",
    "from": {
     "node": "weap_take_rmmk",
     "pin": "then"
@@ -1174,7 +1182,7 @@
    }
   },
   {
-   "id": "w46",
+   "id": "w47",
    "from": {
     "node": "weap_take_in",
     "pin": "vol"
@@ -1185,7 +1193,7 @@
    }
   },
   {
-   "id": "w47",
+   "id": "w48",
    "from": {
     "node": "weap_take_rmvol",
     "pin": "then"
@@ -1196,7 +1204,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w49",
    "from": {
     "node": "weap_take_posf",
     "pin": "out"
@@ -1207,7 +1215,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w50",
    "from": {
     "node": "weap_take_keep",
     "pin": "then"
@@ -1218,7 +1226,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w51",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -1229,7 +1237,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w52",
    "from": {
     "node": "weap_take_gr0",
     "pin": "out"
@@ -1240,7 +1248,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w53",
    "from": {
     "node": "weap_take_rm0",
     "pin": "then"
@@ -1251,7 +1259,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w54",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -1262,7 +1270,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w55",
    "from": {
     "node": "weap_take_gr1",
     "pin": "out"
@@ -1273,7 +1281,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w56",
    "from": {
     "node": "weap_take_rm1",
     "pin": "then"
@@ -1284,7 +1292,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w57",
    "from": {
     "node": "weap_take_idx",
     "pin": "out"
@@ -1295,7 +1303,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w58",
    "from": {
     "node": "weap_take_gr2",
     "pin": "out"
@@ -1306,7 +1314,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w59",
    "from": {
     "node": "weap_take_rm2",
     "pin": "then"
@@ -1317,7 +1325,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w60",
    "from": {
     "node": "weap_take_seq",
     "pin": "then0"
@@ -1328,7 +1336,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w61",
    "from": {
     "node": "weap_take_in",
     "pin": "respawn"
@@ -1339,7 +1347,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w62",
    "from": {
     "node": "weap_take_rs_set",
     "pin": "out"
@@ -1350,7 +1358,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w63",
    "from": {
     "node": "weap_take_in",
     "pin": "respawn"
@@ -1361,7 +1369,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w64",
    "from": {
     "node": "weap_take_rs_d",
     "pin": "out"
@@ -1372,7 +1380,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w65",
    "from": {
     "node": "weap_take_seq",
     "pin": "then1"
@@ -1383,7 +1391,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w66",
    "from": {
     "node": "weap_take_rs",
     "pin": "out"
@@ -1394,7 +1402,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w67",
    "from": {
     "node": "weap_take_wait",
     "pin": "then"
@@ -1405,7 +1413,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w68",
    "from": {
     "node": "weap_take_spot",
     "pin": "out"
@@ -1428,7 +1436,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each spawner is a loot goal, so bots go and grab it."
+   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each one is offered to them as a pickup."
   },
   {
    "id": "c1",

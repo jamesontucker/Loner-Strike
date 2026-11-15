@@ -212,10 +212,25 @@
    "graph": "mine_place"
   },
   {
+   "id": "mine_place_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "tag": "mine",
+    "radius": 120,
+    "strength": 8,
+    "secs": 0
+   },
+   "graph": "mine_place"
+  },
+  {
    "id": "mine_place_add0",
    "type": "array.add",
    "pos": {
-    "x": 2860,
+    "x": 3120,
     "y": 0
    },
    "params": {
@@ -227,7 +242,7 @@
    "id": "mine_place_g0",
    "type": "var.get",
    "pos": {
-    "x": 3120,
+    "x": 3380,
     "y": 540
    },
    "params": {
@@ -239,7 +254,7 @@
    "id": "mine_place_add1",
    "type": "array.add",
    "pos": {
-    "x": 3380,
+    "x": 3640,
     "y": 0
    },
    "params": {
@@ -251,7 +266,7 @@
    "id": "mine_place_g1",
    "type": "var.get",
    "pos": {
-    "x": 3640,
+    "x": 3900,
     "y": 720
    },
    "params": {
@@ -263,7 +278,7 @@
    "id": "mine_place_add2",
    "type": "array.add",
    "pos": {
-    "x": 3900,
+    "x": 4160,
     "y": 0
    },
    "params": {
@@ -275,7 +290,7 @@
    "id": "mine_place_g2",
    "type": "var.get",
    "pos": {
-    "x": 4160,
+    "x": 4420,
     "y": 900
    },
    "params": {
@@ -287,7 +302,7 @@
    "id": "mine_place_add3",
    "type": "array.add",
    "pos": {
-    "x": 4420,
+    "x": 4680,
     "y": 0
    },
    "params": {
@@ -299,7 +314,7 @@
    "id": "mine_place_g3",
    "type": "var.get",
    "pos": {
-    "x": 4680,
+    "x": 4940,
     "y": 1080
    },
    "params": {
@@ -311,7 +326,7 @@
    "id": "mine_place_ret",
    "type": "fn.return",
    "pos": {
-    "x": 4940,
+    "x": 5200,
     "y": 0
    },
    "params": {},
@@ -779,7 +794,7 @@
     "pin": "then"
    },
    "to": {
-    "node": "mine_place_add0",
+    "node": "mine_place_avoid",
     "pin": "exec"
    }
   },
@@ -790,12 +805,34 @@
     "pin": "volume"
    },
    "to": {
+    "node": "mine_place_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "mine_place_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
     "node": "mine_place_add0",
     "pin": "item"
    }
   },
   {
-   "id": "w16",
+   "id": "w18",
    "from": {
     "node": "mine_place_g0",
     "pin": "out"
@@ -806,7 +843,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w19",
    "from": {
     "node": "mine_place_add0",
     "pin": "then"
@@ -817,7 +854,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w20",
    "from": {
     "node": "mine_place_mark",
     "pin": "out"
@@ -828,7 +865,7 @@
    }
   },
   {
-   "id": "w19",
+   "id": "w21",
    "from": {
     "node": "mine_place_g1",
     "pin": "out"
@@ -839,7 +876,7 @@
    }
   },
   {
-   "id": "w20",
+   "id": "w22",
    "from": {
     "node": "mine_place_add1",
     "pin": "then"
@@ -850,7 +887,7 @@
    }
   },
   {
-   "id": "w21",
+   "id": "w23",
    "from": {
     "node": "mine_place_entry",
     "pin": "who"
@@ -861,7 +898,7 @@
    }
   },
   {
-   "id": "w22",
+   "id": "w24",
    "from": {
     "node": "mine_place_g2",
     "pin": "out"
@@ -872,7 +909,7 @@
    }
   },
   {
-   "id": "w23",
+   "id": "w25",
    "from": {
     "node": "mine_place_add2",
     "pin": "then"
@@ -883,7 +920,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w26",
    "from": {
     "node": "mine_place_dmg",
     "pin": "out"
@@ -894,7 +931,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w27",
    "from": {
     "node": "mine_place_g3",
     "pin": "out"
@@ -905,7 +942,7 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w28",
    "from": {
     "node": "mine_place_add3",
     "pin": "then"
@@ -916,7 +953,7 @@
    }
   },
   {
-   "id": "w27",
+   "id": "w29",
    "from": {
     "node": "mine_place_vol",
     "pin": "volume"
@@ -927,7 +964,7 @@
    }
   },
   {
-   "id": "w28",
+   "id": "w30",
    "from": {
     "node": "mine_step_gv",
     "pin": "out"
@@ -938,7 +975,7 @@
    }
   },
   {
-   "id": "w29",
+   "id": "w31",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -949,7 +986,7 @@
    }
   },
   {
-   "id": "w30",
+   "id": "w32",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -960,7 +997,7 @@
    }
   },
   {
-   "id": "w31",
+   "id": "w33",
    "from": {
     "node": "mine_step_entry",
     "pin": "then"
@@ -971,7 +1008,7 @@
    }
   },
   {
-   "id": "w32",
+   "id": "w34",
    "from": {
     "node": "mine_step_known",
     "pin": "out"
@@ -982,7 +1019,7 @@
    }
   },
   {
-   "id": "w33",
+   "id": "w35",
    "from": {
     "node": "mine_step_g_own",
     "pin": "out"
@@ -993,7 +1030,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w36",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1004,7 +1041,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w37",
    "from": {
     "node": "mine_step_br0",
     "pin": "true"
@@ -1015,7 +1052,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w38",
    "from": {
     "node": "mine_step_entry",
     "pin": "who"
@@ -1026,7 +1063,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w39",
    "from": {
     "node": "mine_step_asp",
     "pin": "out"
@@ -1037,7 +1074,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w40",
    "from": {
     "node": "mine_step_own",
     "pin": "out"
@@ -1048,7 +1085,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w41",
    "from": {
     "node": "mine_step_asp",
     "pin": "ok"
@@ -1059,7 +1096,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w42",
    "from": {
     "node": "mine_step_isown",
     "pin": "out"
@@ -1070,7 +1107,7 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w43",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -1081,7 +1118,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w44",
    "from": {
     "node": "mine_step_g_dmv",
     "pin": "out"
@@ -1092,7 +1129,7 @@
    }
   },
   {
-   "id": "w43",
+   "id": "w45",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1103,7 +1140,7 @@
    }
   },
   {
-   "id": "w44",
+   "id": "w46",
    "from": {
     "node": "mine_step_br",
     "pin": "false"
@@ -1114,7 +1151,7 @@
    }
   },
   {
-   "id": "w45",
+   "id": "w47",
    "from": {
     "node": "mine_step_asp",
     "pin": "fail"
@@ -1125,7 +1162,7 @@
    }
   },
   {
-   "id": "w46",
+   "id": "w48",
    "from": {
     "node": "mine_step_bpos",
     "pin": "out"
@@ -1136,7 +1173,7 @@
    }
   },
   {
-   "id": "w47",
+   "id": "w49",
    "from": {
     "node": "mine_step_dmv",
     "pin": "out"
@@ -1147,7 +1184,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w50",
    "from": {
     "node": "mine_step_g_mkf",
     "pin": "out"
@@ -1158,7 +1195,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w51",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1169,7 +1206,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w52",
    "from": {
     "node": "mine_step_boom",
     "pin": "then"
@@ -1180,7 +1217,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w53",
    "from": {
     "node": "mine_step_mkf",
     "pin": "out"
@@ -1191,7 +1228,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w54",
    "from": {
     "node": "mine_step_rmmark",
     "pin": "then"
@@ -1202,7 +1239,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w55",
    "from": {
     "node": "mine_step_entry",
     "pin": "mine"
@@ -1213,7 +1250,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w56",
    "from": {
     "node": "mine_step_rmvol",
     "pin": "then"
@@ -1224,7 +1261,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w57",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1235,7 +1272,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w58",
    "from": {
     "node": "mine_step_gr0",
     "pin": "out"
@@ -1246,7 +1283,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w59",
    "from": {
     "node": "mine_step_rm0",
     "pin": "then"
@@ -1257,7 +1294,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w60",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1268,7 +1305,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w61",
    "from": {
     "node": "mine_step_gr1",
     "pin": "out"
@@ -1279,7 +1316,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w62",
    "from": {
     "node": "mine_step_rm1",
     "pin": "then"
@@ -1290,7 +1327,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w63",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1301,7 +1338,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w64",
    "from": {
     "node": "mine_step_gr2",
     "pin": "out"
@@ -1312,7 +1349,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w65",
    "from": {
     "node": "mine_step_rm2",
     "pin": "then"
@@ -1323,7 +1360,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w66",
    "from": {
     "node": "mine_step_idx",
     "pin": "out"
@@ -1334,7 +1371,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w67",
    "from": {
     "node": "mine_step_gr3",
     "pin": "out"
@@ -1345,7 +1382,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w68",
    "from": {
     "node": "mine_step_rm3",
     "pin": "then"
@@ -1356,7 +1393,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w69",
    "from": {
     "node": "mine_step_br",
     "pin": "true"
@@ -1367,7 +1404,7 @@
    }
   },
   {
-   "id": "w68",
+   "id": "w70",
    "from": {
     "node": "mine_step_br0",
     "pin": "false"
@@ -1390,7 +1427,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: the mine is marked for bots to avoid once Bots Avoid Area exists (until then they may walk into it)."
+   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: they keep away from mines (Bots Avoid Area on each one)."
   }
  ]
 }

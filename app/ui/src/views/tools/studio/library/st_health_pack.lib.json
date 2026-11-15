@@ -273,16 +273,15 @@
   },
   {
    "id": "heal_at_bots",
-   "type": "bots.goal",
+   "type": "bots.offer",
    "pos": {
     "x": 2860,
     "y": 0
    },
    "params": {
-    "kind": "loot",
-    "prio": 40,
-    "secs": 3600,
-    "radius": 48
+    "kind": "pickup",
+    "cost": 60,
+    "order": 2
    },
    "graph": "heal_at"
   },
@@ -572,14 +571,12 @@
   },
   {
    "id": "heal_take_botsoff",
-   "type": "bots.goal_clear",
+   "type": "bots.offer_clear",
    "pos": {
     "x": 5460,
     "y": 0
    },
-   "params": {
-    "kind": "loot"
-   },
+   "params": {},
    "graph": "heal_take"
   },
   {
@@ -1368,6 +1365,17 @@
   {
    "id": "w55",
    "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_botsoff",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
     "node": "heal_take_botsoff",
     "pin": "then"
    },
@@ -1377,7 +1385,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w57",
    "from": {
     "node": "heal_take_mkf",
     "pin": "out"
@@ -1388,7 +1396,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w58",
    "from": {
     "node": "heal_take_rmmk",
     "pin": "then"
@@ -1399,7 +1407,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w59",
    "from": {
     "node": "heal_take_in",
     "pin": "vol"
@@ -1410,7 +1418,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w60",
    "from": {
     "node": "heal_take_rmvol",
     "pin": "then"
@@ -1421,7 +1429,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w61",
    "from": {
     "node": "heal_take_posf",
     "pin": "out"
@@ -1432,7 +1440,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w62",
    "from": {
     "node": "heal_take_keep",
     "pin": "then"
@@ -1443,7 +1451,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w63",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -1454,7 +1462,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w64",
    "from": {
     "node": "heal_take_gr0",
     "pin": "out"
@@ -1465,7 +1473,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w65",
    "from": {
     "node": "heal_take_rm0",
     "pin": "then"
@@ -1476,7 +1484,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w66",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -1487,7 +1495,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w67",
    "from": {
     "node": "heal_take_gr1",
     "pin": "out"
@@ -1498,7 +1506,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w68",
    "from": {
     "node": "heal_take_rm1",
     "pin": "then"
@@ -1509,7 +1517,7 @@
    }
   },
   {
-   "id": "w68",
+   "id": "w69",
    "from": {
     "node": "heal_take_idx",
     "pin": "out"
@@ -1520,7 +1528,7 @@
    }
   },
   {
-   "id": "w69",
+   "id": "w70",
    "from": {
     "node": "heal_take_gr2",
     "pin": "out"
@@ -1531,7 +1539,7 @@
    }
   },
   {
-   "id": "w70",
+   "id": "w71",
    "from": {
     "node": "heal_take_rm2",
     "pin": "then"
@@ -1542,7 +1550,7 @@
    }
   },
   {
-   "id": "w71",
+   "id": "w72",
    "from": {
     "node": "heal_take_seq",
     "pin": "then0"
@@ -1553,7 +1561,7 @@
    }
   },
   {
-   "id": "w72",
+   "id": "w73",
    "from": {
     "node": "heal_take_in",
     "pin": "respawn"
@@ -1564,7 +1572,7 @@
    }
   },
   {
-   "id": "w73",
+   "id": "w74",
    "from": {
     "node": "heal_take_rs_set",
     "pin": "out"
@@ -1575,7 +1583,7 @@
    }
   },
   {
-   "id": "w74",
+   "id": "w75",
    "from": {
     "node": "heal_take_in",
     "pin": "respawn"
@@ -1586,7 +1594,7 @@
    }
   },
   {
-   "id": "w75",
+   "id": "w76",
    "from": {
     "node": "heal_take_rs_d",
     "pin": "out"
@@ -1597,7 +1605,7 @@
    }
   },
   {
-   "id": "w76",
+   "id": "w77",
    "from": {
     "node": "heal_take_seq",
     "pin": "then1"
@@ -1608,7 +1616,7 @@
    }
   },
   {
-   "id": "w77",
+   "id": "w78",
    "from": {
     "node": "heal_take_rs",
     "pin": "out"
@@ -1619,7 +1627,7 @@
    }
   },
   {
-   "id": "w78",
+   "id": "w79",
    "from": {
     "node": "heal_take_wait",
     "pin": "then"
@@ -1630,7 +1638,7 @@
    }
   },
   {
-   "id": "w79",
+   "id": "w80",
    "from": {
     "node": "heal_take_spot",
     "pin": "out"
@@ -1653,7 +1661,7 @@
     "w": 1400,
     "h": 120
    },
-   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is a loot goal, so hurt or not, bots go and grab it."
+   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is offered to them as a pickup (hurt bots want it most)."
   },
   {
    "id": "c1",
