@@ -153,6 +153,18 @@ th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgb
 th { color: var(--faint); font-weight: 600; font-size: 15px; }
 td:first-child { white-space: nowrap; }
 .kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
+/* two balanced cards side by side (What can be shared), stacked on phones */
+.yesno { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 12px 0 16px; }
+.yesno > section { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 12px 16px 10px; }
+.yesno h3 { margin: 0 0 6px; font-size: 18px; }
+.yesno ul { padding-left: 24px; margin: 0; }
+.yesno li { font-size: 17px; line-height: 1.5; }
+.yesno li + li { margin-top: 6px; }
+article .yesno ul > li::before { content: "✓"; width: auto; height: auto; background: none; box-shadow: none; top: 0; left: -22px; font-weight: 700; color: #9be36a; }
+article .yesno .no ul > li::before { content: "✕"; color: #ff8f80; }
+/* a code chip never breaks in the middle: the line wraps between chips */
+.yesno code, td code { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 640px) { .yesno { grid-template-columns: 1fr; } }
 .note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
 .note p { margin: 4px 0; }
 .msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
@@ -1870,14 +1882,29 @@ lsctl logs        the last 100 console lines</code></pre>
   <h1>Publishing</h1>
   <p class="lead">Package it in the app and upload it to GameBanana, with the credits filled in for you, and it shows up in Community. The app never uploads or signs in to GameBanana for you.</p>
   <h2 id="publish-rules">What can be shared</h2>
-  <div class="table"><table>
-    <thead><tr><th>Yes</th><th>No</th></tr></thead>
-    <tbody>
-      <tr><td>Maps you made or added, with their nav, knowledge, overview, sounds, models and textures</td><td>The game's own stock maps</td></tr>
-      <tr><td>Game Mode Studio modes (only the graph is shared)</td><td>Plugin modes and anything compiled: <code>.amxx</code>, <code>.sma</code>, <code>.dll</code>, <code>.exe</code>, scripts</td></tr>
-      <tr><td>Prefabs, textures and sprays</td><td>Game settings files (<code>.cfg</code>, <code>liblist.gam</code>, plugin lists), archives inside the package, Metamod or <code>dlls</code> folders</td></tr>
-    </tbody>
-  </table></div>
+  <div class="yesno">
+    <section class="yes" aria-labelledby="share-yes">
+      <h3 id="share-yes">You can share</h3>
+      <ul>
+        <li>Maps you made or added, with their nav, knowledge and overview, and their own sounds, models, sprites and textures</li>
+        <li>A map's editable source, so others can <a href="#share-remix">remix it</a></li>
+        <li>Game Mode Studio modes: only the graph; each player's app builds it</li>
+        <li>The custom creatures and NPC models a map or mode uses, carried along in your own folder</li>
+        <li>Creature types on their own</li>
+        <li>Prefabs, textures and sprays</li>
+      </ul>
+    </section>
+    <section class="no" aria-labelledby="share-no">
+      <h3 id="share-no">Not shared</h3>
+      <ul>
+        <li>The game's own files: stock maps, models, sounds and textures</li>
+        <li>Plugins and compiled code: <code>.amxx</code> <code>.sma</code> <code>.dll</code> <code>.exe</code> and scripts. A plugin from <a href="#plugin-studio">Plugin Studio</a>: post its <code>.sma</code> on GameBanana yourself</li>
+        <li>Game settings files: <code>.cfg</code> <code>liblist.gam</code> and plugin lists</li>
+        <li>Archives inside the package</li>
+        <li>Metamod and <code>dlls</code> folders</li>
+      </ul>
+    </section>
+  </div>
   <p>Share your own work or work you may share, and credit what you used. Sprays are checked by a moderator first.</p>
   <h2 id="publish-steps">Publish a map</h2>
   <ol>
