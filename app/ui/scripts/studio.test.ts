@@ -19,6 +19,7 @@ import royaleRaw from "../src/views/tools/studio/templates/battle-royale.graph.j
 import runDialogRaw from "../src/views/tools/studio/library/run_dialog.lib.json?raw";
 import { botFix, botFixLabel, isBotsNote, quietNode } from "../src/views/tools/studio/botNotes";
 import { insertAsPlayer, wantsAsPlayer } from "../src/views/tools/studio/castOps";
+import { narrowed } from "../src/views/tools/studio/panels";
 import { allEnums } from "../src/views/tools/studio/schema";
 
 const template = (): Graph => {
@@ -607,4 +608,12 @@ test("a node with a comfort limit brings its Limits setting once (limits.ts)", (
   assert.equal(lim[0].setting?.group, "Limits");
   assert.ok(!addNode(emptyGraph("x", "X"), "debug.print", { x: 0, y: 0 }).graph.variables.length, "others bring nothing");
   assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(g))));
+});
+
+test("in a narrow window the side panels go one at a time (the canvas keeps its room)", () => {
+  assert.deepEqual(narrowed({ left: true, right: false }, { right: true }, true), { right: true, left: false }, "Details opened: My mode folds");
+  assert.deepEqual(narrowed({ left: false, right: true }, { left: true }, true), { left: true, right: false });
+  assert.deepEqual(narrowed({ left: true, right: false }, { right: true }, false), { right: true }, "a wide window: both");
+  assert.deepEqual(narrowed({ left: true, right: true }, { left: true, right: true }, true), { left: true, right: true }, "both at once (the tour): both");
+  assert.deepEqual(narrowed({ left: true, right: true }, { minimap: true }, true), { minimap: true });
 });

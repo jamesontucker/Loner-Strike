@@ -476,6 +476,14 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 .st-main.no-left { grid-template-columns: 26px minmax(0, 1fr) 290px; }
 .st-main.no-right { grid-template-columns: 230px minmax(0, 1fr) 26px; }
 .st-main.no-left.no-right { grid-template-columns: 26px minmax(0, 1fr) 26px; }
+/* a window under 1200 px: narrower side panels (with both open at 1024 the canvas was about 320 px;
+   panels.ts also shows one at a time there) */
+@media (max-width: 1199px) {
+  .st-main { grid-template-columns: 170px minmax(0, 1fr) 210px; }
+  .st-main.no-left { grid-template-columns: 26px minmax(0, 1fr) 250px; }
+  .st-main.no-right { grid-template-columns: 210px minmax(0, 1fr) 26px; }
+  .st-main.no-left.no-right { grid-template-columns: 26px minmax(0, 1fr) 26px; }
+}
 .st-center { min-width: 320px; }
 .st-panel { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .st-panel > .st-mb, .st-panel > .st-side { flex: 1; min-height: 0; }
