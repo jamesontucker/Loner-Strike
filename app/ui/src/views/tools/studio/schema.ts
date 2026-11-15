@@ -154,6 +154,16 @@ export const mapKitSchema = z.object({
 });
 export const macroSchema = z.object({ id, name: label(30), inputs: z.array(memberSchema).max(12).default([]), outputs: z.array(memberSchema).max(12).default([]), from: libFrom });
 
+/** Nodes and wires a graph can have (graph.rs MAX_NODES / MAX_EDGES): saving refuses past them, so
+ *  a saved file always opens again. */
+export const MAX_NODES = 2000;
+export const MAX_EDGES = 6000;
+/** Why a graph is too big to save, or null (graph.rs size_error). */
+export const sizeError = (g: { nodes: unknown[]; edges: unknown[] }): string | null =>
+  g.nodes.length > MAX_NODES || g.edges.length > MAX_EDGES
+    ? `That graph is too big to save: it has ${g.nodes.length} nodes and ${g.edges.length} wires, and a graph can have at most ${MAX_NODES} nodes and ${MAX_EDGES} wires. Move some of it into a Function or Macro, or remove what you don't need.`
+    : null;
+
 export const graphSchema = z.object({
   schema: z.literal(SCHEMA),
   version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(VERSION)]).transform(() => VERSION),
@@ -167,8 +177,8 @@ export const graphSchema = z.object({
     settings: z.array(z.object({ cvar: z.string().regex(/^[a-z_][a-z0-9_]{1,31}$/), value: z.number().finite().min(0).max(100000) })).max(32).optional(),
   }),
   variables: z.array(variableSchema).max(64).default([]),
-  nodes: z.array(nodeSchema).max(400).default([]),
-  edges: z.array(edgeSchema).max(1200).default([]),
+  nodes: z.array(nodeSchema).max(MAX_NODES).default([]),
+  edges: z.array(edgeSchema).max(MAX_EDGES).default([]),
   comments: z.array(commentSchema).max(100).default([]),
   enums: z.array(enumSchema).max(32).optional(),
   structs: z.array(structSchema).max(32).optional(),
@@ -253,6 +263,8 @@ export function parseGraph(v: unknown): { graph: Graph } | { error: string } {
   const o = v as Record<string, unknown>;
   if (o.schema !== SCHEMA) return { error: "That isn't a Game Mode Studio graph." };
   if (typeof o.version === "number" && o.version > VERSION) return { error: `That graph was made by a newer Loner-Strike (graph version ${o.version}). Update the app to open it.` };
+  if (Array.isArray(o.nodes) && Array.isArray(o.edges) && sizeError({ nodes: o.nodes, edges: o.edges }))
+    return { error: `That graph is too big to open: it has ${o.nodes.length} nodes and ${o.edges.length} wires (at most ${MAX_NODES} and ${MAX_EDGES}).` };
   const r = graphSchema.safeParse(v);
   if (!r.success) {
     const i = r.error.issues[0];

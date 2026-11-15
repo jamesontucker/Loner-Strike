@@ -150,3 +150,35 @@ fn many_pins_and_wired_loops_compile_with_amxxpc() {
     }
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// A graph of `n` Print nodes in a chain from Round Started (n - 1 wires after the first).
+fn chain(n: usize) -> Graph {
+    let mut nodes = vec![json!({"id": "rs", "type": "event.round_started"})];
+    let mut edges = vec![w(0, "rs", "then", "p0", "exec")];
+    for k in 0..n - 1 {
+        nodes.push(json!({"id": format!("p{k}"), "type": "debug.print", "params": {"text": "x", "chat": false}}));
+        if k > 0 {
+            edges.push(w(k, &format!("p{}", k - 1), "then", &format!("p{k}"), "exec"));
+        }
+    }
+    g(json!(nodes), json!(edges), json!([]))
+}
+
+#[test]
+fn a_graph_at_the_node_cap_saves_and_opens_again_and_one_over_is_refused_at_save() {
+    let dir = std::env::temp_dir().join(format!("ls-x2-cap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let at = chain(graph::MAX_NODES);
+    assert_eq!(at.nodes.len(), graph::MAX_NODES);
+    assert!(graph::size_error(&at).is_none());
+    save_graph(&dir, "pins_test", &at).unwrap();
+    let back = read_graph(&dir, "pins_test").unwrap();
+    assert_eq!(back.nodes.len(), graph::MAX_NODES);
+    assert!(!graph::validate(&back).iter().any(|p| p.level == "error" && p.message.contains("too big")));
+    let over = chain(graph::MAX_NODES + 1);
+    let e = save_graph(&dir, "pins_test", &over).unwrap_err();
+    assert!(e.contains("too big to save") && e.contains(&graph::MAX_NODES.to_string()), "{e}");
+    // the file on disk is still the one that fits
+    assert_eq!(read_graph(&dir, "pins_test").unwrap().nodes.len(), graph::MAX_NODES);
+    let _ = std::fs::remove_dir_all(&dir);
+}

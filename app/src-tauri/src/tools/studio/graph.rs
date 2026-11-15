@@ -40,15 +40,21 @@ pub const SCHEMA: &str = "loner-strike/graph";
 /// 4: the typed values (Model, Sprite, Sound, Decal, Color, the entity handles, Sound Loop, the
 /// Weapon / Hit Zone / Damage Kind enums, Transform). Versions 1-3 are read forward (migrate).
 pub const VERSION: u32 = 4;
-/// Limits that keep a graph (and the plugin made from it) sane.
-pub const MAX_NODES: usize = 400;
-pub const MAX_EDGES: usize = 1200;
+/// Limits that keep a graph (and the plugin made from it) sane. Nodes and wires: far above any real
+/// mode (the editor stays responsive at this many); saving refuses past them (size_error) so a
+/// saved file always opens again, and the UI's schema.ts has the same numbers.
+pub const MAX_NODES: usize = 2000;
+pub const MAX_EDGES: usize = 6000;
 pub const MAX_COMMENTS: usize = 100;
 pub const MAX_VARIABLES: usize = 64;
 pub const MAX_FUNCTIONS: usize = 64;
 pub const MAX_MACROS: usize = 32;
 pub const MAX_ENUMS: usize = 32;
 pub const MAX_STRUCTS: usize = 32;
+/// Why a graph is too big to save (and so to open again), or None.
+pub fn size_error(g: &Graph) -> Option<String> {
+    (g.nodes.len() > MAX_NODES || g.edges.len() > MAX_EDGES).then(|| format!("That graph is too big to save: it has {} nodes and {} wires, and a graph can have at most {MAX_NODES} nodes and {MAX_EDGES} wires. Move some of it into a Function or Macro, or remove what you don't need.", g.nodes.len(), g.edges.len()))
+}
 /// Inputs or outputs of a Function or Macro, fields of a struct, values of an enum.
 pub const MAX_MEMBERS: usize = 12;
 /// Text fields of one struct (each is 64 characters of every record).

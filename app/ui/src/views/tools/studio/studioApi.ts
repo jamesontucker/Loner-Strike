@@ -1,7 +1,7 @@
 // The Studio's server side (tools/studio/*.rs) and what a Playtest borrows from the app.
 
 import { get, post, tryGet } from "../common/api";
-import type { Graph } from "./schema";
+import { sizeError, type Graph } from "./schema";
 
 const S = "/api/tools/studio";
 
@@ -12,7 +12,11 @@ export type CompileResult = { ok?: boolean; problems?: Problem[]; output?: strin
 export const studioStatus = () => tryGet<{ game?: boolean; compiler?: boolean; graphsDir?: string }>(`${S}/status`);
 export const listGraphs = () => get<{ graphs: GraphInfo[] }>(`${S}/graphs`);
 export const openGraph = (id: string) => get<{ graph: unknown }>(`${S}/graph/${encodeURIComponent(id)}`);
-export const saveGraph = (g: Graph) => post<{ ok?: boolean }>(`${S}/graph/${encodeURIComponent(g.mode.id)}`, { graph: g });
+// (too big: refused here with why, as the server would; a saved file always opens again)
+export const saveGraph = (g: Graph) => {
+  const big = sizeError(g);
+  return big ? Promise.resolve({ error: big } as { ok?: boolean; error?: string }) : post<{ ok?: boolean }>(`${S}/graph/${encodeURIComponent(g.mode.id)}`, { graph: g });
+};
 export const deleteGraph = (id: string) => post<{ ok?: boolean }>(`${S}/graph/${encodeURIComponent(id)}/delete`);
 export const validate = (g: Graph) => post<{ problems?: Problem[] }>(`${S}/validate`, { graph: g });
 export const generate = (g: Graph, debug = false) => post<{ problems?: Problem[]; source?: string; plugin?: string }>(`${S}/generate`, { graph: g, debug });

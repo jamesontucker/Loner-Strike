@@ -60,8 +60,9 @@ export function removePin(g: Graph, nodeId: string): { graph: Graph } | { error:
   if (!node || !c || !now) return { error: "This node's pins are fixed." };
   if (now.n <= now.min) return { error: `${nodeDef(node.type)?.title ?? "This node"} needs at least ${now.min}.` };
   const next = c.kind === "count" ? withParams(g, nodeId, { [c.param]: now.n - 1 }) : withParams(g, nodeId, { cases: switchCases(node, nodeDef(node.type)!).slice(0, -1).join(",") });
-  const before = pinsOf(g, node);
-  const after = pinsOf(next, next.nodes.find((x) => x.id === nodeId)!);
+  // (with no wires: a wired pin that goes would otherwise stay on as an orphan pin)
+  const before = pinsOf({ ...g, edges: [] }, node);
+  const after = pinsOf({ ...next, edges: [] }, next.nodes.find((x) => x.id === nodeId)!);
   const goneIn = before.inputs.filter((p) => !after.inputs.some((q) => q.id === p.id)).map((p) => p.id);
   const goneOut = before.outputs.filter((p) => !after.outputs.some((q) => q.id === p.id)).map((p) => p.id);
   const wired = g.edges.some((e) => (e.to.node === nodeId && goneIn.includes(e.to.pin)) || (e.from.node === nodeId && goneOut.includes(e.from.pin)));

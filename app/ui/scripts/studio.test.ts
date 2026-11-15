@@ -701,3 +701,22 @@ test("file variables: a start value of the right kind loads, others are refused"
   // a text variable still can't hold a path (no /)
   assert.ok("error" in withVar("text", "models/w_c4.mdl"));
 });
+
+// ---- the node cap (X2): a graph at it opens; one over is refused at save, and opening says "too big"
+test("a graph at the node cap round-trips; over it, save refuses with the size and open says too big, not damaged", async () => {
+  const { MAX_NODES, sizeError } = await import("../src/views/tools/studio/schema");
+  const make = (n: number) => {
+    const g = emptyGraph("cap_test", "Cap");
+    g.nodes = Array.from({ length: n }, (_, k) => ({ id: `p${k}`, type: "debug.print", pos: { x: k, y: 0 }, params: {} }));
+    return g;
+  };
+  const at = make(MAX_NODES);
+  assert.equal(sizeError(at), null);
+  const back = parseGraph(JSON.parse(JSON.stringify(at)));
+  assert.ok("graph" in back, "error" in back ? back.error : "");
+  assert.equal((back as { graph: Graph }).graph.nodes.length, MAX_NODES);
+  const over = make(MAX_NODES + 1);
+  assert.match(sizeError(over) ?? "", new RegExp(`too big to save.*at most ${MAX_NODES} nodes`));
+  const opened = parseGraph(JSON.parse(JSON.stringify(over)));
+  assert.ok("error" in opened && /too big to open/.test(opened.error) && !/damaged/.test(opened.error));
+});

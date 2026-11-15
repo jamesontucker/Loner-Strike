@@ -70,7 +70,8 @@ const INTERNAL: &str = "Loner-Strike hit an internal error in the Game Mode Stud
 /// The Game Mode Menu reads at most this many modes (MAX_MODES in gamemodes.sma).
 const MAX_MODES: usize = 128;
 /// Graph files bigger than this aren't graphs anyone drew.
-const MAX_GRAPH_BYTES: u64 = 2 << 20;
+// (room for a graph at graph::MAX_NODES / MAX_EDGES)
+const MAX_GRAPH_BYTES: u64 = 8 << 20;
 
 /// The includes a generated plugin is built against (loner.inc and what it pulls in), written
 /// next to the plugin's source before each compile so they always match this app.
@@ -253,6 +254,9 @@ fn read_graph(dir: &Path, id: &str) -> Result<Graph, String> {
 fn save_graph(dir: &Path, id: &str, g: &Graph) -> Result<(), String> {
     if !graph::valid_mode_id(id) || g.mode.id != id {
         return Err(BAD_ID.into());
+    }
+    if let Some(e) = graph::size_error(g) {
+        return Err(e);
     }
     let text = serde_json::to_string_pretty(g).map_err(|_| INTERNAL.to_string())?;
     if text.len() as u64 > MAX_GRAPH_BYTES {
@@ -1235,7 +1239,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/status", get(api_status))
         .merge(modelpoints::routes())
         .route("/api/tools/studio/graphs", get(api_graphs))
-        .route("/api/tools/studio/graph/:id", get(api_graph).post(api_save))
+        // (a graph at the node cap is more than axum's 2 MB default)
+        .route("/api/tools/studio/graph/:id", get(api_graph).post(api_save).layer(axum::extract::DefaultBodyLimit::max(MAX_GRAPH_BYTES as usize + (1 << 20))))
         .route("/api/tools/studio/graph/:id/delete", post(api_delete))
         .route("/api/tools/studio/history/:id", get(api_history))
         .route("/api/tools/studio/history/:id/:n", get(api_history_version))
