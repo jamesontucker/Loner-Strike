@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map editor tools and keys · Loner-Strike docs</title>
+<meta name="description" content="Everything in the map editor's menus, panels and dialogs, and where to find it, with the keys.">
+<link rel="icon" href="../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root {
+  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
+  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
+  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
+  --signal: #c4b550; --ink: #26240f;
+  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+  --stencil: "Counter-Strike", Impact, sans-serif;
+  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --top: 58px;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--top) + 16px); }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
+a { color: var(--signal); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
+
+/* top bar, as on the home page */
+.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
+.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
+.brand .here { color: var(--faint); font-weight: 600; }
+.top nav { display: flex; gap: 22px; align-items: center; }
+.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
+.top nav a:hover { color: var(--bone); }
+.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.top nav a.btn:hover { background: #d4c55d; }
+
+/* the topic list on the left (sticky), one topic at a time on the right */
+.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
+.rail { align-self: stretch; }
+.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
+  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.search { margin: 0 12px 6px; }
+.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
+.search input::placeholder { color: var(--faint); opacity: .85; }
+.group { margin-top: 8px; }
+.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
+.side ul { list-style: none; margin: 0; padding: 0; }
+.side li + li { margin-top: 0; }
+.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
+.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
+.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
+.side .sub { display: none; padding: 2px 0 6px; }
+.side a[aria-current="page"] + .sub { display: block; }
+.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
+.side .sub a:hover, .side .sub a.on { color: var(--bone); }
+/* search results: one per heading, the topic above it, a snippet with the match marked */
+.results ul { list-style: none; margin: 0; padding: 0; }
+.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
+.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
+.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
+.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
+.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
+.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
+.flash { animation: flash 2.2s ease-out; }
+@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.wrong-link { margin: 0 12px 4px; }
+.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
+/* collapsible groups */
+.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
+.group-btn:hover { color: var(--bone); }
+.group-btn .chev { transition: transform .15s; font-size: 12px; }
+.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.group-btn[aria-expanded="false"] + ul { display: none; }
+/* on this page (wide screens) */
+.toc { display: none; }
+@media (min-width: 1200px) {
+  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
+  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
+  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
+  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
+  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
+  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
+  .toc a:hover { color: var(--bone); }
+  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
+html:not(.js) .search { display: none; }
+html:not(.js) .side .sub { display: block; }
+
+.menu-btn { display: none; }
+
+article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
+.topic + .topic { margin-top: 56px; }
+.js .topic { display: none; }
+.js .topic + .topic { margin-top: 0; }
+.js .topic.on { display: block; }
+.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
+h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
+h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
+h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
+h3 { font-size: 19px; margin: 22px 0 4px; }
+p, li, td { color: var(--dim); text-wrap: pretty; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+b, strong { color: var(--bone); }
+.lead { font-size: 20px; margin: 6px 0 0; }
+code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
+pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
+pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
+th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: 15px; }
+td:first-child { white-space: nowrap; }
+.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
+.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
+.note p { margin: 4px 0; }
+.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
+article ul { list-style: none; padding-left: 22px; }
+article ul > li { position: relative; }
+article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+article ol { list-style: none; padding-left: 34px; counter-reset: step; }
+article ol > li { position: relative; counter-increment: step; }
+article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
+.side .sub a { position: relative; }
+.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
+.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
+.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
+details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
+details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
+details.prov p { margin: 0; padding: 0 14px 12px; }
+@media (hover: none) { h2 .anchor { display: none; } }
+@media (max-width: 520px) {
+  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
+  .table td, .table th { display: block; border: 0; padding: 0; }
+  .table td:first-child { margin-bottom: 2px; }
+  .table thead { display: none; }
+}
+figure.shot { margin: 16px 0 20px; }
+figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
+figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
+h3 { font-weight: 700; }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
+.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
+.pager a:hover { background: var(--panel-2); }
+.pager .next { margin-left: auto; text-align: right; }
+.pager a[hidden] { display: none; }
+html:not(.js) .pager { display: none; }
+
+footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+footer a { color: var(--dim); }
+
+@media (max-width: 900px) {
+  .top nav a:not(.btn) { display: none; }
+  .brand .here { display: none; }
+  html { scroll-padding-top: calc(var(--top) + 64px); }
+  .docs { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: contents; }
+  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
+    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
+  .menu-btn .chev { transition: transform .15s; }
+  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
+  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
+  .js .side.open { display: block; }
+  h1 { font-size: 32px; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
+</style>
+<style>
+.ref .topic { display: block; }
+.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
+.ref .pins dt { color: var(--bone); font-weight: 600; }
+.ref .pins dd { margin: 0; color: var(--dim); }
+.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
+.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
+.ref .node h3 { margin: 0 0 4px; }
+.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
+.ref .meta { color: var(--faint); font-size: 15px; }
+.ref .side { position: static; max-height: none; }
+@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
+@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
+</style>
+</head>
+<body class="ref">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="../docs.html">Docs</a><a href="../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="docs">
+  <div class="rail"><nav class="side" aria-label="Map editor tools and keys"><div class="group"><b>Where</b><ul><li><a href="#t-file">File</a></li><li><a href="#t-edit">Edit</a></li><li><a href="#t-select">Select</a></li><li><a href="#t-view">View</a></li><li><a href="#t-tools">Tools</a></li><li><a href="#t-map">Map</a></li><li><a href="#t-help">Help</a></li><li><a href="#t-dialogs">Dialogs</a></li><li><a href="#t-keys-every-binding">Keys (every binding)</a></li><li><a href="#t-panels">Panels</a></li></ul></div></nav></div>
+  <article id="content" tabindex="-1">
+    <p class="crumb"><a href="../docs.html#reference">Reference</a></p>
+    <h1>Map editor tools and keys</h1>
+    <p class="lead">Everything in the map editor's menus, panels and dialogs, and where to find it, with the keys.</p>
+    <p class="meta">Made from the app's own catalog (the editor's coverage inventory), so it always matches the app.</p>
+<section class="topic" id="t-file"><h2>File</h2><dl class="pins"><dt>New map</dt><dd>File › New map, ⌘⌥N (Hammer ⌘N), start screen</dd><dt>Asks before replacing unsaved work</dt><dd>any New/Open/Import/Recent with changes</dd><dt>Open a project…</dt><dd>File, ⌘O, start screen</dd><dt>Recent files</dt><dd>File menu list, start screen list</dd><dt>Import a .map…</dt><dd>File, start screen</dd><dt>Import a Hammer .rmf or J.A.C.K. .jmf…</dt><dd>File, start screen</dd><dt>A file that isn't a map / isn't an rmf</dt><dd>the same</dd><dt>Save</dt><dd>File, ⌘S, bar's Save</dd><dt>Save as…</dt><dd>File, ⌘⇧S</dd><dt>Export a .map…</dt><dd>File, ⌘E</dd><dt>Project files</dt><dd>File › Project files</dd><dt>Map properties…</dt><dd>File, Map</dd><dt>Autosave recovery: Recover it / Throw it away</dt><dd>start screen banner</dd><dt>Back to the open map</dt><dd>start screen banner</dd><dt>Project panel: Save as a project…, Look again, Rename, Delete</dt><dd>Project panel</dd><dt>Project panel: Open, Show</dt><dd>Project panel</dd><dt>Project panel: Find missing files…, Copy into the game / the project</dt><dd>Project panel</dd></dl></section>
+<section class="topic" id="t-edit"><h2>Edit</h2><dl class="pins"><dt>Undo / Redo</dt><dd>Edit, ⌘Z, ⌘⇧Z / ⌘Y</dd><dt>Undo history (panel; click a step, redo by click)</dt><dd>Edit › Undo history</dd><dt>Cut / Copy / Paste</dt><dd>Edit, ⌘X/⌘C/⌘V</dd><dt>Paste special… (Row, Stairs, Ring, Spiral, copies, Cancel)</dt><dd>Edit, ⌘⇧V, Inspect</dd><dt>Duplicate</dt><dd>Edit, ⌘D, Inspect, Outline menu</dd><dt>Duplicate in place</dt><dd>Edit, ⌘⇧D</dd><dt>Duplicate (keep names)</dt><dd>palette</dd><dt>Apply the current texture</dt><dd>Edit, ⇧T</dd><dt>Delete</dt><dd>Edit, Delete/Backspace, Inspect</dd><dt>Find and replace… (textures, entity types, values, key names, whole name, case, only picked, Pick them)</dt><dd>Edit, ⌘F (Hammer ⌘⇧F)</dd><dt>Transform… (Move, Turn, Stretch, Line up, Spread out)</dt><dd>Edit, ⌘M</dd><dt>Line up and spread out…</dt><dd>Edit (2+ picked)</dd><dt>Replace with entity or prefab… (entity, prefab)</dt><dd>Edit</dd><dt>Group / Ungroup</dt><dd>Edit, ⌘G / ⌘⇧G (Hammer ⌘U), Inspect, Outline</dd><dt>Tie to entity (func_wall; type picker in Inspect)</dt><dd>Edit, ⌘T, Inspect</dd><dt>Move to world</dt><dd>Edit, Inspect (Hammer ⌘⇧W)</dd><dt>Hollow (wall thickness)</dt><dd>Edit, ⌘H, Inspect</dd><dt>Carve</dt><dd>Edit, Inspect (Hammer ⌘⇧C)</dd><dt>Merge</dt><dd>Edit, Inspect</dd><dt>Snap to grid</dt><dd>Edit, ⌘B, Inspect</dd><dt>Flip along X / Y / Z</dt><dd>Edit, Inspect (Hammer ⌘L/⌘I, TB ⌘F/⌘⌥F)</dd><dt>Turn 90° around X / Y / Z</dt><dd>Edit, Inspect</dd><dt>Line up on X/Y/Z: low/middle/high (9)</dt><dd>palette, Transform › Line up</dd><dt>Spread out evenly along X/Y/Z (3)</dt><dd>palette, Transform › Line up</dd></dl></section>
+<section class="topic" id="t-select"><h2>Select</h2><dl class="pins"><dt>Select all / none / invert</dt><dd>Select, ⌘A / ⌘⇧A / ⌘I</dd><dt>Select same texture / type / name</dt><dd>Select</dd><dt>Select touching / inside</dt><dd>Select</dd><dt>Go to brush or entity number… (editor and compiler numbers)</dt><dd>Select, ⌘J (Hammer ⌘⇧G)</dd><dt>Hide / Hide everything else / Show everything</dt><dd>Select, H / ⇧H / U (TB ⌘H/⌘I/⌘⇧H), Inspect, Outline</dd><dt>Hide all point entities / triggers and zones / world brushes</dt><dd>Select</dd><dt>Lock / Unlock everything</dt><dd>Select, L / ⇧L, Outline lock</dd><dt>Clicks pick whole groups / single objects / brushes</dt><dd>Select menu, tool options</dd><dt>Click picks, box picks (Auto, Fully inside, Touching), Only what you can see, Box anywhere in 3D</dt><dd>views, tool options</dd></dl></section>
+<section class="topic" id="t-view"><h2>View</h2><dl class="pins"><dt>Layout: Single / Quad / 1+3 / Two</dt><dd>View, ⌥1-⌥4, bar buttons</dd><dt>Maximize the pane / put it back</dt><dd>View, ⇧Space (Hammer ⇧Z, TB ⌘Space)</dd><dt>3D / Top / Front / Side view</dt><dd>View, ⇧1-⇧4, bar</dd><dt>Zoom to selection / whole map</dt><dd>View, Z / ⇧Z (Hammer ⌘⇧E, TB ⌘U)</dd><dt>Fly / orbit camera</dt><dd>View, F</dd><dt>Smaller / bigger grid</dt><dd>View, [ / ], Grid picker</dd><dt>Show / hide the grid</dt><dd>View, ⇧G, Grid dialog</dd><dt>Grid and snapping… (size, show, turn snap, 64-unit lines, snap, corner snap)</dt><dd>View</dd><dt>Texture lock on/off, Scale lock</dt><dd>View (Hammer ⇧L), tool options</dd><dt>Show frame time</dt><dd>View, ⌘⌥⇧F</dd><dt>Snap to grid on/off; Alt held</dt><dd>View, ⇧W, Snap button, Alt</dd><dt>Snap to corners and edges</dt><dd>View, Grid dialog</dd><dt>Move like Unreal / Blender / Hammer</dt><dd>View, first-open banner</dd><dt>Camera faster / slower</dt><dd>palette (right mouse + scroll in the view)</dd><dt>Models in place of entity boxes</dt><dd>View</dd><dt>Next drawing style for the pane; pane style picker</dt><dd>View, pane picker</dd><dt>Panel: Content, Inspect, Outline, Textures, Gameplay, Budget, I/O, Checks, Compile, Project, History</dt><dd>View</dd><dt>Panel layout: Default, Hammer, Unreal-like, All on the right; Reset</dt><dd>View</dd><dt>Content Browser / Content drawer</dt><dd>View, ⌘⇧Space (Mac)</dd><dt>Budget / I/O</dt><dd>View</dd></dl></section>
+<section class="topic" id="t-tools"><h2>Tools</h2><dl class="pins"><dt>Select, Move, Rotate, Scale, Vertex, Box, Shape, Clip, Entity, Texture, Measure</dt><dd>Tools menu, rail, Q W E R V B C X N T M (Hammer ⇧S ⇧V ⇧B ⇧X ⇧E ⇧A; TB R T C V B)</dd><dt>Box: drag draws; Height</dt><dd>Box tool</dd><dt>Shape: 7 kinds, sides, Preview…</dt><dd>Shape tool</dd><dt>Clip: two points, Tab, Enter, Keep both/behind/front, Cut</dt><dd>Clip tool</dd><dt>Entity: class to place, click places</dt><dd>Entity tool</dd><dt>Texture: click picks a face, Click paints, arrows slide</dt><dd>Texture tool</dd><dt>Measure: drag measures</dt><dd>Measure tool</dd><dt>Vertex: arrows move corners, Esc, Merge corners</dt><dd>Vertex tool</dd><dt>Move/Rotate/Scale gizmo drags, flat-view handles, push/pull a face, Shift-drag extrude</dt><dd>views</dd><dt>Arrows / Page Up / Page Down nudge (Undo)</dt><dd>keys</dd><dt>Camera marks: Ctrl+1-9 store, 1-9 go</dt><dd>keys</dd><dt>Esc: drops the corners, then the selection</dt><dd>key</dd><dt>Keys typed into a field don't run commands</dt><dd>any field</dd></dl></section>
+<section class="topic" id="t-map"><h2>Map</h2><dl class="pins"><dt>Map properties… (title, sky, draw distance, base light, sun color/brightness/pitch/angle, buying, bomb radius, WAD remove/add, Save)</dt><dd>Map, File, Inspect</dd><dt>Entity definitions: Add your own FGD… / Use ours only</dt><dd>Map properties</dd><dt>Entity report… (find, class, tick all, Pick, Delete, double-click)</dt><dd>Map, Inspect</dd><dt>Map information…</dt><dd>Map</dd><dt>Check the map (Checks panel)</dt><dd>Map</dd><dt>Publish… (budget ask, then Community › Publish)</dt><dd>Map, bar</dd><dt>Playtest (compile, install, .res, teach bots, launch)</dt><dd>Map, F5, bar, Compile panel</dd><dt>Playtest for real in the game</dt><dd>–</dd><dt>Go to leak / Show or hide the leak line / Load pointfile…</dt><dd>Map, leak bar</dd><dt>Compile and play… (Compile panel)</dt><dd>Map, F9 (Hammer)</dd><dt>Outline / Textures / Properties of what's picked</dt><dd>Map, ⌥Enter</dd></dl></section>
+<section class="topic" id="t-help"><h2>Help</h2><dl class="pins"><dt>Find a command… (search, arrows, Enter, greyed-out items)</dt><dd>Help, ⌘K, ⌘⇧P, bar</dd><dt>Keys cheat sheet (Change keys…, Print)</dt><dd>Help, ?</dd><dt>Coordinates and axes</dt><dd>Help, axes triad</dd><dt>First map tour</dt><dd>Help</dd><dt>Change keys… (key sets, find, Add key, Remove, clash warning, reset, Put back; Hammer switches to Quad)</dt><dd>Help</dd></dl></section>
+<section class="topic" id="t-dialogs"><h2>Dialogs</h2><dl class="pins"><dt>Escape closes each of the 13 dialogs with focus inside, selection kept</dt><dd>PASS</dd><dt>Escape after Apply (Transform) or after removing a key (Change keys)</dt><dd>**FAIL F-1**</dd><dt>Paste special, Find and replace, Transform, Go to, Grid, Replace with, Map properties, FGD, Entity report, Find a command, keys sheet, Change keys: each control</dt><dd>PASS (rows above)</dd></dl></section>
+<section class="topic" id="t-keys-every-binding"><h2>Keys (every binding)</h2><dl class="pins"><dt>Loner-Strike set: 61 key presses (every key of every command; the file keys and F5 are in file / map)</dt><dd>PASS</dd><dt>Hammer-style set: 18 keys that differ</dt><dd>PASS</dd><dt>TrenchBroom-style set: 10 keys that differ</dt><dd>PASS</dd><dt>Navigation preset keys (Unreal F = zoom)</dt><dd>PASS via editor-nav.spec.ts (existing)</dd><dt>Mac native menu key clashes (⌘H, ⌘M) in the real app</dt><dd>NA: needs the app's WKWebView window</dd></dl></section>
+<section class="topic" id="t-panels"><h2>Panels</h2><dl class="pins"><dt>Inspect, brush: location, turn, size, scale fields; textures list; wall thickness; Hollow, Merge, Carve, Snap, Duplicate, Paste special, Flip, Turn, Tie (type), Group, Look at, Isolate, Hide, Delete</dt><dd>PASS</dd><dt>Inspect, entity: name, color, brightness, flicker, falloff, flags, raw keys, new key, reset, Sets off / Set off by, Move to world, Look at, Duplicate, Delete</dt><dd>PASS (number fields save on blur: UX note)</dd><dt>Inspect, several entities: add to all, remove from all</dt><dd>PASS</dd><dt>Inspect, nothing picked: sky, WADs, Map properties…, Entity report…</dt><dd>PASS</dd><dt>Inspect, faces (face sheet: shift, scale, turn, fit, justify, align world/face/view, pick up, paint)</dt><dd>PASS via editor-facesheet.spec.ts (existing)</dd><dt>Outline: find, show only, sort, hide/lock per row, double-click, right-click (Duplicate, New folder, Ungroup)</dt><dd>PASS</dd><dt>Visgroups (new, rename, show/hide, remove)</dt><dd>PASS via editor-ux.spec.ts (existing)</dd><dt>Textures: find, one WAD, click, double-click paints</dt><dd>PASS</dd><dt>Checks: filters, Show in 3D, settings, Pick, Look, fix + Undo</dt><dd>PASS</dd><dt>Budget: Refresh, rows, Pick</dt><dd>PASS</dd><dt>I/O: All, Broken, Picked chain, find, pick, look, Remove</dt><dd>PASS</dd><dt>Gameplay: Components / Mode kits, search, Place, component file save/load</dt><dd>PASS (kits' placing: editor-kits.spec.ts)</dd><dt>Content: 6 sections, search, size, sources, favorites, recent, right-click, Refresh, drawer</dt><dd>PASS (drag onto the map: editor-content.spec.ts, editor-batch.spec.ts)</dd><dt>Content › GameBanana browse/download</dt><dd>NA: needs GameBanana over the network</dd><dt>Prefabs: save what's picked, search, Place, rename and tags, delete</dt><dd>PASS</dd><dt>Prefabs: Share as a package…, Add a prefab from a file</dt><dd>NA here (save dialog to a .zip / pick a .zip: one more server run each); keep both/replace: editor-push.spec.ts</dd><dt>Compile panel: quality, name (bad names refused), all cores, Compile, output, Download SDHLT, Stop</dt><dd>PASS (answered compiler)</dd><dt>Cordon: box round picked, add, from view, remove, remove all</dt><dd>PASS</dd><dt>Dock: tabs, ⋯ Float, Dock back, Dock: Left, Close, Open in its own window, fold/open bottom</dt><dd>PASS</dd><dt>Dock: drag a tab to another area, resize separators</dt><dd>NA here: covered by npm run test:dock (scripts/test-dock.mjs)</dd><dt>Status bar: picked count and size, counts</dt><dd>PASS</dd><dt>MCP selection: page reports; an agent's selection shows</dt><dd>PASS</dd></dl></section>
+  </article>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+</body>
+</html>
