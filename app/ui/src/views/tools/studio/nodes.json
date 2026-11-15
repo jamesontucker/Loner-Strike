@@ -14486,6 +14486,16 @@
      "id": "kind",
      "type": "text",
      "label": "Kind"
+    },
+    {
+     "id": "headshot",
+     "type": "bool",
+     "label": "Headshot"
+    },
+    {
+     "id": "hitgroup",
+     "type": "text",
+     "label": "Hit where"
     }
    ],
    "params": [],
@@ -20739,6 +20749,703 @@
    ],
    "pure": true,
    "keywords": "attachment muzzle point position"
+  },
+  {
+   "type": "col.semiclip",
+   "title": "Players Pass Through Each Other",
+   "category": "Collision",
+   "help": "Lets players walk through each other (semiclip): nobody, everyone, teammates only, or chosen players (each wired player set on or off; a chosen player passes through everyone). Bullets still hit. Turning it off nudges anyone left inside someone else free. Bots path as usual.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (chosen players)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mode",
+     "label": "Who",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "off",
+       "Nobody (off)"
+      ],
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "team",
+       "Teammates only"
+      ],
+      [
+       "chosen",
+       "Chosen players"
+      ]
+     ]
+    },
+    {
+     "id": "on",
+     "label": "This player passes through (chosen players)",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "semiclip pass through collide collision players solid ghost noclip block"
+  },
+  {
+   "type": "col.set_solid",
+   "title": "Set Entity Collision",
+   "category": "Collision",
+   "help": "How a prop, an NPC or a spawned thing collides: solid (blocks and gets hit), trigger (things pass through, it still feels touches) or pass-through (nothing). Not for players (Players Pass Through Each Other is for them).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Done"
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Collision",
+     "kind": "choice",
+     "default": "solid",
+     "choices": [
+      [
+       "solid",
+       "Solid"
+      ],
+      [
+       "trigger",
+       "Trigger"
+      ],
+      [
+       "none",
+       "Pass-through"
+      ]
+     ]
+    }
+   ],
+   "keywords": "solid collision trigger passthrough nonsolid block"
+  },
+  {
+   "type": "col.set_size",
+   "title": "Set Entity Size",
+   "category": "Collision",
+   "help": "The box an entity takes up, as mins and maxs from its origin (each min below its max). Not for players: their box is the game's.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Done"
+    }
+   ],
+   "params": [
+    {
+     "id": "minx",
+     "label": "Min X",
+     "kind": "number",
+     "default": -16,
+     "min": -4096,
+     "max": 4096
+    },
+    {
+     "id": "miny",
+     "label": "Min Y",
+     "kind": "number",
+     "default": -16,
+     "min": -4096,
+     "max": 4096
+    },
+    {
+     "id": "minz",
+     "label": "Min Z",
+     "kind": "number",
+     "default": 0,
+     "min": -4096,
+     "max": 4096
+    },
+    {
+     "id": "maxx",
+     "label": "Max X",
+     "kind": "number",
+     "default": 16,
+     "min": -4096,
+     "max": 4096
+    },
+    {
+     "id": "maxy",
+     "label": "Max Y",
+     "kind": "number",
+     "default": 16,
+     "min": -4096,
+     "max": 4096
+    },
+    {
+     "id": "maxz",
+     "label": "Max Z",
+     "kind": "number",
+     "default": 32,
+     "min": -4096,
+     "max": 4096
+    }
+   ],
+   "keywords": "size bounds box mins maxs hitbox collision"
+  },
+  {
+   "type": "col.takes_damage",
+   "title": "Entity Takes Damage",
+   "category": "Collision",
+   "help": "Whether a prop or an NPC can be hurt (on) or not (off). Not for players (Set God Mode is theirs).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Done"
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Takes damage",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "damage invulnerable takedamage breakable god"
+  },
+  {
+   "type": "col.health",
+   "title": "Entity Health",
+   "category": "Collision",
+   "help": "An entity's health (a prop, an NPC, a creature, a player).",
+   "inputs": [
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "keywords": "health hp",
+   "pure": true
+  },
+  {
+   "type": "col.set_health",
+   "title": "Set Entity Health",
+   "category": "Collision",
+   "help": "Sets a prop's or an NPC's health (at least 1; to destroy it use its own damage or removal). Not for players (Set Health is theirs).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health",
+     "param": "hp"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Done"
+    }
+   ],
+   "params": [
+    {
+     "id": "hp",
+     "label": "Health",
+     "kind": "number",
+     "default": 100,
+     "min": 1,
+     "max": 1000000
+    }
+   ],
+   "keywords": "health hp set"
+  },
+  {
+   "type": "vol.spawn",
+   "title": "Spawn Trigger Volume",
+   "category": "Collision",
+   "help": "An invisible box or sphere that tells you who goes in and out (Begin Overlap, End Overlap). Where: a Position, or At entity plus a Local offset (X forward, Y right, Z up by its facing) - attached, it follows the entity and turns with it. Rotation (pitch, yaw, roll) turns a box; a sphere ignores it. Size is its own setting; Velocity and Scale don't apply (a volume doesn't move by itself). Who counts: players, creatures or anything. Checked ten times a second (one search round each volume). A name lets Player Touched and the overlap events pick it out. At most 32 at once.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation",
+     "optional": true
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At entity",
+     "optional": true
+    },
+    {
+     "id": "offset",
+     "type": "vector",
+     "label": "Local offset",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "volume",
+     "type": "entity",
+     "label": "Volume"
+    }
+   ],
+   "params": [
+    {
+     "id": "shape",
+     "label": "Shape",
+     "kind": "choice",
+     "default": "box",
+     "choices": [
+      [
+       "box",
+       "Box"
+      ],
+      [
+       "sphere",
+       "Sphere"
+      ]
+     ]
+    },
+    {
+     "id": "sx",
+     "label": "Width (box)",
+     "kind": "number",
+     "default": 128,
+     "min": 8,
+     "max": 8192
+    },
+    {
+     "id": "sy",
+     "label": "Depth (box)",
+     "kind": "number",
+     "default": 128,
+     "min": 8,
+     "max": 8192
+    },
+    {
+     "id": "sz",
+     "label": "Height (box)",
+     "kind": "number",
+     "default": 96,
+     "min": 8,
+     "max": 8192
+    },
+    {
+     "id": "radius",
+     "label": "Radius (sphere)",
+     "kind": "number",
+     "default": 96,
+     "min": 8,
+     "max": 4096
+    },
+    {
+     "id": "filter",
+     "label": "Who counts",
+     "kind": "choice",
+     "default": "players",
+     "choices": [
+      [
+       "players",
+       "Players"
+      ],
+      [
+       "creatures",
+       "Creatures"
+      ],
+      [
+       "any",
+       "Anything"
+      ]
+     ]
+    },
+    {
+     "id": "name",
+     "label": "Name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "keywords": "trigger volume overlap zone area box sphere region"
+  },
+  {
+   "type": "vol.remove",
+   "title": "Remove Trigger Volume",
+   "category": "Collision",
+   "help": "Removes a trigger volume (whoever was inside gets End Overlap).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "volume",
+     "type": "entity",
+     "label": "Volume",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "trigger volume remove delete"
+  },
+  {
+   "type": "vol.is_overlapping",
+   "title": "Is Overlapping",
+   "category": "Collision",
+   "help": "Is this entity (a player, a creature...) inside the trigger volume right now (and one its filter counts)?",
+   "inputs": [
+    {
+     "id": "volume",
+     "type": "entity",
+     "label": "Volume",
+     "required": true
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Overlapping"
+    }
+   ],
+   "params": [],
+   "keywords": "trigger volume overlap inside",
+   "pure": true
+  },
+  {
+   "type": "vol.on_begin",
+   "title": "Begin Overlap",
+   "category": "Events",
+   "help": "Runs when something its filter counts goes into a trigger volume (Spawn Trigger Volume). Name: only volumes with this name (empty: any).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "volume",
+     "type": "entity",
+     "label": "Volume"
+    },
+    {
+     "id": "who",
+     "type": "entity",
+     "label": "Who"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Volume name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "vol.on_end",
+   "title": "End Overlap",
+   "category": "Events",
+   "help": "Runs when something leaves a trigger volume (or the volume is removed, or it died or left the server inside). Name: only volumes with this name (empty: any).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "volume",
+     "type": "entity",
+     "label": "Volume"
+    },
+    {
+     "id": "who",
+     "type": "entity",
+     "label": "Who"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Volume name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "col.on_touch",
+   "title": "Entity Touched",
+   "category": "Events",
+   "help": "Runs when an entity touches another (props, projectiles, NPCs, creatures, players; not the world's walls and floors). Name: only an entity with this name (empty: any). The first touch per N seconds for each entity (players standing on a prop would touch it every frame).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Entity"
+    },
+    {
+     "id": "other",
+     "type": "entity",
+     "label": "Other"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Entity name",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "secs",
+     "label": "Only the first touch per (seconds)",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 60
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "col.on_bullet",
+   "title": "Bullet Hit",
+   "category": "Events",
+   "help": "Runs where a shot lands: the shooter, the hit position, the surface's normal, what it hit (an entity, or World), the weapon and, on a player, where (head, chest...). At most once per shooter every N seconds (automatic weapons and shotguns would flood it).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "shooter",
+     "type": "player",
+     "label": "Shooter"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Hit Position"
+    },
+    {
+     "id": "normal",
+     "type": "vector",
+     "label": "Normal"
+    },
+    {
+     "id": "hit",
+     "type": "entity",
+     "label": "Hit Entity"
+    },
+    {
+     "id": "world",
+     "type": "bool",
+     "label": "Hit World"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
+    },
+    {
+     "id": "hitgroup",
+     "type": "text",
+     "label": "Hit where"
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "At most once per shooter every (seconds)",
+     "kind": "number",
+     "default": 0.1,
+     "min": 0.05,
+     "max": 10
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "col.on_landed",
+   "title": "Player Landed",
+   "category": "Events",
+   "help": "Runs when a player lands after a fall: how fast they were falling (units a second; over 580 hurts) and the fall damage the game gives for it (0 if Fall Damage Off). Small hops don't count.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "speed",
+     "type": "number",
+     "label": "Fall speed"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage"
+    }
+   ],
+   "params": [
+    {
+     "id": "min",
+     "label": "Only falls faster than",
+     "kind": "number",
+     "default": 250,
+     "min": 0,
+     "max": 2000
+    }
+   ],
+   "event": true
   }
  ]
 }

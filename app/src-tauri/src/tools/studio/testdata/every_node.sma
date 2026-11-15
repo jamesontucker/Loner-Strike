@@ -3040,6 +3040,8 @@ public lsg_pre_damage(victim, inflictor, attacker, Float:damage, bits)
 	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
 	ctx[2] = _:damage // damage
 	lsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind
+	ctx[3] = bits & DMG_BULLET && get_ent_data(victim, "CBaseMonster", "m_LastHitGroup") == HIT_HEAD ? 1 : 0 // headshot (W2: as Player Hurt)
+	copy(g_lsgTxt[1], 63, lsg_hitgroup(victim, bits)) // hitgroup
 	lsg_n131(ctx)
 	new Float:now = g_lsgDmg, bool:block = g_lsgDmgBlock
 	g_lsgDmg = was

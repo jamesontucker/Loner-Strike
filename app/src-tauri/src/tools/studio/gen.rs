@@ -27,6 +27,10 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+// collision, overlap and hits (W2): collide.rs, a child of this file
+#[path = "collide.rs"]
+mod collide;
+
 // HUD & View: the engine nodes (Y), their own file
 pub(crate) mod engine;
 
@@ -824,6 +828,9 @@ impl<'a> Gen<'a> {
                 format!("(lsg_kind_ok({}, {}) ? 1 : 0)", i("in", "entity"), pawn_str(k))
             }
             "fun.is_third" => format!("(lsg_ok({p}) && g_lsgCam[{p}] ? 1 : 0)", p = i("player", "player")),
+            // collision, overlap and hits (W2)
+            "col.health" => format!("lsg_ent_health({})", i("ent", "entity")),
+            "vol.is_overlapping" => format!("lsg_vol_has({}, {})", i("volume", "entity"), i("ent", "entity")),
             "player.by_index" => format!("lsg_slot_ok(floatround({}))", i("i", "number")),
             "player.gravity" => format!("lsg_pevf({}, pev_gravity)", i("player", "player")),
             "player.speed" => format!("lsg_pevf({}, pev_maxspeed)", i("player", "player")),
@@ -1332,6 +1339,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if hit_players || hit_creatures {
         o.line(HIT_BLOCK);
     }
+    // collision, overlap and hits (W2): only in a plugin that has one of those nodes
+    if collide::used(g) {
+        o.line(collide::PAWN);
+        o.blank();
+    }
     if uses_v3 {
         o.line(V3_HELPERS);
         o.blank();
@@ -1673,6 +1685,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if fun_view {
         o.line("\tregister_forward(FM_CmdStart, \"lsg_view_cmd\", 0)");
     }
+    // collision, overlap and hits (W2)
+    collide::init(&gen, &mut o);
     if fun_dead {
         o.line("\tRegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)");
     }
@@ -1791,7 +1805,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         if hurt.is_empty() {
             o.line("\t#pragma unused damage\n\t#pragma unused bits\n\treturn HAM_IGNORED\n}\n");
         } else {
-            o.line("\t// (saved and put back: damage done inside the flow comes back here)\n\tnew Float:was = g_lsgDmg, bool:wasBlock = g_lsgDmgBlock\n\tg_lsgDmg = damage\n\tg_lsgDmgBlock = false\n\tnew ctx[LSG_CTX]\n\tctx[0] = victim // victim\n\tctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker\n\tctx[2] = _:damage // damage\n\tlsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind");
+            o.line("\t// (saved and put back: damage done inside the flow comes back here)\n\tnew Float:was = g_lsgDmg, bool:wasBlock = g_lsgDmgBlock\n\tg_lsgDmg = damage\n\tg_lsgDmgBlock = false\n\tnew ctx[LSG_CTX]\n\tctx[0] = victim // victim\n\tctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker\n\tctx[2] = _:damage // damage\n\tlsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind\n\tctx[3] = bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0 // headshot (W2: as Player Hurt)\n\tcopy(g_lsgTxt[1], 63, lsg_hitgroup(victim, bits)) // hitgroup");
             for id in hurt {
                 o.line(format!("\t{}(ctx)", gen.fname(id)));
             }
@@ -1924,6 +1938,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("}");
         o.blank();
     }
+    // collision, overlap and hits (W2): their forwards and hooks
+    if collide::used(g) {
+        collide::handlers(&gen, &mut o);
+    }
 
     // nodes
     for id in &gen.live {
@@ -2044,6 +2062,72 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        // (collision, overlap and hits (W2): their handlers are collide.rs's)
+        k if collide::is_event(k) => {
+            let e = exit("ran");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        // ---- collision, overlap and hits (W2) ----
+        "col.semiclip" => {
+            let mode = match gen.choice(n, def, "mode") { "off" => 0, "team" => 2, "chosen" => 3, _ => 1 };
+            let p = if mode == 3 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            b.line(format!("\tlsg_semiclip({mode}, {p}, {})", if gen.boolean(n, def, "on") { 1 } else { 0 }));
+            let e = exit("set");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "col.set_solid" | "col.set_size" | "col.takes_damage" | "col.set_health" => {
+            let e = inp("ent", "entity");
+            let call = match def.kind.as_str() {
+                "col.set_solid" => format!("lsg_set_solid({e}, {})", match gen.choice(n, def, "kind") { "trigger" => 1, "none" => 2, _ => 0 }),
+                "col.set_size" => {
+                    let f = |k: &str| float_lit(gen.num(n, def, k).clamp(-4096.0, 4096.0));
+                    format!("lsg_set_size({e}, {}, {}, {}, {}, {}, {})", f("minx"), f("miny"), f("minz"), f("maxx"), f("maxy"), f("maxz"))
+                }
+                "col.takes_damage" => format!("lsg_takes_damage({e}, {})", if gen.boolean(n, def, "on") { 1 } else { 0 }),
+                _ => format!("lsg_set_ent_health({e}, {})", inp("hp", "number")),
+            };
+            b.line(format!("\tg_lsgOut[{i}] = {call}"));
+            if debug {
+                let why = if def.kind == "col.set_size" { "Nothing done: no entity there, it's a player, or a min isn't below its max." } else { "Nothing done: no entity there, or it's a player (or the world)." };
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err(why), exit("done")));
+            }
+            then_line(&mut b, "then");
+        }
+        "vol.spawn" => {
+            let at = if v.data_source(id, "at_ent").is_some() { inp("at_ent", "entity") } else { "0".into() };
+            b.line("\tnew Float:lsgVp[3], Float:lsgVa[3], Float:lsgVo[3]");
+            for (pin, arr) in [("pos", "lsgVp"), ("angles", "lsgVa"), ("offset", "lsgVo")] {
+                if v.data_source(id, pin).is_some() {
+                    b.line(format!("\tlsg_vto({}, {arr})", inp(pin, "vector")));
+                }
+            }
+            let sphere = gen.choice(n, def, "shape") == "sphere";
+            let f = |k: &str, hi: f64| float_lit(gen.num(n, def, k).clamp(8.0, hi));
+            let size = if sphere { format!("{}, 0.0, 0.0", f("radius", 4096.0)) } else { format!("{}, {}, {}", f("sx", 8192.0), f("sy", 8192.0), f("sz", 8192.0)) };
+            let filter = match gen.choice(n, def, "filter") { "creatures" => 1, "any" => 2, _ => 0 };
+            let name = name_text(gen.text(n, def, "name"));
+            b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {})", if sphere { 1 } else { 0 }, pawn_str(&name)));
+            if debug {
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("No volume: 32 are out already.")));
+            }
+            then_line(&mut b, "then");
+        }
+        "vol.remove" => {
+            let call = format!("lsg_vol_remove({})", inp("volume", "entity"));
+            if debug {
+                b.line(format!("\tif (!{call})\n\t\t{}\n\telse\n\t{}", err("Nothing removed: that isn't a trigger volume."), exit("removed")));
+            } else {
+                b.line(format!("\t{call}"));
+            }
+            then_line(&mut b, "then");
+        }
+        // ---- end collision, overlap and hits ----
         "cond.is_team" | "flow.branch" => {
             let cond = if def.kind == "cond.is_team" {
                 let p = inp("player", "player");
@@ -3768,7 +3852,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
-    "creature.", "cast.", "fun.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
+    "creature.", "cast.", "fun.", "col.", "vol.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "proj.", // T1fix
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
@@ -7324,6 +7408,8 @@ mod tests {
     pub const EVERY_NODE_3: &str = include_str!("testdata/every_node_3.graph.json");
     /// the HUD & View engine nodes (Y): their own graph, so others' every_node_3 edits don't meet them
     pub const EVERY_NODE_4: &str = include_str!("testdata/every_node_4.graph.json");
+    /// collision, overlap and hits (W2): their own graph too
+    pub const EVERY_NODE_5: &str = include_str!("testdata/every_node_5.graph.json");
     pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
 
     fn snapshot(name: &str, got: &str) {
@@ -7424,7 +7510,7 @@ mod tests {
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
         let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
-        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str())) {
+        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind)) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
     }
@@ -7744,11 +7830,14 @@ mod tests {
         let g4 = parse(EVERY_NODE_4).unwrap();
         let p4 = super::super::graph::validate_core(&g4);
         assert!(p4.is_empty(), "every_node_4: {:#?}", p4);
-        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).map(|n| n.kind.as_str()).collect();
+        let g5 = parse(EVERY_NODE_5).unwrap();
+        let p5 = super::super::graph::validate_core(&g5);
+        assert!(p5.is_empty(), "every_node_5: {:#?}", p5);
+        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).chain(g5.nodes.iter()).map(|n| n.kind.as_str()).collect();
         for d in &registry().nodes {
             assert!(used.contains(d.kind.as_str()), "every_node(_2/_3/_4).graph.json lacks {}", d.kind);
         }
-        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3), ("every_node_4", &g4)] {
+        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3), ("every_node_4", &g4), ("every_node_5", &g5)] {
             let r = generate(gg, false);
             for n in gg.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
                 assert!(r.spans.iter().any(|s| s.node == n.id), "{name}: {} isn't in the plugin", n.id);

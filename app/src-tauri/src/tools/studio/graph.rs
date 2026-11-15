@@ -2382,6 +2382,29 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                     p.push(Problem::err(Some(&n.id), "Objective Marker is for one player: wire the player into Player."));
                 }
             }
+            // ---- collision, overlap and hits (W2) ----
+            "col.semiclip" => {
+                if n.params.get("mode").and_then(Value::as_str) == Some("chosen") && v.data_source(&n.id, "player").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Players Pass Through Each Other on chosen players needs the player wired into Player."));
+                }
+            }
+            "col.set_size" => {
+                let num = |k: &str, d: f64| n.params.get(k).and_then(Value::as_f64).unwrap_or(d);
+                if num("minx", -16.0) >= num("maxx", 16.0) || num("miny", -16.0) >= num("maxy", 16.0) || num("minz", 0.0) >= num("maxz", 32.0) {
+                    p.push(Problem::err(Some(&n.id), "Set Entity Size needs each Min below its Max."));
+                }
+            }
+            "vol.spawn" => {
+                if v.data_source(&n.id, "at_ent").is_none() && v.data_source(&n.id, "pos").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Spawn Trigger Volume needs a Position or an entity wired into At entity."));
+                }
+            }
+            "vol.on_begin" | "vol.on_end" | "vol.remove" | "vol.is_overlapping" => {
+                if !g.nodes.iter().any(|m| m.kind == "vol.spawn") {
+                    p.push(Problem::warn(Some(&n.id), "There's no Spawn Trigger Volume in this mode: nothing makes a volume for this node."));
+                }
+            }
+            // ---- end collision, overlap and hits ----
             "fun.burst" => {
                 if v.data_source(&n.id, "at").is_none() && v.data_source(&n.id, "pos").is_none() {
                     p.push(Problem::err(Some(&n.id), "Effect Burst needs an entity wired into At or a Position."));
