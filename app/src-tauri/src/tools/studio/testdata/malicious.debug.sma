@@ -10,6 +10,8 @@
 #include <engine>
 #include <hamsandwich>
 #include <loner>
+#include <celltrie>
+#include <cellarray>
 
 #define LSG_MODE "evil"
 #define LSG_CTX 8
@@ -22,6 +24,17 @@ stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
 stock const g_lsgYesNo[][] = { "no", "yes" }
 stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists", "Spectators" }
+#define LSG_VR 256
+#define LSG_VP 256
+#define LSG_RR 64
+#define LSG_RP 64
+#define LSG_RC 1
+#define LSG_RT 1
+#define LSG_AC 65
+#define LSG_AMAX 10000
+#define LSG_TMPA 32
+#define LSG_O 4
+#define LSG_OT 1
 
 // The mode's variables
 stock g_v0[64] = "x); server_cmd(quit); " // evil_var  server_cmd(quit)  (text)
@@ -2002,6 +2015,1053 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 }
 
 
+// ---- graph version 3: vectors, structs, arrays, maps, text, timers
+// Vectors and structs are slots (a ring that's reused, then each variable's own slots); a
+// value is the slot's number. Arrays and maps are handles. Every index is clamped and every
+// handle and size checked, so a graph never reads or writes outside them.
+stock Float:g_lsgVec[LSG_VP][3], g_lsgVecAt
+stock g_lsgRec[LSG_RP][LSG_RC], g_lsgRecT[LSG_RP][LSG_RT][64], g_lsgRecAt
+stock g_lsgO[LSG_O], g_lsgOT[LSG_OT][128]
+stock g_lsgTmpA[LSG_TMPA], g_lsgTmpAt
+stock const g_lsgRun[][] = { "stopped", "running" }
+
+stock lsg_vi(v)
+	return clamp(v, 0, LSG_VP - 1)
+
+stock lsg_vnew()
+{
+	if (++g_lsgVecAt >= LSG_VR)
+		g_lsgVecAt = 0
+	return g_lsgVecAt
+}
+
+stock lsg_vec(Float:x, Float:y, Float:z)
+{
+	new v = lsg_vnew()
+	g_lsgVec[v][0] = x
+	g_lsgVec[v][1] = y
+	g_lsgVec[v][2] = z
+	return v
+}
+
+stock Float:lsg_vc(v, k)
+	return g_lsgVec[lsg_vi(v)][clamp(k, 0, 2)]
+
+stock lsg_vset(dst, src)
+{
+	new d = lsg_vi(dst), s = lsg_vi(src)
+	for (new k = 0; k < 3; k++)
+		g_lsgVec[d][k] = g_lsgVec[s][k]
+}
+
+stock lsg_vzero(dst)
+{
+	new d = lsg_vi(dst)
+	for (new k = 0; k < 3; k++)
+		g_lsgVec[d][k] = 0.0
+}
+
+stock lsg_vfrom(const Float:o[3])
+	return lsg_vec(o[0], o[1], o[2])
+
+stock lsg_vto(v, Float:o[3])
+{
+	for (new k = 0; k < 3; k++)
+		o[k] = lsg_vc(v, k)
+}
+
+stock lsg_vadd(a, b, Float:sign)
+	return lsg_vec(lsg_vc(a, 0) + sign * lsg_vc(b, 0), lsg_vc(a, 1) + sign * lsg_vc(b, 1), lsg_vc(a, 2) + sign * lsg_vc(b, 2))
+
+stock lsg_vscale(a, Float:n)
+	return lsg_vec(lsg_vc(a, 0) * n, lsg_vc(a, 1) * n, lsg_vc(a, 2) * n)
+
+stock Float:lsg_vlen(a)
+	return floatsqroot(lsg_vc(a, 0) * lsg_vc(a, 0) + lsg_vc(a, 1) * lsg_vc(a, 1) + lsg_vc(a, 2) * lsg_vc(a, 2))
+
+stock Float:lsg_vdist(a, b)
+{
+	new Float:x = lsg_vc(a, 0) - lsg_vc(b, 0), Float:y = lsg_vc(a, 1) - lsg_vc(b, 1), Float:z = lsg_vc(a, 2) - lsg_vc(b, 2)
+	return floatsqroot(x * x + y * y + z * z)
+}
+
+stock lsg_vnorm(a)
+{
+	new Float:l = lsg_vlen(a)
+	if (l < 0.0001)
+		return lsg_vec(0.0, 0.0, 0.0)
+	return lsg_vscale(a, 1.0 / l)
+}
+
+stock lsg_vdir(from, to)
+	return lsg_vnorm(lsg_vadd(to, from, -1.0))
+
+stock bool:lsg_veq(a, b)
+	return lsg_vc(a, 0) == lsg_vc(b, 0) && lsg_vc(a, 1) == lsg_vc(b, 1) && lsg_vc(a, 2) == lsg_vc(b, 2)
+
+stock lsg_vtext(v)
+{
+	new t[64], Float:x = lsg_vc(v, 0), Float:y = lsg_vc(v, 1), Float:z = lsg_vc(v, 2)
+	// (a short vector, a direction above all, gets two decimals: in whole units one is "0 0 0")
+	if (floatabs(x) < 10.0 && floatabs(y) < 10.0 && floatabs(z) < 10.0)
+		formatex(t, charsmax(t), "%.2f %.2f %.2f", x, y, z)
+	else
+		formatex(t, charsmax(t), "%.0f %.0f %.0f", x, y, z)
+	return t
+}
+
+// where a player is: 0 feet, 1 eyes, 2 aim direction, 3 what the aim hits, 4 velocity
+stock lsg_vplayer(id, what)
+{
+	new Float:o[3]
+	if (!lsg_ok(id))
+		return lsg_vfrom(o)
+	new Float:ofs[3], Float:ang[3], Float:fwd[3], Float:end[3]
+	switch (what)
+	{
+		case 1, 3:
+		{
+			pev(id, pev_origin, o)
+			pev(id, pev_view_ofs, ofs)
+			for (new k = 0; k < 3; k++)
+				o[k] += ofs[k]
+			if (what == 3)
+			{
+				pev(id, pev_v_angle, ang)
+				angle_vector(ang, ANGLEVECTOR_FORWARD, fwd)
+				for (new k = 0; k < 3; k++)
+					end[k] = o[k] + fwd[k] * 8192.0
+				engfunc(EngFunc_TraceLine, o, end, DONT_IGNORE_MONSTERS, id, 0)
+				get_tr2(0, TR_vecEndPos, o)
+			}
+		}
+		case 2:
+		{
+			pev(id, pev_v_angle, ang)
+			angle_vector(ang, ANGLEVECTOR_FORWARD, o)
+		}
+		case 4:
+			pev(id, pev_velocity, o)
+		default:
+			pev(id, pev_origin, o)
+	}
+	return lsg_vfrom(o)
+}
+
+// where an entity is (a brush entity: the middle of its box)
+stock lsg_vent(ent)
+{
+	new Float:o[3]
+	if (ent < 1 || !pev_valid(ent))
+		return lsg_vfrom(o)
+	pev(ent, pev_origin, o)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) * 0.5
+	}
+	return lsg_vfrom(o)
+}
+
+stock lsg_vsetpos(id, v)
+{
+	new Float:o[3], Float:still[3]
+	lsg_vto(v, o)
+	engfunc(EngFunc_SetOrigin, id, o)
+	set_pev(id, pev_velocity, still)
+}
+
+stock lsg_vsetvel(id, v)
+{
+	new Float:o[3]
+	lsg_vto(v, o)
+	for (new k = 0; k < 3; k++)
+		o[k] = floatclamp(o[k], -4000.0, 4000.0)
+	set_pev(id, pev_velocity, o)
+}
+
+// ---- structs
+stock lsg_ri(r)
+	return clamp(r, 0, LSG_RP - 1)
+
+stock lsg_rzero(r)
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[i][k] = 0
+	for (new k = 0; k < LSG_RT; k++)
+		g_lsgRecT[i][k][0] = 0
+}
+
+stock lsg_rnew()
+{
+	if (++g_lsgRecAt >= LSG_RR)
+		g_lsgRecAt = 0
+	lsg_rzero(g_lsgRecAt)
+	return g_lsgRecAt
+}
+
+stock lsg_rset(dst, src)
+{
+	new d = lsg_ri(dst), s = lsg_ri(src)
+	if (d == s)
+		return
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[d][k] = g_lsgRec[s][k]
+	for (new k = 0; k < LSG_RT; k++)
+		copy(g_lsgRecT[d][k], 63, g_lsgRecT[s][k])
+}
+
+stock bool:lsg_req(a, b)
+{
+	new x = lsg_ri(a), y = lsg_ri(b)
+	for (new k = 0; k < LSG_RC; k++)
+		if (g_lsgRec[x][k] != g_lsgRec[y][k])
+			return false
+	for (new k = 0; k < LSG_RT; k++)
+		if (!equal(g_lsgRecT[x][k], g_lsgRecT[y][k]))
+			return false
+	return true
+}
+
+stock lsg_rvec(r, off)
+{
+	new i = lsg_ri(r)
+	return lsg_vec(Float:g_lsgRec[i][off], Float:g_lsgRec[i][off + 1], Float:g_lsgRec[i][off + 2])
+}
+
+stock lsg_rsetvec(r, off, v)
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < 3; k++)
+		g_lsgRec[i][off + k] = _:lsg_vc(v, k)
+}
+
+stock lsg_rpack(r, b[LSG_AC])
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < LSG_RC; k++)
+		b[k] = g_lsgRec[i][k]
+	for (new t = 0; t < LSG_RT; t++)
+		for (new c = 0; c < 64; c++)
+			b[LSG_RC + t * 64 + c] = g_lsgRecT[i][t][c]
+}
+
+stock lsg_runpack(const b[LSG_AC])
+{
+	new r = lsg_rnew()
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[r][k] = b[k]
+	for (new t = 0; t < LSG_RT; t++)
+	{
+		for (new c = 0; c < 63; c++)
+			g_lsgRecT[r][t][c] = b[LSG_RC + t * 64 + c]
+		g_lsgRecT[r][t][63] = 0
+	}
+	return r
+}
+
+// ---- arrays (every array holds items of LSG_AC cells; at most LSG_AMAX items)
+stock lsg_atmp()
+{
+	if (++g_lsgTmpAt >= LSG_TMPA)
+		g_lsgTmpAt = 0
+	if (!g_lsgTmpA[g_lsgTmpAt])
+		g_lsgTmpA[g_lsgTmpAt] = _:ArrayCreate(LSG_AC)
+	else
+		ArrayClear((Array:g_lsgTmpA[g_lsgTmpAt]))
+	return g_lsgTmpA[g_lsgTmpAt]
+}
+
+stock lsg_alen(a)
+	return a ? ArraySize((Array:a)) : 0
+
+// an index, or -1 when it's outside the array
+stock lsg_aidx(a, Float:i)
+{
+	new k = floatround(i, floatround_floor)
+	return k >= 0 && k < lsg_alen(a) ? k : -1
+}
+
+stock bool:lsg_aroom(a)
+	return a && ArraySize((Array:a)) < LSG_AMAX
+
+stock lsg_aremi(a, Float:i)
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayDeleteItem((Array:a), k)
+}
+
+stock lsg_aclear(a)
+{
+	if (a)
+		ArrayClear((Array:a))
+}
+
+stock lsg_ashuffle(a)
+{
+	for (new k = lsg_alen(a) - 1; k > 0; k--)
+		ArraySwap((Array:a), k, random(k + 1))
+}
+
+// kind: 0 numbers, 1 by cell, 2 text
+stock lsg_asort(a, kind, desc)
+{
+	if (lsg_alen(a) < 2)
+		return
+	new d[2]
+	d[0] = kind
+	d[1] = desc
+	ArraySort((Array:a), "lsg_acmp", d, 2)
+}
+
+public lsg_acmp(Array:a, i1, i2, const d[], size)
+{
+	#pragma unused size
+	new r
+	switch (d[0])
+	{
+		case 0:
+		{
+			new Float:x = Float:ArrayGetCell(a, i1), Float:y = Float:ArrayGetCell(a, i2)
+			r = x < y ? -1 : (x > y ? 1 : 0)
+		}
+		case 2:
+		{
+			new s1[64], s2[64]
+			ArrayGetString(a, i1, s1, 63)
+			ArrayGetString(a, i2, s2, 63)
+			r = strcmp(s1, s2, true)
+			r = r < 0 ? -1 : (r > 0 ? 1 : 0)
+		}
+		default:
+		{
+			new x = ArrayGetCell(a, i1), y = ArrayGetCell(a, i2)
+			r = x < y ? -1 : (x > y ? 1 : 0)
+		}
+	}
+	return d[1] ? -r : r
+}
+
+stock lsg_acopy(dst, src)
+{
+	if (!dst || dst == src)
+		return
+	ArrayClear((Array:dst))
+	new n = min(lsg_alen(src), LSG_AMAX), b[LSG_AC]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:src), k, b)
+		ArrayPushArray((Array:dst), b)
+	}
+}
+
+stock lsg_aplayers(which)
+{
+	new a = lsg_atmp()
+	for (new p = 1; p <= MaxClients; p++)
+		if (lsg_match(p, which))
+			ArrayPushCell((Array:a), p)
+	return a
+}
+
+// items in a cell
+stock lsg_apushc(a, v)
+	return lsg_aroom(a) ? ArrayPushCell((Array:a), v) : -1
+
+stock lsg_agetc(a, Float:i)
+{
+	new k = lsg_aidx(a, i)
+	return k < 0 ? 0 : ArrayGetCell((Array:a), k)
+}
+
+stock lsg_asetc(a, Float:i, v)
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArraySetCell((Array:a), k, v)
+}
+
+stock lsg_ainsc(a, Float:i, v)
+{
+	if (!lsg_aroom(a))
+		return
+	new k = floatround(i, floatround_floor)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushCell((Array:a), v)
+	else
+		ArrayInsertCellBefore((Array:a), k, v)
+}
+
+stock lsg_afindc(a, v)
+{
+	new n = lsg_alen(a)
+	for (new k = 0; k < n; k++)
+		if (ArrayGetCell((Array:a), k) == v)
+			return k
+	return -1
+}
+
+stock bool:lsg_aremc(a, v)
+{
+	new bool:any
+	for (new k = lsg_alen(a) - 1; k >= 0; k--)
+		if (ArrayGetCell((Array:a), k) == v)
+		{
+			ArrayDeleteItem((Array:a), k)
+			any = true
+		}
+	return any
+}
+
+stock lsg_arandc(a)
+{
+	new n = lsg_alen(a)
+	return n ? ArrayGetCell((Array:a), random(n)) : 0
+}
+
+// text items
+stock lsg_apushs(a, const s[])
+	return lsg_aroom(a) ? ArrayPushString((Array:a), s) : -1
+
+stock lsg_agets(a, Float:i)
+{
+	new t[64], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetString((Array:a), k, t, 63)
+	return t
+}
+
+stock lsg_asets(a, Float:i, const s[])
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArraySetString((Array:a), k, s)
+}
+
+stock lsg_ainss(a, Float:i, const s[])
+{
+	if (!lsg_aroom(a))
+		return
+	new k = floatround(i, floatround_floor)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushString((Array:a), s)
+	else
+		ArrayInsertStringBefore((Array:a), k, s)
+}
+
+stock lsg_afinds(a, const s[])
+{
+	new n = lsg_alen(a), t[64]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetString((Array:a), k, t, 63)
+		if (equal(t, s))
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_arems(a, const s[])
+{
+	new bool:any, t[64]
+	for (new k = lsg_alen(a) - 1; k >= 0; k--)
+	{
+		ArrayGetString((Array:a), k, t, 63)
+		if (equal(t, s))
+		{
+			ArrayDeleteItem((Array:a), k)
+			any = true
+		}
+	}
+	return any
+}
+
+stock lsg_arands(a)
+{
+	new t[64], n = lsg_alen(a)
+	if (n)
+		ArrayGetString((Array:a), random(n), t, 63)
+	return t
+}
+
+// vector items (3 cells)
+stock lsg_vbuf(v, b[LSG_AC])
+{
+	for (new k = 0; k < 3; k++)
+		b[k] = _:lsg_vc(v, k)
+}
+
+stock lsg_apushv(a, v)
+{
+	if (!lsg_aroom(a))
+		return -1
+	new b[LSG_AC]
+	lsg_vbuf(v, b)
+	return ArrayPushArray((Array:a), b)
+}
+
+stock lsg_agetv(a, Float:i)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetArray((Array:a), k, b)
+	return lsg_vec(Float:b[0], Float:b[1], Float:b[2])
+}
+
+stock lsg_asetv(a, Float:i, v)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	lsg_vbuf(v, b)
+	if (k >= 0)
+		ArraySetArray((Array:a), k, b)
+}
+
+stock lsg_ainsv(a, Float:i, v)
+{
+	if (!lsg_aroom(a))
+		return
+	new b[LSG_AC], k = floatround(i, floatround_floor)
+	lsg_vbuf(v, b)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushArray((Array:a), b)
+	else
+		ArrayInsertArrayBefore((Array:a), k, b)
+}
+
+stock lsg_afindv(a, v)
+{
+	new n = lsg_alen(a), b[LSG_AC]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:a), k, b)
+		if (Float:b[0] == lsg_vc(v, 0) && Float:b[1] == lsg_vc(v, 1) && Float:b[2] == lsg_vc(v, 2))
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_aremv(a, v)
+{
+	new bool:any, k
+	while ((k = lsg_afindv(a, v)) >= 0)
+	{
+		ArrayDeleteItem((Array:a), k)
+		any = true
+	}
+	return any
+}
+
+stock lsg_arandv(a)
+{
+	new n = lsg_alen(a)
+	return lsg_agetv(a, n ? float(random(n)) : -1.0)
+}
+
+// struct items (packed)
+stock lsg_apushr(a, r)
+{
+	if (!lsg_aroom(a))
+		return -1
+	new b[LSG_AC]
+	lsg_rpack(r, b)
+	return ArrayPushArray((Array:a), b)
+}
+
+stock lsg_agetr(a, Float:i)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetArray((Array:a), k, b)
+	return lsg_runpack(b)
+}
+
+stock lsg_asetr(a, Float:i, r)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	lsg_rpack(r, b)
+	if (k >= 0)
+		ArraySetArray((Array:a), k, b)
+}
+
+stock lsg_ainsr(a, Float:i, r)
+{
+	if (!lsg_aroom(a))
+		return
+	new b[LSG_AC], k = floatround(i, floatround_floor)
+	lsg_rpack(r, b)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushArray((Array:a), b)
+	else
+		ArrayInsertArrayBefore((Array:a), k, b)
+}
+
+stock lsg_afindr(a, r)
+{
+	new n = lsg_alen(a), want[LSG_AC], b[LSG_AC]
+	lsg_rpack(r, want)
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:a), k, b)
+		new same = 1
+		for (new c = 0; c < LSG_AC && same; c++)
+			if (b[c] != want[c])
+				same = 0
+		if (same)
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_aremr(a, r)
+{
+	new bool:any, k
+	while ((k = lsg_afindr(a, r)) >= 0)
+	{
+		ArrayDeleteItem((Array:a), k)
+		any = true
+	}
+	return any
+}
+
+stock lsg_arandr(a)
+{
+	new n = lsg_alen(a)
+	return lsg_agetr(a, n ? float(random(n)) : -1.0)
+}
+
+// ---- maps: keys are text (a number written out, a player as #userid)
+stock lsg_kn(Float:n)
+{
+	new k[24]
+	formatex(k, charsmax(k), "%.3f", n)
+	return k
+}
+
+stock lsg_kp(id)
+{
+	new k[16]
+	if (lsg_ok(id))
+		formatex(k, charsmax(k), "#%d", get_user_userid(id))
+	return k
+}
+
+stock lsg_by_userid(u)
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && get_user_userid(p) == u)
+			return p
+	return 0
+}
+
+stock lsg_mlen(m)
+	return m ? TrieGetSize((Trie:m)) : 0
+
+stock bool:lsg_mhas(m, const k[])
+	return m && TrieKeyExists((Trie:m), k)
+
+stock lsg_mdel(m, const k[])
+{
+	if (m)
+		TrieDeleteKey((Trie:m), k)
+}
+
+stock lsg_mclear(m)
+{
+	if (m)
+		TrieClear((Trie:m))
+}
+
+stock lsg_msetc(m, const k[], v)
+{
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetCell((Trie:m), k, v)
+}
+
+stock lsg_msets(m, const k[], const s[])
+{
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetString((Trie:m), k, s)
+}
+
+stock lsg_msetv(m, const k[], v)
+{
+	new Float:b[3]
+	lsg_vto(v, b)
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetArray((Trie:m), k, b, 3)
+}
+
+stock lsg_mgetc(m, const k[])
+{
+	new v
+	if (m)
+		TrieGetCell((Trie:m), k, v)
+	return v
+}
+
+stock lsg_mgets(m, const k[])
+{
+	new t[64]
+	if (m)
+		TrieGetString((Trie:m), k, t, 63)
+	return t
+}
+
+stock lsg_mgetv(m, const k[])
+{
+	new Float:b[3]
+	if (m)
+		TrieGetArray((Trie:m), k, b, 3)
+	return lsg_vfrom(b)
+}
+
+// keys: 0 text, 1 numbers, 2 players
+stock lsg_mkeys(m, kind)
+{
+	new a = lsg_atmp()
+	if (!m)
+		return a
+	new TrieIter:it = TrieIterCreate(Trie:m), k[64], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		TrieIterGetKey(it, k, charsmax(k))
+		switch (kind)
+		{
+			case 1: ArrayPushCell((Array:a), _:str_to_float(k))
+			case 2:
+			{
+				new p = lsg_by_userid(str_to_num(k[1]))
+				if (p)
+					ArrayPushCell((Array:a), p)
+			}
+			default: ArrayPushString((Array:a), k)
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+	return a
+}
+
+// values: 0 cells, 1 text, 2 vectors
+stock lsg_mvalues(m, kind)
+{
+	new a = lsg_atmp()
+	if (!m)
+		return a
+	new TrieIter:it = TrieIterCreate(Trie:m), t[64], v, Float:b[3], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		switch (kind)
+		{
+			case 1:
+			{
+				TrieIterGetString(it, t, charsmax(t))
+				ArrayPushString((Array:a), t)
+			}
+			case 2:
+			{
+				TrieIterGetArray(it, b, 3)
+				lsg_apushv(a, lsg_vfrom(b))
+			}
+			default:
+			{
+				TrieIterGetCell(it, v)
+				ArrayPushCell((Array:a), v)
+			}
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+	return a
+}
+
+stock lsg_mcopy(dst, src, kind)
+{
+	if (!dst || dst == src)
+		return
+	TrieClear((Trie:dst))
+	if (!src)
+		return
+	new TrieIter:it = TrieIterCreate((Trie:src)), k[64], t[64], v, Float:b[3], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		TrieIterGetKey(it, k, charsmax(k))
+		switch (kind)
+		{
+			case 1:
+			{
+				TrieIterGetString(it, t, charsmax(t))
+				TrieSetString((Trie:dst), k, t)
+			}
+			case 2:
+			{
+				TrieIterGetArray(it, b, 3)
+				TrieSetArray((Trie:dst), k, b, 3)
+			}
+			default:
+			{
+				TrieIterGetCell(it, v)
+				TrieSetCell((Trie:dst), k, v)
+			}
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+}
+
+// ---- text, numbers, things
+stock lsg_tcat(const a[], const b[])
+{
+	new t[128]
+	formatex(t, charsmax(t), "%s%s", a, b)
+	return t
+}
+
+stock lsg_tsel(c, const a[], const b[])
+{
+	new t[128]
+	if (c)
+		copy(t, charsmax(t), a)
+	else
+		copy(t, charsmax(t), b)
+	return t
+}
+
+stock lsg_etext(e)
+{
+	new t[32]
+	formatex(t, charsmax(t), "entity %d", e)
+	return t
+}
+
+stock Float:lsg_sign(Float:a)
+	return a > 0.0 ? 1.0 : (a < 0.0 ? -1.0 : 0.0)
+
+stock Float:lsg_clampf(Float:a, Float:lo, Float:hi)
+{
+	if (lo > hi)
+		return floatclamp(a, hi, lo)
+	return floatclamp(a, lo, hi)
+}
+
+stock bool:lsg_valid(e)
+{
+	if (e >= 1 && e <= MaxClients)
+		return bool:is_user_connected(e)
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
+}
+
+stock bool:lsg_is_creature(e)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return false
+	new c[16]
+	pev(e, pev_classname, c, charsmax(c))
+	return bool:equal(c, "ls_creature")
+}
+
+stock bool:lsg_tactive(h)
+	return h >= LSG_TASK && h < LSG_TASK + LSG_N && task_exists(h)
+
+stock lsg_tclear(h)
+{
+	if (h >= LSG_TASK && h < LSG_TASK + LSG_N)
+		remove_task(h)
+}
+
+// ---- (vectors) transforms, entities, effects ----
+stock lsg_vpev(id, field)
+{
+	new Float:o[3]
+	if (id > 0 && pev_valid(id))
+		pev(id, field, o)
+	return lsg_vfrom(o)
+}
+
+stock lsg_set_transform(id, pos, ang, vel)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new Float:o[3]
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		engfunc(EngFunc_SetOrigin, id, o)
+	}
+	if (ang >= 0)
+	{
+		lsg_vto(ang, o)
+		set_pev(id, pev_angles, o)
+		set_pev(id, pev_v_angle, o)
+		set_pev(id, pev_fixangle, 1)
+	}
+	if (vel >= 0)
+	{
+		lsg_vto(vel, o)
+		set_pev(id, pev_velocity, o)
+	}
+}
+
+stock lsg_look_at(id, ent, pos)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new Float:t[3], Float:me[3], Float:ofs[3], Float:d[3], Float:ang[3]
+	if (ent > 0)
+	{
+		if (!lsg_ent_origin(ent, t))
+			return
+	}
+	else if (pos >= 0)
+		lsg_vto(pos, t)
+	else
+		return
+	pev(id, pev_origin, me)
+	pev(id, pev_view_ofs, ofs)
+	for (new k = 0; k < 3; k++)
+		d[k] = t[k] - (me[k] + ofs[k])
+	vector_to_angle(d, ang)
+	ang[0] = -ang[0]
+	set_pev(id, pev_angles, ang)
+	set_pev(id, pev_v_angle, ang)
+	set_pev(id, pev_fixangle, 1)
+}
+
+stock lsg_find_all(byname, const name[])
+{
+	new a = lsg_atmp(), e = -1, n
+	while (n < 512 && (e = engfunc(EngFunc_FindEntityByString, e, byname ? "targetname" : "classname", name)) > 0)
+	{
+		ArrayPushCell((Array:a), e)
+		n++
+	}
+	return a
+}
+
+stock lsg_ent_pos(e, v)
+{
+	if (e > MaxClients && pev_valid(e))
+	{
+		new Float:o[3]
+		lsg_vto(v, o)
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+stock lsg_ent_angles(e, v)
+{
+	if (e > MaxClients && pev_valid(e))
+	{
+		new Float:o[3]
+		lsg_vto(v, o)
+		set_pev(e, pev_angles, o)
+	}
+}
+
+stock lsg_explode(v, Float:dmg, Float:radius)
+{
+	new Float:o[3]
+	lsg_vto(v, o)
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_EXPLOSION)
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+	write_short(g_lsgSprExp)
+	write_byte(30)
+	write_byte(15)
+	write_byte(0)
+	message_end()
+	if (dmg <= 0.0)
+		return
+	new Float:p[3]
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id))
+			continue
+		pev(id, pev_origin, p)
+		new Float:d = get_distance_f(o, p)
+		if (d < radius)
+			ExecuteHamB(Ham_TakeDamage, id, 0, 0, dmg * (1.0 - d / radius), DMG_BLAST)
+	}
+}
+
+stock lsg_beam(a, b, r, g, bl, Float:secs)
+{
+	new Float:x[3], Float:y[3]
+	lsg_vto(a, x)
+	lsg_vto(b, y)
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMPOINTS)
+	engfunc(EngFunc_WriteCoord, x[0])
+	engfunc(EngFunc_WriteCoord, x[1])
+	engfunc(EngFunc_WriteCoord, x[2])
+	engfunc(EngFunc_WriteCoord, y[0])
+	engfunc(EngFunc_WriteCoord, y[1])
+	engfunc(EngFunc_WriteCoord, y[2])
+	write_short(g_lsgSprBeam)
+	write_byte(0)
+	write_byte(0)
+	write_byte(clamp(floatround(secs * 10.0), 1, 255))
+	write_byte(20)
+	write_byte(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+}
+
+stock lsg_sound_at(v, const snd[])
+{
+	// (a sound that wasn't there when the map loaded: nothing)
+	if (!lsg_have(snd))
+		return
+	new Float:o[3]
+	lsg_vto(v, o)
+	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+}
+
+// Timelines: smooth in and out between two keys (0..1 -> 0..1)
+stock Float:lsg_tl_ease(Float:x)
+{
+	x = floatclamp(x, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
+}
+
+// an entity's rotation (a player's view angles)
+stock lsg_erot(e)
+	return lsg_vpev(e, e >= 1 && e <= MaxClients ? pev_v_angle : pev_angles)
+
+// the middle of an entity's box
+stock lsg_ecenter(e)
+{
+	new Float:mn[3], Float:mx[3], Float:c[3]
+	if (e > 0 && pev_valid(e))
+	{
+		pev(e, pev_absmin, mn)
+		pev(e, pev_absmax, mx)
+		for (new k = 0; k < 3; k++)
+			c[k] = (mn[k] + mx[k]) / 2.0
+	}
+	return lsg_vfrom(c)
+}
+
+
+// enum Entity Kind
+stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
+// enum Component Kind
+stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
+// enum Spawn Failure
+stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
+
 lsd_graph_vars()
 {
 	lsd_var_text("v1", 0, g_v0)
@@ -2016,6 +3076,553 @@ lsd_graph_set(const vid[], who, const val[])
 	}
 	#pragma unused who
 	return false
+}
+
+// ---- effects, sounds and spawning (fx.rs) ----
+// the engine's crash points are gen.rs's shared guards: lsg_msg_room (effect messages a frame,
+// the mode's "messages" limit) and lsg_ent_room (entity slots with a reserve)
+stock g_lsgXfSrc
+
+stock bool:lsg_xf_from(src, bool:found)
+{
+	g_lsgXfSrc = src
+	return found
+}
+
+// a prop at a place (Spawn Prop with the shared transform)
+stock lsg_prop_o(const Float:o[3], const model[], solid)
+{
+	if (!lsg_have(model))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_prop")
+	engfunc(EngFunc_SetModel, e, model)
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, solid ? SOLID_BBOX : SOLID_NOT)
+	set_pev(e, pev_movetype, MOVETYPE_NONE)
+	if (solid)
+		engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 32.0})
+	return e
+}
+
+stock bool:lsg_have_snd(const p[])
+{
+	new full[128]
+	formatex(full, charsmax(full), "sound/%s", p)
+	return lsg_have(full) || lsg_have(p)
+}
+
+stock lsg_wcoord(const Float:o[3])
+{
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+}
+
+// where a spawn goes: an entity's spot (plus an offset along its own forward, right and up),
+// or a position; remembers the entity for its rotation
+stock bool:lsg_xf_at(src, pos, ofs, Float:o[3])
+{
+	g_lsgXfSrc = 0
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		return true
+	}
+	if (!lsg_ent_origin(src, o))
+		return false
+	g_lsgXfSrc = src
+	if (ofs >= 0)
+	{
+		new Float:a[3], Float:f[3], Float:r[3], Float:u[3]
+		pev(src, is_user_alive(src) ? pev_v_angle : pev_angles, a)
+		engfunc(EngFunc_MakeVectors, a)
+		global_get(glb_v_forward, f)
+		global_get(glb_v_right, r)
+		global_get(glb_v_up, u)
+		for (new k = 0; k < 3; k++)
+			o[k] += f[k] * lsg_vc(ofs, 0) + r[k] * lsg_vc(ofs, 1) + u[k] * lsg_vc(ofs, 2)
+	}
+	return true
+}
+
+// turn, push and size a new entity: Rotation, else the At entity's facing (if copied) plus the
+// rotation offset; Velocity (a still thing falls and slides from there); Scale (models, sprites)
+stock lsg_xf_set(e, copy, rot, rot_ofs, vel, Float:scale)
+{
+	if (e <= 0 || !pev_valid(e))
+		return
+	new Float:a[3], bool:turn = false
+	if (rot >= 0)
+	{
+		lsg_vto(rot, a)
+		turn = true
+	}
+	else if (copy && g_lsgXfSrc > 0 && pev_valid(g_lsgXfSrc))
+	{
+		pev(g_lsgXfSrc, pev_angles, a)
+		// (a player's model pitch isn't where they look: keep their heading)
+		if (is_user_alive(g_lsgXfSrc))
+			a[0] = 0.0
+		turn = true
+	}
+	else
+		pev(e, pev_angles, a)
+	if (rot_ofs >= 0)
+	{
+		for (new k = 0; k < 3; k++)
+			a[k] += lsg_vc(rot_ofs, k)
+		turn = true
+	}
+	if (turn)
+	{
+		set_pev(e, pev_angles, a)
+		if (pev(e, pev_flags) & FL_MONSTER)
+			set_pev(e, pev_ideal_yaw, a[1])
+	}
+	if (vel >= 0)
+	{
+		new Float:v[3]
+		lsg_vto(vel, v)
+		if (pev(e, pev_movetype) == MOVETYPE_NONE)
+			set_pev(e, pev_movetype, MOVETYPE_TOSS)
+		set_pev(e, pev_velocity, v)
+	}
+	if (scale > 0.0 && scale != 1.0)
+		set_pev(e, pev_scale, floatclamp(scale, 0.05, 10.0))
+}
+
+// ---- effects
+stock g_lsgDlFollow[33], Float:g_lsgDlEnd[33], g_lsgDl[33][5], g_lsgDlN, g_lsgDlLim[33]
+
+public lsg_fx_dl_tick(t)
+{
+	// (the task's id: its slot plus the base)
+	new k = clamp(t - (LSG_TASK - 200000), 0, 31)
+	new e = g_lsgDlFollow[k]
+	if (e <= 0 || !pev_valid(e) || get_gametime() >= g_lsgDlEnd[k])
+	{
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = 0
+		return
+	}
+	new Float:o[3]
+	if (!lsg_ent_origin(e, o) || !lsg_msg_room("Dynamic Light", 1, 0, g_lsgDlLim[k]))
+		return
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(g_lsgDl[k][0])
+	write_byte(g_lsgDl[k][1])
+	write_byte(g_lsgDl[k][2])
+	write_byte(g_lsgDl[k][3])
+	write_byte(2)
+	write_byte(g_lsgDl[k][4])
+	message_end()
+}
+
+stock lsg_fx_dlight(follow, pos, r, g, b, Float:radius, Float:life, Float:decay, lim)
+{
+	new rad = clamp(floatround(radius / 10.0), 1, 255), dec = clamp(floatround(decay / 10.0), 0, 255)
+	if (follow > 0 && pev_valid(follow))
+	{
+		// following: a short light each tenth of a second where it is (32 at once at most)
+		new k = g_lsgDlN++ % 32
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = follow
+		g_lsgDlEnd[k] = get_gametime() + floatclamp(life, 0.1, 60.0)
+		// (as the message wants them: radius, r, g, b, then the decay after the life)
+		g_lsgDl[k][0] = rad
+		g_lsgDl[k][1] = r
+		g_lsgDl[k][2] = g
+		g_lsgDl[k][3] = b
+		g_lsgDl[k][4] = dec
+		g_lsgDlLim[k] = lim
+		lsg_fx_dl_tick(k + LSG_TASK - 200000)
+		set_task(0.1, "lsg_fx_dl_tick", k + LSG_TASK - 200000, _, _, "b")
+		return 1
+	}
+	if (pos < 0 || !lsg_msg_room("Dynamic Light", 1, 0, lim))
+		return 0
+	new Float:o[3]
+	lsg_vto(pos, o)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(rad)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(dec)
+	message_end()
+	return 1
+}
+
+// a decal on the nearest surface within reach (traced six ways from the point)
+stock lsg_fx_decal(pos, const name[], Float:reach, lim)
+{
+	if (pos < 0)
+		return 0
+	new d = engfunc(EngFunc_DecalIndex, name)
+	if (d < 0)
+		return 0
+	new Float:o[3], Float:end[3], Float:hit[3], Float:best = 2.0, Float:at[3], who = 0
+	static const Float:DIRS[6][3] = { {0.0, 0.0, -1.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}, {-1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, -1.0, 0.0} }
+	lsg_vto(pos, o)
+	reach = floatclamp(reach, 8.0, 512.0)
+	for (new k = 0; k < 6; k++)
+	{
+		for (new j = 0; j < 3; j++)
+			end[j] = o[j] + DIRS[k][j] * reach
+		engfunc(EngFunc_TraceLine, o, end, IGNORE_MONSTERS, 0, 0)
+		new Float:f
+		get_tr2(0, TR_flFraction, f)
+		if (f < best)
+		{
+			best = f
+			get_tr2(0, TR_vecEndPos, hit)
+			at = hit
+			who = max(get_tr2(0, TR_pHit), 0)
+		}
+	}
+	if (best >= 1.0 || !lsg_msg_room("Decal", 1, 0, lim))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	if (who > 0)
+	{
+		write_byte(d > 255 ? TE_DECALHIGH : TE_DECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+		write_short(who)
+	}
+	else
+	{
+		write_byte(d > 255 ? TE_WORLDDECALHIGH : TE_WORLDDECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+	}
+	message_end()
+	return 1
+}
+
+// pieces of a model flying out from a point (or an entity's middle), with the material's sound
+stock lsg_fx_gibs(at, pos, const model[], flags, const snd[], count, Float:speed, Float:life, Float:size, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!lsg_have(model) || !lsg_msg_room("Break Into Gibs", 2, 0, lim))
+		return 0
+	new Float:sz = floatclamp(size, 1.0, 512.0)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BREAKMODEL)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, floatclamp(speed, 0.0, 2000.0) * 0.5)
+	write_byte(clamp(floatround(speed / 10.0), 0, 255))
+	write_short(engfunc(EngFunc_ModelIndex, model))
+	write_byte(count)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(flags)
+	message_end()
+	if (snd[0] && lsg_have_snd(snd))
+		engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+	return 1
+}
+
+// a shockwave ring growing from a point (or an entity's spot)
+stock lsg_fx_ring(at, pos, Float:radius, r, g, b, Float:life, width, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	new spr = lsg_have("sprites/shockwave.spr") ? engfunc(EngFunc_ModelIndex, "sprites/shockwave.spr") : (lsg_have("sprites/laserbeam.spr") ? engfunc(EngFunc_ModelIndex, "sprites/laserbeam.spr") : 0)
+	if (!spr || !lsg_msg_room("Beam Ring", 1, 0, lim))
+		return 0
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BEAMCYLINDER)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2] + floatclamp(radius, 8.0, 4096.0))
+	write_short(spr)
+	write_byte(0)
+	write_byte(0)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(width)
+	write_byte(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+	return 1
+}
+
+// ---- sounds (map sounds are best mono: a stereo .wav is heard in the middle, not where it is)
+// heard as is, not from a place: a player, a team (1 T, 2 CT) or everyone; volume and pitch go
+// through the game's speaker command (v = volume %, p = pitch %)
+stock lsg_snd_2d(who, arg, const snd[], Float:vol, pitch, lim)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	new name[72], n = 0
+	copy(name, charsmax(name), snd)
+	new len = strlen(name)
+	if (len > 4 && equali(name[len - 4], ".wav"))
+		name[len - 4] = 0
+	new v = clamp(floatround(vol * 100.0), 0, 100)
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 1 && p != arg) || (who == 2 && get_user_team(p) != arg))
+			continue
+		if (!lsg_msg_room("Play Sound 2D", 1, p, lim))
+			continue
+		client_cmd(p, "spk ^"(v%d p%d) %s^"", v, pitch, name)
+		n++
+	}
+	return n > 0 || who == 0
+}
+
+// at a place (a position, else an entity's spot, staying there)
+stock lsg_snd_at(at, pos, const snd[], Float:vol, Float:attn, pitch)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// on an entity's channel: it follows the entity
+stock lsg_snd_on(e, chan, const snd[], Float:vol, Float:attn, pitch)
+{
+	if (e <= 0 || !pev_valid(e) || !snd[0] || !lsg_have_snd(snd))
+		return 0
+	emit_sound(e, chan, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// a looping sound: an emitter at a spot, or riding on an entity; the file loops by itself if it
+// has loop points, else it's played again every Every seconds
+stock g_lsgLoops
+public lsg_snd_again(t)
+{
+	new e = t - (LSG_TASK - 300000)
+	if (e <= MaxClients || !pev_valid(e))
+	{
+		remove_task(t)
+		return
+	}
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, entity_get_float(e, EV_FL_fuser1), entity_get_float(e, EV_FL_fuser2), 0, pev(e, pev_iuser1))
+}
+
+stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:every, most)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	if (g_lsgLoops >= most)
+	{
+		log_amx("[%s] Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", LSG_MODE, most)
+		return 0
+	}
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(on, o))
+		return 0
+	if (!lsg_ent_room("Loop Sound"))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_loop")
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_effects, EF_NODRAW)
+	if (pos < 0 && on > 0)
+	{
+		set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
+		set_pev(e, pev_aiment, on)
+	}
+	else
+		set_pev(e, pev_movetype, MOVETYPE_NONE)
+	set_pev(e, pev_noise, snd)
+	set_pev(e, pev_fuser1, floatclamp(vol, 0.0, 1.0))
+	set_pev(e, pev_fuser2, attn)
+	set_pev(e, pev_iuser1, pitch)
+	emit_sound(e, CHAN_STATIC, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	if (every > 0.0)
+		set_task(floatclamp(every, 0.5, 600.0), "lsg_snd_again", e + LSG_TASK - 300000, _, _, "b")
+	g_lsgLoops++
+	return e
+}
+
+stock lsg_snd_stop_loop(e)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return 0
+	new cls[24]
+	pev(e, pev_classname, cls, charsmax(cls))
+	if (!equal(cls, "ls_studio_loop"))
+		return 0
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	remove_task(e + LSG_TASK - 300000)
+	engfunc(EngFunc_RemoveEntity, e)
+	if (g_lsgLoops > 0)
+		g_lsgLoops--
+	return 1
+}
+
+stock lsg_snd_stop_on(e, chan)
+{
+	if (e <= 0 || !pev_valid(e) || !lsg_have_snd("common/null.wav"))
+		return 0
+	emit_sound(e, chan, "common/null.wav", 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	return 1
+}
+
+stock lsg_snd_stop_player(p)
+{
+	if (!lsg_ok(p))
+		return 0
+	client_cmd(p, "stopsound")
+	return 1
+}
+
+// ---- spawning: a class from Spawn Entity's list, its keys, then spawned
+stock lsg_spawn_kv(const cls[], const Float:o[3], const k1[] = "", const v1[] = "", ...)
+{
+	new e = create_entity(cls)
+	if (e <= 0)
+		return 0
+	engfunc(EngFunc_SetOrigin, e, o)
+	if (k1[0])
+		DispatchKeyValue(e, k1, v1)
+	// (the rest, in pairs)
+	new n = numargs(), key[64], val[128]
+	for (new a = 4; a + 1 < n; a += 2)
+	{
+		lsg_argstr(a, key, charsmax(key))
+		lsg_argstr(a + 1, val, charsmax(val))
+		if (key[0])
+			DispatchKeyValue(e, key, val)
+	}
+	DispatchSpawn(e)
+	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
+stock lsg_argstr(a, s[], len)
+{
+	new i = 0
+	for (; i < len; i++)
+	{
+		s[i] = getarg(a, i)
+		if (!s[i])
+			break
+	}
+	s[min(i, len)] = 0
+}
+
+// ---- solid spawns: is the spot free (a hull the size of the thing, players and walls count)?
+// If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
+stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
+
+// (Retry: the spot of the first try, kept)
+stock lsg_xr_put(i, ok, const Float:o[3])
+{
+	if (ok)
+	{
+		g_lsgXrO[i][0] = o[0]
+		g_lsgXrO[i][1] = o[1]
+		g_lsgXrO[i][2] = o[2]
+	}
+	return ok
+}
+
+stock lsg_xr_get(i, Float:o[3])
+{
+	o[0] = g_lsgXrO[i][0]
+	o[1] = g_lsgXrO[i][1]
+	o[2] = g_lsgXrO[i][2]
+	return 1
+}
+
+stock bool:lsg_xf_clear(const Float:o[3], size)
+{
+	new Float:c[3]
+	c[0] = o[0]
+	c[1] = o[1]
+	c[2] = o[2] + (size >= 2 ? 37.0 : 19.0)
+	engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, size >= 2 ? HULL_HUMAN : HULL_HEAD, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+// mode: 0 always spawn (no check), 1 a nearby spot or in place anyway, 2 a nearby spot or not at
+// all, 3 exactly there or not at all, 4 exactly there (the node retries)
+stock bool:lsg_xf_free(Float:o[3], size, mode, Float:maxd, &moved)
+{
+	moved = 0
+	if (size < 0 || mode == 0 || lsg_xf_clear(o, size))
+		return true
+	if (mode >= 3)
+		return false
+	new Float:c[3], Float:from[3], Float:to[3], Float:f
+	from[0] = o[0]
+	from[1] = o[1]
+	from[2] = o[2] + 18.0
+	for (new Float:r = 16.0; r <= maxd; r += 16.0)
+	{
+		new steps = clamp(floatround(r / 6.0), 8, 32)
+		for (new k = 0; k < steps; k++)
+		{
+			new Float:ang = 6.2831853 * float(k) / float(steps)
+			for (new z = 0; z < 3; z++)
+			{
+				c[0] = o[0] + floatcos(ang) * r
+				c[1] = o[1] + floatsin(ang) * r
+				c[2] = o[2] + float(z) * 18.0
+				if (!lsg_xf_clear(c, size))
+					continue
+				to[0] = c[0]
+				to[1] = c[1]
+				to[2] = c[2] + 18.0
+				engfunc(EngFunc_TraceLine, from, to, IGNORE_MONSTERS, 0, 0)
+				get_tr2(0, TR_flFraction, f)
+				if (f < 1.0)
+					continue
+				o[0] = c[0]
+				o[1] = c[1]
+				o[2] = c[2]
+				moved = 1
+				return true
+			}
+		}
+	}
+	// (mode 1: no free spot near, so in place anyway)
+	return mode == 1
 }
 
 public plugin_init()
@@ -2180,18 +3787,44 @@ lsg_n7(ctx[])
 	}
 	if (lsd_enter(7, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(7, "gm_components isn't running on this server.")
-	else if (!lsg_origin_of("x", o))
-		lsd_error(7, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 7
+	if (!lsgRe)
+		g_lsgXrN[7] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Create Component")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("x", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_comp_create("ls_capture_point", o, "radius=1; server_cmdquit")))
+		lsgWhy = 1
+	new bool:lsgWait = false
+	g_lsgOut[7] = e
+	g_lsgO[0] = e
+	g_lsgO[1] = e ? 1 : 0
+	g_lsgO[2] = e ? lsgMv : 0
+	g_lsgO[3] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(7, "moved to a nearby free spot")
+		else
+		lsd_exit(7, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(7, "blocked: trying again")
 	else
 	{
-		g_lsgOut[7] = ls_comp_create("ls_capture_point", o, "radius=1; server_cmdquit")
-		if (g_lsgOut[7])
-			lsd_exit(7, fmt("entity %d", g_lsgOut[7]))
-		else
-			lsd_error(7, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(7, "gm_components isn't running on this server.")
+			case 2: lsd_error(7, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(7, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(7, "The spot stayed blocked: every retry was used up.")
+		}
 	}
 }
 

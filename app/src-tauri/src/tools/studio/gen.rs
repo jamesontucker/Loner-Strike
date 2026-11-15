@@ -1125,7 +1125,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     for id in &live {
         let d = v.defs[id];
         let ctx = CTX_KINDS.contains(&d.kind.as_str());
-        if !ctx && !STORE_KINDS.contains(&d.kind.as_str()) && !w1::STORE.contains(&d.kind.as_str()) {
+        if !ctx && !STORE_KINDS.contains(&d.kind.as_str()) && !w1::STORE.contains(&d.kind.as_str()) && !fx::STORE.contains(&d.kind.as_str()) {
             continue;
         }
         for o in v.outputs(id).iter().filter(|o| o.ty != "exec") {
@@ -2939,19 +2939,12 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "ls_extraction" => "ls_extraction_zone",
                 k => k,
             });
-            let at = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
+            let place = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
             let keys = pawn_str(&keys_text(gen.text(n, def, "keys")));
-            b.line("\tnew Float:o[3]");
-            if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("gm_components couldn't make that component (it has no room, or the keys are wrong).")));
-            } else {
-                b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})"));
-            }
-            // (a component turns, but isn't pushed or sized: it's a zone)
-            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", false, None) {
-                b.line(l);
-            }
-            then_line(&mut b, "then");
+            // (a component turns, but isn't pushed or sized: it's a zone; "If the spot is blocked", gen/fx.rs)
+            let apply = fx::apply(gen, n, def, id, "e", "at_ent", false, None);
+            let pre = [("ls_components_running()".to_string(), fx::WHY_BAD, "gm_components isn't running on this server."), ("lsg_ent_room(\"Create Component\")".to_string(), fx::WHY_SLOTS, "Not made: the server is out of entity slots.")];
+            fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &format!("ls_comp_create({kind}, o, {keys})"), (fx::WHY_BLOCKED, "gm_components couldn't make that component (no room there, or the keys are wrong)."), apply, &exit, &err, &next, &mut after);
         }
         "comp.zone_set" | "comp.zone_shrink" => {
             // the safe zone: the one wired in, or the one a wired Shrinking zone drives
@@ -3373,20 +3366,14 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "ent.spawn_prop" => {
-            if fx::place_wired(gen, id, "at") || v.data_source(id, "at").is_none() || fx::copies(n, def) {
-                // (the shared transform: At position, or At entity with a Local offset)
-                let fallback = if v.data_source(id, "at").is_some() { format!("lsg_ent_origin({}, o)", inp("at", "entity")) } else { "false".into() };
-                b.line(format!("\tnew Float:o[3]\n\tg_lsgOut[{i}] = {} ? lsg_prop_o(o, {}, {}) : 0", fx::place(gen, id, "at", &fallback), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
-            } else {
-                b.line(format!("\tg_lsgOut[{i}] = lsg_prop({}, {}, {})", inp("at", "entity"), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
-            }
-            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at", true, None) {
-                b.line(l);
-            }
-            if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No prop: the model isn't loaded, or there's no such entity."), exit("spawned")));
-            }
-            then_line(&mut b, "then");
+            // (the shared transform and "If the spot is blocked", gen/fx.rs)
+            let fallback = if v.data_source(id, "at").is_some() { format!("lsg_ent_origin({}, o)", inp("at", "entity")) } else { "false".into() };
+            let place = fx::place(gen, id, "at", &fallback);
+            let model = pawn_str(&model_text(gen.text(n, def, "model")));
+            let create = format!("lsg_prop_o(o, {model}, {})", if gen.boolean(n, def, "solid") { 1 } else { 0 });
+            let apply = fx::apply(gen, n, def, id, "e", "at", true, None);
+            let pre = [(format!("lsg_have({model})"), fx::WHY_MISSING, "No prop: its model isn't loaded with the map."), ("lsg_ent_room(\"Spawn Prop\")".to_string(), fx::WHY_SLOTS, "No prop: the server is out of entity slots.")];
+            fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &create, (fx::WHY_BAD, "No prop: the game didn't make it."), apply, &exit, &err, &next, &mut after);
         }
         "amx.call" => {
             let k = gen.out_index(id, "out");
@@ -3494,26 +3481,17 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let kind = pawn_str(&name_text(gen.text(n, def, "kind")));
             let tier = gen.choice(n, def, "tier").parse::<i64>().unwrap_or(0).clamp(0, 3);
             let (hp, pay) = (inp("health", "number"), inp("pay", "number"));
-            // (at a wired entity, or the one with the name)
-            let at = match v.data_source(id, "at_ent") {
-                Some(_) => format!("lsg_ent_find_origin({})", inp("at_ent", "entity")),
-                None => pawn_str(&name_text(gen.text(n, def, "at"))),
+            // (at a wired entity, or the one with the name; the shared transform and "If the spot
+            // is blocked", gen/fx.rs)
+            let fallback = match v.data_source(id, "at_ent") {
+                Some(_) => format!("lsg_ent_origin({}, o)", inp("at_ent", "entity")),
+                None => format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at")))),
             };
-            // (the shared transform: At position, or At entity with a Local offset)
-            let xf = fx::place_wired(gen, id, "at_ent") || (v.data_source(id, "at_ent").is_some() && fx::copies(n, def));
-            if xf {
-                b.line("\tnew Float:o[3]");
-            }
-            let at_call = |hp: &str, pay: &str| if xf { format!("({} ? lsg_creature_o2({kind}, o, {tier}, {hp}, floatround({pay})) : 0)", fx::place(gen, id, "at_ent", &format!("lsg_ent_origin({}, o)", inp("at_ent", "entity")))) } else { format!("lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))") };
-            if debug {
-                b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = {}))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), at_call(&hp, &pay), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
-            } else {
-                b.line(format!("\tg_lsgOut[{i}] = {}", at_call(&hp, &pay)));
-            }
-            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", true, None) {
-                b.line(l);
-            }
-            then_line(&mut b, "then");
+            let place = fx::place(gen, id, "at_ent", &fallback);
+            let create = format!("lsg_creature_o2({kind}, o, {tier}, {hp}, floatround({pay}))");
+            let apply = fx::apply(gen, n, def, id, "e", "at_ent", true, None);
+            let pre = [("get_cvar_pointer(\"ls_creature_ver\")".to_string(), fx::WHY_BAD, "This server's bot brain has no creatures (ls_creature)."), ("lsg_ent_room(\"Spawn Creature\")".to_string(), fx::WHY_SLOTS, "Not spawned: the server is out of entity slots.")];
+            fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &create, (fx::WHY_MISSING, "Not spawned: that creature type isn't loaded on this map."), apply, &exit, &err, &next, &mut after);
         }
         // ---- graph version 3
         "fn.return" => {
@@ -3937,8 +3915,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         k if fx::is_action(k) => {
-            fx::action(gen, id, n, def, &mut b, &inp, &exit, &err);
-            then_line(&mut b, "then");
+            // (it goes on to Then, or a spawn node's Then or Failed, itself)
+            fx::action(gen, id, n, def, &mut b, &inp, &exit, &err, &next, &mut after);
         }
         _ => {}
     }
@@ -8346,7 +8324,8 @@ mod tests {
             for l in src.lines().filter(|l| l.contains("#include <evil>")) {
                 assert!(l.starts_with("\tls_announce(0, 20.0, \"%s\", \"") && l.ends_with("\")"), "{l}");
             }
-            assert_eq!(src.lines().filter(|l| l.trim_start().starts_with("#include")).count(), 6);
+            // (only the plugin's own includes: a spawn node brings the vector helpers' two more)
+            assert!(src.lines().filter(|l| l.trim_start().starts_with("#include")).all(|l| ["#include <amxmodx>", "#include <amxmisc>", "#include <fakemeta>", "#include <engine>", "#include <hamsandwich>", "#include <cstrike>", "#include <fun>", "#include <xs>", "#include <sqlx>", "#include <json>", "#include <cellarray>", "#include <celltrie>", "#include <loner>"].contains(&l.trim())), "{src}");
             assert_eq!(src.matches("*/").count(), src.matches("/*").count());
             assert_eq!(src.matches("*/").count(), 1, "only the header comment closes");
             // every quote in the plugin's own lines is balanced (no string was cut open)

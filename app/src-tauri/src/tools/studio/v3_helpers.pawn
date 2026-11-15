@@ -836,7 +836,8 @@ stock bool:lsg_valid(e)
 {
 	if (e >= 1 && e <= MaxClients)
 		return bool:is_user_connected(e)
-	return e > MaxClients && pev_valid(e) > 0
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
 }
 
 stock bool:lsg_is_creature(e)

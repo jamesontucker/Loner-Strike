@@ -534,7 +534,7 @@ node("flow.switch_num", "Switch on Number", "Flow", "Goes to the output whose ca
 node("flow.switch_text", "Switch on Text", "Flow", "Goes to the output whose case is the text (capitals don't matter; cases split by commas), or Default.",
      inputs=[X, P("in","text","Selection",required=True)], outputs=[E("default","Default")], params=[prm("cases","Cases","cases","yes,no")])
 node("flow.switch_enum", "Switch on Enum", "Enums", "Goes to the output for the enum's value.", inputs=[X, P("in","$E","Selection",required=True)], outputs=[], params=[prm("enum","Enum","enum","")])
-node("flow.if_valid", "Is Valid?", "Conditions", "Goes to Is Valid when the entity (or player) is there, else Is Not Valid.", inputs=[X, P("in","entity","Object",optional=True)], outputs=[E("valid","Is Valid"), E("invalid","Is Not Valid")])
+node("flow.if_valid", "Is Valid?", "Conditions", "Goes to Is Valid when the entity is there, else Is Not Valid. Any entity handle works: a player or bot, a prop, creature, NPC, interactable, component, spawned entity or weapon (a spawn node's Entity), a map entity. A removed one isn't valid.", inputs=[X, P("in","entity","Object",optional=True)], outputs=[E("valid","Is Valid"), E("invalid","Is Not Valid")])
 node("timer.retrigger", "Retriggerable Delay", "Timers", "Waits, then carries on; flow coming in again while waiting starts the wait again.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("secs","Seconds","number",3,min=0.1,max=3600)])
 node("timer.by_function", "Set Timer by Function", "Timers", "Runs a Function (with its own graph) after some seconds, again and again if Looping. Its inputs get nothing (0, empty).",
      inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("func","Function","fn",""), prm("secs","Seconds","number",5,min=0.1,max=3600), prm("loop","Looping","bool",True)])
@@ -601,7 +601,7 @@ node("logic.equal", "Equal", "Conditions", "Are the two values the same (or diff
      params=[OF(), prm("op","Is","choice","eq",choices=[["eq","equal"],["ne","not equal"]])], pure=True)
 node("logic.select", "Select", "Conditions", "Picks A when the condition is true, else B.", inputs=[P("cond","bool","Pick A",param="cond"), P("a","$T","A",optional=True), P("b","$T","B",optional=True)], outputs=[P("out","$T","Result")],
      params=[OF(), prm("cond","Pick A","bool",True)], pure=True)
-node("cond.is_valid", "Is Valid", "Conditions", "Is the entity (or player) there?", inputs=[P("in","entity","Object",optional=True)], outputs=[P("out","bool","Valid")], pure=True)
+node("cond.is_valid", "Is Valid", "Conditions", "Is the entity there? Any entity handle works: a player or bot, a prop, creature, NPC, interactable, component, spawned entity or weapon (a spawn node's Entity), a map entity. A removed one isn't valid.", inputs=[P("in","entity","Object",optional=True)], outputs=[P("out","bool","Valid")], pure=True)
 node("player.is_player", "Is Player", "Players", "Is the entity a player (or bot) in the game?", inputs=[P("in","entity","Entity",optional=True)], outputs=[P("out","bool","Player")], pure=True)
 node("creature.is", "Is Creature", "Creatures", "Is the entity one of the bot brain's creatures?", inputs=[P("in","entity","Entity",optional=True)], outputs=[P("out","bool","Creature")], pure=True)
 # math
@@ -1028,6 +1028,26 @@ node("ent.spawn_weapon", "Spawn Weapon On Ground", "Entities", "A weapon or item
      inputs=[X] + _i + [P("ammo","number","Reserve ammo",param="ammo"), P("respawn","number","Back after (seconds)",param="respawn")], outputs=[E(), P("out","entity","Weapon")],
      params=[prm("item","Weapon or item","choice","ak47",choices=[["mp5navy","MP5"],["tmp","TMP"],["p90","P90"],["mac10","MAC-10"],["ak47","AK-47"],["sg552","SG 552"],["m4a1","M4A1"],["aug","AUG"],["scout","Scout"],["g3sg1","G3SG1"],["awp","AWP"],["m3","M3 shotgun"],["xm1014","XM1014 shotgun"],["m249","M249"],["flashbang","Flashbang"],["hegrenade","HE grenade"],["kevlar","Kevlar"],["assault","Kevlar and helmet"],["smokegrenade","Smoke grenade"],["shield","Tactical shield"],["famas","FAMAS"],["sg550","SG 550"],["galil","Galil"],["ump45","UMP 45"],["glock18","Glock"],["usp","USP"],["elite","Dual Elites"],["fiveseven","Five-SeveN"],["p228","P228"],["deagle","Desert Eagle"]]), prm("ammo","Reserve ammo (-1: the game's usual)","number",-1,min=-1,max=1000), prm("respawn","Back after (seconds; 0: next round)","number",0,min=0,max=600)] + _p,
      keywords="weapon gun item spawn ground drop armoury pickup ammo respawn")
+
+# solid spawn nodes: what happens when the spot is blocked (Unreal's Spawn Collision Handling), and
+# the spawn outcome standard (docs/notes/FX.md): Then right away; Spawned / Failed once each
+# (maybe later, with Retry); Entity, Success, Moved, Failure Reason (the Spawn Failure enum)
+BLOCKED_CHOICES = [["force","Always spawn, ignore collisions"],["nearby_always","Try a nearby spot, but always spawn"],["nearby","Try a nearby spot, don't spawn if still blocked"],["exact","Don't spawn if blocked"],["retry","Retry every N seconds up to M tries"]]
+BLOCKED_HELP = (" If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck);"
+    " Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding);"
+    " Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved."
+    " Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason"
+    " (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot.")
+for d in nodes:
+    if d["type"] in ("ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon"):
+        for o in d["outputs"]:
+            if o["id"] == "out":
+                o["label"] = "Entity"
+        if not any(o["id"] == "spawned" for o in d["outputs"]):
+            d["outputs"] += [E("spawned","Spawned"), E("failed","Failed"), P("ok","bool","Success"), P("moved","bool","Moved"), P("reason","enum:ls_spawn_fail","Failure reason")]
+        d["params"] += [prm("blocked","If the spot is blocked","choice","nearby",choices=BLOCKED_CHOICES), prm("max_dist","Max distance for a nearby spot","number",128,min=16,max=1024), prm("retry_every","Retry every (seconds)","number",1,min=0.1,max=60), prm("retry_tries","Retry tries (0: until clear)","number",10,min=0,max=1000)]
+        d["help"] += BLOCKED_HELP
+        d["keywords"] = (d.get("keywords", "") + " collision handling force spawn always spawn blocked free spot fallback").strip()
 
 # the older sound nodes: still working, left out of the node list (Problems says what replaced them)
 SUPERSEDED = {"game.play_sound": "snd.play_2d", "fx.sound_at": "snd.play_at", "fx.sound_to": "snd.play_2d"}

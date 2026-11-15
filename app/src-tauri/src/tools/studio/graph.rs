@@ -588,7 +588,7 @@ pub struct EnumDef {
 
 /// The app's own enums, in every graph (never saved with it): what Kind Of and Component Kind Of
 /// give, so they plug into Switch on Enum (its cases fill from them) and Select like any enum.
-pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 2] = [
+pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 3] = [
     ("ls_kind", "Entity Kind", &["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]),
     (
         "ls_comp_kind",
@@ -597,6 +597,8 @@ pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 2] = [
             "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None",
         ],
     ),
+    // the spawn nodes' Failure Reason (gen/fx.rs WHY_*): the order is the numbers
+    ("ls_spawn_fail", "Spawn Failure", &["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"]),
 ];
 
 fn user_enums_only<S: serde::Serializer>(v: &[EnumDef], s: S) -> Result<S::Ok, S::Error> {
@@ -2902,7 +2904,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 20] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind"];
+    const TYPES: [&str; 21] = ["enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];

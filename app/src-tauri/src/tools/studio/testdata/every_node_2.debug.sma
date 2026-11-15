@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 2
+#define LSG_O 10
 #define LSG_OT 1
 
 // The mode's variables
@@ -2853,7 +2853,8 @@ stock bool:lsg_valid(e)
 {
 	if (e >= 1 && e <= MaxClients)
 		return bool:is_user_connected(e)
-	return e > MaxClients && pev_valid(e) > 0
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
 }
 
 stock bool:lsg_is_creature(e)
@@ -3058,6 +3059,8 @@ stock lsg_ecenter(e)
 stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
 // enum Component Kind
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
+// enum Spawn Failure
+stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
 
 lsd_graph_vars()
 {
@@ -3068,6 +3071,553 @@ lsd_graph_set(const vid[], who, const val[])
 {
 	#pragma unused vid, who, val
 	return false
+}
+
+// ---- effects, sounds and spawning (fx.rs) ----
+// the engine's crash points are gen.rs's shared guards: lsg_msg_room (effect messages a frame,
+// the mode's "messages" limit) and lsg_ent_room (entity slots with a reserve)
+stock g_lsgXfSrc
+
+stock bool:lsg_xf_from(src, bool:found)
+{
+	g_lsgXfSrc = src
+	return found
+}
+
+// a prop at a place (Spawn Prop with the shared transform)
+stock lsg_prop_o(const Float:o[3], const model[], solid)
+{
+	if (!lsg_have(model))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_prop")
+	engfunc(EngFunc_SetModel, e, model)
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, solid ? SOLID_BBOX : SOLID_NOT)
+	set_pev(e, pev_movetype, MOVETYPE_NONE)
+	if (solid)
+		engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 32.0})
+	return e
+}
+
+stock bool:lsg_have_snd(const p[])
+{
+	new full[128]
+	formatex(full, charsmax(full), "sound/%s", p)
+	return lsg_have(full) || lsg_have(p)
+}
+
+stock lsg_wcoord(const Float:o[3])
+{
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+}
+
+// where a spawn goes: an entity's spot (plus an offset along its own forward, right and up),
+// or a position; remembers the entity for its rotation
+stock bool:lsg_xf_at(src, pos, ofs, Float:o[3])
+{
+	g_lsgXfSrc = 0
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		return true
+	}
+	if (!lsg_ent_origin(src, o))
+		return false
+	g_lsgXfSrc = src
+	if (ofs >= 0)
+	{
+		new Float:a[3], Float:f[3], Float:r[3], Float:u[3]
+		pev(src, is_user_alive(src) ? pev_v_angle : pev_angles, a)
+		engfunc(EngFunc_MakeVectors, a)
+		global_get(glb_v_forward, f)
+		global_get(glb_v_right, r)
+		global_get(glb_v_up, u)
+		for (new k = 0; k < 3; k++)
+			o[k] += f[k] * lsg_vc(ofs, 0) + r[k] * lsg_vc(ofs, 1) + u[k] * lsg_vc(ofs, 2)
+	}
+	return true
+}
+
+// turn, push and size a new entity: Rotation, else the At entity's facing (if copied) plus the
+// rotation offset; Velocity (a still thing falls and slides from there); Scale (models, sprites)
+stock lsg_xf_set(e, copy, rot, rot_ofs, vel, Float:scale)
+{
+	if (e <= 0 || !pev_valid(e))
+		return
+	new Float:a[3], bool:turn = false
+	if (rot >= 0)
+	{
+		lsg_vto(rot, a)
+		turn = true
+	}
+	else if (copy && g_lsgXfSrc > 0 && pev_valid(g_lsgXfSrc))
+	{
+		pev(g_lsgXfSrc, pev_angles, a)
+		// (a player's model pitch isn't where they look: keep their heading)
+		if (is_user_alive(g_lsgXfSrc))
+			a[0] = 0.0
+		turn = true
+	}
+	else
+		pev(e, pev_angles, a)
+	if (rot_ofs >= 0)
+	{
+		for (new k = 0; k < 3; k++)
+			a[k] += lsg_vc(rot_ofs, k)
+		turn = true
+	}
+	if (turn)
+	{
+		set_pev(e, pev_angles, a)
+		if (pev(e, pev_flags) & FL_MONSTER)
+			set_pev(e, pev_ideal_yaw, a[1])
+	}
+	if (vel >= 0)
+	{
+		new Float:v[3]
+		lsg_vto(vel, v)
+		if (pev(e, pev_movetype) == MOVETYPE_NONE)
+			set_pev(e, pev_movetype, MOVETYPE_TOSS)
+		set_pev(e, pev_velocity, v)
+	}
+	if (scale > 0.0 && scale != 1.0)
+		set_pev(e, pev_scale, floatclamp(scale, 0.05, 10.0))
+}
+
+// ---- effects
+stock g_lsgDlFollow[33], Float:g_lsgDlEnd[33], g_lsgDl[33][5], g_lsgDlN, g_lsgDlLim[33]
+
+public lsg_fx_dl_tick(t)
+{
+	// (the task's id: its slot plus the base)
+	new k = clamp(t - (LSG_TASK - 200000), 0, 31)
+	new e = g_lsgDlFollow[k]
+	if (e <= 0 || !pev_valid(e) || get_gametime() >= g_lsgDlEnd[k])
+	{
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = 0
+		return
+	}
+	new Float:o[3]
+	if (!lsg_ent_origin(e, o) || !lsg_msg_room("Dynamic Light", 1, 0, g_lsgDlLim[k]))
+		return
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(g_lsgDl[k][0])
+	write_byte(g_lsgDl[k][1])
+	write_byte(g_lsgDl[k][2])
+	write_byte(g_lsgDl[k][3])
+	write_byte(2)
+	write_byte(g_lsgDl[k][4])
+	message_end()
+}
+
+stock lsg_fx_dlight(follow, pos, r, g, b, Float:radius, Float:life, Float:decay, lim)
+{
+	new rad = clamp(floatround(radius / 10.0), 1, 255), dec = clamp(floatround(decay / 10.0), 0, 255)
+	if (follow > 0 && pev_valid(follow))
+	{
+		// following: a short light each tenth of a second where it is (32 at once at most)
+		new k = g_lsgDlN++ % 32
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = follow
+		g_lsgDlEnd[k] = get_gametime() + floatclamp(life, 0.1, 60.0)
+		// (as the message wants them: radius, r, g, b, then the decay after the life)
+		g_lsgDl[k][0] = rad
+		g_lsgDl[k][1] = r
+		g_lsgDl[k][2] = g
+		g_lsgDl[k][3] = b
+		g_lsgDl[k][4] = dec
+		g_lsgDlLim[k] = lim
+		lsg_fx_dl_tick(k + LSG_TASK - 200000)
+		set_task(0.1, "lsg_fx_dl_tick", k + LSG_TASK - 200000, _, _, "b")
+		return 1
+	}
+	if (pos < 0 || !lsg_msg_room("Dynamic Light", 1, 0, lim))
+		return 0
+	new Float:o[3]
+	lsg_vto(pos, o)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(rad)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(dec)
+	message_end()
+	return 1
+}
+
+// a decal on the nearest surface within reach (traced six ways from the point)
+stock lsg_fx_decal(pos, const name[], Float:reach, lim)
+{
+	if (pos < 0)
+		return 0
+	new d = engfunc(EngFunc_DecalIndex, name)
+	if (d < 0)
+		return 0
+	new Float:o[3], Float:end[3], Float:hit[3], Float:best = 2.0, Float:at[3], who = 0
+	static const Float:DIRS[6][3] = { {0.0, 0.0, -1.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}, {-1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, -1.0, 0.0} }
+	lsg_vto(pos, o)
+	reach = floatclamp(reach, 8.0, 512.0)
+	for (new k = 0; k < 6; k++)
+	{
+		for (new j = 0; j < 3; j++)
+			end[j] = o[j] + DIRS[k][j] * reach
+		engfunc(EngFunc_TraceLine, o, end, IGNORE_MONSTERS, 0, 0)
+		new Float:f
+		get_tr2(0, TR_flFraction, f)
+		if (f < best)
+		{
+			best = f
+			get_tr2(0, TR_vecEndPos, hit)
+			at = hit
+			who = max(get_tr2(0, TR_pHit), 0)
+		}
+	}
+	if (best >= 1.0 || !lsg_msg_room("Decal", 1, 0, lim))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	if (who > 0)
+	{
+		write_byte(d > 255 ? TE_DECALHIGH : TE_DECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+		write_short(who)
+	}
+	else
+	{
+		write_byte(d > 255 ? TE_WORLDDECALHIGH : TE_WORLDDECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+	}
+	message_end()
+	return 1
+}
+
+// pieces of a model flying out from a point (or an entity's middle), with the material's sound
+stock lsg_fx_gibs(at, pos, const model[], flags, const snd[], count, Float:speed, Float:life, Float:size, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!lsg_have(model) || !lsg_msg_room("Break Into Gibs", 2, 0, lim))
+		return 0
+	new Float:sz = floatclamp(size, 1.0, 512.0)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BREAKMODEL)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, floatclamp(speed, 0.0, 2000.0) * 0.5)
+	write_byte(clamp(floatround(speed / 10.0), 0, 255))
+	write_short(engfunc(EngFunc_ModelIndex, model))
+	write_byte(count)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(flags)
+	message_end()
+	if (snd[0] && lsg_have_snd(snd))
+		engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+	return 1
+}
+
+// a shockwave ring growing from a point (or an entity's spot)
+stock lsg_fx_ring(at, pos, Float:radius, r, g, b, Float:life, width, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	new spr = lsg_have("sprites/shockwave.spr") ? engfunc(EngFunc_ModelIndex, "sprites/shockwave.spr") : (lsg_have("sprites/laserbeam.spr") ? engfunc(EngFunc_ModelIndex, "sprites/laserbeam.spr") : 0)
+	if (!spr || !lsg_msg_room("Beam Ring", 1, 0, lim))
+		return 0
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BEAMCYLINDER)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2] + floatclamp(radius, 8.0, 4096.0))
+	write_short(spr)
+	write_byte(0)
+	write_byte(0)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(width)
+	write_byte(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+	return 1
+}
+
+// ---- sounds (map sounds are best mono: a stereo .wav is heard in the middle, not where it is)
+// heard as is, not from a place: a player, a team (1 T, 2 CT) or everyone; volume and pitch go
+// through the game's speaker command (v = volume %, p = pitch %)
+stock lsg_snd_2d(who, arg, const snd[], Float:vol, pitch, lim)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	new name[72], n = 0
+	copy(name, charsmax(name), snd)
+	new len = strlen(name)
+	if (len > 4 && equali(name[len - 4], ".wav"))
+		name[len - 4] = 0
+	new v = clamp(floatround(vol * 100.0), 0, 100)
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 1 && p != arg) || (who == 2 && get_user_team(p) != arg))
+			continue
+		if (!lsg_msg_room("Play Sound 2D", 1, p, lim))
+			continue
+		client_cmd(p, "spk ^"(v%d p%d) %s^"", v, pitch, name)
+		n++
+	}
+	return n > 0 || who == 0
+}
+
+// at a place (a position, else an entity's spot, staying there)
+stock lsg_snd_at(at, pos, const snd[], Float:vol, Float:attn, pitch)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// on an entity's channel: it follows the entity
+stock lsg_snd_on(e, chan, const snd[], Float:vol, Float:attn, pitch)
+{
+	if (e <= 0 || !pev_valid(e) || !snd[0] || !lsg_have_snd(snd))
+		return 0
+	emit_sound(e, chan, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// a looping sound: an emitter at a spot, or riding on an entity; the file loops by itself if it
+// has loop points, else it's played again every Every seconds
+stock g_lsgLoops
+public lsg_snd_again(t)
+{
+	new e = t - (LSG_TASK - 300000)
+	if (e <= MaxClients || !pev_valid(e))
+	{
+		remove_task(t)
+		return
+	}
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, entity_get_float(e, EV_FL_fuser1), entity_get_float(e, EV_FL_fuser2), 0, pev(e, pev_iuser1))
+}
+
+stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:every, most)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	if (g_lsgLoops >= most)
+	{
+		log_amx("[%s] Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", LSG_MODE, most)
+		return 0
+	}
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(on, o))
+		return 0
+	if (!lsg_ent_room("Loop Sound"))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_loop")
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_effects, EF_NODRAW)
+	if (pos < 0 && on > 0)
+	{
+		set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
+		set_pev(e, pev_aiment, on)
+	}
+	else
+		set_pev(e, pev_movetype, MOVETYPE_NONE)
+	set_pev(e, pev_noise, snd)
+	set_pev(e, pev_fuser1, floatclamp(vol, 0.0, 1.0))
+	set_pev(e, pev_fuser2, attn)
+	set_pev(e, pev_iuser1, pitch)
+	emit_sound(e, CHAN_STATIC, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	if (every > 0.0)
+		set_task(floatclamp(every, 0.5, 600.0), "lsg_snd_again", e + LSG_TASK - 300000, _, _, "b")
+	g_lsgLoops++
+	return e
+}
+
+stock lsg_snd_stop_loop(e)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return 0
+	new cls[24]
+	pev(e, pev_classname, cls, charsmax(cls))
+	if (!equal(cls, "ls_studio_loop"))
+		return 0
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	remove_task(e + LSG_TASK - 300000)
+	engfunc(EngFunc_RemoveEntity, e)
+	if (g_lsgLoops > 0)
+		g_lsgLoops--
+	return 1
+}
+
+stock lsg_snd_stop_on(e, chan)
+{
+	if (e <= 0 || !pev_valid(e) || !lsg_have_snd("common/null.wav"))
+		return 0
+	emit_sound(e, chan, "common/null.wav", 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	return 1
+}
+
+stock lsg_snd_stop_player(p)
+{
+	if (!lsg_ok(p))
+		return 0
+	client_cmd(p, "stopsound")
+	return 1
+}
+
+// ---- spawning: a class from Spawn Entity's list, its keys, then spawned
+stock lsg_spawn_kv(const cls[], const Float:o[3], const k1[] = "", const v1[] = "", ...)
+{
+	new e = create_entity(cls)
+	if (e <= 0)
+		return 0
+	engfunc(EngFunc_SetOrigin, e, o)
+	if (k1[0])
+		DispatchKeyValue(e, k1, v1)
+	// (the rest, in pairs)
+	new n = numargs(), key[64], val[128]
+	for (new a = 4; a + 1 < n; a += 2)
+	{
+		lsg_argstr(a, key, charsmax(key))
+		lsg_argstr(a + 1, val, charsmax(val))
+		if (key[0])
+			DispatchKeyValue(e, key, val)
+	}
+	DispatchSpawn(e)
+	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
+stock lsg_argstr(a, s[], len)
+{
+	new i = 0
+	for (; i < len; i++)
+	{
+		s[i] = getarg(a, i)
+		if (!s[i])
+			break
+	}
+	s[min(i, len)] = 0
+}
+
+// ---- solid spawns: is the spot free (a hull the size of the thing, players and walls count)?
+// If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
+stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
+
+// (Retry: the spot of the first try, kept)
+stock lsg_xr_put(i, ok, const Float:o[3])
+{
+	if (ok)
+	{
+		g_lsgXrO[i][0] = o[0]
+		g_lsgXrO[i][1] = o[1]
+		g_lsgXrO[i][2] = o[2]
+	}
+	return ok
+}
+
+stock lsg_xr_get(i, Float:o[3])
+{
+	o[0] = g_lsgXrO[i][0]
+	o[1] = g_lsgXrO[i][1]
+	o[2] = g_lsgXrO[i][2]
+	return 1
+}
+
+stock bool:lsg_xf_clear(const Float:o[3], size)
+{
+	new Float:c[3]
+	c[0] = o[0]
+	c[1] = o[1]
+	c[2] = o[2] + (size >= 2 ? 37.0 : 19.0)
+	engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, size >= 2 ? HULL_HUMAN : HULL_HEAD, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+// mode: 0 always spawn (no check), 1 a nearby spot or in place anyway, 2 a nearby spot or not at
+// all, 3 exactly there or not at all, 4 exactly there (the node retries)
+stock bool:lsg_xf_free(Float:o[3], size, mode, Float:maxd, &moved)
+{
+	moved = 0
+	if (size < 0 || mode == 0 || lsg_xf_clear(o, size))
+		return true
+	if (mode >= 3)
+		return false
+	new Float:c[3], Float:from[3], Float:to[3], Float:f
+	from[0] = o[0]
+	from[1] = o[1]
+	from[2] = o[2] + 18.0
+	for (new Float:r = 16.0; r <= maxd; r += 16.0)
+	{
+		new steps = clamp(floatround(r / 6.0), 8, 32)
+		for (new k = 0; k < steps; k++)
+		{
+			new Float:ang = 6.2831853 * float(k) / float(steps)
+			for (new z = 0; z < 3; z++)
+			{
+				c[0] = o[0] + floatcos(ang) * r
+				c[1] = o[1] + floatsin(ang) * r
+				c[2] = o[2] + float(z) * 18.0
+				if (!lsg_xf_clear(c, size))
+					continue
+				to[0] = c[0]
+				to[1] = c[1]
+				to[2] = c[2] + 18.0
+				engfunc(EngFunc_TraceLine, from, to, IGNORE_MONSTERS, 0, 0)
+				get_tr2(0, TR_flFraction, f)
+				if (f < 1.0)
+					continue
+				o[0] = c[0]
+				o[1] = c[1]
+				o[2] = c[2]
+				moved = 1
+				return true
+			}
+		}
+	}
+	// (mode 1: no free spot near, so in place anyway)
+	return mode == 1
 }
 
 // a creature with the mode's own health, tier and pay for its killer
@@ -3112,6 +3662,35 @@ public lsg_pay_killer(ent, killer)
 		g_lsgPay[ent] = 0
 	}
 	return HAM_IGNORED
+}
+
+stock lsg_creature_o2(const kind[], const Float:o[3], tier, Float:hp, pay)
+{
+	if (!get_cvar_pointer("ls_creature_ver"))
+		return 0
+	new ent = create_entity("ls_creature")
+	if (ent <= 0)
+		return 0
+	DispatchKeyValue(ent, "type", kind)
+	if (tier > 0)
+	{
+		new v[4]
+		num_to_str(tier, v, charsmax(v))
+		DispatchKeyValue(ent, "tier", v)
+	}
+	entity_set_origin(ent, o)
+	DispatchSpawn(ent)
+	if (!is_valid_ent(ent) || (entity_get_int(ent, EV_INT_flags) & FL_KILLME))
+		return 0
+	if (hp > 0.0)
+	{
+		entity_set_float(ent, EV_FL_health, hp)
+		entity_set_float(ent, EV_FL_max_health, hp)
+	}
+	if (ent < sizeof g_lsgPay)
+		g_lsgPay[ent] = clamp(pay, 0, 16000)
+	g_lsgCrAt = -1.0
+	return ent
 }
 
 public plugin_precache()
@@ -3839,19 +4418,54 @@ lsg_n22(ctx[])
 	}
 	if (lsd_enter(22, ctx))
 		return
-	if (!get_cvar_pointer("ls_creature_ver"))
-		lsd_error(22, "This server's bot brain has no creatures (ls_creature).")
-	else if (!(g_lsgOut[22] = lsg_creature_x("zombie", "spot1", 2, lsi1, floatround(lsi2))))
-		lsd_error(22, "Not spawned: no entity has that name, or that type isn't loaded on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 22
+	if (!lsgRe)
+		g_lsgXrN[22] = 0
+	g_lsgXrIn = -1
+	if (!(get_cvar_pointer("ls_creature_ver")))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Creature")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("spot1", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_creature_o2("zombie", o, 2, lsi1, floatround(lsi2))))
+		lsgWhy = 4
+	new bool:lsgWait = false
+	g_lsgOut[22] = e
+	g_lsgO[1] = e
+	g_lsgO[2] = e ? 1 : 0
+	g_lsgO[3] = e ? lsgMv : 0
+	g_lsgO[4] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(22, "moved to a nearby free spot")
+		else
+		lsd_exit(22, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(22, "blocked: trying again")
 	else
-		lsd_exit(22, fmt("entity %d", g_lsgOut[22]))
-	lsg_n23(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(22, "This server's bot brain has no creatures (ls_creature).")
+			case 2: lsd_error(22, "Not spawned: the server is out of entity slots.")
+			case 1: lsd_error(22, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(22, "The spot stayed blocked: every retry was used up.")
+			case 4: lsd_error(22, "Not spawned: that creature type isn't loaded on this map.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n23(ctx)
 }
 
 // Print String (p_cs)
 lsg_n23(ctx[])
 {
-	new lsi0 = g_lsgOut[22]
+	new lsi0 = g_lsgO[1]
 	if (lsd_want(23))
 	{
 	lsd_begin()
@@ -3871,7 +4485,7 @@ lsg_n23(ctx[])
 // Print String (p_chp)
 lsg_n24(ctx[])
 {
-	new Float:lsi0 = lsg_ehp(g_lsgOut[22])
+	new Float:lsi0 = lsg_ehp(g_lsgO[1])
 	if (lsd_want(24))
 	{
 	lsd_begin()
@@ -4180,7 +4794,7 @@ lsg_n40(ctx[])
 		lsd_error(40, "gm_components isn't running on this server.")
 	else
 	{
-		g_lsgO[1] = ls_perk_buy(lsi0, "hands") ? 1 : 0
+		g_lsgO[5] = ls_perk_buy(lsi0, "hands") ? 1 : 0
 		lsd_exit(40, "done")
 	}
 	lsg_n41(ctx)
@@ -4189,7 +4803,7 @@ lsg_n40(ctx[])
 // Print String (p_pb)
 lsg_n41(ctx[])
 {
-	new lsi0 = g_lsgO[1]
+	new lsi0 = g_lsgO[5]
 	if (lsd_want(41))
 	{
 	lsd_begin()
@@ -4556,26 +5170,53 @@ lsg_n59(ctx[])
 	}
 	if (lsd_enter(59, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(59, "gm_components isn't running on this server.")
-	else if (!lsg_origin_of("spot1", o))
-		lsd_error(59, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 59
+	if (!lsgRe)
+		g_lsgXrN[59] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Create Component")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("spot1", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_comp_create("ls_shop", o, "items=Ammo|300|ammo|refill;Armor|650|vesthelm|armor keeper=barney")))
+		lsgWhy = 1
+	new bool:lsgWait = false
+	g_lsgOut[59] = e
+	g_lsgO[6] = e
+	g_lsgO[7] = e ? 1 : 0
+	g_lsgO[8] = e ? lsgMv : 0
+	g_lsgO[9] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(59, "moved to a nearby free spot")
+		else
+		lsd_exit(59, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(59, "blocked: trying again")
 	else
 	{
-		g_lsgOut[59] = ls_comp_create("ls_shop", o, "items=Ammo|300|ammo|refill;Armor|650|vesthelm|armor keeper=barney")
-		if (g_lsgOut[59])
-			lsd_exit(59, fmt("entity %d", g_lsgOut[59]))
-		else
-			lsd_error(59, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(59, "gm_components isn't running on this server.")
+			case 2: lsd_error(59, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(59, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(59, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_n60(ctx)
+	if (!lsgRe)
+		lsg_n60(ctx)
 }
 
 // Open or Close Shop (sopen)
 lsg_n60(ctx[])
 {
-	new lsi0 = g_lsgOut[59]
+	new lsi0 = g_lsgO[6]
 	new lsi1 = 1
 	if (lsd_want(60))
 	{
@@ -4598,7 +5239,7 @@ lsg_n60(ctx[])
 // Print String (p_sp)
 lsg_n61(ctx[])
 {
-	new Float:lsi0 = float(lsg_kind_ok(g_lsgOut[59], "ls_shop") ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)
+	new Float:lsi0 = float(lsg_kind_ok(g_lsgO[6], "ls_shop") ? ls_shop_price(g_lsgO[6], "Ammo") : -1)
 	if (lsd_want(61))
 	{
 	lsd_begin()
@@ -4810,7 +5451,7 @@ lsg_n70(ctx[])
 // Set Variable (svar)
 lsg_n71(ctx[])
 {
-	new lsi2 = g_lsgOut[59]
+	new lsi2 = g_lsgO[6]
 	if (lsd_want(71))
 	{
 	lsd_begin()

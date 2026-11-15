@@ -24,6 +24,60 @@ gives the line that turns, pushes and sizes the new entity; Pawn `lsg_xf_at` / `
 Requests to the creature fixer (Spawn Projectile) and W2 (Spawn Trigger Volume): use these ids;
 W2 already uses `pos`, `angles`, `at_ent`, `offset`.
 
+## The spawn outcome standard (every solid spawn node)
+
+Applies to Spawn Prop, Spawn Creature, Spawn Entity, Spawn Weapon On Ground and Create
+Component (done here), and Spawn Projectile, Spawn NPC, Spawn Interactable and Trigger Volume
+(their owners). Trigger volumes aren't solid: they take the outputs but never check the spot.
+
+**If the spot is blocked** (param `blocked`; Unreal's Spawn Collision Handling, named in the help
+and keywords: collision handling, force spawn, always spawn):
+
+| Value | Label | Unreal | What it does |
+|---|---|---|---|
+| `force` | Always spawn, ignore collisions | Always Spawn, Ignore Collisions | exactly there, even overlapping (it may get stuck) |
+| `nearby_always` | Try a nearby spot, but always spawn | Adjust If Possible But Always Spawn | moved if a free spot is within Max distance, else in place anyway |
+| `nearby` | Try a nearby spot, don't spawn if still blocked | Adjust If Possible But Don't Spawn If Colliding | moved, or Failed (Blocked) |
+| `exact` | Don't spawn if blocked | Do Not Spawn | exactly there, or Failed (Blocked) |
+| `retry` | Retry every N seconds up to M tries | (ours) | exactly there when it clears; else Failed (Retries used up); 0 tries: until clear |
+
+Defaults: `nearby` for props, creatures, NPCs (and weapons, entities, components); `exact` for
+interactables. Params: `max_dist` (default 128, 16-1024), `retry_every` (default 1 s),
+`retry_tries` (default 10, 0 = until clear).
+
+**Outputs** (pin ids fixed):
+
+| Pin | Type | Meaning |
+|---|---|---|
+| `then` | exec | right away, whatever happened (not again on a retry), for code that doesn't care |
+| `spawned` | exec | once, when it exists (maybe later, with Retry) |
+| `failed` | exec | once, when it gives up |
+| `out` "Entity" | entity | the thing (valid on Spawned; 0 otherwise) |
+| `ok` "Success" | bool | for pure checks |
+| `moved` "Moved" | bool | it was put at a nearby spot, not the asked one |
+| `reason` "Failure reason" | enum:ls_spawn_fail | the built-in Spawn Failure enum |
+
+Spawn Failure values (numbers are the order): None 0, Blocked 1, Out of entity slots 2, Limit
+reached 3, Missing file 4, Retries used up 5, Bad input 6. It's in graph.rs `BUILTIN_ENUMS` and
+schema.ts, and the WHY_* constants in gen/fx.rs.
+
+**The shared helper** (gen/fx.rs): `spawn_flow(gen, id, n, def, b, pre, place, create,
+create_why, apply, exit, err, next, after)` writes the whole body: the `pre` checks (each a
+condition with its Failure Reason and debugger words: files loaded, `lsg_ent_room`...), the spot
+(`fx::place`), `lsg_xf_free(o, size, mode, maxd, moved)` (Pawn: a hull trace at the spot, then
+rings every 16 units out to Max distance, 3 heights each, each in sight of the spot), the create
+call, `fx::apply`, the outputs, and Retry (a `public lsg_xr{i}` timer re-running the node, task
+`LSG_TASK + 410000 + i`). `hull_size`: 0 small (weapon, item), 1 medium (prop, component), 2 tall
+(creature, NPC: HULL_HUMAN), -1 not solid (no check). The node kinds must be in `fx::STORE` (for
+the extra output slots). Registry side: make_nodes.py's post-process loop adds the params,
+outputs, help (BLOCKED_HELP) and keywords; reuse BLOCKED_CHOICES.
+
+Is Valid / Is Valid? take any entity handle (a spawn node's Entity included); a removed one, or
+one going this frame (FL_KILLME), isn't valid.
+
+Fallback chains: wire Failed into another spawn node (spawn at A, on Failed at B), or Switch on
+Enum on Failure reason (testdata every_node_fx: pfail -> pB -> why).
+
 ## What landed (2026-11-14)
 
 - **Map editor** (4a536202): env_beam, env_laser, gibshooter, env_shooter, env_blood, env_funnel,

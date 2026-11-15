@@ -298,6 +298,128 @@ pub(super) fn apply(gen: &Gen, n: &Node, def: &'static NodeDef, id: &str, e: &st
     Some(format!("\tlsg_xf_set({e}, {}, {rot}, {rot_ofs}, {vel}, {scale})", if copy { 1 } else { 0 }))
 }
 
+/// The solid spawn nodes with "If the spot is blocked" (their Moved output needs its own slot).
+pub(crate) const STORE: [&str; 5] = ["ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon"];
+
+/// How big a solid spawn is for the free-spot check: 0 small (a weapon, an item), 1 medium (a
+/// prop, a component), 2 tall (a creature); -1 no check (it isn't solid).
+pub(super) fn hull_size(n: &Node, def: &NodeDef) -> i64 {
+    match def.kind.as_str() {
+        "ent.spawn_prop" if !n.params.get("solid").and_then(Value::as_bool).unwrap_or(true) => -1,
+        "ent.spawn_prop" | "comp.create" => 1,
+        "creature.spawn" => 2,
+        "ent.spawn_weapon" => 0,
+        "ent.spawn_entity" => match n.params.get("class").and_then(Value::as_str).unwrap_or("env_sprite") {
+            "armoury_entity" | "item_healthkit" | "item_battery" | "env_beverage" => 0,
+            "cycler_sprite" => 1,
+            _ => -1,
+        },
+        _ => -1,
+    }
+}
+
+/// Spawn Failure (graph.rs BUILTIN_ENUMS "ls_spawn_fail"): why a spawn node didn't make its thing.
+pub(crate) const WHY_BLOCKED: i64 = 1;
+pub(crate) const WHY_SLOTS: i64 = 2;
+pub(crate) const WHY_MISSING: i64 = 4;
+pub(crate) const WHY_RETRIES: i64 = 5;
+pub(crate) const WHY_BAD: i64 = 6;
+
+/// "If the spot is blocked" (Unreal's Spawn Collision Handling): 0 always spawn, ignore
+/// collisions; 1 try a nearby spot, but always spawn; 2 try a nearby spot, don't spawn if still
+/// blocked; 3 don't spawn if blocked; 4 retry every N seconds up to M tries.
+pub(super) fn blocked_mode(gen: &Gen, n: &Node, def: &'static NodeDef) -> i64 {
+    match gen.choice(n, def, "blocked") {
+        "force" => 0,
+        "nearby_always" => 1,
+        "exact" => 3,
+        "retry" => 4,
+        _ => 2,
+    }
+}
+
+/// A solid spawn node's body (the spawn outcome standard, docs/notes/FX.md): checks `pre` in
+/// order (each a condition, its Failure Reason and the debugger's words), finds the spot
+/// (`place`, into `o`), handles a blocked spot as "If the spot is blocked" says, makes the thing
+/// with `create` (an expression using `o`; `create_why` when it gives 0), turns and pushes it
+/// (`apply`). Outputs: Then (right away, whatever happened), Spawned / Failed (once each, maybe
+/// later with Retry), Entity, Success, Moved, Failure Reason.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn spawn_flow(
+    gen: &Gen,
+    id: &str,
+    n: &Node,
+    def: &'static NodeDef,
+    b: &mut Out,
+    pre: &[(String, i64, &str)],
+    place: &str,
+    create: &str,
+    create_why: (i64, &str),
+    apply: Option<String>,
+    exit: &dyn Fn(&str) -> String,
+    err: &dyn Fn(&str) -> String,
+    next: &dyn Fn(&str) -> Option<String>,
+    after: &mut Vec<String>,
+) {
+    let i = gen.index(id);
+    let size = hull_size(n, def);
+    let mode = blocked_mode(gen, n, def);
+    let maxd = float_lit(gen.num(n, def, "max_dist").clamp(16.0, 1024.0));
+    b.line(format!("\tnew Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == {i}"));
+    b.line(format!("\tif (!lsgRe)\n\t\tg_lsgXrN[{i}] = 0\n\tg_lsgXrIn = -1"));
+    let mut chain = String::new();
+    for (k, (c, why, _)) in pre.iter().enumerate() {
+        chain.push_str(&format!("\t{}if (!({c}))\n\t\tlsgWhy = {why}\n", if k == 0 { "" } else { "else " }));
+    }
+    // (Retry keeps the first try's spot: it waits for that spot to clear, not one that moves)
+    let place = if mode == 4 { format!("(lsgRe ? lsg_xr_get({i}, o) : lsg_xr_put({i}, ({place}) ? 1 : 0, o))") } else { place.to_string() };
+    chain.push_str(&format!("\t{}if (!({place}))\n\t\tlsgWhy = {WHY_BAD}\n", if pre.is_empty() { "" } else { "else " }));
+    chain.push_str(&format!("\telse if (!lsg_xf_free(o, {size}, {mode}, {maxd}, lsgMv))\n\t\tlsgWhy = {WHY_BLOCKED}\n"));
+    chain.push_str(&format!("\telse if (!(e = {create}))\n\t\tlsgWhy = {}", create_why.0));
+    b.line(chain);
+    if let Some(l) = apply {
+        b.line(l);
+    }
+    if mode == 4 {
+        let tries = gen.num(n, def, "retry_tries").round().clamp(0.0, 1000.0) as i64;
+        let every = float_lit(gen.num(n, def, "retry_every").clamp(0.1, 60.0));
+        b.line(format!("\tnew bool:lsgWait = !e && lsgWhy == {WHY_BLOCKED} && ({tries} == 0 || ++g_lsgXrN[{i}] < {tries})\n\tif (lsgWait)\n\t\tset_task({every}, \"lsg_xr{i}\", LSG_TASK + 410000 + {i}, ctx, LSG_CTX)\n\telse if (!e && lsgWhy == {WHY_BLOCKED})\n\t\tlsgWhy = {WHY_RETRIES}"));
+        after.push(format!("public lsg_xr{i}(ctx[])\n{{\n\tg_lsgXrIn = {i}\n\t{}(ctx)\n}}", gen.pin_fname(id, "exec")));
+    } else {
+        b.line("\tnew bool:lsgWait = false");
+    }
+    b.line(format!("\tg_lsgOut[{i}] = e"));
+    for (pin, val) in [("out", "e".to_string()), ("ok", "e ? 1 : 0".into()), ("moved", "e ? lsgMv : 0".into()), ("reason", "e ? 0 : lsgWhy".into())] {
+        if let Some(k) = gen.out_index(id, pin) {
+            b.line(format!("\tg_lsgO[{k}] = {val}"));
+        }
+    }
+    // the debugger: what happened, in words
+    if gen.debug {
+        let mut words: Vec<(i64, String)> = pre.iter().map(|(_, w, m)| (*w, m.to_string())).collect();
+        words.push((WHY_BAD, "No place: no such entity, or nothing wired into At.".into()));
+        words.push((WHY_BLOCKED, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.".into()));
+        words.push((WHY_RETRIES, "The spot stayed blocked: every retry was used up.".into()));
+        words.push((create_why.0, create_why.1.to_string()));
+        let mut seen = std::collections::BTreeSet::new();
+        let cases: String = words.iter().filter(|(w, _)| seen.insert(*w)).map(|(w, m)| format!("\t\t\tcase {w}: {}\n", err(m))).collect();
+        let (moved, spawned) = (exit("moved to a nearby free spot"), exit("spawned"));
+        b.line(format!("\tif (e)\n\t{{\n\t\tif (lsgMv)\n\t{moved}\n\t\telse\n\t{spawned}\n\t}}\n\telse if (lsgWait)\n\t{}\n\telse\n\t{{\n\t\tswitch (lsgWhy)\n\t\t{{\n{cases}\t\t}}\n\t}}", exit("blocked: trying again")));
+    }
+    // Spawned / Failed: once each; Then: right away (not again on a retry)
+    let spawned = next("spawned").map(|c| format!("\n\t\t{c}")).unwrap_or_default();
+    let failed = next("failed").map(|c| format!("\n\t\t{c}")).unwrap_or_default();
+    if !spawned.is_empty() || !failed.is_empty() {
+        b.line(format!("\tif (e)\n\t{{{spawned}\n\t}}\n\telse if (!lsgWait)\n\t{{{failed}\n\t}}"));
+    }
+    if let Some(c) = next("then") {
+        b.line(format!("\tif (!lsgRe)\n\t\t{c}"));
+    }
+    if !gen.debug && spawned.is_empty() && failed.is_empty() {
+        b.line("\t#pragma unused lsgWait");
+    }
+}
+
 /// The older spawn nodes: saved graphs have no "Face the way At entity faces" setting, and for
 /// them it stays off (they make the same plugin as before); new ones get it on.
 const LEGACY_SPAWNERS: [&str; 5] = ["ent.spawn_prop", "creature.spawn", "npc.spawn", "npc.spawn_use", "comp.create"];
@@ -309,6 +431,10 @@ pub(super) fn copies(n: &Node, def: &NodeDef) -> bool {
 
 /// Whether any spawn node in the graph uses the shared transform (the helpers are added then).
 pub(crate) fn xf_used(g: &Graph) -> bool {
+    // (every solid spawn node checks its spot: the helpers come with any spawn node)
+    if g.nodes.iter().any(|n| STORE.contains(&n.kind.as_str())) {
+        return true;
+    }
     let wired = |id: &str, pin: &str| g.edges.iter().any(|e| e.to.node == id && e.to.pin == pin);
     g.nodes.iter().filter(|n| SPAWNERS.contains(&n.kind.as_str())).any(|n| {
         let at = if n.kind == "ent.spawn_prop" { "at" } else { "at_ent" };
@@ -355,7 +481,20 @@ fn channel(gen: &Gen, n: &Node, def: &'static NodeDef) -> i64 {
 
 /// The node's code (inside its function, before it goes on).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Out, inp: &dyn Fn(&str, &str) -> String, exit: &dyn Fn(&str) -> String, err: &dyn Fn(&str) -> String) {
+pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Out, inp: &dyn Fn(&str, &str) -> String, exit: &dyn Fn(&str) -> String, err: &dyn Fn(&str) -> String, next: &dyn Fn(&str) -> Option<String>, after: &mut Vec<String>) {
+    // (the spawn nodes go on to Then or Failed themselves; the rest go on to Then here)
+    if !STORE.contains(&def.kind.as_str()) {
+        action_inner(gen, id, n, def, b, inp, exit, err, next, after);
+        if let Some(c) = next("then") {
+            b.line(format!("\t{c}"));
+        }
+        return;
+    }
+    action_inner(gen, id, n, def, b, inp, exit, err, next, after);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Out, inp: &dyn Fn(&str, &str) -> String, exit: &dyn Fn(&str) -> String, err: &dyn Fn(&str) -> String, next: &dyn Fn(&str) -> Option<String>, after: &mut Vec<String>) {
     let debug = gen.debug;
     let i = gen.index(id);
     let wired = |pin: &str| gen.v.data_source(id, pin).is_some();
@@ -449,6 +588,9 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
                 if debug {
                     b.line(format!("\t{}", err("That class isn't one Spawn Entity can make (see Problems for the list).")));
                 }
+                if let Some(f) = next("failed") {
+                    b.line(format!("\t{f}"));
+                }
                 return;
             };
             let keys = spawn_keys(gen.text(n, def, "keys"));
@@ -458,42 +600,22 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
             need.extend(models.iter().map(|m| format!("lsg_have({})", pawn_str(m))));
             need.extend(sounds.iter().map(|m| format!("lsg_have_snd({})", pawn_str(m))));
             let have = if need.is_empty() { "true".to_string() } else { need.join(" && ") };
-            b.line("\tnew Float:o[3], e = 0");
             let fallback = if wired("at_ent") { format!("lsg_ent_origin({}, o)", inp("at_ent", "entity")) } else { "false".into() };
             let place = place(gen, id, "at_ent", &fallback);
-            b.line(format!("\tif ({have} && {place} && lsg_ent_room(\"Spawn Entity\"))\n\t{{\n\t\te = lsg_spawn_begin({}, o)", pawn_str(c.0)));
-            for (k, v) in &keys {
-                b.line(format!("\t\tif (e)\n\t\t\tDispatchKeyValue(e, {}, {})", pawn_str(k), pawn_str(v)));
-            }
-            b.line("\t\te = lsg_spawn_end(e)\n\t}");
-            if let Some(l) = apply(gen, n, def, id, "e", "at_ent", true, None) {
-                b.line(l);
-            }
-            b.line(format!("\tg_lsgOut[{i}] = e"));
-            if debug {
-                b.line(format!("\tif (!e)\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", e))", err("Not made: no place, a file it needs isn't loaded with the map, or the map is near its entity limit.")));
-            }
+            let kv = keys.iter().map(|(k, v)| format!("{}, {}", pawn_str(k), pawn_str(v))).collect::<Vec<_>>();
+            // (the keys go in one call: a short helper with up to 32 pairs)
+            let create = format!("lsg_spawn_kv({}, o{}{})", pawn_str(c.0), if kv.is_empty() { "" } else { ", " }, kv.join(", "));
+            let pre = [(have, WHY_MISSING, "Not made: a file it needs isn't loaded with the map."), ("lsg_ent_room(\"Spawn Entity\")".to_string(), WHY_SLOTS, "Not made: the server is out of entity slots.")];
+            spawn_flow(gen, id, n, def, b, &pre, &place, &create, (WHY_BAD, "The game didn't make it (its keys may be wrong for that class)."), apply(gen, n, def, id, "e", "at_ent", true, None), exit, err, next, after);
         }
         "ent.spawn_weapon" => {
             let item = WEAPON_ITEMS.iter().find(|x| x.0 == gen.choice(n, def, "item")).unwrap_or(&WEAPON_ITEMS[4]);
             let ammo = if wired("ammo") { format!("floatround({})", inp("ammo", "number")) } else { (gen.num(n, def, "ammo").round() as i64).clamp(-1, 1000).to_string() };
-            b.line("\tnew Float:o[3], e = 0");
             let fallback = if wired("at_ent") { format!("lsg_ent_origin({}, o)", inp("at_ent", "entity")) } else { "false".into() };
             let place = place(gen, id, "at_ent", &fallback);
-            b.line(format!(
-                "\tif (lsg_have({}) && {place} && lsg_ent_room(\"Spawn Weapon On Ground\"))\n\t\te = lsg_weapon_drop({}, {}, o, {ammo}, {})",
-                pawn_str(&item_model(item.0)),
-                item.2,
-                pawn_str(item.3),
-                num("respawn")
-            ));
-            if let Some(l) = apply(gen, n, def, id, "e", "at_ent", true, None) {
-                b.line(l);
-            }
-            b.line(format!("\tg_lsgOut[{i}] = e"));
-            if debug {
-                b.line(format!("\tif (!e)\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", e))", err("Not made: no place, its model isn't loaded with the map, or the map is near its entity limit.")));
-            }
+            let create = format!("lsg_weapon_drop({}, {}, o, {ammo}, {})", item.2, pawn_str(item.3), num("respawn"));
+            let pre = [(format!("lsg_have({})", pawn_str(&item_model(item.0))), WHY_MISSING, "Not made: its model isn't loaded with the map."), ("lsg_ent_room(\"Spawn Weapon On Ground\")".to_string(), WHY_SLOTS, "Not made: the server is out of entity slots.")];
+            spawn_flow(gen, id, n, def, b, &pre, &place, &create, (WHY_BAD, "The game didn't make it."), apply(gen, n, def, id, "e", "at_ent", true, None), exit, err, next, after);
         }
         _ => {}
     }
@@ -1032,21 +1154,116 @@ stock lsg_snd_stop_player(p)
 }
 
 // ---- spawning: a class from Spawn Entity's list, its keys, then spawned
-stock lsg_spawn_begin(const cls[], const Float:o[3])
+stock lsg_spawn_kv(const cls[], const Float:o[3], const k1[] = "", const v1[] = "", ...)
 {
 	new e = create_entity(cls)
 	if (e <= 0)
 		return 0
 	engfunc(EngFunc_SetOrigin, e, o)
-	return e
-}
-
-stock lsg_spawn_end(e)
-{
-	if (e <= 0)
-		return 0
+	if (k1[0])
+		DispatchKeyValue(e, k1, v1)
+	// (the rest, in pairs)
+	new n = numargs(), key[64], val[128]
+	for (new a = 4; a + 1 < n; a += 2)
+	{
+		lsg_argstr(a, key, charsmax(key))
+		lsg_argstr(a + 1, val, charsmax(val))
+		if (key[0])
+			DispatchKeyValue(e, key, val)
+	}
 	DispatchSpawn(e)
 	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
+stock lsg_argstr(a, s[], len)
+{
+	new i = 0
+	for (; i < len; i++)
+	{
+		s[i] = getarg(a, i)
+		if (!s[i])
+			break
+	}
+	s[min(i, len)] = 0
+}
+
+// ---- solid spawns: is the spot free (a hull the size of the thing, players and walls count)?
+// If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
+stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
+
+// (Retry: the spot of the first try, kept)
+stock lsg_xr_put(i, ok, const Float:o[3])
+{
+	if (ok)
+	{
+		g_lsgXrO[i][0] = o[0]
+		g_lsgXrO[i][1] = o[1]
+		g_lsgXrO[i][2] = o[2]
+	}
+	return ok
+}
+
+stock lsg_xr_get(i, Float:o[3])
+{
+	o[0] = g_lsgXrO[i][0]
+	o[1] = g_lsgXrO[i][1]
+	o[2] = g_lsgXrO[i][2]
+	return 1
+}
+
+stock bool:lsg_xf_clear(const Float:o[3], size)
+{
+	new Float:c[3]
+	c[0] = o[0]
+	c[1] = o[1]
+	c[2] = o[2] + (size >= 2 ? 37.0 : 19.0)
+	engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, size >= 2 ? HULL_HUMAN : HULL_HEAD, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+// mode: 0 always spawn (no check), 1 a nearby spot or in place anyway, 2 a nearby spot or not at
+// all, 3 exactly there or not at all, 4 exactly there (the node retries)
+stock bool:lsg_xf_free(Float:o[3], size, mode, Float:maxd, &moved)
+{
+	moved = 0
+	if (size < 0 || mode == 0 || lsg_xf_clear(o, size))
+		return true
+	if (mode >= 3)
+		return false
+	new Float:c[3], Float:from[3], Float:to[3], Float:f
+	from[0] = o[0]
+	from[1] = o[1]
+	from[2] = o[2] + 18.0
+	for (new Float:r = 16.0; r <= maxd; r += 16.0)
+	{
+		new steps = clamp(floatround(r / 6.0), 8, 32)
+		for (new k = 0; k < steps; k++)
+		{
+			new Float:ang = 6.2831853 * float(k) / float(steps)
+			for (new z = 0; z < 3; z++)
+			{
+				c[0] = o[0] + floatcos(ang) * r
+				c[1] = o[1] + floatsin(ang) * r
+				c[2] = o[2] + float(z) * 18.0
+				if (!lsg_xf_clear(c, size))
+					continue
+				to[0] = c[0]
+				to[1] = c[1]
+				to[2] = c[2] + 18.0
+				engfunc(EngFunc_TraceLine, from, to, IGNORE_MONSTERS, 0, 0)
+				get_tr2(0, TR_flFraction, f)
+				if (f < 1.0)
+					continue
+				o[0] = c[0]
+				o[1] = c[1]
+				o[2] = c[2]
+				moved = 1
+				return true
+			}
+		}
+	}
+	// (mode 1: no free spot near, so in place anyway)
+	return mode == 1
 }
 "#;
 
@@ -1182,8 +1399,8 @@ mod tests {
         assert!(c("se").contains(", 2.0)"), "Spawn Entity's Scale: {}", c("se"));
         assert!(c("cr").contains("lsg_creature_o2(\"zombie\", o,"), "{}", c("cr"));
         assert!(c("pr").contains("lsg_prop_o(o, "), "{}", c("pr"));
-        // (a saved graph's prop at an entity, no new setting: the same code as before)
-        assert!(c("pr3").contains("lsg_prop(ctx[0], ") && !c("pr3").contains("lsg_xf_set("), "{}", c("pr3"));
+        // (a saved graph's prop at an entity, no new setting: its spot, not turned; the spot checked)
+        assert!(c("pr3").contains("lsg_ent_origin(ctx[0], o)") && c("pr3").contains("lsg_xf_free(o, 1, 2, 128.0, lsgMv)") && !c("pr3").contains("lsg_xf_set("), "{}", c("pr3"));
         // at a position, sized
         assert!(c("pr2").contains("lsg_xf_at(0, ") && c("pr2").contains(", 1.5)"), "{}", c("pr2"));
         // an NPC: Facing is a yaw offset on top of the At entity's facing
@@ -1194,12 +1411,50 @@ mod tests {
         let cc = c("cc");
         assert!(cc.contains("lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)"), "{cc}");
         // Spawn Entity only makes its class, with its keys, after checking its files
-        assert!(c("se").contains("create_entity") || c("se").contains("lsg_spawn_begin(\"env_sprite\""), "{}", c("se"));
+        assert!(c("se").contains("lsg_spawn_kv(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\""), "{}", c("se"));
         assert!(c("se").contains("lsg_have(\"sprites/glow01.spr\")"), "{}", c("se"));
         assert!(c("se3").contains("lsg_have_snd(\"buttons/spark1.wav\")"), "{}", c("se3"));
         // and its files are loaded with the map
         assert!(r.source.contains("lsg_pre_model(\"sprites/glow01.spr\")") && r.source.contains("lsg_pre_sound(\"buttons/spark1.wav\")"));
         assert!(r.source.contains("lsg_pre_model(\"models/w_awp.mdl\")") && r.source.contains("lsg_pre_sound(\"custom/fx_sting.wav\")"));
+    }
+
+    /// If the spot is blocked: the nearest free spot (Moved), Don't spawn (Failed), Retry (a timer
+    /// runs the node again, 0 tries: until clear); non-solid things aren't checked.
+    #[test]
+    fn blocked_spots_move_fail_or_retry() {
+        let g = crate::tools::studio::graph::parse(include_str!("../testdata/every_node_fx.graph.json")).unwrap();
+        let r = super::super::generate(&g, false);
+        let c = |id: &str| code_of(&r.source, &r.spans, id);
+        // each way of handling a blocked spot (mode 0-4), at the bot itself
+        assert!(c("pforce").contains("lsg_xf_free(o, 1, 0, "), "{}", c("pforce"));
+        assert!(c("palways").contains("lsg_xf_free(o, 1, 1, 64.0, lsgMv)"), "{}", c("palways"));
+        assert!(c("pnear").contains("lsg_xf_free(o, 0, 2, 96.0, lsgMv)") && c("pnear").contains("e ? lsgMv : 0"), "{}", c("pnear"));
+        assert!(c("pfail").contains("lsg_xf_free(o, 1, 3, "), "{}", c("pfail"));
+        let cr = c("cretry");
+        assert!(cr.contains("lsg_xf_free(o, 2, 4, ") && cr.contains("(0 == 0 || ++g_lsgXrN[") && cr.contains("lsgWhy = 5"), "{cr}");
+        assert!(r.source.contains("public lsg_xr") && r.source.contains("set_task(1.0, \"lsg_xr"));
+        // Then isn't run again by a retry
+        assert!(cr.contains("if (!lsgRe)"), "{cr}");
+        // a retry waits for the first try's spot (not the entity's spot now)
+        assert!(cr.contains("(lsgRe ? lsg_xr_get("), "{cr}");
+        // a sprite isn't solid: never moved; a non-solid prop neither
+        assert!(c("se").contains("lsg_xf_free(o, -1, "), "{}", c("se"));
+        assert!(c("pr").contains("lsg_xf_free(o, -1, "), "{}", c("pr"));
+    }
+
+    /// The fallback chain: exactly at the bot, and on Failed at a point; the reason goes on.
+    #[test]
+    fn a_failed_spawn_can_fall_back() {
+        let g = crate::tools::studio::graph::parse(include_str!("../testdata/every_node_fx.graph.json")).unwrap();
+        let r = super::super::generate(&g, false);
+        let code = code_of(&r.source, &r.spans, "pfail");
+        let b_fn = code_of(&r.source, &r.spans, "pB").lines().find(|l| l.trim_end().ends_with("(ctx[])")).map(|l| l.trim().trim_end_matches("(ctx[])").trim_start_matches("public ").to_string()).unwrap();
+        assert!(code.contains(&format!("else if (!lsgWait)\n\t{{\n\t\t{b_fn}(ctx)")), "{code}");
+        // Failure Reason is a cell the Switch on Enum reads (the Spawn Failure enum)
+        assert!(code.contains("? 0 : lsgWhy"), "{code}");
+        let p = crate::tools::studio::graph::validate_core(&g);
+        assert!(p.is_empty(), "{p:#?}");
     }
 
     /// A class off the list never becomes code; Problems lists what's allowed.

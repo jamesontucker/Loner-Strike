@@ -402,6 +402,101 @@
    "params": {
     "kind": "ls_capture_point"
    }
+  },
+  {
+   "id": "pforce",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 260,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "force"
+   }
+  },
+  {
+   "id": "palways",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "nearby_always",
+    "max_dist": 64
+   }
+  },
+  {
+   "id": "pnear",
+   "type": "ent.spawn_weapon",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {
+    "item": "deagle",
+    "blocked": "nearby",
+    "max_dist": 96
+   }
+  },
+  {
+   "id": "br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "pfail",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1300,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "blocked": "exact"
+   }
+  },
+  {
+   "id": "pB",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1560,
+    "y": 880
+   },
+   "params": {
+    "model": "models/w_c4.mdl"
+   }
+  },
+  {
+   "id": "why",
+   "type": "flow.switch_enum",
+   "pos": {
+    "x": 1820,
+    "y": 880
+   },
+   "params": {
+    "enum": "ls_spawn_fail"
+   }
+  },
+  {
+   "id": "cretry",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {
+    "kind": "zombie",
+    "blocked": "retry",
+    "retry_every": 1,
+    "retry_tries": 0
+   }
   }
  ],
  "edges": [
@@ -871,49 +966,170 @@
    "id": "w43",
    "from": {
     "node": "ps",
-    "pin": "then"
+    "pin": "player"
    },
    "to": {
-    "node": "dl",
-    "pin": "exec"
+    "node": "pforce",
+    "pin": "at"
    }
   },
   {
    "id": "w44",
    "from": {
-    "node": "dl",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "dl2",
-    "pin": "exec"
+    "node": "palways",
+    "pin": "at"
    }
   },
   {
    "id": "w45",
    "from": {
-    "node": "dl2",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "dc",
-    "pin": "exec"
+    "node": "pnear",
+    "pin": "at_ent"
    }
   },
   {
    "id": "w46",
    "from": {
-    "node": "dc",
-    "pin": "then"
+    "node": "pnear",
+    "pin": "spawned"
    },
    "to": {
-    "node": "gb",
+    "node": "br",
     "pin": "exec"
    }
   },
   {
    "id": "w47",
    "from": {
+    "node": "pnear",
+    "pin": "moved"
+   },
+   "to": {
+    "node": "br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pfail",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "pfail",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "pB",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pB",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "pB",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "why",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "pfail",
+    "pin": "reason"
+   },
+   "to": {
+    "node": "why",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cretry",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "dl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "dl2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "dc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
     "node": "gb",
     "pin": "then"
    },
@@ -923,7 +1139,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w59",
    "from": {
     "node": "gb2",
     "pin": "then"
@@ -934,7 +1150,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w60",
    "from": {
     "node": "rg",
     "pin": "then"
@@ -945,7 +1161,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w61",
    "from": {
     "node": "s2",
     "pin": "then"
@@ -956,7 +1172,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w62",
    "from": {
     "node": "s2b",
     "pin": "then"
@@ -967,7 +1183,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w63",
    "from": {
     "node": "sa",
     "pin": "then"
@@ -978,7 +1194,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w64",
    "from": {
     "node": "sa2",
     "pin": "then"
@@ -989,7 +1205,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w65",
    "from": {
     "node": "so",
     "pin": "then"
@@ -1000,7 +1216,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w66",
    "from": {
     "node": "lp",
     "pin": "then"
@@ -1011,7 +1227,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w67",
    "from": {
     "node": "lp2",
     "pin": "then"
@@ -1022,7 +1238,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w68",
    "from": {
     "node": "st",
     "pin": "then"
@@ -1033,7 +1249,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w69",
    "from": {
     "node": "st2",
     "pin": "then"
@@ -1044,7 +1260,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w70",
    "from": {
     "node": "st3",
     "pin": "then"
@@ -1055,7 +1271,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w71",
    "from": {
     "node": "se",
     "pin": "then"
@@ -1066,7 +1282,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w72",
    "from": {
     "node": "se2",
     "pin": "then"
@@ -1077,7 +1293,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w73",
    "from": {
     "node": "se3",
     "pin": "then"
@@ -1088,7 +1304,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w74",
    "from": {
     "node": "sw",
     "pin": "then"
@@ -1099,7 +1315,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w75",
    "from": {
     "node": "sw2",
     "pin": "then"
@@ -1110,7 +1326,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w76",
    "from": {
     "node": "pr",
     "pin": "then"
@@ -1121,7 +1337,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w77",
    "from": {
     "node": "pr2",
     "pin": "then"
@@ -1132,7 +1348,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w78",
    "from": {
     "node": "pr3",
     "pin": "then"
@@ -1143,7 +1359,7 @@
    }
   },
   {
-   "id": "w68",
+   "id": "w79",
    "from": {
     "node": "cr",
     "pin": "then"
@@ -1154,7 +1370,7 @@
    }
   },
   {
-   "id": "w69",
+   "id": "w80",
    "from": {
     "node": "np",
     "pin": "then"
@@ -1165,13 +1381,68 @@
    }
   },
   {
-   "id": "w70",
+   "id": "w81",
    "from": {
     "node": "iu",
     "pin": "then"
    },
    "to": {
     "node": "cc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "cc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pforce",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "pforce",
+    "pin": "then"
+   },
+   "to": {
+    "node": "palways",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "palways",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pnear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "pnear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pfail",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "pfail",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cretry",
     "pin": "exec"
    }
   }

@@ -49,6 +49,22 @@ A("cr", "creature.spawn", {"kind": "zombie"}, [(*P, "at_ent"), ("vofs", "out", "
 A("np", "npc.spawn", {"name": "Guide", "yaw": 45, "copy_rot": True}, [(*P, "at_ent"), ("vofs", "out", "offset")])
 A("iu", "npc.spawn_use", {}, [("v1", "out", "pos"), ("vrot", "out", "angles")])
 A("cc", "comp.create", {"kind": "ls_capture_point"}, [(*P, "at_ent"), ("vofs", "out", "offset"), ("vrot", "out", "angles")])
+# If the spot is blocked: at the bot itself (blocked by the bot), each way
+A("pforce", "ent.spawn_prop", {"model": "models/w_c4.mdl", "blocked": "force"}, [(*P, "at")])
+A("palways", "ent.spawn_prop", {"model": "models/w_c4.mdl", "blocked": "nearby_always", "max_dist": 64}, [(*P, "at")])
+A("pnear", "ent.spawn_weapon", {"item": "deagle", "blocked": "nearby", "max_dist": 96}, [(*P, "at_ent")])
+N("br", "flow.branch", {})
+W("pnear", "spawned", "br", "exec")
+W("pnear", "moved", "br", "cond")
+# a fallback chain: exactly at the bot, else (Failed) at a point
+A("pfail", "ent.spawn_prop", {"model": "models/w_c4.mdl", "blocked": "exact"}, [(*P, "at")])
+N("pB", "ent.spawn_prop", {"model": "models/w_c4.mdl"})
+W("pfail", "failed", "pB", "exec")
+W("v1", "out", "pB", "pos")
+N("why", "flow.switch_enum", {"enum": "ls_spawn_fail"})
+W("pB", "failed", "why", "exec")
+W("pfail", "reason", "why", "in")
+A("cretry", "creature.spawn", {"kind": "zombie", "blocked": "retry", "retry_every": 1, "retry_tries": 0}, [(*P, "at_ent")])
 W("ps", "then", chain[0], "exec")
 for a, b in zip(chain, chain[1:]):
     W(a, "then", b, "exec")

@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_fx"
 #define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 29
+#define LSG_N 37
 #define LSG_TASK 7310000
-#pragma dynamic 22656
+#pragma dynamic 27776
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 1
+#define LSG_O 64
 #define LSG_OT 1
 
 
@@ -43,9 +43,9 @@ stock bool:lsg_npc_at(v, Float:o[3])
 		o[k] = lsg_vc(v, k)
 	return true
 }
-#define LSD_N 29
-new const g_lsdIds[LSD_N][] = { "ps", "dl", "dl2", "dc", "gb", "gb2", "rg", "s2", "s2b", "sa", "sa2", "so", "lp", "lp2", "st", "st2", "st3", "se", "se2", "se3", "sw", "sw2", "pr", "pr2", "pr3", "cr", "np", "iu", "cc" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 37
+new const g_lsdIds[LSD_N][] = { "ps", "dl", "dl2", "dc", "gb", "gb2", "rg", "s2", "s2b", "sa", "sa2", "so", "lp", "lp2", "st", "st2", "st3", "se", "se2", "se3", "sw", "sw2", "pr", "pr2", "pr3", "cr", "np", "iu", "cc", "pforce", "palways", "pnear", "br", "pfail", "pB", "why", "cretry" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -2857,7 +2857,8 @@ stock bool:lsg_valid(e)
 {
 	if (e >= 1 && e <= MaxClients)
 		return bool:is_user_connected(e)
-	return e > MaxClients && pev_valid(e) > 0
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
 }
 
 stock bool:lsg_is_creature(e)
@@ -3062,6 +3063,8 @@ stock lsg_ecenter(e)
 stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
 // enum Component Kind
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
+// enum Spawn Failure
+stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
 
 lsd_graph_vars()
 {
@@ -3508,21 +3511,116 @@ stock lsg_snd_stop_player(p)
 }
 
 // ---- spawning: a class from Spawn Entity's list, its keys, then spawned
-stock lsg_spawn_begin(const cls[], const Float:o[3])
+stock lsg_spawn_kv(const cls[], const Float:o[3], const k1[] = "", const v1[] = "", ...)
 {
 	new e = create_entity(cls)
 	if (e <= 0)
 		return 0
 	engfunc(EngFunc_SetOrigin, e, o)
-	return e
-}
-
-stock lsg_spawn_end(e)
-{
-	if (e <= 0)
-		return 0
+	if (k1[0])
+		DispatchKeyValue(e, k1, v1)
+	// (the rest, in pairs)
+	new n = numargs(), key[64], val[128]
+	for (new a = 4; a + 1 < n; a += 2)
+	{
+		lsg_argstr(a, key, charsmax(key))
+		lsg_argstr(a + 1, val, charsmax(val))
+		if (key[0])
+			DispatchKeyValue(e, key, val)
+	}
 	DispatchSpawn(e)
 	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
+stock lsg_argstr(a, s[], len)
+{
+	new i = 0
+	for (; i < len; i++)
+	{
+		s[i] = getarg(a, i)
+		if (!s[i])
+			break
+	}
+	s[min(i, len)] = 0
+}
+
+// ---- solid spawns: is the spot free (a hull the size of the thing, players and walls count)?
+// If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
+stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
+
+// (Retry: the spot of the first try, kept)
+stock lsg_xr_put(i, ok, const Float:o[3])
+{
+	if (ok)
+	{
+		g_lsgXrO[i][0] = o[0]
+		g_lsgXrO[i][1] = o[1]
+		g_lsgXrO[i][2] = o[2]
+	}
+	return ok
+}
+
+stock lsg_xr_get(i, Float:o[3])
+{
+	o[0] = g_lsgXrO[i][0]
+	o[1] = g_lsgXrO[i][1]
+	o[2] = g_lsgXrO[i][2]
+	return 1
+}
+
+stock bool:lsg_xf_clear(const Float:o[3], size)
+{
+	new Float:c[3]
+	c[0] = o[0]
+	c[1] = o[1]
+	c[2] = o[2] + (size >= 2 ? 37.0 : 19.0)
+	engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, size >= 2 ? HULL_HUMAN : HULL_HEAD, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+// mode: 0 always spawn (no check), 1 a nearby spot or in place anyway, 2 a nearby spot or not at
+// all, 3 exactly there or not at all, 4 exactly there (the node retries)
+stock bool:lsg_xf_free(Float:o[3], size, mode, Float:maxd, &moved)
+{
+	moved = 0
+	if (size < 0 || mode == 0 || lsg_xf_clear(o, size))
+		return true
+	if (mode >= 3)
+		return false
+	new Float:c[3], Float:from[3], Float:to[3], Float:f
+	from[0] = o[0]
+	from[1] = o[1]
+	from[2] = o[2] + 18.0
+	for (new Float:r = 16.0; r <= maxd; r += 16.0)
+	{
+		new steps = clamp(floatround(r / 6.0), 8, 32)
+		for (new k = 0; k < steps; k++)
+		{
+			new Float:ang = 6.2831853 * float(k) / float(steps)
+			for (new z = 0; z < 3; z++)
+			{
+				c[0] = o[0] + floatcos(ang) * r
+				c[1] = o[1] + floatsin(ang) * r
+				c[2] = o[2] + float(z) * 18.0
+				if (!lsg_xf_clear(c, size))
+					continue
+				to[0] = c[0]
+				to[1] = c[1]
+				to[2] = c[2] + 18.0
+				engfunc(EngFunc_TraceLine, from, to, IGNORE_MONSTERS, 0, 0)
+				get_tr2(0, TR_flFraction, f)
+				if (f < 1.0)
+					continue
+				o[0] = c[0]
+				o[1] = c[1]
+				o[2] = c[2]
+				moved = 1
+				return true
+			}
+		}
+	}
+	// (mode 1: no free spot near, so in place anyway)
+	return mode == 1
 }
 
 // Spawn Weapon On Ground: an armoury_entity (picked up like a map's weapon), with its own reserve
@@ -3663,6 +3761,7 @@ public plugin_precache()
 	lsg_pre_model("models/glassgibs.mdl")
 	lsg_pre_model("models/hgibs.mdl")
 	lsg_pre_model("models/w_awp.mdl")
+	lsg_pre_model("models/w_deagle.mdl")
 	lsg_pre_model("models/w_kevlar.mdl")
 	lsg_pre_model("sprites/glow01.spr")
 	lsg_pre_model("sprites/laserbeam.spr")
@@ -4133,25 +4232,49 @@ lsg_n17(ctx[])
 	}
 	if (lsd_enter(17, ctx))
 		return
-	new Float:o[3], e = 0
-	if (lsg_have("sprites/glow01.spr") && lsg_xf_at(lsi0, -1, lsi2, o) && lsg_ent_room("Spawn Entity"))
-	{
-		e = lsg_spawn_begin("env_sprite", o)
-		if (e)
-			DispatchKeyValue(e, "model", "sprites/glow01.spr")
-		if (e)
-			DispatchKeyValue(e, "rendermode", "5")
-		if (e)
-			DispatchKeyValue(e, "renderamt", "200")
-		e = lsg_spawn_end(e)
-	}
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 17
+	if (!lsgRe)
+		g_lsgXrN[17] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("sprites/glow01.spr")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Entity")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(lsi0, -1, lsi2, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_spawn_kv("env_sprite", o, "model", "sprites/glow01.spr", "rendermode", "5", "renderamt", "200")))
+		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, lsi4, lsi5, 2.0)
+	new bool:lsgWait = false
 	g_lsgOut[17] = e
-	if (!e)
-		lsd_error(17, "Not made: no place, a file it needs isn't loaded with the map, or the map is near its entity limit.")
+	g_lsgO[0] = e
+	g_lsgO[1] = e ? 1 : 0
+	g_lsgO[2] = e ? lsgMv : 0
+	g_lsgO[3] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(17, "moved to a nearby free spot")
+		else
+		lsd_exit(17, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(17, "blocked: trying again")
 	else
-		lsd_exit(17, fmt("entity %d", e))
-	lsg_n18(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(17, "Not made: a file it needs isn't loaded with the map.")
+			case 2: lsd_error(17, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(17, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(17, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(17, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n18(ctx)
 }
 
 // Spawn Entity (se2)
@@ -4167,24 +4290,48 @@ lsg_n18(ctx[])
 	}
 	if (lsd_enter(18, ctx))
 		return
-	new Float:o[3], e = 0
-	if (lsg_have("sprites/laserbeam.spr") && lsg_xf_at(0, lsi1, -1, o) && lsg_ent_room("Spawn Entity"))
-	{
-		e = lsg_spawn_begin("env_beam", o)
-		if (e)
-			DispatchKeyValue(e, "texture", "sprites/laserbeam.spr")
-		if (e)
-			DispatchKeyValue(e, "LightningStart", "x")
-		if (e)
-			DispatchKeyValue(e, "renderamt", "200")
-		e = lsg_spawn_end(e)
-	}
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 18
+	if (!lsgRe)
+		g_lsgXrN[18] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("sprites/laserbeam.spr")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Entity")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsi1, -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_spawn_kv("env_beam", o, "texture", "sprites/laserbeam.spr", "LightningStart", "x", "renderamt", "200")))
+		lsgWhy = 6
+	new bool:lsgWait = false
 	g_lsgOut[18] = e
-	if (!e)
-		lsd_error(18, "Not made: no place, a file it needs isn't loaded with the map, or the map is near its entity limit.")
+	g_lsgO[4] = e
+	g_lsgO[5] = e ? 1 : 0
+	g_lsgO[6] = e ? lsgMv : 0
+	g_lsgO[7] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(18, "moved to a nearby free spot")
+		else
+		lsd_exit(18, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(18, "blocked: trying again")
 	else
-		lsd_exit(18, fmt("entity %d", e))
-	lsg_n19(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(18, "Not made: a file it needs isn't loaded with the map.")
+			case 2: lsd_error(18, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(18, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(18, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(18, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n19(ctx)
 }
 
 // Spawn Entity (se3)
@@ -4200,21 +4347,49 @@ lsg_n19(ctx[])
 	}
 	if (lsd_enter(19, ctx))
 		return
-	new Float:o[3], e = 0
-	if (lsg_have_snd("buttons/spark1.wav") && lsg_have_snd("buttons/spark2.wav") && lsg_have_snd("buttons/spark3.wav") && lsg_have_snd("buttons/spark4.wav") && lsg_have_snd("buttons/spark5.wav") && lsg_have_snd("buttons/spark6.wav") && lsg_xf_from(lsi0, lsg_ent_origin(lsi0, o)) && lsg_ent_room("Spawn Entity"))
-	{
-		e = lsg_spawn_begin("env_spark", o)
-		if (e)
-			DispatchKeyValue(e, "MaxDelay", "1")
-		e = lsg_spawn_end(e)
-	}
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 19
+	if (!lsgRe)
+		g_lsgXrN[19] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have_snd("buttons/spark1.wav") && lsg_have_snd("buttons/spark2.wav") && lsg_have_snd("buttons/spark3.wav") && lsg_have_snd("buttons/spark4.wav") && lsg_have_snd("buttons/spark5.wav") && lsg_have_snd("buttons/spark6.wav")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Entity")))
+		lsgWhy = 2
+	else if (!(lsg_xf_from(lsi0, lsg_ent_origin(lsi0, o))))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_spawn_kv("env_spark", o, "MaxDelay", "1")))
+		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, -1, -1, 1.0)
+	new bool:lsgWait = false
 	g_lsgOut[19] = e
-	if (!e)
-		lsd_error(19, "Not made: no place, a file it needs isn't loaded with the map, or the map is near its entity limit.")
+	g_lsgO[8] = e
+	g_lsgO[9] = e ? 1 : 0
+	g_lsgO[10] = e ? lsgMv : 0
+	g_lsgO[11] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(19, "moved to a nearby free spot")
+		else
+		lsd_exit(19, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(19, "blocked: trying again")
 	else
-		lsd_exit(19, fmt("entity %d", e))
-	lsg_n20(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(19, "Not made: a file it needs isn't loaded with the map.")
+			case 2: lsd_error(19, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(19, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(19, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(19, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n20(ctx)
 }
 
 // Spawn Weapon On Ground (sw)
@@ -4238,16 +4413,49 @@ lsg_n20(ctx[])
 	}
 	if (lsd_enter(20, ctx))
 		return
-	new Float:o[3], e = 0
-	if (lsg_have("models/w_awp.mdl") && lsg_xf_at(lsi0, -1, lsi2, o) && lsg_ent_room("Spawn Weapon On Ground"))
-		e = lsg_weapon_drop(10, "weapon_awp", o, 30, 10.0)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 20
+	if (!lsgRe)
+		g_lsgXrN[20] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_awp.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Weapon On Ground")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(lsi0, -1, lsi2, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_weapon_drop(10, "weapon_awp", o, 30, 10.0)))
+		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, -1, lsi5, 1.0)
+	new bool:lsgWait = false
 	g_lsgOut[20] = e
-	if (!e)
-		lsd_error(20, "Not made: no place, its model isn't loaded with the map, or the map is near its entity limit.")
+	g_lsgO[12] = e
+	g_lsgO[13] = e ? 1 : 0
+	g_lsgO[14] = e ? lsgMv : 0
+	g_lsgO[15] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(20, "moved to a nearby free spot")
+		else
+		lsd_exit(20, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(20, "blocked: trying again")
 	else
-		lsd_exit(20, fmt("entity %d", e))
-	lsg_n21(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(20, "Not made: its model isn't loaded with the map.")
+			case 2: lsd_error(20, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(20, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(20, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(20, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n21(ctx)
 }
 
 // Spawn Weapon On Ground (sw2)
@@ -4269,16 +4477,49 @@ lsg_n21(ctx[])
 	}
 	if (lsd_enter(21, ctx))
 		return
-	new Float:o[3], e = 0
-	if (lsg_have("models/w_kevlar.mdl") && lsg_xf_at(0, lsi1, -1, o) && lsg_ent_room("Spawn Weapon On Ground"))
-		e = lsg_weapon_drop(16, "", o, -1, 0.0)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 21
+	if (!lsgRe)
+		g_lsgXrN[21] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_kevlar.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Weapon On Ground")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsi1, -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_weapon_drop(16, "", o, -1, 0.0)))
+		lsgWhy = 6
 	lsg_xf_set(e, 0, lsi3, -1, -1, 1.0)
+	new bool:lsgWait = false
 	g_lsgOut[21] = e
-	if (!e)
-		lsd_error(21, "Not made: no place, its model isn't loaded with the map, or the map is near its entity limit.")
+	g_lsgO[16] = e
+	g_lsgO[17] = e ? 1 : 0
+	g_lsgO[18] = e ? lsgMv : 0
+	g_lsgO[19] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(21, "moved to a nearby free spot")
+		else
+		lsd_exit(21, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(21, "blocked: trying again")
 	else
-		lsd_exit(21, fmt("entity %d", e))
-	lsg_n22(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(21, "Not made: its model isn't loaded with the map.")
+			case 2: lsd_error(21, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(21, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(21, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(21, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n22(ctx)
 }
 
 // Spawn Prop (pr)
@@ -4300,14 +4541,49 @@ lsg_n22(ctx[])
 	}
 	if (lsd_enter(22, ctx))
 		return
-	new Float:o[3]
-	g_lsgOut[22] = lsg_xf_at(lsi0, -1, lsi2, o) ? lsg_prop_o(o, "models/w_c4.mdl", 0) : 0
-	lsg_xf_set(g_lsgOut[22], 0, lsi3, -1, lsi5, 1.0)
-	if (!g_lsgOut[22])
-		lsd_error(22, "No prop: the model isn't loaded, or there's no such entity.")
-	else
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 22
+	if (!lsgRe)
+		g_lsgXrN[22] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(lsi0, -1, lsi2, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 0)))
+		lsgWhy = 6
+	lsg_xf_set(e, 0, lsi3, -1, lsi5, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[22] = e
+	g_lsgO[20] = e
+	g_lsgO[21] = e ? 1 : 0
+	g_lsgO[22] = e ? lsgMv : 0
+	g_lsgO[23] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(22, "moved to a nearby free spot")
+		else
 		lsd_exit(22, "spawned")
-	lsg_n23(ctx)
+	}
+	else if (lsgWait)
+		lsd_exit(22, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(22, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(22, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(22, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(22, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(22, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n23(ctx)
 }
 
 // Spawn Prop (pr2)
@@ -4323,14 +4599,49 @@ lsg_n23(ctx[])
 	}
 	if (lsd_enter(23, ctx))
 		return
-	new Float:o[3]
-	g_lsgOut[23] = lsg_xf_at(0, lsi1, -1, o) ? lsg_prop_o(o, "models/w_c4.mdl", 1) : 0
-	lsg_xf_set(g_lsgOut[23], 0, -1, -1, -1, 1.5)
-	if (!g_lsgOut[23])
-		lsd_error(23, "No prop: the model isn't loaded, or there's no such entity.")
-	else
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 23
+	if (!lsgRe)
+		g_lsgXrN[23] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsi1, -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	lsg_xf_set(e, 0, -1, -1, -1, 1.5)
+	new bool:lsgWait = false
+	g_lsgOut[23] = e
+	g_lsgO[24] = e
+	g_lsgO[25] = e ? 1 : 0
+	g_lsgO[26] = e ? lsgMv : 0
+	g_lsgO[27] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(23, "moved to a nearby free spot")
+		else
 		lsd_exit(23, "spawned")
-	lsg_n24(ctx)
+	}
+	else if (lsgWait)
+		lsd_exit(23, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(23, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(23, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(23, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(23, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(23, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n24(ctx)
 }
 
 // Spawn Prop (pr3)
@@ -4346,12 +4657,48 @@ lsg_n24(ctx[])
 	}
 	if (lsd_enter(24, ctx))
 		return
-	g_lsgOut[24] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
-	if (!g_lsgOut[24])
-		lsd_error(24, "No prop: the model isn't loaded, or there's no such entity.")
-	else
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 24
+	if (!lsgRe)
+		g_lsgXrN[24] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(lsi0, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[24] = e
+	g_lsgO[28] = e
+	g_lsgO[29] = e ? 1 : 0
+	g_lsgO[30] = e ? lsgMv : 0
+	g_lsgO[31] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(24, "moved to a nearby free spot")
+		else
 		lsd_exit(24, "spawned")
-	lsg_n25(ctx)
+	}
+	else if (lsgWait)
+		lsd_exit(24, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(24, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(24, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(24, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(24, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(24, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n25(ctx)
 }
 
 // Spawn Creature (cr)
@@ -4375,15 +4722,49 @@ lsg_n25(ctx[])
 	}
 	if (lsd_enter(25, ctx))
 		return
-	new Float:o[3]
-	if (!get_cvar_pointer("ls_creature_ver"))
-		lsd_error(25, "This server's bot brain has no creatures (ls_creature).")
-	else if (!(g_lsgOut[25] = (lsg_xf_at(lsi0, -1, lsi4, o) ? lsg_creature_o2("zombie", o, 0, lsi1, floatround(lsi2)) : 0)))
-		lsd_error(25, "Not spawned: no entity has that name, or that type isn't loaded on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 25
+	if (!lsgRe)
+		g_lsgXrN[25] = 0
+	g_lsgXrIn = -1
+	if (!(get_cvar_pointer("ls_creature_ver")))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Creature")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(lsi0, -1, lsi4, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_creature_o2("zombie", o, 0, lsi1, floatround(lsi2))))
+		lsgWhy = 4
+	lsg_xf_set(e, 0, -1, -1, lsi7, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[25] = e
+	g_lsgO[32] = e
+	g_lsgO[33] = e ? 1 : 0
+	g_lsgO[34] = e ? lsgMv : 0
+	g_lsgO[35] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(25, "moved to a nearby free spot")
+		else
+		lsd_exit(25, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(25, "blocked: trying again")
 	else
-		lsd_exit(25, fmt("entity %d", g_lsgOut[25]))
-	lsg_xf_set(g_lsgOut[25], 0, -1, -1, lsi7, 1.0)
-	lsg_n26(ctx)
+	{
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(25, "This server's bot brain has no creatures (ls_creature).")
+			case 2: lsd_error(25, "Not spawned: the server is out of entity slots.")
+			case 1: lsd_error(25, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(25, "The spot stayed blocked: every retry was used up.")
+			case 4: lsd_error(25, "Not spawned: that creature type isn't loaded on this map.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n26(ctx)
 }
 
 // Spawn NPC (np)
@@ -4465,20 +4846,489 @@ lsg_n28(ctx[])
 	}
 	if (lsd_enter(28, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(28, "gm_components isn't running on this server.")
-	else if (!lsg_xf_at(lsi0, -1, lsi2, o))
-		lsd_error(28, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 28
+	if (!lsgRe)
+		g_lsgXrN[28] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Create Component")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(lsi0, -1, lsi2, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_comp_create("ls_capture_point", o, "")))
+		lsgWhy = 1
+	lsg_xf_set(e, 0, lsi3, -1, -1, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[28] = e
+	g_lsgO[36] = e
+	g_lsgO[37] = e ? 1 : 0
+	g_lsgO[38] = e ? lsgMv : 0
+	g_lsgO[39] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(28, "moved to a nearby free spot")
+		else
+		lsd_exit(28, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(28, "blocked: trying again")
 	else
 	{
-		g_lsgOut[28] = ls_comp_create("ls_capture_point", o, "")
-		if (g_lsgOut[28])
-			lsd_exit(28, fmt("entity %d", g_lsgOut[28]))
-		else
-			lsd_error(28, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(28, "gm_components isn't running on this server.")
+			case 2: lsd_error(28, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(28, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(28, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_xf_set(g_lsgOut[28], 0, lsi3, -1, -1, 1.0)
+	if (!lsgRe)
+		lsg_n29(ctx)
+}
+
+// Spawn Prop (pforce)
+lsg_n29(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi6 = 1.0
+	if (lsd_want(29))
+	{
+	lsd_begin()
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
+	}
+	if (lsd_enter(29, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 29
+	if (!lsgRe)
+		g_lsgXrN[29] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(lsi0, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 0, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[29] = e
+	g_lsgO[40] = e
+	g_lsgO[41] = e ? 1 : 0
+	g_lsgO[42] = e ? lsgMv : 0
+	g_lsgO[43] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(29, "moved to a nearby free spot")
+		else
+		lsd_exit(29, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(29, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(29, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(29, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(29, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(29, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(29, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n30(ctx)
+}
+
+// Spawn Prop (palways)
+lsg_n30(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi6 = 1.0
+	if (lsd_want(30))
+	{
+	lsd_begin()
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
+	}
+	if (lsd_enter(30, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 30
+	if (!lsgRe)
+		g_lsgXrN[30] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(lsi0, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 1, 64.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[30] = e
+	g_lsgO[44] = e
+	g_lsgO[45] = e ? 1 : 0
+	g_lsgO[46] = e ? lsgMv : 0
+	g_lsgO[47] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(30, "moved to a nearby free spot")
+		else
+		lsd_exit(30, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(30, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(30, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(30, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(30, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(30, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(30, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n31(ctx)
+}
+
+// Spawn Weapon On Ground (pnear)
+lsg_n31(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi6 = 1.0
+	new Float:lsi7 = -1.0
+	new Float:lsi8 = 0.0
+	if (lsd_want(31))
+	{
+	lsd_begin()
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
+	lsd_in_number("Reserve ammo", lsi7)
+	lsd_in_number("Back after (seconds)", lsi8)
+	}
+	if (lsd_enter(31, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 31
+	if (!lsgRe)
+		g_lsgXrN[31] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_deagle.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Weapon On Ground")))
+		lsgWhy = 2
+	else if (!(lsg_xf_from(lsi0, lsg_ent_origin(lsi0, o))))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 2, 96.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_weapon_drop(29, "weapon_deagle", o, -1, 0.0)))
+		lsgWhy = 6
+	lsg_xf_set(e, 1, -1, -1, -1, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[31] = e
+	g_lsgO[48] = e
+	g_lsgO[49] = e ? 1 : 0
+	g_lsgO[50] = e ? lsgMv : 0
+	g_lsgO[51] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(31, "moved to a nearby free spot")
+		else
+		lsd_exit(31, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(31, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(31, "Not made: its model isn't loaded with the map.")
+			case 2: lsd_error(31, "Not made: the server is out of entity slots.")
+			case 6: lsd_error(31, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(31, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(31, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (e)
+	{
+		lsg_n32(ctx)
+	}
+	else if (!lsgWait)
+	{
+	}
+	if (!lsgRe)
+		lsg_n33(ctx)
+}
+
+// Branch (br)
+lsg_n32(ctx[])
+{
+	new lsi0 = g_lsgO[50]
+	if (lsd_want(32))
+	{
+	lsd_begin()
+	lsd_in_bool("Condition", lsi0)
+	}
+	if (lsd_enter(32, ctx))
+		return
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(32, g_lsdBool[ok])
+}
+
+// Spawn Prop (pfail)
+lsg_n33(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi6 = 1.0
+	if (lsd_want(33))
+	{
+	lsd_begin()
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
+	}
+	if (lsd_enter(33, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 33
+	if (!lsgRe)
+		g_lsgXrN[33] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(lsi0, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 3, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[33] = e
+	g_lsgO[52] = e
+	g_lsgO[53] = e ? 1 : 0
+	g_lsgO[54] = e ? lsgMv : 0
+	g_lsgO[55] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(33, "moved to a nearby free spot")
+		else
+		lsd_exit(33, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(33, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(33, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(33, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(33, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(33, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(33, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (e)
+	{
+	}
+	else if (!lsgWait)
+	{
+		lsg_n34(ctx)
+	}
+	if (!lsgRe)
+		lsg_n36(ctx)
+}
+
+// Spawn Prop (pB)
+lsg_n34(ctx[])
+{
+	new lsi1 = lsg_vec(0.0, 0.0, 40.0)
+	new Float:lsi6 = 1.0
+	if (lsd_want(34))
+	{
+	lsd_begin()
+	lsd_in_text("At position", lsg_vtext(lsi1))
+	lsd_in_number("Scale", lsi6)
+	}
+	if (lsd_enter(34, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 34
+	if (!lsgRe)
+		g_lsgXrN[34] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsi1, -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 1)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[34] = e
+	g_lsgO[56] = e
+	g_lsgO[57] = e ? 1 : 0
+	g_lsgO[58] = e ? lsgMv : 0
+	g_lsgO[59] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(34, "moved to a nearby free spot")
+		else
+		lsd_exit(34, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(34, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(34, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(34, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(34, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(34, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(34, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (e)
+	{
+	}
+	else if (!lsgWait)
+	{
+		lsg_n35(ctx)
+	}
+}
+
+// Switch on Enum (why)
+lsg_n35(ctx[])
+{
+	new lsi0 = g_lsgO[55]
+	if (lsd_want(35))
+	{
+	lsd_begin()
+	lsd_in_text("Selection", g_lsgE2[clamp(lsi0, 0, 6)])
+	}
+	if (lsd_enter(35, ctx))
+		return
+	switch (lsi0)
+	{
+		case 0:
+		{
+			lsd_exit(35, "None")
+		}
+		case 1:
+		{
+			lsd_exit(35, "Blocked")
+		}
+		case 2:
+		{
+			lsd_exit(35, "Out of entity slots")
+		}
+		case 3:
+		{
+			lsd_exit(35, "Limit reached")
+		}
+		case 4:
+		{
+			lsd_exit(35, "Missing file")
+		}
+		case 5:
+		{
+			lsd_exit(35, "Retries used up")
+		}
+		case 6:
+		{
+			lsd_exit(35, "Bad input")
+		}
+		default:
+		{
+			lsd_exit(35, "default")
+		}
+	}
+}
+
+// Spawn Creature (cretry)
+lsg_n36(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 0.0
+	new Float:lsi2 = 0.0
+	new Float:lsi8 = 1.0
+	if (lsd_want(36))
+	{
+	lsd_begin()
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Health", lsi1)
+	lsd_in_number("Pay", lsi2)
+	lsd_in_number("Scale", lsi8)
+	}
+	if (lsd_enter(36, ctx))
+		return
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 36
+	if (!lsgRe)
+		g_lsgXrN[36] = 0
+	g_lsgXrIn = -1
+	if (!(get_cvar_pointer("ls_creature_ver")))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Creature")))
+		lsgWhy = 2
+	else if (!((lsgRe ? lsg_xr_get(36, o) : lsg_xr_put(36, (lsg_ent_origin(lsi0, o)) ? 1 : 0, o))))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 4, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_creature_o2("zombie", o, 0, lsi1, floatround(lsi2))))
+		lsgWhy = 4
+	new bool:lsgWait = !e && lsgWhy == 1 && (0 == 0 || ++g_lsgXrN[36] < 0)
+	if (lsgWait)
+		set_task(1.0, "lsg_xr36", LSG_TASK + 410000 + 36, ctx, LSG_CTX)
+	else if (!e && lsgWhy == 1)
+		lsgWhy = 5
+	g_lsgOut[36] = e
+	g_lsgO[60] = e
+	g_lsgO[61] = e ? 1 : 0
+	g_lsgO[62] = e ? lsgMv : 0
+	g_lsgO[63] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(36, "moved to a nearby free spot")
+		else
+		lsd_exit(36, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(36, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(36, "This server's bot brain has no creatures (ls_creature).")
+			case 2: lsd_error(36, "Not spawned: the server is out of entity slots.")
+			case 1: lsd_error(36, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(36, "The spot stayed blocked: every retry was used up.")
+			case 4: lsd_error(36, "Not spawned: that creature type isn't loaded on this map.")
+		}
+	}
+}
+
+public lsg_xr36(ctx[])
+{
+	g_lsgXrIn = 36
+	lsg_n36(ctx)
 }
 
 lsd_call(n, const data[])
@@ -4517,5 +5367,13 @@ lsd_call(n, const data[])
 		case 26: lsg_n26(ctx)
 		case 27: lsg_n27(ctx)
 		case 28: lsg_n28(ctx)
+		case 29: lsg_n29(ctx)
+		case 30: lsg_n30(ctx)
+		case 31: lsg_n31(ctx)
+		case 32: lsg_n32(ctx)
+		case 33: lsg_n33(ctx)
+		case 34: lsg_n34(ctx)
+		case 35: lsg_n35(ctx)
+		case 36: lsg_n36(ctx)
 	}
 }

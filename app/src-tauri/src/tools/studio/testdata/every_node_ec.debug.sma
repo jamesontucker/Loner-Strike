@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 1
+#define LSG_O 4
 #define LSG_OT 1
 
 
@@ -2857,7 +2857,8 @@ stock bool:lsg_valid(e)
 {
 	if (e >= 1 && e <= MaxClients)
 		return bool:is_user_connected(e)
-	return e > MaxClients && pev_valid(e) > 0
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
 }
 
 stock bool:lsg_is_creature(e)
@@ -3062,6 +3063,8 @@ stock lsg_ecenter(e)
 stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
 // enum Component Kind
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
+// enum Spawn Failure
+stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
 stock lsg_mka44(p0, p1)
 {
 	new a = lsg_atmp()
@@ -3515,21 +3518,116 @@ stock lsg_snd_stop_player(p)
 }
 
 // ---- spawning: a class from Spawn Entity's list, its keys, then spawned
-stock lsg_spawn_begin(const cls[], const Float:o[3])
+stock lsg_spawn_kv(const cls[], const Float:o[3], const k1[] = "", const v1[] = "", ...)
 {
 	new e = create_entity(cls)
 	if (e <= 0)
 		return 0
 	engfunc(EngFunc_SetOrigin, e, o)
-	return e
-}
-
-stock lsg_spawn_end(e)
-{
-	if (e <= 0)
-		return 0
+	if (k1[0])
+		DispatchKeyValue(e, k1, v1)
+	// (the rest, in pairs)
+	new n = numargs(), key[64], val[128]
+	for (new a = 4; a + 1 < n; a += 2)
+	{
+		lsg_argstr(a, key, charsmax(key))
+		lsg_argstr(a + 1, val, charsmax(val))
+		if (key[0])
+			DispatchKeyValue(e, key, val)
+	}
 	DispatchSpawn(e)
 	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
+stock lsg_argstr(a, s[], len)
+{
+	new i = 0
+	for (; i < len; i++)
+	{
+		s[i] = getarg(a, i)
+		if (!s[i])
+			break
+	}
+	s[min(i, len)] = 0
+}
+
+// ---- solid spawns: is the spot free (a hull the size of the thing, players and walls count)?
+// If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
+stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
+
+// (Retry: the spot of the first try, kept)
+stock lsg_xr_put(i, ok, const Float:o[3])
+{
+	if (ok)
+	{
+		g_lsgXrO[i][0] = o[0]
+		g_lsgXrO[i][1] = o[1]
+		g_lsgXrO[i][2] = o[2]
+	}
+	return ok
+}
+
+stock lsg_xr_get(i, Float:o[3])
+{
+	o[0] = g_lsgXrO[i][0]
+	o[1] = g_lsgXrO[i][1]
+	o[2] = g_lsgXrO[i][2]
+	return 1
+}
+
+stock bool:lsg_xf_clear(const Float:o[3], size)
+{
+	new Float:c[3]
+	c[0] = o[0]
+	c[1] = o[1]
+	c[2] = o[2] + (size >= 2 ? 37.0 : 19.0)
+	engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, size >= 2 ? HULL_HUMAN : HULL_HEAD, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+// mode: 0 always spawn (no check), 1 a nearby spot or in place anyway, 2 a nearby spot or not at
+// all, 3 exactly there or not at all, 4 exactly there (the node retries)
+stock bool:lsg_xf_free(Float:o[3], size, mode, Float:maxd, &moved)
+{
+	moved = 0
+	if (size < 0 || mode == 0 || lsg_xf_clear(o, size))
+		return true
+	if (mode >= 3)
+		return false
+	new Float:c[3], Float:from[3], Float:to[3], Float:f
+	from[0] = o[0]
+	from[1] = o[1]
+	from[2] = o[2] + 18.0
+	for (new Float:r = 16.0; r <= maxd; r += 16.0)
+	{
+		new steps = clamp(floatround(r / 6.0), 8, 32)
+		for (new k = 0; k < steps; k++)
+		{
+			new Float:ang = 6.2831853 * float(k) / float(steps)
+			for (new z = 0; z < 3; z++)
+			{
+				c[0] = o[0] + floatcos(ang) * r
+				c[1] = o[1] + floatsin(ang) * r
+				c[2] = o[2] + float(z) * 18.0
+				if (!lsg_xf_clear(c, size))
+					continue
+				to[0] = c[0]
+				to[1] = c[1]
+				to[2] = c[2] + 18.0
+				engfunc(EngFunc_TraceLine, from, to, IGNORE_MONSTERS, 0, 0)
+				get_tr2(0, TR_flFraction, f)
+				if (f < 1.0)
+					continue
+				o[0] = c[0]
+				o[1] = c[1]
+				o[2] = c[2]
+				moved = 1
+				return true
+			}
+		}
+	}
+	// (mode 1: no free spot near, so in place anyway)
+	return mode == 1
 }
 
 // ---- engine coverage nodes (EC): only stocks here; the hooks are written for the nodes used ----
@@ -5652,18 +5750,54 @@ lsg_n40(ctx[])
 	}
 	if (lsd_enter(40, ctx))
 		return
-	g_lsgOut[40] = lsg_prop(lsi0, "models/w_c4.mdl", 0)
-	if (!g_lsgOut[40])
-		lsd_error(40, "No prop: the model isn't loaded, or there's no such entity.")
-	else
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 40
+	if (!lsgRe)
+		g_lsgXrN[40] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(lsi0, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_prop_o(o, "models/w_c4.mdl", 0)))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[40] = e
+	g_lsgO[0] = e
+	g_lsgO[1] = e ? 1 : 0
+	g_lsgO[2] = e ? lsgMv : 0
+	g_lsgO[3] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(40, "moved to a nearby free spot")
+		else
 		lsd_exit(40, "spawned")
-	lsg_n41(ctx)
+	}
+	else if (lsgWait)
+		lsd_exit(40, "blocked: trying again")
+	else
+	{
+		switch (lsgWhy)
+		{
+			case 4: lsd_error(40, "No prop: its model isn't loaded with the map.")
+			case 2: lsd_error(40, "No prop: the server is out of entity slots.")
+			case 6: lsd_error(40, "No place: no such entity, or nothing wired into At.")
+			case 1: lsd_error(40, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(40, "The spot stayed blocked: every retry was used up.")
+		}
+	}
+	if (!lsgRe)
+		lsg_n41(ctx)
 }
 
 // Play Animation (anim)
 lsg_n41(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[0]
 	if (lsd_want(41))
 	{
 	lsd_begin()
@@ -5681,7 +5815,7 @@ lsg_n41(ctx[])
 // Attach To (att)
 lsg_n42(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[0]
 	new lsi1 = g_lsgOut[31]
 	new lsi2 = lsg_vec(128.0, 0.0, 0.0)
 	if (lsd_want(42))
@@ -5703,7 +5837,7 @@ lsg_n42(ctx[])
 // Attach To (att2)
 lsg_n43(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[0]
 	new lsi1 = g_lsgOut[31]
 	if (lsd_want(43))
 	{
@@ -5723,7 +5857,7 @@ lsg_n43(ctx[])
 // Detach (det)
 lsg_n44(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[0]
 	if (lsd_want(44))
 	{
 	lsd_begin()
@@ -5739,7 +5873,7 @@ lsg_n44(ctx[])
 // Set Entity Property (pset2)
 lsg_n45(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[0]
 	new Float:lsi1 = 2.0
 	if (lsd_want(45))
 	{

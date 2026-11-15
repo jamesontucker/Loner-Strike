@@ -287,6 +287,7 @@ export const BUILTIN_ENUMS: GEnum[] = [
     name: "Component Kind",
     values: ["Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None"],
   },
+  { id: "ls_spawn_fail", name: "Spawn Failure", values: ["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"] },
 ];
 
 /** The mode's enums and then the app's own (a mode's own of the same id wins). */

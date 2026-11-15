@@ -2850,7 +2850,8 @@ stock bool:lsg_valid(e)
 {
 	if (e >= 1 && e <= MaxClients)
 		return bool:is_user_connected(e)
-	return e > MaxClients && pev_valid(e) > 0
+	// (any entity handle: a removed one, or one going this frame, isn't valid)
+	return e > MaxClients && pev_valid(e) > 0 && !(pev(e, pev_flags) & FL_KILLME)
 }
 
 stock bool:lsg_is_creature(e)
@@ -3055,6 +3056,8 @@ stock lsg_ecenter(e)
 stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
 // enum Component Kind
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
+// enum Spawn Failure
+stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
 
 lsd_graph_vars()
 {
