@@ -205,10 +205,13 @@ async fn api_send(State(st): State<Shared>, h: HeaderMap, Json(r): Json<SendReq>
                 results.push(one);
             }
             let good = results.iter().filter(|x| x["ok"] == true).count();
+            // (only taking types off says so, not "Sent")
+            let only_removing = r.types.is_empty();
+            let (done, none) = if only_removing { ("Removed from", "Nothing was removed.") } else { ("Sent to", "Nothing was sent.") };
             let message = match (good, results.len()) {
-                (0, _) => "Nothing was sent.".to_string(),
-                (n, t) if n == t => format!("Sent to {} server{}. They use it from their next map.", n, if n == 1 { "" } else { "s" }),
-                (n, t) => format!("Sent to {n} of {t} servers."),
+                (0, _) => none.to_string(),
+                (n, t) if n == t => format!("{done} {} server{}. They use it from their next map.", n, if n == 1 { "" } else { "s" }),
+                (n, t) => format!("{done} {n} of {t} servers."),
             };
             Ok(json!({"ok": good > 0, "message": message, "results": results}))
         })
