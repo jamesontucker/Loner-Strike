@@ -375,3 +375,15 @@ Both sessions were restored and verified: the backups at `~/loner-strike/backups
 are kept, and the touched folders match them byte for byte. AMXX writes the loaded plugins' commands
 into `configs/cmdaccess.ini`, so that file is put back again after the switch home. The server is back
 in Gun Game on cs_militia with 19 bots playing, and the status page says online.
+
+### Browser specs after the owners' fixes (2026-11-15)
+- **Full default suite at 3ec670e8** (editor coverage sweep and site specs excluded; they have their own
+  configs). One worker, Chromium large and WebKit, against a game copy: 470 passed, 10 failed,
+  22 skipped.
+- **8 of the 10 were game-copy fixtures, all passing once the copy has the right files:**
+  - creatures-qa4 wants the stock waves.ini: 6/6.
+  - creature-send wants a `qa_crawler` type in creatures.ini; with it, creature-send and creature-picker
+    pass 12/12. The re-check runner now writes that fixture (1edaa737).
+- **The last 2:** editor-community-maps "Save as <name>_edit". Fixed in the test (bbbd5c28): it answers
+  compile/status now. Rerun at bbbd5c28: 10/10 in both engines.
+- No M2 flake showed. **Final check complete.**
