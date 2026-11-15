@@ -258,11 +258,53 @@ stock lsg_skip_log(const cap[], const what[], const fmt[], any:...)
 
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
 // a mode's spawn that would eat into them is skipped, and the server log says what and why
-#define LSG_EDICT_RESERVE 96
+// The engine doesn't hand a slot out again for 0.5 s after it's freed, so in a flood (things removed
+// and made every frame) a slot freed just now is as good as taken: the live entities (the engine's
+// count, read once a frame), the ones made since this frame began and the ones freed in the last
+// 0.5-1 s must leave the reserve free: an eighth of the server's slots, at least 128 (bots buying,
+// dropping and throwing). O(1) a call: a flood asks thousands of times a second (W2, P5's final check)
+#define LSG_EDICT_RESERVE 128
+stock Float:g_lsgEdAt = -1.0, g_lsgEdLive, g_lsgEdMade, g_lsgEdWin, g_lsgEdFreed, g_lsgEdFreedBefore, bool:g_lsgEdHooked
+
+public lsg_ed_freed(ent)
+{
+	lsg_ed_window()
+	g_lsgEdFreed++
+}
+
+// (frees counted in half-second windows: this one and the one before)
+stock lsg_ed_window()
+{
+	new w = floatround(get_gametime() * 2.0, floatround_floor)
+	if (w != g_lsgEdWin)
+	{
+		g_lsgEdFreedBefore = w == g_lsgEdWin + 1 ? g_lsgEdFreed : 0
+		g_lsgEdFreed = 0
+		g_lsgEdWin = w
+	}
+}
+
 stock bool:lsg_ent_room(const what[])
 {
-	if (engfunc(EngFunc_NumberOfEntities) < global_get(glb_maxEntities) - LSG_EDICT_RESERVE)
+	if (!g_lsgEdHooked)
+	{
+		g_lsgEdHooked = true
+		register_forward(FM_OnFreeEntPrivateData, "lsg_ed_freed")
+	}
+	new Float:now = get_gametime()
+	if (now != g_lsgEdAt)
+	{
+		g_lsgEdAt = now
+		g_lsgEdLive = engfunc(EngFunc_NumberOfEntities)
+		g_lsgEdMade = 0
+	}
+	lsg_ed_window()
+	new most = global_get(glb_maxEntities)
+	if (g_lsgEdLive + g_lsgEdMade + g_lsgEdFreed + g_lsgEdFreedBefore < most - max(LSG_EDICT_RESERVE, most / 8))
+	{
+		g_lsgEdMade++
 		return true
+	}
 	lsg_skip_log("slots", what, "%s skipped: the server is out of entity slots", what)
 	return false
 }
@@ -1684,9 +1726,18 @@ public lsg_vol_tick()
 		}
 		new Float:reach = g_lsgVolShape[v] == 1 ? g_lsgVolSize[v][0] : floatsqroot(g_lsgVolSize[v][0] * g_lsgVolSize[v][0] + g_lsgVolSize[v][1] * g_lsgVolSize[v][1] + g_lsgVolSize[v][2] * g_lsgVolSize[v][2]) * 0.5
 		new now[LSG_VOLIN], nn = 0, e = -1
-		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
-			if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
-				now[nn++] = e
+		if (g_lsgVolFilter[v] == 0)
+		{
+			// players only (the usual): the players themselves, not a search through every entity
+			// near it (P5's spawn flood: 256 volumes among piled-up props and projectiles)
+			for (e = 1; e <= MaxClients && nn < g_lsgVolInCap[v]; e++)
+				if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
+					now[nn++] = e
+		}
+		else
+			while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
+				if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
+					now[nn++] = e
 		// who left, then who came in
 		new was[LSG_VOLIN], wn = g_lsgVolInN[v]
 		for (new i = 0; i < wn; i++)

@@ -363,9 +363,18 @@ public lsg_vol_tick()
 		}
 		new Float:reach = g_lsgVolShape[v] == 1 ? g_lsgVolSize[v][0] : floatsqroot(g_lsgVolSize[v][0] * g_lsgVolSize[v][0] + g_lsgVolSize[v][1] * g_lsgVolSize[v][1] + g_lsgVolSize[v][2] * g_lsgVolSize[v][2]) * 0.5
 		new now[LSG_VOLIN], nn = 0, e = -1
-		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
-			if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
-				now[nn++] = e
+		if (g_lsgVolFilter[v] == 0)
+		{
+			// players only (the usual): the players themselves, not a search through every entity
+			// near it (P5's spawn flood: 256 volumes among piled-up props and projectiles)
+			for (e = 1; e <= MaxClients && nn < g_lsgVolInCap[v]; e++)
+				if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
+					now[nn++] = e
+		}
+		else
+			while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
+				if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
+					now[nn++] = e
 		// who left, then who came in
 		new was[LSG_VOLIN], wn = g_lsgVolInN[v]
 		for (new i = 0; i < wn; i++)
@@ -773,6 +782,28 @@ mod tests {
         let at = h.find("stock lsg_skip_log(").expect("the helper");
         let body = &h[at..at + h[at..].find("\n}").unwrap()];
         assert!(body.contains("< 1.0") && body.contains("times in the last second") && body.contains("now >= g_lsgSkipAt[k]"), "{body}");
+    }
+
+    /// P5's spawn flood crashed a sim ("ED_Alloc: no free edicts") with every spawn behind
+    /// lsg_ent_room: the engine won't reuse a slot for 0.5 s after it's freed, and the old check
+    /// counted only live entities. The guard counts the recently freed too (a free hook), keeps a
+    /// reserve of max(128, an eighth), and stays O(1) a call (the engine's count once a frame, no
+    /// loop over entities).
+    #[test]
+    fn entity_room_counts_freed_slots_and_stays_o1() {
+        let h = super::super::HELPERS;
+        let at = h.find("stock bool:lsg_ent_room(").expect("the guard");
+        let body = &h[at..at + h[at..].find("\n}").unwrap()];
+        for want in ["register_forward(FM_OnFreeEntPrivateData, \"lsg_ed_freed\")", "if (now != g_lsgEdAt)", "g_lsgEdLive = engfunc(EngFunc_NumberOfEntities)",
+                     "g_lsgEdLive + g_lsgEdMade + g_lsgEdFreed + g_lsgEdFreedBefore", "max(LSG_EDICT_RESERVE, most / 8)", "g_lsgEdMade++"] {
+            assert!(body.contains(want), "missing {want}:\n{body}");
+        }
+        for slow in ["for (", "while (", "find_ent", "FindEntity"] {
+            assert!(!body.contains(slow), "the guard loops ({slow}): it runs for every spawn in a flood\n{body}");
+        }
+        assert!(h.contains("#define LSG_EDICT_RESERVE 128") && h.contains("public lsg_ed_freed(ent)"));
+        // every Studio spawn path checks it (the nodes' pre-checks and the helpers that make entities)
+        assert!(super::PAWN.contains("lsg_ent_room(\"Spawn Trigger Volume\")"));
     }
 
     /// Every limit's setting label fits a setting label (30): a longer one failed every mode using it.
