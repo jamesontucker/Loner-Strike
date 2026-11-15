@@ -140,7 +140,7 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Hand-started game servers always use `-insecure` (a failed Steam start can take down every CrossOver sim).
 
 ## How many sims at once (2026-11-14, evening)
-Up to 3 test servers (hlds.exe sims) may run at once across the crew, while the 1-minute load is under 20 and free disk is over 8 GB. Before starting one, count running `hlds.exe` (ps) and check load; if 3 are running or load is 20+, wait. One sim per agent still. The earlier "only when no other server is running" rule is lifted: the wineserver "deaths" were mostly normal exits and debugger freezes (see below), not overload.
+Up to 3 test servers (hlds.exe sims) may run at once across the crew, while the 1-minute load is under 20 and free disk is over 8 GB. Before starting one, count running `hlds.exe` (ps) and check load; if 3 are running or load is 20+, wait. One sim per agent still. Always pass an explicit free `-port` (27030 or higher; check `lsof -nP -iUDP:<port>`): the user's own CS client can hold 27015, and a sim on the default port dies with "NET_OpenIP: Couldn't allocate…" as a dialog on their screen (2026-11-15). The earlier "only when no other server is running" rule is lifted: the wineserver "deaths" were mostly normal exits and debugger freezes (see below), not overload.
 
 ## CrossOver wineserver (2026-11-14)
 - The Steam bottle's wineserver exits about 3 s after its last Wine process. Most "wineserver died" reports
