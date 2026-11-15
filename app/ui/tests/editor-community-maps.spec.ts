@@ -147,6 +147,12 @@ test("Save as <name>_edit is kept in the project: opened again, it compiles to t
       return r.fulfill({ json: { error: "ls_newmap came from Community. Its updates would replace your changes.", community: { map: "ls_newmap", name: "New", author: "jam", model: "Mod", gb: 4243, editName: "ls_newmap_edit", remixable: false } } });
     return r.fulfill({ json: { error: "(stopped here by the test)" } });
   });
+  // (the compiler set up, whatever this computer has, so this runs without Steam too; the name it
+  // suggests is the app's own: the open project's, its saved compile name once there is one)
+  await page.route(/\/api\/tools\/compile\/status/, async (r) => {
+    const real = await (await r.fetch()).json();
+    await r.fulfill({ json: { ...STATUS, suggestName: real.suggestName } });
+  });
   await open(page);
   await dock(page, "Compile");
   const nameBox = page.locator(".compile-panel").getByRole("textbox", { name: /^Map name/ });
