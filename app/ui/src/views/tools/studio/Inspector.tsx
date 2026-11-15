@@ -1,10 +1,13 @@
 // The side panel: the selected node's settings and help (or the mode's name and the problem
 // list when nothing is selected).
 
+import type { ReactNode } from "react";
 import { ColorField } from "./ColorField";
+import { addTable } from "./tables";
+import { openTableEditor } from "./TableEditor";
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
-import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { addEnum, addFunction, addStruct, freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { allEnums, allStructs, isAssetType, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, orphanValues, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
@@ -98,18 +101,44 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
       ))}
     </select>
   );
-  if (p.kind === "fn") return pick((graph.functions ?? []).filter((f) => !!f.pure === (node.type === "fn.call_pure") && f.id !== node.graph).map((f) => [f.id, f.name]), "Add a Function under My mode first");
-  if (p.kind === "table") return pick((graph.dataTables ?? []).map((t) => [t.id, t.name]), "Add a data table under My mode first");
+  // (a picker of the mode's own parts gets a New button: it makes one, picks it on this node and
+  // opens it to fill in; the same + is next to its section in the My mode panel on the left)
+  const withNew = (select: ReactNode, what: "struct" | "enum" | "table" | "function") => {
+    const label = { struct: "New struct…", enum: "New enum…", table: "New data table…", function: "New Function…" }[what];
+    const make = () => {
+      const { edit, selectPart, setRenameNew, openTab } = useStudio.getState();
+      let id = "";
+      edit((g) => {
+        const r = what === "struct" ? addStruct(g) : what === "enum" ? addEnum(g) : what === "table" ? addTable(g) : addFunction(g, node.type === "fn.call_pure");
+        id = r.id;
+        return setParam(r.graph, node.id, p.id, r.id);
+      });
+      setRenameNew(id);
+      if (what === "table") setTimeout(() => openTableEditor(id), 0);
+      else if (what === "function") openTab(id);
+      else selectPart(id);
+    };
+    return (
+      <span className="st-pick-new">
+        {select}
+        <button type="button" className="btn small" onClick={make} title={`Make a new one and use it here (also: + next to ${{ struct: "Structs", enum: "Enums", table: "Data tables", function: "Functions" }[what]} in the My mode panel on the left)`}>
+          {label}
+        </button>
+      </span>
+    );
+  };
+  if (p.kind === "fn") return withNew(pick((graph.functions ?? []).filter((f) => !!f.pure === (node.type === "fn.call_pure") && f.id !== node.graph).map((f) => [f.id, f.name]), "No Functions yet: New Function…, or + next to Functions on the left"), "function");
+  if (p.kind === "table") return withNew(pick((graph.dataTables ?? []).map((t) => [t.id, t.name]), "No data tables yet: New data table…, or + next to Data tables on the left"), "table");
   if (p.kind === "column") {
     const t = graph.dataTables?.find((x) => x.id === node.params.table);
     return t ? pick(t.columns.map((c) => [c.id, c.name]), "This table has no columns") : <em className="st-muted">Pick a table first</em>;
   }
-  if (p.kind === "tline") return pick((graph.timelines ?? []).map((t) => [t.id, t.name]), "Add a Timeline under My mode first");
-  if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "Add a Custom Event with no inputs under My mode first" : "Add a Custom Event under My mode first");
-  if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
-  if (p.kind === "struct") return pick(allStructs(graph).map((x) => [x.id, x.name]), "Add a struct under My mode first");
-  if (p.kind === "enum") return pick(allEnums(graph).map((x) => [x.id, x.name]), "Add an enum under My mode first");
-  if (p.kind === "marker") return pick((graph.markers ?? []).map((x) => [x.id, x.label]), "Add a map marker under My mode first");
+  if (p.kind === "tline") return pick((graph.timelines ?? []).map((t) => [t.id, t.name]), "No Timelines yet: the + next to Timelines, in the My mode panel on the left");
+  if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "No Custom Event without inputs yet: the + next to Custom events, in the My mode panel on the left" : "No Custom Events yet: the + next to Custom events, in the My mode panel on the left");
+  if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "No Macros yet: the + next to Macros, in the My mode panel on the left");
+  if (p.kind === "struct") return withNew(pick(allStructs(graph).map((x) => [x.id, x.name]), "No structs yet: New struct…, or + next to Structs on the left"), "struct");
+  if (p.kind === "enum") return withNew(pick(allEnums(graph).map((x) => [x.id, x.name]), "No enums yet: New enum…, or + next to Enums on the left"), "enum");
+  if (p.kind === "marker") return pick((graph.markers ?? []).map((x) => [x.id, x.label]), "No map markers yet: the + next to Map markers, in the My mode panel on the left");
   if (p.kind === "type") return <TypePicker graph={graph} value={itemTypeOk(graph, String(value), true) ? String(value) : "number"} onChange={onChange} containers={false} structs={!node.type.startsWith("map.")} label={p.label} />;
   if (p.kind === "field") {
     const st = allStructs(graph).find((x) => `struct:${x.id}` === nodeVar?.type);

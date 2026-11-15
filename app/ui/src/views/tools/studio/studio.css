@@ -581,3 +581,6 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 .st-mode-menu button { text-align: left; background: none; border: 0; color: var(--text); font: inherit; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
 .st-mode-menu button:hover, .st-mode-menu button:focus-visible { background: color-mix(in srgb, var(--signal, #6aa0ff) 18%, transparent); }
 .st-mode-menu button.danger { color: var(--bad, #e66); }
+/* a picker of the mode's own parts with its New button (Inspector withNew) */
+.st-pick-new { display: flex; gap: 4px; align-items: center; }
+.st-pick-new .st-field { flex: 1; min-width: 0; }

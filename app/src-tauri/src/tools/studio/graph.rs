@@ -2145,7 +2145,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                 "var" => {
                     let chosen = sval.and_then(|id| v.vars.get(id));
                     match chosen {
-                        None => Err(format!("Pick a variable for {} (add one under My mode).", def.title)),
+                        None => Err(format!("Pick a variable for {} in its Details (no variable yet? the + next to Variables, in the My mode panel on the left).", def.title)),
                         Some(x) if prm.var_type.as_deref().is_some_and(|t| !(t == x.ty || (t == "struct" && x.ty.starts_with("struct:")) || (t == "array" && x.ty.starts_with("array<")))) => {
                             Err(format!("{} needs a {} variable.", def.title, prm.var_type.as_deref().unwrap_or("")))
                         }
@@ -2168,7 +2168,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                     _ => Ok(()),
                 },
                 "table" => match sval.and_then(|id| g.data_tables.iter().find(|t| t.id == id)) {
-                    None => Err(format!("Pick a data table for {} (add one under My mode, Data tables).", def.title)),
+                    None => Err(format!("Pick a data table for {} in its Details: New data table…, or the + next to Data tables in the My mode panel on the left.", def.title)),
                     _ => Ok(()),
                 },
                 "column" => match super::tables::table_of(&g.data_tables, n).map(|(_, t)| t.col(sval.unwrap_or("")).is_some()) {
@@ -2176,11 +2176,11 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                     _ => Ok(()),
                 },
                 "tline" => match sval.and_then(|id| g.timelines.iter().find(|t| t.id == id)) {
-                    None => Err(format!("Pick a Timeline for {} (add one under My mode, Timelines).", def.title)),
+                    None => Err(format!("Pick a Timeline for {} in its Details (no Timeline yet? the + next to Timelines, in the My mode panel on the left).", def.title)),
                     _ => Ok(()),
                 },
                 "cevent" => match sval.and_then(|id| g.custom_events.iter().find(|c| c.id == id)) {
-                    None => Err(format!("Pick a Custom Event for {} (add one under My mode, Custom events).", def.title)),
+                    None => Err(format!("Pick a Custom Event for {} in its Details (no Custom Event yet? the + next to Custom events, in the My mode panel on the left).", def.title)),
                     Some(c) if def.kind == "timer.by_event" && !c.inputs.is_empty() => Err(format!("\u{201c}{}\u{201d} has inputs: a timer can only run a Custom Event without any (call it from a Delay instead).", short(&c.name))),
                     _ => Ok(()),
                 },
@@ -2189,11 +2189,11 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                     _ => Err(format!("Pick a map marker for {} (add one under Map markers).", def.title)),
                 },
                 "struct" => match sval.and_then(|id| v.structs.get(id)) {
-                    None => Err(format!("Pick a struct for {} (add one under My mode).", def.title)),
+                    None => Err(format!("Pick a struct for {} in its Details: New struct…, or the + next to Structs in the My mode panel on the left.", def.title)),
                     _ => Ok(()),
                 },
                 "enum" => match sval.and_then(|id| v.enums.get(id)) {
-                    None => Err(format!("Pick an enum for {} (add one under My mode).", def.title)),
+                    None => Err(format!("Pick an enum for {} in its Details: New enum…, or the + next to Enums in the My mode panel on the left.", def.title)),
                     _ => Ok(()),
                 },
                 "type" => match sval {

@@ -97,3 +97,23 @@ test("casts: an Entity dropped on a Creature pin offers Insert As Creature", asy
   await insert.click();
   await expect(page.locator(".react-flow__node").filter({ hasText: "As Creature" })).toHaveCount(1);
 });
+
+test("a struct, enum, data table or Function picker in Details makes a new one in one click", async ({ page }) => {
+  await seed(page, base({ nodes: [{ id: "mk", type: "struct.make", pos: { x: 0, y: 0 }, params: { struct: "" } }], edges: [] }));
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  const node = page.locator('.react-flow__node[data-id="mk"]');
+  await expect(node).toBeVisible({ timeout: 20_000 });
+  await node.click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  // (the app's own Transform is always there to pick; the mode's own come from New struct…)
+  await expect(details.getByRole("combobox").first()).toContainText("Transform");
+  await expect(details.getByRole("button", { name: "New struct…" })).toHaveAttribute("title", /next to Structs in the My mode panel on the left/);
+  await details.getByRole("button", { name: "New struct…" }).click();
+  // a struct made, picked on the node, and its editor open to fill in
+  const g = async () => (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => { const x = await g(); return x.structs?.length === 1 && x.nodes.find((n: { id: string }) => n.id === "mk").params.struct === x.structs[0].id; }).toBeTruthy();
+  // the left panel's sections are labeled, each with its +
+  for (const [title, add] of [["Structs", "Add a struct"], ["Enums", "Add an enum"], ["Data tables", /Add a data table/], ["Functions", /Add a Function/], ["Variables", /Add a variable/]] as const)
+    await expect(page.locator(".st-mb-section").filter({ hasText: title }).getByRole("button", { name: add }).first()).toBeAttached();
+});
