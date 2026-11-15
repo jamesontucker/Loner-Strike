@@ -137,3 +137,14 @@
 .cs-placed h4 { font-size: 13px; color: var(--bone-faint); text-transform: uppercase; letter-spacing: 0.04em; }
 .cs-placed-how { display: block; margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
 .cs-placed-keys-title { margin: 14px 0 2px; }
+
+/* "Send my creatures to…" */
+.cs-send .sheet-body { display: grid; gap: 12px; }
+.cs-send-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cs-send fieldset { border: 1px solid var(--line); padding: 8px 10px; display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+.cs-send-summary { margin: 0; padding-left: 18px; }
+.cs-send-h { margin: 6px 0 0; }
+.cs-send-server ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cs-send-server .row { gap: 8px; align-items: center; }
+.cs-send-name { min-width: 140px; }
+.cs-send-changed, .cs-send-gone { color: var(--danger); }

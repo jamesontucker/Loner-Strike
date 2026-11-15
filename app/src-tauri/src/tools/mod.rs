@@ -37,6 +37,7 @@ pub mod creatures;
 pub mod creaturepack;
 pub mod creaturesrv;
 pub mod creaturekind; // CP-kind: Community's creature kind
+pub mod creaturesend; // "Send my creatures to…" (Creature Studio)
 pub mod soundconv; // sounds imported as WAV, MP3, Ogg or FLAC become engine-friendly WAVs
 pub mod assetimport; // the asset pickers' Import into the game, and files from your map projects
 pub mod spritemaker; // T1fix: the Sprite maker (pictures to a .spr)
@@ -327,6 +328,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(community::routes())
         .merge(communitylib::routes())
         .merge(creaturekind::routes())
+        .merge(creaturesend::routes())
         .merge(assetimport::routes())
         .merge(spritemaker::routes()) // T1fix
         .merge(credits::routes())

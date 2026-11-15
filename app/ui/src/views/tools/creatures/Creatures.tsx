@@ -14,6 +14,7 @@ import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
 import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, usedBy, type TypeUser, type Checked, type Creature, type Placed, type Problem, type Status, type TypeRow } from "./creaturesApi";
+import { SendToServers } from "./SendToServers";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
 import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
@@ -53,6 +54,7 @@ export default function Creatures() {
   const [calm, setCalm] = useState(true);
   /** a "Placed by mappers" entry shown instead of a type (its id) */
   const [placedId, setPlacedId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   /** an installed (community) type shown instead, read only (its name) */
   const [instName, setInstName] = useState<string | null>(null);
   /** the preview as tier 1, 2, 3 or enraged */
@@ -108,6 +110,8 @@ export default function Creatures() {
   if (!types) return null;
   const builtinNames = st.templates.map((x) => x.name);
   const savedNames = (saved ?? []).map((x) => x.name);
+  // your own saved types (not the built-ins you changed): what "Send to servers…" can send
+  const ownNames = savedNames.filter((n) => !builtinNames.includes(n));
   const blanks = numberProblems(types);
   const problems = [...blanks, ...(checked?.problems ?? st.problems).filter((p) => !blanks.some((b) => b.at === p.at && b.field === p.field))];
   const errors = problems.filter((p) => p.error);
@@ -328,7 +332,19 @@ export default function Creatures() {
                   Share…
                 </button>
               )}
+              {!st.server && (
+                <button
+                  type="button"
+                  className="btn small"
+                  disabled={dirty || !ownNames.length}
+                  title={dirty ? "Save first" : !ownNames.length ? "Make a type of your own first" : "Put your types on your servers, with their models and sounds"}
+                  onClick={() => setSending(true)}
+                >
+                  Send to servers…
+                </button>
+              )}
             </div>
+            {sending && <SendToServers own={ownNames} start={t?.name} onClose={() => setSending(false)} />}
             <p className="cs-note">
               {types.length} of {st.limits.maxTypes} types <Info text={`The game always has the ${builtinNames.length} built-in types; change them or make your own from them, ${st.limits.maxTypes} in all. A mode spawns a type by its name.`} />
             </p>

@@ -60,7 +60,7 @@ pub fn drop_block(server_game: &Path, id: &str) -> Result<Vec<String>, String> {
 }
 
 /// `[name]` sections of `text` (the lines up to the next section), by lower-case name.
-fn sections(text: &str) -> Vec<(String, String)> {
+pub(crate) fn sections(text: &str) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     for line in text.lines() {
         let t = line.trim();
@@ -158,6 +158,17 @@ fn files_of(body: &str, game: &str) -> Vec<String> {
 pub fn carry_map(local_game: &Path, game: &str, server_game: &Path, map: &str, entities: &str) -> Result<Value, String> {
     let Some(id) = map_block_id(map) else { return Ok(json!({"types": []})) };
     let used = cp::types_in_entity_text(entities);
+    carry_types(local_game, game, server_game, &id, &used, &format!("{map}'s creatures"))
+}
+
+/// Puts the custom types `used` names (and their custom bases) on a server as the block `id`,
+/// in place of the block it had: copied from this computer's game, with the models and sounds
+/// the server doesn't have (a different file there stays the server's). A type the server's own
+/// part defines is the server's and isn't added. Nothing to put: the block just goes.
+/// Returns {"types": [...], "kept": [...], "skipped": [...]}.
+pub fn carry_types(local_game: &Path, game: &str, server_game: &Path, id: &str, used: &BTreeSet<String>, what: &str) -> Result<Value, String> {
+    let id = id.to_string();
+    let used = used.clone();
     let local_ini = std::fs::read(local_game.join(INI)).map(|b| b.iter().map(|c| *c as char).collect::<String>()).unwrap_or_default();
     let found = collect(&local_ini, &used);
     let own_names: BTreeSet<String> = sections(&cp::split_blocks(&local_ini).0).into_iter().map(|(n, _)| n).collect();
@@ -165,7 +176,7 @@ pub fn carry_map(local_game: &Path, game: &str, server_game: &Path, map: &str, e
     let old = std::fs::read(&server_ini_path).map(|b| b.iter().map(|c| *c as char).collect::<String>()).unwrap_or_default();
     let (server_user, _) = cp::split_blocks(&old);
     let theirs: BTreeSet<String> = sections(&server_user).into_iter().map(|(n, _)| n).collect();
-    // the map's previous block goes first (a map copied again brings what it uses now)
+    // the block's previous version goes first (a map copied again brings what it uses now)
     cp::uninstall_pack(server_game, &id)?;
     let mut types: Vec<String> = Vec::new();
     let mut skipped: Vec<String> = Vec::new();
@@ -224,7 +235,7 @@ pub fn carry_map(local_game: &Path, game: &str, server_game: &Path, map: &str, e
     let (_, mut new) = cp::split_blocks(&b);
     blocks.append(&mut new);
     let text = cp::join_blocks(&user, &blocks);
-    crate::safety::before(TOOL, &format!("Add {map}'s creatures to a server"), &server_ini_path);
+    crate::safety::before(TOOL, &format!("Add {what} to a server"), &server_ini_path);
     if let Some(d) = server_ini_path.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("Couldn't save creatures.ini ({e})."))?;
     }
