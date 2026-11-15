@@ -28,6 +28,8 @@ export type LiveState = {
   rounds_ct?: number;
   /** the map after this one ("" when it's this one again) */
   nextmap?: string;
+  /** safe mode: a mode turned off after it stopped the server twice while starting ("" or missing: none) */
+  safemode?: string;
   /** bots learning this map: percent done (-1 or missing: not learning), and what step */
   learn?: number;
   learnstep?: string;

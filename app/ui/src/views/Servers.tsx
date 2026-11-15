@@ -781,6 +781,11 @@ export function ServerPage(props: {
           <JobProgress server={s.id} long={!!s.host} onEnd={() => void reloadServers()} />
         </div>
       )}
+      {!role && data?.state.safemode && (
+        <div className="banner" role="status">
+          <div>{data.state.safemode}. It's playing Classic now; picking a mode clears this.</div>
+        </div>
+      )}
       {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} phase={s.update_phase} job={s.update_job} /></div>}
       {!role && !s.updating && s.update_queued && <div className="banner" role="status"><div>Its Loner-Strike updates are waiting their turn: another server's are going in now.</div></div>}
       {role && (

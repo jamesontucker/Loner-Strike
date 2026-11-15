@@ -308,6 +308,7 @@ pub(crate) const SETUP_SKIP: &[&str] = &[
     "panel_rcon.txt", "status.json", "seen.json", "seen.log", "seen.log.reading", "friends.cfg", "navqueue.txt",
     "stats.json", "stats.json.part", "playtime.txt", "reports.json", "matches.json", "scrim_status.json", "recent.txt", "bots.txt",
     "current.txt", "premode.txt", "lastmap.txt", "session.txt", "lastpreset.txt", "crashmap.txt", "reloadnote.txt",
+    "modestart.txt", "safemode.txt",
 ];
 
 /// Separates the files machine_setup_files prints.

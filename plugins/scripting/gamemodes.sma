@@ -371,6 +371,8 @@ new g_ReloadNote[96]
 #define BASEBUILDER_SLOTS 264
 new g_ModelMax                    // the highest model slot handed out on this map (see "Model slots")
 new bool:g_NoFit                  // this map has too many models for the mode: its plugins were paused
+new g_SafeFrom[32]                // safe mode: the mode turned off on this load (it stopped the server twice while starting)
+new bool:g_SafeWriting            // ... switching to Classic for it (its note stays)
 new g_NoFitMode[32]               // ... that mode
 new g_NavPolls
 
@@ -402,7 +404,9 @@ public plugin_precache()
 {
 	register_forward(FM_PrecacheModel, "fw_precache_model_post", 1)
 	g_BeamSpr = precache_model("sprites/laserbeam.spr")
-	precache_guard()
+	safe_mode_guard()
+	if (!g_SafeFrom[0])
+		precache_guard()
 }
 
 public plugin_natives()
@@ -575,10 +579,14 @@ public plugin_init()
 	check_roster_file()
 	load_addons()
 	load_presets()
-	if (g_NoFit)
+	if (g_SafeFrom[0])
+		fall_back_safe()
+	else if (g_NoFit)
 		fall_back_from_nofit()
 	else
 	{
+		// past the map's first 20 s of frames: this mode starts fine (safe mode)
+		set_task(20.0, "task_started_ok")
 		remember_model_slots()
 		check_map_presets()
 	}
@@ -752,6 +760,8 @@ public fw_setmodel_post(ent, const model[])
 public plugin_end()
 {
 	write_data_line("session.txt", "clean")
+	// a normal map change or quit: never counts against the mode (safe mode)
+	safe_mark("end")
 	apply_next_mode()
 	if (g_Maps != Invalid_Array)
 	{
@@ -989,6 +999,9 @@ write_mode_plugins(mode)
 	}
 	fclose(out)
 	write_data_line("current.txt", g_ModeId[mode])
+	// a mode picked again: safe mode's note has done its job
+	if (!g_SafeWriting)
+		write_data_line("safemode.txt", "")
 }
 
 exec_if_exists(const path[])
@@ -1375,10 +1388,19 @@ precache_guard()
 	if (!mode[0] || slots_fit(slots, pieces))
 		return
 
-	new cfg[128], line[128], plugin[64], paused
+	new paused = pause_mode_plugins()
+	g_NoFit = true
+	copy(g_NoFitMode, charsmax(g_NoFitMode), mode)
+	log_amx("%s has too many models for %s (%d + %d of %d slots): its %d plugins are paused on this load", map, mode, slots, pieces, MODEL_SLOTS, paused)
+}
+
+// pauses the mode's plugins (plugins-gamemode.ini) on this load, before their precache and init
+pause_mode_plugins()
+{
+	new cfg[128], path[192], line[128], plugin[64], paused
 	get_configsdir(cfg, charsmax(cfg))
 	formatex(path, charsmax(path), "%s/plugins-gamemode.ini", cfg)
-	f = fopen(path, "rt")
+	new f = fopen(path, "rt")
 	if (f)
 	{
 		while (fgets(f, line, charsmax(line)))
@@ -1392,9 +1414,126 @@ precache_guard()
 		}
 		fclose(f)
 	}
-	g_NoFit = true
-	copy(g_NoFitMode, charsmax(g_NoFitMode), mode)
-	log_amx("%s has too many models for %s (%d + %d of %d slots): its %d plugins are paused on this load", map, mode, slots, pieces, MODEL_SLOTS, paused)
+	return paused
+}
+
+// ---------------------------------------------------------------------------
+// Safe mode: data/gamemodes/modestart.txt is "<mode> <map> <start|ok|end> <starts that failed>".
+// "start" is written while a map loads, "ok" once it's had 20 s of frames, "end" on a normal map
+// change or quit. A start still at "start" when the next one begins ended in a crash or a hang
+// (the watchdog ended it); two of the same mode in a row and the server starts in Classic, with
+// a note for the app (safemode.txt) until a mode is picked again.
+// ---------------------------------------------------------------------------
+
+// failed starts in a row, given the last record and the mode about to start (pure: the decision)
+stock safe_fails(const lastMode[], const lastState[], lastFails, const mode[])
+{
+	if (!mode[0] || !equali(lastMode, mode) || !equal(lastState, "start"))
+		return 0
+	return lastFails + 1
+}
+
+stock bool:safe_fall_back(fails, const mode[])
+{
+	return fails >= 2 && mode[0] && !equali(mode, "classic")
+}
+
+safe_path(path[], len, const file[])
+{
+	new datadir[128]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, len, "%s/gamemodes/%s", datadir, file)
+}
+
+safe_write(const mode[], const map[], const st[], fails)
+{
+	new path[192]
+	safe_path(path, charsmax(path), "modestart.txt")
+	new f = fopen(path, "wt")
+	if (f)
+	{
+		fprintf(f, "%s %s %s %d^n", mode, map, st, fails)
+		fclose(f)
+	}
+}
+
+// the mode and map of this load, as recorded, with a new state
+safe_mark(const what[])
+{
+	new path[192], line[128], mode[32], map[32], st[8], n[8]
+	safe_path(path, charsmax(path), "modestart.txt")
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	fgets(f, line, charsmax(line))
+	fclose(f)
+	parse(line, mode, charsmax(mode), map, charsmax(map), st, charsmax(st), n, charsmax(n))
+	if (mode[0])
+		safe_write(mode, map, what, 0)
+}
+
+public task_started_ok()
+{
+	safe_mark("ok")
+}
+
+// While this map loads (before the mode's plugins load): the last start of this same mode never
+// got going, twice: its plugins are paused, and plugin_init switches to Classic and loads again
+safe_mode_guard()
+{
+	new path[192], line[128], mode[32], map[32], lm[32], lmap[32], lst[8], ln[8]
+	safe_path(path, charsmax(path), "current.txt")
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		fclose(f)
+	}
+	trim(mode)
+	safe_path(path, charsmax(path), "modestart.txt")
+	f = fopen(path, "rt")
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		parse(line, lm, charsmax(lm), lmap, charsmax(lmap), lst, charsmax(lst), ln, charsmax(ln))
+	}
+	get_mapname(map, charsmax(map))
+	new fails = safe_fails(lm, lst, str_to_num(ln), mode)
+	if (!safe_fall_back(fails, mode))
+	{
+		safe_write(mode[0] ? mode : "classic", map, "start", fails)
+		return
+	}
+	new paused = pause_mode_plugins()
+	copy(g_SafeFrom, charsmax(g_SafeFrom), mode)
+	log_amx("Safe mode: %s stopped the server %d times in a row while starting (last on %s): its %d plugins are paused, starting in Classic", mode, fails, lmap, paused)
+	// (the reload into Classic is a normal start of its own)
+	safe_write("classic", map, "end", 0)
+}
+
+// after safe_mode_guard: Classic, the note, and load the map again
+fall_back_safe()
+{
+	new map[32]
+	get_mapname(map, charsmax(map))
+	write_data_line("lastmap.txt", map)
+	write_data_line("premode.txt", "")
+	new target = find_mode("classic")
+	if (target < 0)
+		target = 0
+	new was = find_mode(g_SafeFrom), wasname[48], note[192]
+	copy(wasname, charsmax(wasname), was >= 0 ? g_ModeName[was] : g_SafeFrom)
+	formatex(note, charsmax(note), "%s was turned off after it stopped the server twice while starting; fix it or switch back to it", wasname)
+	write_data_line("safemode.txt", note)
+	formatex(g_ReloadNote, charsmax(g_ReloadNote), "%s stopped the server twice while starting: Classic", wasname)
+	write_data_line("reloadnote.txt", g_ReloadNote)
+	g_SafeWriting = true
+	write_mode_plugins(target)
+	g_SafeWriting = false
+	g_Cur = target
+	g_Reloading = true
+	log_amx("Safe mode: %s - reloading %s in %s", note, map, g_ModeName[target])
 }
 
 // after precache_guard: back to the mode from before a map preset, else Classic, and reload
@@ -3975,6 +4114,15 @@ public admin_handler(id, menu, item)
 // RCON output is too lossy for large replies, so the panel reads the file.
 // ---------------------------------------------------------------------------
 
+// safe mode's note for the app (JSON-escaped), "" when there's none
+safe_note()
+{
+	static note[192], esc[256]
+	read_data_line("safemode.txt", note, charsmax(note))
+	json_escape(note, esc, charsmax(esc))
+	return esc
+}
+
 json_escape(const src[], out[], len)
 {
 	new j
@@ -4032,10 +4180,10 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"learn^":%d,^"learnstep^":^"%s^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^"}^n",
+	fprintf(f, "{^"t^":^"state^",^"learn^":%d,^"learnstep^":^"%s^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^",^"safemode^":^"%s^"}^n",
 		g_LearnPct, g_LearnStep, g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
 		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
-		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name())
+		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name(), safe_note())
 
 	for (new i = 0; i < g_ModeCount; i++)
 	{
