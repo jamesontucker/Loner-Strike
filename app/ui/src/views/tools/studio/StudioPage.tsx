@@ -33,6 +33,7 @@ import { usePanels } from "./panels";
 import { DeleteDialogHost } from "./DeleteDialog";
 import { TableEditorHost } from "./TableEditor";
 import { StudioTour, TourOffer, startStudioTour } from "./Tour";
+import { YourModes } from "./YourModes";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
 import { emptyGraph, newUid, parseGraph, type Graph } from "./schema";
@@ -675,17 +676,52 @@ function Studio({ maps }: ToolProps) {
   }, []);
 
   if (!graph) {
+    // (someone with modes of their own wants them first: a short header, Your modes, then the
+    // examples and templates; the intro and the tour's banner are for someone new. While the list
+    // loads, the short layout, so a returning creator doesn't see the first-time page flash.)
+    const returning = !list || list.length > 0;
+    const yours = (
+      <>
+        <h3 className="st-start-head">Your modes</h3>
+        {listError ? (
+          <p className="st-bad-text">{listError}</p>
+        ) : !list ? (
+          <Loading text="Reading your modes…" />
+        ) : list.length === 0 ? (
+          <p className="st-muted">None yet.</p>
+        ) : (
+          <YourModes list={list} onOpen={(g) => void openId(g.id)} onUninstall={(g) => void uninstall(g)} onDelete={(g) => void removeGraph(g)} />
+        )}
+      </>
+    );
     return (
       <div className="st-start tl-page">
-        <Empty title="Game Mode Studio (Beta)" text="Make a game mode out of nodes: when something happens (a round starts, a player dies), check things and do things. The Studio turns it into a plugin and Playtest starts the game in your mode with bots.">
-          <button type="button" className="btn primary" onClick={() => void newGraph()}>
-            Blank mode
-          </button>
-          <button type="button" className="btn" onClick={() => void tour()}>
-            Take the tour
-          </button>
-        </Empty>
-        <TourOffer onStart={() => void tour()} />
+        {returning ? (
+          <div className="st-start-top">
+            {/* (the page's own header already names the Studio) */}
+            <span className="st-start-actions">
+              <button type="button" className="btn primary" onClick={() => void newGraph()}>
+                Blank mode
+              </button>
+              <button type="button" className="btn" onClick={() => void tour()}>
+                Take the tour
+              </button>
+            </span>
+          </div>
+        ) : (
+          <>
+            <Empty title="Game Mode Studio (Beta)" text="Make a game mode out of nodes: when something happens (a round starts, a player dies), check things and do things. The Studio turns it into a plugin and Playtest starts the game in your mode with bots.">
+              <button type="button" className="btn primary" onClick={() => void newGraph()}>
+                Blank mode
+              </button>
+              <button type="button" className="btn" onClick={() => void tour()}>
+                Take the tour
+              </button>
+            </Empty>
+            <TourOffer onStart={() => void tour()} />
+          </>
+        )}
+        {returning && yours}
         <h3 className="st-start-head">Example modes</h3>
         <p className="st-muted">Small, finished modes with notes on every part: open one to see how it's made and play it; Make it mine keeps a copy to change.</p>
         <ul className="st-examples" data-testid="studio-examples">
@@ -709,34 +745,7 @@ function Studio({ maps }: ToolProps) {
             </li>
           ))}
         </ul>
-        <h3 className="st-start-head">Your modes</h3>
-        {listError ? (
-          <p className="st-bad-text">{listError}</p>
-        ) : !list ? (
-          <Loading text="Reading your modes…" />
-        ) : list.length === 0 ? (
-          <p className="st-muted">None yet.</p>
-        ) : (
-          <ul className="st-graph-list">
-            {list.map((g) => (
-              <li key={g.id}>
-                <button type="button" className="st-graph-open" disabled={g.damaged} onClick={() => void openId(g.id)}>
-                  <strong>{g.name}</strong>
-                  <span className="st-muted">{g.damaged ? "This file is damaged." : g.description || `${g.nodes ?? 0} nodes`}</span>
-                </button>
-                {g.installed && <span className="st-tag">Installed</span>}
-                {g.installed && (
-                  <button type="button" className="btn small" onClick={() => void uninstall(g)}>
-                    Remove from game
-                  </button>
-                )}
-                <button type="button" className="btn small" onClick={() => void removeGraph(g)}>
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {!returning && yours}
       </div>
     );
   }

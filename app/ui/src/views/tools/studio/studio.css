@@ -149,7 +149,7 @@
 .st-log li.paused { color: var(--st-run); }
 
 /* start screen, code sheet */
-.st-start { max-width: 760px; }
+.st-start { max-width: 1100px; }
 .st-start-head { margin: 18px 0 8px; }
 .st-graph-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .st-graph-list li { display: flex; align-items: center; gap: 8px; }
@@ -565,3 +565,19 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 .st-color-alpha input { flex: 1; }
 .st-color-presets { display: flex; gap: 4px; flex-wrap: wrap; }
 .st-color-swatch { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); padding: 0; cursor: pointer; }
+/* the start page for someone with modes: a short header, then Your modes as cards (YourModes.tsx) */
+.st-start-top { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin: 4px 0 2px; }
+.st-start-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-your-tools { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0 0 8px; }
+.st-your-tools .search { flex: 1 1 220px; min-width: 0; max-width: 360px; }
+.st-your-sort { display: flex; align-items: center; gap: 6px; }
+.st-mode-cards .st-mode-card { position: relative; min-width: 0; }
+.st-mode-card .st-graph-open { padding-right: 40px; gap: 2px; align-content: start; }
+.st-mode-card .st-mode-what { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-mode-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.st-mode-more { position: absolute; top: 6px; right: 6px; }
+.st-mode-more-btn { min-width: 28px; padding: 0 6px; line-height: 22px; }
+.st-mode-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: grid; min-width: 170px; padding: 4px; background: #22272c; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+.st-mode-menu button { text-align: left; background: none; border: 0; color: var(--text); font: inherit; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+.st-mode-menu button:hover, .st-mode-menu button:focus-visible { background: color-mix(in srgb, var(--signal, #6aa0ff) 18%, transparent); }
+.st-mode-menu button.danger { color: var(--bad, #e66); }

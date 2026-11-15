@@ -63,6 +63,8 @@ test("node help: the ? menu, search, F1 on a node, an example dropped in", async
 });
 
 test("example modes and the tour: offered once, every step, skip, again from the ? menu", async ({ page }) => {
+  // (the banner is for someone new: no modes of their own yet)
+  await page.route("**/api/tools/studio/graphs", (r) => r.fulfill({ json: { graphs: [] } }));
   await page.addInitScript(() => {
     if (!sessionStorage.getItem("pw-cleared")) {
       localStorage.removeItem("ls.studio.tour");
