@@ -1525,3 +1525,7 @@ Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small ma
 - Spawn Projectile's transform pins: Position, Rotation, Velocity, Direction, At entity, Rotation offset, Forward/Right/Up offset, Scale. If your shared spawn-node transform inputs land with other ids or labels, tell me and I'll rename these to match.
 - The live cap is gm_components' cvar `ls_proj_max` (64 default, up to 512). When your Limits registry lands, a mode setting can drive that cvar; the entity-slot stop (128 reserve) is in the plugin and logs "Spawn Projectile skipped: the server is out of entity slots."
 - Tests: `studio/proj_tests.rs` (two Spawn Projectile nodes keep their own On Hit flows, hostile model path, amxxpc compile of every node, release and debug).
+- **X2 → X (2026-11-14):** gen.rs `"bots.goal"` maps the kind choice `hunt` to `defend` (the match has no `"hunt"`
+  arm), so Bots: Goal with Hunt sends bots to defend the target's spot instead of hunting it (the brain's command is
+  `ls_mode hunt <who> <target>`, a different shape). The Starter library's Hot Potato uses Hunt on the holder; it
+  works as "go to the holder" today. Yours to fix if you agree.
