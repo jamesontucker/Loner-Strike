@@ -141,6 +141,11 @@ export function Palette({
     const reg: PaletteItem[] = searchNodes(q, wire && { type: wire.type, dir: wire.dir })
       .filter((d) => fitsTab(graph, tab, d))
       .map((d) => ({ def: d, title: d.title, help: d.help, category: d.category }));
+    // W1: a node's presets (Compare set to ">"...) offered when a search matches them
+    if (words)
+      for (const d of searchNodes("", wire && { type: wire.type, dir: wire.dir }))
+        for (const p of d.presets ?? [])
+          if (fitsTab(graph, tab, d) && matchRank(p.title, words, p.keywords) < 5) reg.push({ def: d, title: p.title, help: d.help, category: d.category, params: p.params });
     const own = ownItems(graph, tab).filter((it, k) => (!words || `${it.title} ${it.category}`.toLowerCase().includes(words)) && (!wire || itemFits(graph, it, wire, k)));
     const all = [...own, ...reg].filter((it) => !at.only || it.category === at.only);
     // searching: the best matches first (their folder goes first too, so Enter places the top

@@ -68,6 +68,7 @@
   "Structs",
   "Enums",
   "Vectors",
+  "Spatial",
   "Timers",
   "Round clock",
   "Players",
@@ -967,27 +968,27 @@
      "choices": [
       [
        "gt",
-       "greater than"
+       "> more than"
       ],
       [
        "ge",
-       "at least"
+       "≥ at least"
       ],
       [
        "lt",
-       "less than"
+       "< less than"
       ],
       [
        "le",
-       "at most"
+       "≤ at most"
       ],
       [
        "eq",
-       "equal to"
+       "= equal to"
       ],
       [
        "ne",
-       "not equal to"
+       "≠ not equal to"
       ]
      ]
     },
@@ -1000,7 +1001,52 @@
      "max": 100000
     }
    ],
-   "pure": true
+   "pure": true,
+   "keywords": "> >= < <= == != = greater less more than equal compare bigger smaller",
+   "presets": [
+    {
+     "title": "Greater Than (A > B)",
+     "params": {
+      "op": "gt"
+     },
+     "keywords": "greater than > more bigger"
+    },
+    {
+     "title": "At Least (A ≥ B)",
+     "params": {
+      "op": "ge"
+     },
+     "keywords": "greater or equal >= at least"
+    },
+    {
+     "title": "Less Than (A < B)",
+     "params": {
+      "op": "lt"
+     },
+     "keywords": "less than < smaller fewer"
+    },
+    {
+     "title": "At Most (A ≤ B)",
+     "params": {
+      "op": "le"
+     },
+     "keywords": "less or equal <= at most"
+    },
+    {
+     "title": "Equal (A = B)",
+     "params": {
+      "op": "eq"
+     },
+     "keywords": "equal == same"
+    },
+    {
+     "title": "Not Equal (A ≠ B)",
+     "params": {
+      "op": "ne"
+     },
+     "keywords": "not equal != different"
+    }
+   ]
   },
   {
    "type": "logic.and_or",
@@ -1167,7 +1213,8 @@
      "max": 100000
     }
    ],
-   "pure": true
+   "pure": true,
+   "keywords": "mod modulo % remainder plus minus times divide power"
   },
   {
    "type": "math.random",
@@ -15628,7 +15675,8 @@
      "label": "Is A"
     }
    ],
-   "params": []
+   "params": [],
+   "keywords": "toggle switch alternate"
   },
   {
    "type": "flow.for_loop",
@@ -15848,7 +15896,8 @@
      "kind": "type",
      "default": "number"
     }
-   ]
+   ],
+   "keywords": "break loop each array"
   },
   {
    "type": "flow.switch_num",
@@ -17391,7 +17440,7 @@
    "type": "math.fn",
    "title": "Math Function",
    "category": "Numbers",
-   "help": "Absolute value, rounding, square root and more.",
+   "help": "Absolute value, rounding, square root and more; Truncate drops the fraction toward zero (-2.7 becomes -2, where Round down gives -3).",
    "inputs": [
     {
      "id": "a",
@@ -17449,11 +17498,16 @@
       [
        "sign",
        "Sign (-1, 0, 1)"
+      ],
+      [
+       "trunc",
+       "Truncate (toward zero)"
       ]
      ]
     }
    ],
-   "pure": true
+   "pure": true,
+   "keywords": "sign abs absolute round floor ceil sqrt truncate trunc"
   },
   {
    "type": "math.clamp",
@@ -21446,6 +21500,2107 @@
     }
    ],
    "event": true
+  },
+  {
+   "type": "spatial.players_in_radius",
+   "title": "Players In Radius",
+   "category": "Spatial",
+   "help": "Every player within Radius of a point or an entity, as an array (an entity wired in isn't counted itself).",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Around point",
+     "optional": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "Around entity"
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Radius",
+     "param": "radius"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<player>",
+     "label": "Players"
+    }
+   ],
+   "params": [
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 300,
+     "min": 1,
+     "max": 8192
+    },
+    {
+     "id": "alive",
+     "label": "Alive only",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Any team"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    }
+   ],
+   "keywords": "near nearby around close range sphere area aoe",
+   "pure": true
+  },
+  {
+   "type": "spatial.nearest_player",
+   "title": "Nearest Player",
+   "category": "Spatial",
+   "help": "The player nearest to a point or an entity (not the entity itself), within Max distance; nobody if none.",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Around point",
+     "optional": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "Around entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "dist",
+     "type": "number",
+     "label": "Distance"
+    }
+   ],
+   "params": [
+    {
+     "id": "max",
+     "label": "Max distance",
+     "kind": "number",
+     "default": 8192,
+     "min": 1,
+     "max": 16384
+    },
+    {
+     "id": "alive",
+     "label": "Alive only",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Any team"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "bots",
+     "label": "Who",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Bots and people"
+      ],
+      [
+       "humans",
+       "People only"
+      ],
+      [
+       "bots",
+       "Bots only"
+      ]
+     ]
+    }
+   ],
+   "keywords": "closest near target",
+   "pure": true
+  },
+  {
+   "type": "spatial.entities_in_radius",
+   "title": "Entities In Radius",
+   "category": "Spatial",
+   "help": "Entities within Radius of a point or an entity, of a class or any (up to Most found), as an array. Players aren't listed (use Players In Radius).",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Around point",
+     "optional": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "Around entity"
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Radius",
+     "param": "radius"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<entity>",
+     "label": "Entities"
+    }
+   ],
+   "params": [
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 300,
+     "min": 1,
+     "max": 32768
+    },
+    {
+     "id": "class",
+     "label": "Class (empty: any)",
+     "kind": "entname",
+     "default": ""
+    },
+    {
+     "id": "most",
+     "label": "Most found",
+     "kind": "number",
+     "default": 64,
+     "min": 1,
+     "max": 2048
+    }
+   ],
+   "keywords": "near nearby around find sphere area props",
+   "pure": true
+  },
+  {
+   "type": "spatial.nearest_entity",
+   "title": "Nearest Entity",
+   "category": "Spatial",
+   "help": "The entity of a class nearest to a point or an entity, within Max distance; nothing if none. Players aren't counted.",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Around point",
+     "optional": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "Around entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Entity"
+    },
+    {
+     "id": "dist",
+     "type": "number",
+     "label": "Distance"
+    }
+   ],
+   "params": [
+    {
+     "id": "class",
+     "label": "Class",
+     "kind": "entname",
+     "default": "info_target"
+    },
+    {
+     "id": "max",
+     "label": "Max distance",
+     "kind": "number",
+     "default": 2048,
+     "min": 1,
+     "max": 32768
+    }
+   ],
+   "keywords": "closest near find",
+   "pure": true
+  },
+  {
+   "type": "spatial.line_of_sight",
+   "title": "Line of Sight",
+   "category": "Spatial",
+   "help": "Is there a clear line between A and B (each an entity or a point)? Entities wired in don't block it (a player's eyes are used). Hit Position is where something got in the way.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A"
+    },
+    {
+     "id": "a_pos",
+     "type": "vector",
+     "label": "Or point A",
+     "optional": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B"
+    },
+    {
+     "id": "b_pos",
+     "type": "vector",
+     "label": "Or point B",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "clear",
+     "type": "bool",
+     "label": "Clear"
+    },
+    {
+     "id": "hit",
+     "type": "vector",
+     "label": "Hit position"
+    }
+   ],
+   "params": [
+    {
+     "id": "monsters",
+     "label": "Creatures and players block",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "visible see trace los sight blocked wall",
+   "pure": true
+  },
+  {
+   "type": "random.chance",
+   "title": "Random Chance",
+   "category": "Numbers",
+   "help": "Yes Percent % of the time (a new roll each time it's worked out).",
+   "inputs": [
+    {
+     "id": "pct",
+     "type": "number",
+     "label": "Percent",
+     "param": "pct"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Yes"
+    }
+   ],
+   "params": [
+    {
+     "id": "pct",
+     "label": "Percent",
+     "kind": "number",
+     "default": 25,
+     "min": 0,
+     "max": 100
+    }
+   ],
+   "keywords": "probability odds percent roll luck dice",
+   "pure": true
+  },
+  {
+   "type": "random.bool",
+   "title": "Random Bool",
+   "category": "Numbers",
+   "help": "Yes or no, half the time each.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Yes"
+    }
+   ],
+   "params": [],
+   "keywords": "coin flip random yes no",
+   "pure": true
+  },
+  {
+   "type": "random.weighted",
+   "title": "Weighted Random Pick",
+   "category": "Numbers",
+   "help": "Picks an index from an array of weights (a weight of 3 is picked three times as often as 1); with Items wired, the item at that index too. -1 when every weight is 0.",
+   "inputs": [
+    {
+     "id": "weights",
+     "type": "array<number>",
+     "label": "Weights",
+     "required": true
+    },
+    {
+     "id": "items",
+     "type": "array<$T>",
+     "label": "Items",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "keywords": "loot table chance roll pick weight drop",
+   "pure": true
+  },
+  {
+   "type": "math.map_range",
+   "title": "Map Range",
+   "category": "Numbers",
+   "help": "A value from one range moved into another: In Min..In Max becomes Out Min..Out Max (Clamp keeps it inside).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Value",
+     "param": "a"
+    },
+    {
+     "id": "in_min",
+     "type": "number",
+     "label": "In Min",
+     "param": "in_min"
+    },
+    {
+     "id": "in_max",
+     "type": "number",
+     "label": "In Max",
+     "param": "in_max"
+    },
+    {
+     "id": "out_min",
+     "type": "number",
+     "label": "Out Min",
+     "param": "out_min"
+    },
+    {
+     "id": "out_max",
+     "type": "number",
+     "label": "Out Max",
+     "param": "out_max"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "Value",
+     "kind": "number",
+     "default": 50,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "in_min",
+     "label": "In Min",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "in_max",
+     "label": "In Max",
+     "kind": "number",
+     "default": 100,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "out_min",
+     "label": "Out Min",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "out_max",
+     "label": "Out Max",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "clamp",
+     "label": "Clamp",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "remap scale normalize convert range",
+   "pure": true
+  },
+  {
+   "type": "math.trig",
+   "title": "Sin / Cos / Tan",
+   "category": "Numbers",
+   "help": "The sine, cosine or tangent of an angle (degrees, or radians).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Angle",
+     "param": "a"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "Angle",
+     "kind": "number",
+     "default": 45,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "sin",
+     "choices": [
+      [
+       "sin",
+       "Sin"
+      ],
+      [
+       "cos",
+       "Cos"
+      ],
+      [
+       "tan",
+       "Tan"
+      ]
+     ]
+    },
+    {
+     "id": "unit",
+     "label": "Angles in",
+     "kind": "choice",
+     "default": "deg",
+     "choices": [
+      [
+       "deg",
+       "Degrees"
+      ],
+      [
+       "rad",
+       "Radians"
+      ]
+     ]
+    }
+   ],
+   "keywords": "sine cosine tangent trigonometry angle wave",
+   "pure": true
+  },
+  {
+   "type": "math.atan2",
+   "title": "Atan2",
+   "category": "Numbers",
+   "help": "The angle of the direction X, Y (from the X axis, -180..180 degrees, or radians).",
+   "inputs": [
+    {
+     "id": "y",
+     "type": "number",
+     "label": "Y",
+     "param": "y"
+    },
+    {
+     "id": "x",
+     "type": "number",
+     "label": "X",
+     "param": "x"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Angle"
+    }
+   ],
+   "params": [
+    {
+     "id": "y",
+     "label": "Y",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "x",
+     "label": "X",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "unit",
+     "label": "Angles in",
+     "kind": "choice",
+     "default": "deg",
+     "choices": [
+      [
+       "deg",
+       "Degrees"
+      ],
+      [
+       "rad",
+       "Radians"
+      ]
+     ]
+    }
+   ],
+   "keywords": "angle arctangent direction heading yaw",
+   "pure": true
+  },
+  {
+   "type": "math.angle_convert",
+   "title": "Degrees / Radians",
+   "category": "Numbers",
+   "help": "Degrees to radians or radians to degrees.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Angle",
+     "param": "a"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "Angle",
+     "kind": "number",
+     "default": 180,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "to_rad",
+     "choices": [
+      [
+       "to_rad",
+       "Degrees to radians"
+      ],
+      [
+       "to_deg",
+       "Radians to degrees"
+      ]
+     ]
+    }
+   ],
+   "keywords": "deg rad convert angle",
+   "pure": true
+  },
+  {
+   "type": "flow.nearly_equal",
+   "title": "Nearly Equal",
+   "category": "Conditions",
+   "help": "Are A and B within Tolerance of each other (for numbers that came out of math, which are seldom exactly equal)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    },
+    {
+     "id": "tol",
+     "type": "number",
+     "label": "Tolerance",
+     "param": "tol"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Nearly equal"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "tol",
+     "label": "Tolerance",
+     "kind": "number",
+     "default": 0.01,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "approximately close equal epsilon float compare",
+   "pure": true
+  },
+  {
+   "type": "text.split",
+   "title": "Split Text",
+   "category": "Text",
+   "help": "Text cut at each Separator, as an array of texts (at most 64 pieces; empty pieces kept).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "sep",
+     "type": "text",
+     "label": "Separator",
+     "param": "sep"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<text>",
+     "label": "Pieces"
+    }
+   ],
+   "params": [
+    {
+     "id": "sep",
+     "label": "Separator",
+     "kind": "text",
+     "default": ",",
+     "max": 8
+    }
+   ],
+   "keywords": "explode tokens words cut parse",
+   "pure": true
+  },
+  {
+   "type": "text.replace",
+   "title": "Replace Text",
+   "category": "Text",
+   "help": "The text with every Find replaced by With (capitals matter).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "find",
+     "type": "text",
+     "label": "Find",
+     "param": "find"
+    },
+    {
+     "id": "with",
+     "type": "text",
+     "label": "With",
+     "param": "with"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "find",
+     "label": "Find",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "with",
+     "label": "With",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    }
+   ],
+   "keywords": "swap substitute change",
+   "pure": true
+  },
+  {
+   "type": "text.substring",
+   "title": "Substring",
+   "category": "Text",
+   "help": "Part of the text: Length characters from Start (the first is 0).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "start",
+     "type": "number",
+     "label": "Start",
+     "param": "start"
+    },
+    {
+     "id": "len",
+     "type": "number",
+     "label": "Length",
+     "param": "len"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "start",
+     "label": "Start",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 127
+    },
+    {
+     "id": "len",
+     "label": "Length",
+     "kind": "number",
+     "default": 5,
+     "min": 0,
+     "max": 127
+    }
+   ],
+   "keywords": "part mid slice cut left right characters",
+   "pure": true
+  },
+  {
+   "type": "text.upper",
+   "title": "Upper Case",
+   "category": "Text",
+   "help": "THE TEXT IN CAPITALS.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [],
+   "keywords": "capitals uppercase caps",
+   "pure": true
+  },
+  {
+   "type": "text.lower",
+   "title": "Lower Case",
+   "category": "Text",
+   "help": "the text in small letters.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [],
+   "keywords": "lowercase small",
+   "pure": true
+  },
+  {
+   "type": "text.trim",
+   "title": "Trim Text",
+   "category": "Text",
+   "help": "The text without spaces at the start and end.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [],
+   "keywords": "strip spaces whitespace",
+   "pure": true
+  },
+  {
+   "type": "text.starts_with",
+   "title": "Starts With",
+   "category": "Text",
+   "help": "Does the text start with this (capitals don't matter)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "text",
+     "label": "Start",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Starts with"
+    }
+   ],
+   "params": [
+    {
+     "id": "b",
+     "label": "Start",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    }
+   ],
+   "keywords": "prefix begins",
+   "pure": true
+  },
+  {
+   "type": "text.ends_with",
+   "title": "Ends With",
+   "category": "Text",
+   "help": "Does the text end with this (capitals don't matter)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "text",
+     "label": "End",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Ends with"
+    }
+   ],
+   "params": [
+    {
+     "id": "b",
+     "label": "End",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    }
+   ],
+   "keywords": "suffix",
+   "pure": true
+  },
+  {
+   "type": "text.join",
+   "title": "Join Array",
+   "category": "Text",
+   "help": "An array's texts in one, with Separator between them (as much as fits in 127 characters).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<text>",
+     "label": "Texts",
+     "required": true
+    },
+    {
+     "id": "sep",
+     "type": "text",
+     "label": "Separator",
+     "param": "sep"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "sep",
+     "label": "Separator",
+     "kind": "text",
+     "default": ", ",
+     "max": 8
+    }
+   ],
+   "keywords": "implode combine list concat",
+   "pure": true
+  },
+  {
+   "type": "text.format_time",
+   "title": "Format Time",
+   "category": "Text",
+   "help": "Seconds as a clock: 1:05, or 1:02:05 (Auto: hours only when there are any).",
+   "inputs": [
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "style",
+     "label": "Style",
+     "kind": "choice",
+     "default": "auto",
+     "choices": [
+      [
+       "auto",
+       "Auto"
+      ],
+      [
+       "ms",
+       "m:ss"
+      ],
+      [
+       "hms",
+       "h:mm:ss"
+      ]
+     ]
+    }
+   ],
+   "keywords": "clock timer duration minutes countdown",
+   "pure": true
+  },
+  {
+   "type": "text.format_number",
+   "title": "Format Number",
+   "category": "Text",
+   "help": "A number as text with a set number of decimals, and thousands separated by commas if you like (12,345.6).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Number",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "decimals",
+     "label": "Decimals",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 4
+    },
+    {
+     "id": "thousands",
+     "label": "Thousands separator",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "decimal round money comma digits",
+   "pure": true
+  },
+  {
+   "type": "array.sum",
+   "title": "Sum",
+   "category": "Arrays",
+   "help": "All the numbers added up (0 for an empty array).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<number>",
+     "label": "Numbers",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Sum"
+    }
+   ],
+   "params": [],
+   "keywords": "total add",
+   "pure": true
+  },
+  {
+   "type": "array.min",
+   "title": "Array Min",
+   "category": "Arrays",
+   "help": "The smallest number, and its index (-1 for an empty array).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<number>",
+     "label": "Numbers",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Min"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    }
+   ],
+   "params": [],
+   "keywords": "smallest lowest",
+   "pure": true
+  },
+  {
+   "type": "array.max",
+   "title": "Array Max",
+   "category": "Arrays",
+   "help": "The biggest number, and its index (-1 for an empty array).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<number>",
+     "label": "Numbers",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Max"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    }
+   ],
+   "params": [],
+   "keywords": "biggest highest largest",
+   "pure": true
+  },
+  {
+   "type": "array.average",
+   "title": "Average",
+   "category": "Arrays",
+   "help": "The numbers' average (0 for an empty array).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<number>",
+     "label": "Numbers",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Average"
+    }
+   ],
+   "params": [],
+   "keywords": "mean",
+   "pure": true
+  },
+  {
+   "type": "array.reverse",
+   "title": "Reverse",
+   "category": "Arrays",
+   "help": "Turns an array round: the last item first.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "keywords": "flip backwards order"
+  },
+  {
+   "type": "array.slice",
+   "title": "Slice",
+   "category": "Arrays",
+   "help": "A new array with Count items from Start (the first is 0).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "start",
+     "type": "number",
+     "label": "Start",
+     "param": "start"
+    },
+    {
+     "id": "count",
+     "type": "number",
+     "label": "Count",
+     "param": "count"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<$T>",
+     "label": "Array"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "start",
+     "label": "Start",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    },
+    {
+     "id": "count",
+     "label": "Count",
+     "kind": "number",
+     "default": 3,
+     "min": 0,
+     "max": 10000
+    }
+   ],
+   "keywords": "sub part range copy",
+   "pure": true
+  },
+  {
+   "type": "vec.dot",
+   "title": "Dot Product",
+   "category": "Vectors",
+   "help": "A·B: how much two directions point the same way (with both length 1: 1 same, 0 square, -1 opposite).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Dot"
+    }
+   ],
+   "params": [],
+   "keywords": "dot product angle facing",
+   "pure": true
+  },
+  {
+   "type": "vec.cross",
+   "title": "Cross Product",
+   "category": "Vectors",
+   "help": "A×B: the direction square to both (its length is how far apart they point).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Cross"
+    }
+   ],
+   "params": [],
+   "keywords": "cross product perpendicular normal",
+   "pure": true
+  },
+  {
+   "type": "vec.random_in_radius",
+   "title": "Random Point In Radius",
+   "category": "Vectors",
+   "help": "A random point within Radius of Center: on a flat circle (2D, Z kept) or in a ball (3D).",
+   "inputs": [
+    {
+     "id": "c",
+     "type": "vector",
+     "label": "Center",
+     "required": true
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Radius",
+     "param": "radius"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Point"
+    }
+   ],
+   "params": [
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 200,
+     "min": 0,
+     "max": 8192
+    },
+    {
+     "id": "mode",
+     "label": "Shape",
+     "kind": "choice",
+     "default": "2d",
+     "choices": [
+      [
+       "2d",
+       "Circle (2D)"
+      ],
+      [
+       "3d",
+       "Ball (3D)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "scatter spawn spread random position",
+   "pure": true
+  },
+  {
+   "type": "vec.rotate",
+   "title": "Rotate Vector",
+   "category": "Vectors",
+   "help": "Turns a vector round the vertical by Yaw degrees (and up or down by Pitch).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Vector",
+     "required": true
+    },
+    {
+     "id": "yaw",
+     "type": "number",
+     "label": "Yaw",
+     "param": "yaw"
+    },
+    {
+     "id": "pitch",
+     "type": "number",
+     "label": "Pitch",
+     "param": "pitch"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "yaw",
+     "label": "Yaw",
+     "kind": "number",
+     "default": 90,
+     "min": -360,
+     "max": 360
+    },
+    {
+     "id": "pitch",
+     "label": "Pitch",
+     "kind": "number",
+     "default": 0,
+     "min": -90,
+     "max": 90
+    }
+   ],
+   "keywords": "turn spin angle",
+   "pure": true
+  },
+  {
+   "type": "vec.lerp",
+   "title": "Lerp Vector",
+   "category": "Vectors",
+   "help": "A point between A and B: Alpha 0 is A, 1 is B, 0.5 halfway.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "B",
+     "required": true
+    },
+    {
+     "id": "alpha",
+     "type": "number",
+     "label": "Alpha",
+     "param": "alpha"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "alpha",
+     "label": "Alpha",
+     "kind": "number",
+     "default": 0.5,
+     "min": -100,
+     "max": 100
+    }
+   ],
+   "keywords": "interpolate blend between mix",
+   "pure": true
+  },
+  {
+   "type": "vec.to_angles",
+   "title": "Direction To Angles",
+   "category": "Vectors",
+   "help": "A direction as angles (pitch, yaw, 0), for aiming and Look At math.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Direction",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Angles"
+    }
+   ],
+   "params": [],
+   "keywords": "aim pitch yaw look rotation vector to angles",
+   "pure": true
+  },
+  {
+   "type": "vec.forward",
+   "title": "Angles To Forward Vector",
+   "category": "Vectors",
+   "help": "Angles (pitch, yaw, roll) as the direction they face, length 1.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Angles",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Direction"
+    }
+   ],
+   "params": [],
+   "keywords": "forward direction facing aim angle vector",
+   "pure": true
+  },
+  {
+   "type": "rel.to_local",
+   "title": "To Local Space",
+   "category": "Vectors",
+   "help": "A world position as seen from a player or entity: X forward, Y right, Z up (by its facing; a player's view yaw).",
+   "inputs": [
+    {
+     "id": "thing",
+     "type": "entity",
+     "label": "Player or entity",
+     "required": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "World position",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Local offset"
+    }
+   ],
+   "params": [],
+   "keywords": "relative local offset forward right up",
+   "pure": true
+  },
+  {
+   "type": "rel.to_world",
+   "title": "To World Space",
+   "category": "Vectors",
+   "help": "An offset from a player or entity (X forward, Y right, Z up, by its facing) as a world position.",
+   "inputs": [
+    {
+     "id": "thing",
+     "type": "entity",
+     "label": "Player or entity",
+     "required": true
+    },
+    {
+     "id": "off",
+     "type": "vector",
+     "label": "Local offset",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "World position"
+    }
+   ],
+   "params": [],
+   "keywords": "relative offset in front behind spawn position",
+   "pure": true
+  },
+  {
+   "type": "rel.position_of",
+   "title": "Relative Position Of",
+   "category": "Vectors",
+   "help": "How far B is in front of, to the right of and above A (by A's facing; behind and left are negative).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "forward",
+     "type": "number",
+     "label": "Forward"
+    },
+    {
+     "id": "right",
+     "type": "number",
+     "label": "Right"
+    },
+    {
+     "id": "up",
+     "type": "number",
+     "label": "Up"
+    }
+   ],
+   "params": [],
+   "keywords": "relative offset local",
+   "pure": true
+  },
+  {
+   "type": "rel.angle_to",
+   "title": "Angle To",
+   "category": "Vectors",
+   "help": "How far A would turn to face B: the yaw difference, -180..180 degrees (positive: to the left).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Angle"
+    }
+   ],
+   "params": [],
+   "keywords": "yaw turn facing direction",
+   "pure": true
+  },
+  {
+   "type": "rel.is_in_front",
+   "title": "Is In Front",
+   "category": "Vectors",
+   "help": "Is B in front of A, inside a cone of this many degrees round A's facing?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "In front"
+    }
+   ],
+   "params": [
+    {
+     "id": "cone",
+     "label": "Cone (degrees)",
+     "kind": "number",
+     "default": 90,
+     "min": 1,
+     "max": 360
+    }
+   ],
+   "keywords": "facing ahead view cone fov",
+   "pure": true
+  },
+  {
+   "type": "rel.is_behind",
+   "title": "Is Behind",
+   "category": "Vectors",
+   "help": "Is B behind A, inside a cone of this many degrees round A's back (backstabs, sneaking)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Behind"
+    }
+   ],
+   "params": [
+    {
+     "id": "cone",
+     "label": "Cone (degrees)",
+     "kind": "number",
+     "default": 90,
+     "min": 1,
+     "max": 360
+    }
+   ],
+   "keywords": "back backstab sneak rear",
+   "pure": true
+  },
+  {
+   "type": "aim.eye_pos",
+   "title": "Eye Position",
+   "category": "Players",
+   "help": "Where a player's eyes are (their position plus view height).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Eyes"
+    }
+   ],
+   "params": [],
+   "keywords": "view head camera",
+   "pure": true
+  },
+  {
+   "type": "aim.dir",
+   "title": "Aim Direction",
+   "category": "Players",
+   "help": "Which way a player is aiming, length 1 (from their view angles).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Direction"
+    }
+   ],
+   "params": [],
+   "keywords": "look view forward facing",
+   "pure": true
+  },
+  {
+   "type": "aim.point",
+   "title": "Aim Point",
+   "category": "Players",
+   "help": "What a player is aiming at, up to Max distance: where the line from their eyes hits, the entity hit, the surface's normal, and whether it hit anything (the player is ignored).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Hit position"
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Hit entity"
+    },
+    {
+     "id": "normal",
+     "type": "vector",
+     "label": "Hit normal"
+    },
+    {
+     "id": "hit",
+     "type": "bool",
+     "label": "Hit"
+    }
+   ],
+   "params": [
+    {
+     "id": "max",
+     "label": "Max distance",
+     "kind": "number",
+     "default": 4096,
+     "min": 16,
+     "max": 32768
+    }
+   ],
+   "keywords": "trace crosshair looking at target raycast",
+   "pure": true
+  },
+  {
+   "type": "flow.multi_gate",
+   "title": "Multi Gate",
+   "category": "Flow",
+   "help": "Each time flow comes in, goes out the next output (in order, or random); after the last it stops, or starts over with Loop. Reset starts again from Start index.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "reset",
+     "type": "exec",
+     "label": "Reset"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then0",
+     "type": "exec",
+     "label": "Out 0"
+    },
+    {
+     "id": "then1",
+     "type": "exec",
+     "label": "Out 1"
+    }
+   ],
+   "params": [
+    {
+     "id": "count",
+     "label": "Outputs",
+     "kind": "number",
+     "default": 3,
+     "min": 1,
+     "max": 8
+    },
+    {
+     "id": "random",
+     "label": "Random",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "start",
+     "label": "Start index",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 7
+    }
+   ],
+   "keywords": "round robin cycle rotate sequence each"
+  },
+  {
+   "type": "flow.do_once_per_player",
+   "title": "Do Once Per Player",
+   "category": "Flow",
+   "help": "Lets the flow through once for each player, until Reset (everyone) or Reset Player (the player wired in then).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "reset",
+     "type": "exec",
+     "label": "Reset"
+    },
+    {
+     "id": "reset_player",
+     "type": "exec",
+     "label": "Reset Player"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [],
+   "keywords": "once each player first time"
+  },
+  {
+   "type": "var.toggle",
+   "title": "Toggle Variable",
+   "category": "Variables",
+   "help": "Flips a yes/no variable (yes becomes no, no becomes yes); New Value is what it is now. A per-player one needs a Player, a per-team one a Team.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "bool",
+     "label": "New value"
+    }
+   ],
+   "params": [
+    {
+     "id": "var",
+     "label": "Variable",
+     "kind": "var",
+     "default": "",
+     "varType": "bool"
+    }
+   ],
+   "keywords": "flip switch invert not bool toggle"
+  },
+  {
+   "type": "event.on_tick",
+   "title": "On Tick",
+   "category": "Events",
+   "help": "Runs again and again, every Interval seconds (0.1: ten times a second; 0: every server frame), all through the map. Delta is the seconds since the last time.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "delta",
+     "type": "number",
+     "label": "Delta"
+    }
+   ],
+   "params": [
+    {
+     "id": "interval",
+     "label": "Interval (seconds)",
+     "kind": "number",
+     "default": 0.1,
+     "min": 0,
+     "max": 60
+    }
+   ],
+   "event": true,
+   "keywords": "update frame loop every tick think interval"
   }
  ]
 }

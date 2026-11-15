@@ -33,6 +33,8 @@ export type NodeDef = {
   needs?: string;
   /** more words search finds it by (gravity -> sv_gravity) */
   keywords?: string;
+  /** W1: the node with settings already set, offered by search ("greater than": Compare set to >) */
+  presets?: { title: string; params: Record<string, string | number | boolean>; keywords?: string }[];
   /** the cvar a World node reads or sets */
   cvar?: string;
   /** a power tool (server/AMX commands, plugin calls): flagged on community modes */

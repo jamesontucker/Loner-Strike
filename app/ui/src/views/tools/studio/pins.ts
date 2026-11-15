@@ -181,6 +181,10 @@ export function pinsOf(g: Graph, n: GNode): Pins {
     case "flow.sequence":
       outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 8)) }, (_, i) => execPin(`then${i}`, `Then ${i}`));
       break;
+    // W1: Multi Gate's outputs
+    case "flow.multi_gate":
+      outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 8)) }, (_, i) => execPin(`then${i}`, `Out ${i}`));
+      break;
     case "array.make": {
       const item = def.inputs[0];
       if (item) inputs = Array.from({ length: countParam(n, def, "count", 8) }, (_, i) => ({ ...item, id: `i${i}`, label: `[${i}]` }));
@@ -188,7 +192,8 @@ export function pinsOf(g: Graph, n: GNode): Pins {
     }
     case "var.get":
     case "var.set":
-    case "var.add": {
+    case "var.add":
+    case "var.toggle": {
       // Player only for a per-player variable, Team only for a per-team one (a wire already on
       // one keeps it showing, so it can be seen and taken off): UX review M4
       const v = allVariables(g).find((x) => x.id === n.params.var);

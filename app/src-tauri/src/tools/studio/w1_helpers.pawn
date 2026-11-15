@@ -1,0 +1,525 @@
+// ---- W1's utility nodes: spatial queries, random picks, text, number arrays, vector math, relative
+// space and aim. How many entities a search keeps and how far an aim trace goes are the node's
+// own settings; every index and length is clamped and every loop bounded (4096 entities looked at).
+stock Float:g_lsgW1Wt[64], g_lsgW1Wk[64]
+stock Float:g_lsgW1AimT[33], Float:g_lsgW1AimD[33], Float:g_lsgW1AimPos[33][3], Float:g_lsgW1AimNrm[33][3], g_lsgW1AimEnt[33], g_lsgW1AimHit[33]
+
+// the point a query is around: a point (a vector slot) or an entity (its position; a player's
+// feet); false when there's neither
+stock bool:lsg_w1_at(pos, ent, Float:o[3])
+{
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		return true
+	}
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		return true
+	}
+	return false
+}
+
+stock bool:lsg_w1_pfits(p, alive, team, bots)
+{
+	if (!is_user_connected(p) || (alive && !is_user_alive(p)))
+		return false
+	if (team && get_user_team(p) != team)
+		return false
+	if (bots == 1 && is_user_bot(p))
+		return false
+	if (bots == 2 && !is_user_bot(p))
+		return false
+	return true
+}
+
+stock lsg_w1_pin(pos, ent, Float:r, alive, team)
+{
+	new a = lsg_atmp(), Float:at[3], Float:o[3]
+	if (!lsg_w1_at(pos, ent, at))
+		return a
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == ent || !lsg_w1_pfits(p, alive, team, 0))
+			continue
+		pev(p, pev_origin, o)
+		if (get_distance_f(o, at) <= r)
+			ArrayPushCell((Array:a), p)
+	}
+	return a
+}
+
+stock lsg_w1_np(pos, ent, Float:maxd, alive, team, bots, bool:dist = false)
+{
+	new Float:at[3], Float:o[3], best, Float:bd = maxd
+	if (lsg_w1_at(pos, ent, at))
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (p == ent || !lsg_w1_pfits(p, alive, team, bots))
+				continue
+			pev(p, pev_origin, o)
+			new Float:d = get_distance_f(o, at)
+			if (d <= bd)
+			{
+				bd = d
+				best = p
+			}
+		}
+	return dist ? (best ? (_:bd) : (_:-1.0)) : best
+}
+
+stock lsg_w1_ein(pos, ent, Float:r, const cls[], most)
+{
+	new a = lsg_atmp(), Float:at[3], Float:o[3], e = MaxClients, n, looked
+	if (!lsg_w1_at(pos, ent, at))
+		return a
+	if (cls[0])
+	{
+		while (n < most && looked++ < 4096 && (e = engfunc(EngFunc_FindEntityByString, e, "classname", cls)) > 0)
+		{
+			if (e == ent || e <= MaxClients)
+				continue
+			pev(e, pev_origin, o)
+			if (get_distance_f(o, at) <= r)
+			{
+				ArrayPushCell((Array:a), e)
+				n++
+			}
+		}
+		return a
+	}
+	while (n < most && looked++ < 4096 && (e = engfunc(EngFunc_FindEntityInSphere, e, at, r)) > 0)
+	{
+		if (e == ent || e <= MaxClients)
+			continue
+		ArrayPushCell((Array:a), e)
+		n++
+	}
+	return a
+}
+
+stock lsg_w1_ne(pos, ent, const cls[], Float:maxd, bool:dist = false)
+{
+	new Float:at[3], Float:o[3], e = MaxClients, best, Float:bd = maxd, looked
+	if (cls[0] && lsg_w1_at(pos, ent, at))
+		while (looked++ < 4096 && (e = engfunc(EngFunc_FindEntityByString, e, "classname", cls)) > 0)
+		{
+			if (e == ent || e <= MaxClients)
+				continue
+			pev(e, pev_origin, o)
+			new Float:d = get_distance_f(o, at)
+			if (d <= bd)
+			{
+				bd = d
+				best = e
+			}
+		}
+	return dist ? (best ? (_:bd) : (_:-1.0)) : best
+}
+
+// an end of a line: an entity (a player's eyes) or a point
+stock lsg_w1_end(ent, pos, Float:o[3])
+{
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		if (ent <= MaxClients)
+		{
+			new Float:ofs[3]
+			pev(ent, pev_view_ofs, ofs)
+			o[2] += ofs[2]
+		}
+		return
+	}
+	if (pos >= 0)
+		lsg_vto(pos, o)
+}
+
+// a clear line from A to B? (the entities at the ends don't block it); hit: where it stopped
+stock lsg_w1_los(aent, apos, bent, bpos, monsters, bool:hit = false)
+{
+	new Float:a[3], Float:b[3], Float:frac, Float:end[3]
+	lsg_w1_end(aent, apos, a)
+	lsg_w1_end(bent, bpos, b)
+	engfunc(EngFunc_TraceLine, a, b, monsters ? DONT_IGNORE_MONSTERS : IGNORE_MONSTERS, aent > 0 ? aent : 0, 0)
+	get_tr2(0, TR_flFraction, frac)
+	get_tr2(0, TR_vecEndPos, end)
+	new t = get_tr2(0, TR_pHit)
+	if (hit)
+		return lsg_vfrom(frac >= 1.0 ? b : end)
+	return (frac >= 1.0 || (bent > 0 && t == bent)) ? 1 : 0
+}
+
+// a weighted pick (one roll per node per server frame, so Index and Item agree)
+stock lsg_w1_wpick(w, node)
+{
+	new k = node & 63
+	new Float:now = get_gametime()
+	if (g_lsgW1Wt[k] == now && now > 0.0)
+		return g_lsgW1Wk[k]
+	new n = min(lsg_alen(w), LSG_AMAX), Float:total = 0.0
+	for (new i = 0; i < n; i++)
+		total += floatmax(Float:ArrayGetCell((Array:w), i), 0.0)
+	new pick = -1
+	if (total > 0.0)
+	{
+		new Float:r = random_float(0.0, total)
+		for (new i = 0; i < n; i++)
+		{
+			r -= floatmax(Float:ArrayGetCell((Array:w), i), 0.0)
+			if (r <= 0.0 && Float:ArrayGetCell((Array:w), i) > 0.0)
+			{
+				pick = i
+				break
+			}
+		}
+		if (pick < 0)
+			for (new i = n - 1; i >= 0 && pick < 0; i--)
+				if (Float:ArrayGetCell((Array:w), i) > 0.0)
+					pick = i
+	}
+	g_lsgW1Wt[k] = now
+	g_lsgW1Wk[k] = pick
+	return pick
+}
+
+stock Float:lsg_w1_map(Float:x, Float:a, Float:b, Float:c, Float:d, clamp_it)
+{
+	if (floatabs(b - a) < 0.000001)
+		return c
+	new Float:t = (x - a) / (b - a)
+	if (clamp_it)
+		t = floatclamp(t, 0.0, 1.0)
+	return c + (d - c) * t
+}
+
+// ---- text (every result fits 128 cells; every position clamped)
+stock lsg_w1_split(const s[], const sep[])
+{
+	new a = lsg_atmp(), piece[128], n, len = strlen(s), sl = strlen(sep), start
+	if (!sl)
+	{
+		ArrayPushString((Array:a), s)
+		return a
+	}
+	for (new i = 0; i <= len && n < 64; i++)
+	{
+		if (i == len || (i + sl <= len && equal(s[i], sep, sl)))
+		{
+			new c = min(i - start, charsmax(piece))
+			copy(piece, c, s[start])
+			ArrayPushString((Array:a), piece)
+			n++
+			start = i + sl
+			i += sl - 1
+		}
+	}
+	return a
+}
+
+stock lsg_w1_repl(const s[], const find[], const with[])
+{
+	new t[128]
+	copy(t, charsmax(t), s)
+	if (find[0])
+		replace_all(t, charsmax(t), find, with)
+	return t
+}
+
+stock lsg_w1_sub(const s[], Float:start, Float:len)
+{
+	new t[128], l = strlen(s)
+	new b = clamp(floatround(start, floatround_floor), 0, l), n = clamp(floatround(len, floatround_floor), 0, charsmax(t))
+	copy(t, min(n, l - b), s[b])
+	return t
+}
+
+stock lsg_w1_case(const s[], up)
+{
+	new t[128]
+	copy(t, charsmax(t), s)
+	if (up)
+		strtoupper(t)
+	else
+		strtolower(t)
+	return t
+}
+
+stock lsg_w1_trim(const s[])
+{
+	new t[128]
+	copy(t, charsmax(t), s)
+	trim(t)
+	return t
+}
+
+stock bool:lsg_w1_starts(const s[], const p[])
+	return equali(s, p, strlen(p)) != 0
+
+stock bool:lsg_w1_ends(const s[], const p[])
+{
+	new l = strlen(s), m = strlen(p)
+	return m <= l && equali(s[l - m], p) != 0
+}
+
+stock lsg_w1_join(a, const sep[])
+{
+	new t[128], piece[128], n = min(lsg_alen(a), LSG_AMAX)
+	for (new i = 0; i < n; i++)
+	{
+		ArrayGetString((Array:a), i, piece, charsmax(piece))
+		if (i)
+			add(t, charsmax(t), sep)
+		add(t, charsmax(t), piece)
+	}
+	return t
+}
+
+// 0 auto (hours only when there are any), 1 m:ss, 2 h:mm:ss
+stock lsg_w1_time(Float:secs, style)
+{
+	new t[32], s = max(floatround(secs, floatround_floor), 0)
+	new h = s / 3600, m = (s / 60) % 60, x = s % 60
+	if (style == 2 || (style == 0 && h > 0))
+		formatex(t, charsmax(t), "%d:%02d:%02d", h, m, x)
+	else
+		formatex(t, charsmax(t), "%d:%02d", s / 60, x)
+	return t
+}
+
+stock lsg_w1_num(Float:v, decimals, thousands)
+{
+	new t[48], raw[40], fmt[8]
+	formatex(fmt, charsmax(fmt), "%%.%df", clamp(decimals, 0, 4))
+	formatex(raw, charsmax(raw), fmt, floatabs(v))
+	if (!thousands)
+	{
+		formatex(t, charsmax(t), "%s%s", v < 0.0 ? "-" : "", raw)
+		return t
+	}
+	new dot = contain(raw, "."), digits = dot >= 0 ? dot : strlen(raw), o
+	if (v < 0.0)
+		t[o++] = '-'
+	for (new i = 0; i < digits && o < charsmax(t) - 1; i++)
+	{
+		if (i > 0 && (digits - i) % 3 == 0)
+			t[o++] = ','
+		t[o++] = raw[i]
+	}
+	t[o] = 0
+	if (dot >= 0)
+		add(t, charsmax(t), raw[dot])
+	return t
+}
+
+// ---- number arrays: 0 sum, 1 min, 2 max, 3 average; the index of the min (1) or max (2)
+stock Float:lsg_w1_astat(a, op, bool:idx = false)
+{
+	new n = min(lsg_alen(a), LSG_AMAX), best = -1
+	new Float:acc = 0.0
+	for (new i = 0; i < n; i++)
+	{
+		new Float:x = Float:ArrayGetCell((Array:a), i)
+		switch (op)
+		{
+			case 1: if (best < 0 || x < acc) { acc = x; best = i; }
+			case 2: if (best < 0 || x > acc) { acc = x; best = i; }
+			default: acc += x
+		}
+	}
+	if (idx)
+		return float(best)
+	if (op == 3)
+		return n ? acc / float(n) : 0.0
+	return acc
+}
+
+stock lsg_w1_areverse(a)
+{
+	new n = lsg_alen(a)
+	for (new i = 0, j = n - 1; i < j; i++, j--)
+		ArraySwap((Array:a), i, j)
+}
+
+stock lsg_w1_slice(a, Float:start, Float:count)
+{
+	new out = lsg_atmp(), n = lsg_alen(a), b[LSG_AC]
+	new s = clamp(floatround(start, floatround_floor), 0, n), c = clamp(floatround(count, floatround_floor), 0, LSG_AMAX)
+	for (new k = s; k < n && k < s + c; k++)
+	{
+		ArrayGetArray((Array:a), k, b)
+		ArrayPushArray((Array:out), b)
+	}
+	return out
+}
+
+// ---- vectors
+stock Float:lsg_w1_dot(a, b)
+	return lsg_vc(a, 0) * lsg_vc(b, 0) + lsg_vc(a, 1) * lsg_vc(b, 1) + lsg_vc(a, 2) * lsg_vc(b, 2)
+
+stock lsg_w1_cross(a, b)
+	return lsg_vec(lsg_vc(a, 1) * lsg_vc(b, 2) - lsg_vc(a, 2) * lsg_vc(b, 1), lsg_vc(a, 2) * lsg_vc(b, 0) - lsg_vc(a, 0) * lsg_vc(b, 2), lsg_vc(a, 0) * lsg_vc(b, 1) - lsg_vc(a, 1) * lsg_vc(b, 0))
+
+stock lsg_w1_rnd(c, Float:r, ball)
+{
+	// uniform in the circle / ball (a root of the radius' share, else it bunches in the middle)
+	new Float:yaw = random_float(0.0, 360.0)
+	if (!ball)
+	{
+		new Float:d = r * floatsqroot(random_float(0.0, 1.0))
+		return lsg_vec(lsg_vc(c, 0) + d * floatcos(yaw, degrees), lsg_vc(c, 1) + d * floatsin(yaw, degrees), lsg_vc(c, 2))
+	}
+	new Float:z = random_float(-1.0, 1.0), Float:d = r * floatpower(random_float(0.0, 1.0), 1.0 / 3.0)
+	new Float:ring = floatsqroot(floatmax(1.0 - z * z, 0.0))
+	return lsg_vec(lsg_vc(c, 0) + d * ring * floatcos(yaw, degrees), lsg_vc(c, 1) + d * ring * floatsin(yaw, degrees), lsg_vc(c, 2) + d * z)
+}
+
+stock lsg_w1_rot(a, Float:yaw, Float:pitch)
+{
+	new Float:x = lsg_vc(a, 0), Float:y = lsg_vc(a, 1), Float:z = lsg_vc(a, 2)
+	// pitch first (up is negative pitch in GoldSrc), in the vector's own vertical plane
+	if (pitch != 0.0)
+	{
+		new Float:h = floatsqroot(x * x + y * y), Float:cp = floatcos(-pitch, degrees), Float:sp = floatsin(-pitch, degrees)
+		new Float:h2 = h * cp - z * sp, Float:z2 = h * sp + z * cp
+		if (h > 0.0001)
+		{
+			x = x / h * h2
+			y = y / h * h2
+		}
+		z = z2
+	}
+	new Float:cy = floatcos(yaw, degrees), Float:sy = floatsin(yaw, degrees)
+	return lsg_vec(x * cy - y * sy, x * sy + y * cy, z)
+}
+
+stock lsg_w1_vlerp(a, b, Float:t)
+	return lsg_vec(lsg_vc(a, 0) + (lsg_vc(b, 0) - lsg_vc(a, 0)) * t, lsg_vc(a, 1) + (lsg_vc(b, 1) - lsg_vc(a, 1)) * t, lsg_vc(a, 2) + (lsg_vc(b, 2) - lsg_vc(a, 2)) * t)
+
+stock lsg_w1_toang(a)
+{
+	new Float:d[3], Float:ang[3]
+	lsg_vto(a, d)
+	vector_to_angle(d, ang)
+	// (vector_to_angle gives pitch up as positive; a view's pitch is down-positive)
+	return lsg_vec(-ang[0], ang[1], 0.0)
+}
+
+stock lsg_w1_fwd(a)
+{
+	new Float:ang[3], Float:f[3]
+	lsg_vto(a, ang)
+	angle_vector(ang, ANGLEVECTOR_FORWARD, f)
+	return lsg_vfrom(f)
+}
+
+// ---- relative space: a thing's facing (a player's view yaw, else its angles' yaw)
+stock Float:lsg_w1_yaw(e)
+{
+	new Float:ang[3]
+	if (e > 0 && e <= MaxClients)
+		pev(e, pev_v_angle, ang)
+	else if (e > 0 && pev_valid(e))
+		pev(e, pev_angles, ang)
+	return ang[1]
+}
+
+stock lsg_w1_local(e, pos)
+{
+	new Float:o[3], Float:p[3]
+	if (e > 0 && pev_valid(e))
+		pev(e, pev_origin, o)
+	lsg_vto(pos, p)
+	new Float:dx = p[0] - o[0], Float:dy = p[1] - o[1], Float:y = lsg_w1_yaw(e)
+	new Float:c = floatcos(y, degrees), Float:s = floatsin(y, degrees)
+	// forward along the facing, right is clockwise from it (GoldSrc yaw turns left)
+	return lsg_vec(dx * c + dy * s, dx * s - dy * c, p[2] - o[2])
+}
+
+stock lsg_w1_world(e, off)
+{
+	new Float:o[3]
+	if (e > 0 && pev_valid(e))
+		pev(e, pev_origin, o)
+	new Float:f = lsg_vc(off, 0), Float:r = lsg_vc(off, 1), Float:y = lsg_w1_yaw(e)
+	new Float:c = floatcos(y, degrees), Float:s = floatsin(y, degrees)
+	return lsg_vec(o[0] + f * c + r * s, o[1] + f * s - r * c, o[2] + lsg_vc(off, 2))
+}
+
+stock Float:lsg_w1_relc(a, b, k)
+{
+	new Float:o[3]
+	if (b > 0 && pev_valid(b))
+		pev(b, pev_origin, o)
+	return lsg_vc(lsg_w1_local(a, lsg_vfrom(o)), k)
+}
+
+stock Float:lsg_w1_angto(a, b)
+{
+	new Float:o[3], Float:p[3]
+	if (a > 0 && pev_valid(a))
+		pev(a, pev_origin, o)
+	if (b > 0 && pev_valid(b))
+		pev(b, pev_origin, p)
+	new Float:d = floatatan2(p[1] - o[1], p[0] - o[0], degrees) - lsg_w1_yaw(a)
+	while (d > 180.0)
+		d -= 360.0
+	while (d < -180.0)
+		d += 360.0
+	return d
+}
+
+// B inside a cone round A's facing (back: round A's back)
+stock bool:lsg_w1_cone(a, b, Float:cone, back)
+{
+	new Float:d = floatabs(lsg_w1_angto(a, b))
+	if (back)
+		d = 180.0 - d
+	return d <= cone * 0.5
+}
+
+// ---- aim: one trace per player per frame and distance, its four answers kept
+stock lsg_w1_aim(id, Float:maxd, what)
+{
+	new k = clamp(id, 0, 32)
+	new Float:now = get_gametime()
+	if (g_lsgW1AimT[k] != now || g_lsgW1AimD[k] != maxd || now <= 0.0)
+	{
+		g_lsgW1AimT[k] = now
+		g_lsgW1AimD[k] = maxd
+		g_lsgW1AimEnt[k] = 0
+		g_lsgW1AimHit[k] = 0
+		for (new j = 0; j < 3; j++)
+		{
+			g_lsgW1AimPos[k][j] = 0.0
+			g_lsgW1AimNrm[k][j] = 0.0
+		}
+		if (lsg_ok(id))
+		{
+			new Float:eye[3], Float:ofs[3], Float:ang[3], Float:fwd[3], Float:end[3], Float:frac
+			pev(id, pev_origin, eye)
+			pev(id, pev_view_ofs, ofs)
+			eye[2] += ofs[2]
+			pev(id, pev_v_angle, ang)
+			angle_vector(ang, ANGLEVECTOR_FORWARD, fwd)
+			new Float:d = floatmax(maxd, 16.0)
+			for (new j = 0; j < 3; j++)
+				end[j] = eye[j] + fwd[j] * d
+			engfunc(EngFunc_TraceLine, eye, end, DONT_IGNORE_MONSTERS, id, 0)
+			get_tr2(0, TR_flFraction, frac)
+			get_tr2(0, TR_vecEndPos, g_lsgW1AimPos[k])
+			get_tr2(0, TR_vecPlaneNormal, g_lsgW1AimNrm[k])
+			new t = get_tr2(0, TR_pHit)
+			g_lsgW1AimHit[k] = frac < 1.0 ? 1 : 0
+			g_lsgW1AimEnt[k] = t > 0 ? t : 0
+		}
+	}
+	switch (what)
+	{
+		case 1: return g_lsgW1AimEnt[k]
+		case 2: return lsg_vfrom(g_lsgW1AimNrm[k])
+		case 3: return g_lsgW1AimHit[k]
+	}
+	return lsg_vfrom(g_lsgW1AimPos[k])
+}

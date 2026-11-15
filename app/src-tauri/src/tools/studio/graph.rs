@@ -1273,6 +1273,10 @@ impl<'a> View<'a> {
             "flow.sequence" => {
                 p.outputs = (0..count_param(n, def, "count", 8).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Then {i}"))).collect();
             }
+            "flow.multi_gate" => {
+                // W1: Multi Gate's outputs, as many as its Outputs setting
+                p.outputs = (0..count_param(n, def, "count", 8).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Out {i}"))).collect();
+            }
             "array.make" => {
                 let item = p.inputs.first().cloned();
                 if let Some(item) = item {
@@ -1606,8 +1610,13 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     }
     p.extend(nothing_happens(g));
     p.extend(bot_awareness(g, &View::new(g)));
+    p.extend(w1_checks::problems(g, &View::new(g))); // W1
     p
 }
+
+// W1: the utility nodes' checks (bad settings, heavy work in a fast On Tick)
+#[path = "w1_checks.rs"]
+mod w1_checks;
 
 /// The start of the note about something bots could use but aren't told about (the Studio
 /// offers its fix and "Don't warn for this one" on it).

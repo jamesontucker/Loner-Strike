@@ -1787,6 +1787,7 @@ mod tests {
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }
+        graphs.push(("every_node_w1".into(), include_str!("testdata/every_node_w1.graph.json").into())); // W1
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));

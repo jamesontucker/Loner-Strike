@@ -783,6 +783,141 @@ data = {
   "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Waves", "Upgrades", "Game", "World", "Entities", "Effects", "Advanced", "Downed", "Shop", "NPCs", "Battle Royale", "Creatures", "Data tables", "Projectiles", "HUD & View"],
   "nodes": nodes,
 }
+# ==== W1: utility nodes (spatial, random, math, text, arrays, vectors, aim, flow, On Tick) ====
+FROM_IN = [P("pos","vector","Around point",optional=True), P("to","entity","Around entity")]
+TEAM_ANY = prm("team","Team","choice","any",choices=[["any","Any team"],["t","Terrorists"],["ct","Counter-Terrorists"]])
+SP = dict(pure=True)
+node("spatial.players_in_radius", "Players In Radius", "Spatial", "Every player within Radius of a point or an entity, as an array (an entity wired in isn't counted itself).",
+     inputs=FROM_IN + [P("radius","number","Radius",param="radius")], outputs=[P("out","array<player>","Players")],
+     params=[prm("radius","Radius","number",300,min=1,max=8192), prm("alive","Alive only","bool",True), TEAM_ANY], keywords="near nearby around close range sphere area aoe", **SP)
+node("spatial.nearest_player", "Nearest Player", "Spatial", "The player nearest to a point or an entity (not the entity itself), within Max distance; nobody if none.",
+     inputs=FROM_IN, outputs=[P("out","player","Player"), P("dist","number","Distance")],
+     params=[prm("max","Max distance","number",8192,min=1,max=16384), prm("alive","Alive only","bool",True), TEAM_ANY, prm("bots","Who","choice","all",choices=[["all","Bots and people"],["humans","People only"],["bots","Bots only"]])], keywords="closest near target", **SP)
+node("spatial.entities_in_radius", "Entities In Radius", "Spatial", "Entities within Radius of a point or an entity, of a class or any (up to Most found), as an array. Players aren't listed (use Players In Radius).",
+     inputs=FROM_IN + [P("radius","number","Radius",param="radius")], outputs=[P("out","array<entity>","Entities")],
+     params=[prm("radius","Radius","number",300,min=1,max=32768), prm("class","Class (empty: any)","entname",""), prm("most","Most found","number",64,min=1,max=2048)], keywords="near nearby around find sphere area props", **SP)
+node("spatial.nearest_entity", "Nearest Entity", "Spatial", "The entity of a class nearest to a point or an entity, within Max distance; nothing if none. Players aren't counted.",
+     inputs=FROM_IN, outputs=[P("out","entity","Entity"), P("dist","number","Distance")],
+     params=[prm("class","Class","entname","info_target"), prm("max","Max distance","number",2048,min=1,max=32768)], keywords="closest near find", **SP)
+node("spatial.line_of_sight", "Line of Sight", "Spatial", "Is there a clear line between A and B (each an entity or a point)? Entities wired in don't block it (a player's eyes are used). Hit Position is where something got in the way.",
+     inputs=[P("a","entity","A"), P("a_pos","vector","Or point A",optional=True), P("b","entity","B"), P("b_pos","vector","Or point B",optional=True)],
+     outputs=[P("clear","bool","Clear"), P("hit","vector","Hit position")], params=[prm("monsters","Creatures and players block","bool",False)], keywords="visible see trace los sight blocked wall", **SP)
+# random
+node("random.chance", "Random Chance", "Numbers", "Yes Percent % of the time (a new roll each time it's worked out).", inputs=[P("pct","number","Percent",param="pct")], outputs=[P("out","bool","Yes")],
+     params=[prm("pct","Percent","number",25,min=0,max=100)], keywords="probability odds percent roll luck dice", **SP)
+node("random.bool", "Random Bool", "Numbers", "Yes or no, half the time each.", outputs=[P("out","bool","Yes")], keywords="coin flip random yes no", **SP)
+node("random.weighted", "Weighted Random Pick", "Numbers", "Picks an index from an array of weights (a weight of 3 is picked three times as often as 1); with Items wired, the item at that index too. -1 when every weight is 0.",
+     inputs=[P("weights","array<number>","Weights",required=True), P("items","array<$T>","Items",optional=True)], outputs=[P("index","number","Index"), P("item","$T","Item")], params=[OF()], keywords="loot table chance roll pick weight drop", **SP)
+# math
+node("math.map_range", "Map Range", "Numbers", "A value from one range moved into another: In Min..In Max becomes Out Min..Out Max (Clamp keeps it inside).",
+     inputs=[P("a","number","Value",param="a"), P("in_min","number","In Min",param="in_min"), P("in_max","number","In Max",param="in_max"), P("out_min","number","Out Min",param="out_min"), P("out_max","number","Out Max",param="out_max")], outputs=[P("out","number","Result")],
+     params=[prm("a","Value","number",50,min=-100000,max=100000), prm("in_min","In Min","number",0,min=-100000,max=100000), prm("in_max","In Max","number",100,min=-100000,max=100000), prm("out_min","Out Min","number",0,min=-100000,max=100000), prm("out_max","Out Max","number",1,min=-100000,max=100000), prm("clamp","Clamp","bool",True)], keywords="remap scale normalize convert range", **SP)
+UNIT = prm("unit","Angles in","choice","deg",choices=[["deg","Degrees"],["rad","Radians"]])
+node("math.trig", "Sin / Cos / Tan", "Numbers", "The sine, cosine or tangent of an angle (degrees, or radians).", inputs=[P("a","number","Angle",param="a")], outputs=[P("out","number","Result")],
+     params=[prm("a","Angle","number",45,min=-100000,max=100000), prm("op","Do","choice","sin",choices=[["sin","Sin"],["cos","Cos"],["tan","Tan"]]), UNIT], keywords="sine cosine tangent trigonometry angle wave", **SP)
+node("math.atan2", "Atan2", "Numbers", "The angle of the direction X, Y (from the X axis, -180..180 degrees, or radians).", inputs=[P("y","number","Y",param="y"), P("x","number","X",param="x")], outputs=[P("out","number","Angle")],
+     params=[prm("y","Y","number",1,min=-100000,max=100000), prm("x","X","number",1,min=-100000,max=100000), UNIT], keywords="angle arctangent direction heading yaw", **SP)
+node("math.angle_convert", "Degrees / Radians", "Numbers", "Degrees to radians or radians to degrees.", inputs=[P("a","number","Angle",param="a")], outputs=[P("out","number","Result")],
+     params=[prm("a","Angle","number",180,min=-100000,max=100000), prm("op","Do","choice","to_rad",choices=[["to_rad","Degrees to radians"],["to_deg","Radians to degrees"]])], keywords="deg rad convert angle", **SP)
+node("flow.nearly_equal", "Nearly Equal", "Conditions", "Are A and B within Tolerance of each other (for numbers that came out of math, which are seldom exactly equal)?",
+     inputs=[P("a","number","A",param="a"), P("b","number","B",param="b"), P("tol","number","Tolerance",param="tol")], outputs=[P("out","bool","Nearly equal")],
+     params=[prm("a","A","number",0,min=-100000,max=100000), prm("b","B","number",0,min=-100000,max=100000), prm("tol","Tolerance","number",0.01,min=0,max=100000)], keywords="approximately close equal epsilon float compare", **SP)
+# text
+TX = lambda id="a", label="Text": P(id,"text",label,required=True)
+node("text.split", "Split Text", "Text", "Text cut at each Separator, as an array of texts (at most 64 pieces; empty pieces kept).", inputs=[TX(), P("sep","text","Separator",param="sep")], outputs=[P("out","array<text>","Pieces")],
+     params=[prm("sep","Separator","text",",",max=8)], keywords="explode tokens words cut parse", **SP)
+node("text.replace", "Replace Text", "Text", "The text with every Find replaced by With (capitals matter).", inputs=[TX(), P("find","text","Find",param="find"), P("with","text","With",param="with")], outputs=[P("out","text","Text")],
+     params=[prm("find","Find","text","",max=40), prm("with","With","text","",max=40)], keywords="swap substitute change", **SP)
+node("text.substring", "Substring", "Text", "Part of the text: Length characters from Start (the first is 0).", inputs=[TX(), P("start","number","Start",param="start"), P("len","number","Length",param="len")], outputs=[P("out","text","Text")],
+     params=[prm("start","Start","number",0,min=0,max=127), prm("len","Length","number",5,min=0,max=127)], keywords="part mid slice cut left right characters", **SP)
+node("text.upper", "Upper Case", "Text", "THE TEXT IN CAPITALS.", inputs=[TX()], outputs=[P("out","text","Text")], keywords="capitals uppercase caps", **SP)
+node("text.lower", "Lower Case", "Text", "the text in small letters.", inputs=[TX()], outputs=[P("out","text","Text")], keywords="lowercase small", **SP)
+node("text.trim", "Trim Text", "Text", "The text without spaces at the start and end.", inputs=[TX()], outputs=[P("out","text","Text")], keywords="strip spaces whitespace", **SP)
+node("text.starts_with", "Starts With", "Text", "Does the text start with this (capitals don't matter)?", inputs=[TX(), P("b","text","Start",param="b")], outputs=[P("out","bool","Starts with")], params=[prm("b","Start","text","",max=40)], keywords="prefix begins", **SP)
+node("text.ends_with", "Ends With", "Text", "Does the text end with this (capitals don't matter)?", inputs=[TX(), P("b","text","End",param="b")], outputs=[P("out","bool","Ends with")], params=[prm("b","End","text","",max=40)], keywords="suffix", **SP)
+node("text.join", "Join Array", "Text", "An array's texts in one, with Separator between them (as much as fits in 127 characters).", inputs=[P("array","array<text>","Texts",required=True), P("sep","text","Separator",param="sep")], outputs=[P("out","text","Text")],
+     params=[prm("sep","Separator","text",", ",max=8)], keywords="implode combine list concat", **SP)
+node("text.format_time", "Format Time", "Text", "Seconds as a clock: 1:05, or 1:02:05 (Auto: hours only when there are any).", inputs=[P("secs","number","Seconds",required=True)], outputs=[P("out","text","Text")],
+     params=[prm("style","Style","choice","auto",choices=[["auto","Auto"],["ms","m:ss"],["hms","h:mm:ss"]])], keywords="clock timer duration minutes countdown", **SP)
+node("text.format_number", "Format Number", "Text", "A number as text with a set number of decimals, and thousands separated by commas if you like (12,345.6).", inputs=[P("a","number","Number",required=True)], outputs=[P("out","text","Text")],
+     params=[prm("decimals","Decimals","number",0,min=0,max=4), prm("thousands","Thousands separator","bool",True)], keywords="decimal round money comma digits", **SP)
+# arrays of numbers
+AN = P("array","array<number>","Numbers",required=True)
+node("array.sum", "Sum", "Arrays", "All the numbers added up (0 for an empty array).", inputs=[AN], outputs=[P("out","number","Sum")], keywords="total add", **SP)
+node("array.min", "Array Min", "Arrays", "The smallest number, and its index (-1 for an empty array).", inputs=[AN], outputs=[P("out","number","Min"), P("index","number","Index")], keywords="smallest lowest", **SP)
+node("array.max", "Array Max", "Arrays", "The biggest number, and its index (-1 for an empty array).", inputs=[AN], outputs=[P("out","number","Max"), P("index","number","Index")], keywords="biggest highest largest", **SP)
+node("array.average", "Average", "Arrays", "The numbers' average (0 for an empty array).", inputs=[AN], outputs=[P("out","number","Average")], keywords="mean", **SP)
+node("array.reverse", "Reverse", "Arrays", "Turns an array round: the last item first.", inputs=[X, P("array","array<$T>","Array",required=True)], outputs=[E()], params=[OF()], keywords="flip backwards order")
+node("array.slice", "Slice", "Arrays", "A new array with Count items from Start (the first is 0).", inputs=[P("array","array<$T>","Array",required=True), P("start","number","Start",param="start"), P("count","number","Count",param="count")], outputs=[P("out","array<$T>","Array")],
+     params=[OF(), prm("start","Start","number",0,min=0,max=10000), prm("count","Count","number",3,min=0,max=10000)], keywords="sub part range copy", **SP)
+# vectors
+V = lambda id, label: P(id,"vector",label,required=True)
+node("vec.dot", "Dot Product", "Vectors", "A·B: how much two directions point the same way (with both length 1: 1 same, 0 square, -1 opposite).", inputs=[V("a","A"), V("b","B")], outputs=[P("out","number","Dot")], keywords="dot product angle facing", **SP)
+node("vec.cross", "Cross Product", "Vectors", "A×B: the direction square to both (its length is how far apart they point).", inputs=[V("a","A"), V("b","B")], outputs=[P("out","vector","Cross")], keywords="cross product perpendicular normal", **SP)
+node("vec.random_in_radius", "Random Point In Radius", "Vectors", "A random point within Radius of Center: on a flat circle (2D, Z kept) or in a ball (3D).", inputs=[V("c","Center"), P("radius","number","Radius",param="radius")], outputs=[P("out","vector","Point")],
+     params=[prm("radius","Radius","number",200,min=0,max=8192), prm("mode","Shape","choice","2d",choices=[["2d","Circle (2D)"],["3d","Ball (3D)"]])], keywords="scatter spawn spread random position", **SP)
+node("vec.rotate", "Rotate Vector", "Vectors", "Turns a vector round the vertical by Yaw degrees (and up or down by Pitch).", inputs=[V("a","Vector"), P("yaw","number","Yaw",param="yaw"), P("pitch","number","Pitch",param="pitch")], outputs=[P("out","vector","Result")],
+     params=[prm("yaw","Yaw","number",90,min=-360,max=360), prm("pitch","Pitch","number",0,min=-90,max=90)], keywords="turn spin angle", **SP)
+node("vec.lerp", "Lerp Vector", "Vectors", "A point between A and B: Alpha 0 is A, 1 is B, 0.5 halfway.", inputs=[V("a","A"), V("b","B"), P("alpha","number","Alpha",param="alpha")], outputs=[P("out","vector","Result")],
+     params=[prm("alpha","Alpha","number",0.5,min=-100,max=100)], keywords="interpolate blend between mix", **SP)
+node("vec.to_angles", "Direction To Angles", "Vectors", "A direction as angles (pitch, yaw, 0), for aiming and Look At math.", inputs=[V("a","Direction")], outputs=[P("out","vector","Angles")], keywords="aim pitch yaw look rotation vector to angles", **SP)
+node("vec.forward", "Angles To Forward Vector", "Vectors", "Angles (pitch, yaw, roll) as the direction they face, length 1.", inputs=[V("a","Angles")], outputs=[P("out","vector","Direction")], keywords="forward direction facing aim angle vector", **SP)
+# relative space and aim
+THING = P("thing","entity","Player or entity",required=True)
+node("rel.to_local", "To Local Space", "Vectors", "A world position as seen from a player or entity: X forward, Y right, Z up (by its facing; a player's view yaw).", inputs=[THING, V("pos","World position")], outputs=[P("out","vector","Local offset")], keywords="relative local offset forward right up", **SP)
+node("rel.to_world", "To World Space", "Vectors", "An offset from a player or entity (X forward, Y right, Z up, by its facing) as a world position.", inputs=[THING, V("off","Local offset")], outputs=[P("out","vector","World position")], keywords="relative offset in front behind spawn position", **SP)
+node("rel.position_of", "Relative Position Of", "Vectors", "How far B is in front of, to the right of and above A (by A's facing; behind and left are negative).",
+     inputs=[P("a","entity","A",required=True), P("b","entity","B",required=True)], outputs=[P("forward","number","Forward"), P("right","number","Right"), P("up","number","Up")], keywords="relative offset local", **SP)
+node("rel.angle_to", "Angle To", "Vectors", "How far A would turn to face B: the yaw difference, -180..180 degrees (positive: to the left).", inputs=[P("a","entity","A",required=True), P("b","entity","B",required=True)], outputs=[P("out","number","Angle")], keywords="yaw turn facing direction", **SP)
+CONE = prm("cone","Cone (degrees)","number",90,min=1,max=360)
+node("rel.is_in_front", "Is In Front", "Vectors", "Is B in front of A, inside a cone of this many degrees round A's facing?", inputs=[P("a","entity","A",required=True), P("b","entity","B",required=True)], outputs=[P("out","bool","In front")], params=[CONE], keywords="facing ahead view cone fov", **SP)
+node("rel.is_behind", "Is Behind", "Vectors", "Is B behind A, inside a cone of this many degrees round A's back (backstabs, sneaking)?", inputs=[P("a","entity","A",required=True), P("b","entity","B",required=True)], outputs=[P("out","bool","Behind")], params=[CONE], keywords="back backstab sneak rear", **SP)
+PL = P("player","player","Player",required=True)
+node("aim.eye_pos", "Eye Position", "Players", "Where a player's eyes are (their position plus view height).", inputs=[PL], outputs=[P("out","vector","Eyes")], keywords="view head camera", **SP)
+node("aim.dir", "Aim Direction", "Players", "Which way a player is aiming, length 1 (from their view angles).", inputs=[PL], outputs=[P("out","vector","Direction")], keywords="look view forward facing", **SP)
+node("aim.point", "Aim Point", "Players", "What a player is aiming at, up to Max distance: where the line from their eyes hits, the entity hit, the surface's normal, and whether it hit anything (the player is ignored).",
+     inputs=[PL], outputs=[P("pos","vector","Hit position"), P("ent","entity","Hit entity"), P("normal","vector","Hit normal"), P("hit","bool","Hit")],
+     params=[prm("max","Max distance","number",4096,min=16,max=32768)], keywords="trace crosshair looking at target raycast", **SP)
+# flow
+node("flow.multi_gate", "Multi Gate", "Flow", "Each time flow comes in, goes out the next output (in order, or random); after the last it stops, or starts over with Loop. Reset starts again from Start index.",
+     inputs=[X, E("reset","Reset")], outputs=[E("then0","Out 0"), E("then1","Out 1")],
+     params=[prm("count","Outputs","number",3,min=1,max=8), prm("random","Random","bool",False), prm("loop","Loop","bool",False), prm("start","Start index","number",0,min=0,max=7)], keywords="round robin cycle rotate sequence each")
+node("flow.do_once_per_player", "Do Once Per Player", "Flow", "Lets the flow through once for each player, until Reset (everyone) or Reset Player (the player wired in then).",
+     inputs=[X, E("reset","Reset"), E("reset_player","Reset Player"), P("player","player","Player",required=True)], outputs=[E("then","Completed")], keywords="once each player first time")
+node("var.toggle", "Toggle Variable", "Variables", "Flips a yes/no variable (yes becomes no, no becomes yes); New Value is what it is now. A per-player one needs a Player, a per-team one a Team.",
+     inputs=[X, P("player","player","Player",optional=True), P("team","team","Team",optional=True)], outputs=[E(), P("value","bool","New value")], params=[prm("var","Variable","var","",varType="bool")], keywords="flip switch invert not bool toggle")
+node("event.on_tick", "On Tick", "Events", "Runs again and again, every Interval seconds (0.1: ten times a second; 0: every server frame), all through the map. Delta is the seconds since the last time.",
+     outputs=[E(), P("delta","number","Delta")], params=[prm("interval","Interval (seconds)","number",0.1,min=0,max=60)], event=True, keywords="update frame loop every tick think interval")
+
+# findable: what already exists under other words
+def _kw(t, words):
+    for d in nodes:
+        if d["type"] == t:
+            d["keywords"] = (d.get("keywords", "") + " " + words).strip()
+_kw("math.op", "mod modulo % remainder plus minus times divide power")
+_kw("math.fn", "sign abs absolute round floor ceil sqrt truncate trunc")
+_kw("flow.flipflop", "toggle switch alternate")
+_kw("flow.for_each_array", "break loop each array")
+_kw("math.compare", "> >= < <= == != = greater less more than equal compare bigger smaller")
+for d in nodes:
+    if d["type"] == "math.compare":
+        for p in d["params"]:
+            if p["id"] == "op":
+                p["choices"] = [["gt","> more than"],["ge","≥ at least"],["lt","< less than"],["le","≤ at most"],["eq","= equal to"],["ne","≠ not equal to"]]
+        d["presets"] = [{"title": "Greater Than (A > B)", "params": {"op": "gt"}, "keywords": "greater than > more bigger"},
+                        {"title": "At Least (A ≥ B)", "params": {"op": "ge"}, "keywords": "greater or equal >= at least"},
+                        {"title": "Less Than (A < B)", "params": {"op": "lt"}, "keywords": "less than < smaller fewer"},
+                        {"title": "At Most (A ≤ B)", "params": {"op": "le"}, "keywords": "less or equal <= at most"},
+                        {"title": "Equal (A = B)", "params": {"op": "eq"}, "keywords": "equal == same"},
+                        {"title": "Not Equal (A ≠ B)", "params": {"op": "ne"}, "keywords": "not equal != different"}]
+    if d["type"] == "math.fn":
+        for p in d["params"]:
+            if p["id"] == "op" and not any(c[0] == "trunc" for c in p["choices"]):
+                p["choices"].append(["trunc","Truncate (toward zero)"])
+        d["help"] = d["help"].rstrip(".") + "; Truncate drops the fraction toward zero (-2.7 becomes -2, where Round down gives -3)."
+if "Spatial" not in data["categories"]:
+    data["categories"].insert(data["categories"].index("Vectors") + 1, "Spatial")
+# ==== end W1 ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
 # the node help (X2's node_help.py), remade with the registry

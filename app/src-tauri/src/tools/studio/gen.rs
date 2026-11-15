@@ -468,7 +468,7 @@ impl<'a> Gen<'a> {
     /// per input; the first is the node's own).
     fn pin_fname(&self, id: &str, pin: &str) -> String {
         let def = self.v.defs[id];
-        if MULTI_IN.contains(&def.kind.as_str()) && pin != "exec" {
+        if (MULTI_IN.contains(&def.kind.as_str()) || w1::MULTI.contains(&def.kind.as_str())) && pin != "exec" {
             format!("lsg_n{}_{}", self.index(id), id_text(pin))
         } else {
             self.fname(id)
@@ -727,6 +727,7 @@ impl<'a> Gen<'a> {
             return Val { expr: e, ty };
         }
         let expr = match def.kind.as_str() {
+            k if w1::PURE.contains(&k) => w1::pure(self, node, pin), // W1
             "math.compare" => {
                 let op = match self.choice(n, def, "op") {
                     "ge" => ">=",
@@ -954,6 +955,7 @@ impl<'a> Gen<'a> {
                     "sqrt" => format!("floatsqroot(floatmax({a}, 0.0))"),
                     "neg" => format!("(-({a}))"),
                     "sign" => format!("lsg_sign({a})"),
+                    "trunc" => format!("float(floatround({a}, floatround_tozero))"), // W1
                     _ => format!("floatabs({a})"),
                 }
             }
@@ -1105,7 +1107,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     for id in &live {
         let d = v.defs[id];
         let ctx = CTX_KINDS.contains(&d.kind.as_str());
-        if !ctx && !STORE_KINDS.contains(&d.kind.as_str()) {
+        if !ctx && !STORE_KINDS.contains(&d.kind.as_str()) && !w1::STORE.contains(&d.kind.as_str()) {
             continue;
         }
         for o in v.outputs(id).iter().filter(|o| o.ty != "exec") {
@@ -1195,6 +1197,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         || !g.structs.is_empty()
         || g.enums.iter().any(|e| !e.builtin)
         || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
+        || w1::used(g) // W1
         || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))));
 
     let mut o = Out { text: String::new(), lines: 0 };
@@ -1347,6 +1350,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_v3 {
         o.line(V3_HELPERS);
         o.blank();
+        if w1::used(g) {
+            o.line(w1::HELPERS); // W1
+            o.blank();
+        }
         v3_stocks(&gen, &mut o);
         // the data tables the mode reads, as constant arrays
         let used = |tid: &str| g.nodes.iter().any(|n| n.kind.starts_with("table.") && n.params.get("table").and_then(Value::as_str) == Some(tid));
@@ -1731,6 +1738,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             o.line(format!("\tg_lsgLeft[{}] = 1", gen.index(id)));
         }
     }
+    // W1: On Tick: a check every server frame (set_task can't go under 0.1 s)
+    if gen.live.iter().any(|id| v.defs[*id].kind == "event.on_tick") {
+        o.line("\tregister_forward(FM_StartFrame, \"lsg_w1_frame\")");
+    }
     // chat commands: on all of say (a "say /shop" registration only matches the bare word, so
     // "/give 5" never came: node coverage run); the handler checks the first word
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
@@ -1773,6 +1784,17 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             o.line(gen.reset_all(x));
         }
         o.line("}\n");
+    }
+    // W1: On Tick's handler: each one when its Interval has gone by; Delta is the time since
+    // its last run (the interval the first time; a new map starts the clocks again)
+    let ticks: Vec<&str> = gen.live.iter().copied().filter(|id| v.defs[*id].kind == "event.on_tick").collect();
+    if !ticks.is_empty() {
+        o.line(format!("public lsg_w1_frame()\n{{\n\tstatic Float:at[{}]\n\tnew Float:now = get_gametime()", ticks.len()));
+        for (k, id) in ticks.iter().enumerate() {
+            let s = w1::tick_secs(&gen, id);
+            o.line(format!("\tif (now < at[{k}] || now - at[{k}] >= {s})\n\t{{\n\t\tnew ctx[LSG_CTX]\n\t\tctx[0] = _:(at[{k}] > 0.0 && now > at[{k}] ? now - at[{k}] : {s})\n\t\tat[{k}] = now\n\t\t{}(ctx)\n\t}}", gen.fname(id)));
+        }
+        o.line("\treturn FMRES_IGNORED\n}\n");
     }
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
         let i = gen.index(id);
@@ -1979,7 +2001,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     // (in a Function's graph: compiled only when the Function is called; a node with several
     // flow inputs, as a Timeline's Play / Play from Start: its first input's function only when
     // something is wired into it, so no "never used" warning)
-    let stock = if v.graph_of(id).is_empty() && !MULTI_IN.contains(&def.kind.as_str()) { "" } else { "stock " };
+    let stock = if v.graph_of(id).is_empty() && !MULTI_IN.contains(&def.kind.as_str()) && !w1::MULTI.contains(&def.kind.as_str()) { "" } else { "stock " };
     o.line(format!("// {} ({})", comment_text(&def.title), gen.report_id(id)));
     o.line(format!("{stock}{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };
@@ -3477,6 +3499,71 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(e);
             }
             then_line(&mut b, "then");
+        }
+        // ---- W1: utility flow nodes
+        "event.on_tick" => {
+            let e = exit("tick");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "array.reverse" => {
+            b.line(format!("\tlsg_w1_areverse({})", inp("array", "any")));
+            let e = exit("reversed");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "var.toggle" => {
+            if let Some(var) = v.var_of(id).filter(|x| x.ty == "bool") {
+                let r = gen.var_ref(var, &inp("player", "player"), &inp("team", "team"));
+                b.line(format!("\t{r} = !{r}"));
+                if let Some(c) = gen.out_index(id, "value") {
+                    b.line(format!("\tg_lsgO[{c}] = {r} ? 1 : 0"));
+                }
+                if debug {
+                    b.line(format!("\tlsd_exit({i}, g_lsdBool[{r} ? 1 : 0])"));
+                }
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.do_once_per_player" => {
+            // (one bit per player in g_lsgLeft)
+            let p = inp("player", "player");
+            b.line(format!("\tnew p = {p}\n\tif (p < 1 || p > 32)\n\t{{\n\t{}\n\t\treturn\n\t}}\n\tif (g_lsgLeft[{i}] & (1 << (p - 1)))\n\t{{\n\t{}\n\t\treturn\n\t}}\n\tg_lsgLeft[{i}] |= 1 << (p - 1)", exit("no player"), exit("done for this player")));
+            after.push(multi_fn(gen, id, "reset", &format!("\tg_lsgLeft[{i}] = 0")));
+            // (its own function: the Player as wired, not the main function's local copy of it)
+            let rp = gen.input_unpinned(id, "player").map(|x| x.expr).unwrap_or_else(|| "0".into());
+            after.push(multi_fn(gen, id, "reset_player", &format!("\tnew p = {rp}\n\tif (p >= 1 && p <= 32)\n\t\tg_lsgLeft[{i}] &= ~(1 << (p - 1))")));
+            let e = exit("through");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.multi_gate" => {
+            // (g_lsgLeft: a bit per output already used)
+            let outs = v.exec_outs(id);
+            let cnt = outs.len().clamp(1, 8);
+            let all = (1u32 << cnt) - 1;
+            let start = (gen.num(n, def, "start").round() as usize).min(cnt - 1);
+            let refill = if gen.boolean(n, def, "loop") { format!("\t\tg_lsgLeft[{i}] = 0") } else { format!("\t{}\n\t\treturn", exit("all used")) };
+            b.line(format!("\tif ((g_lsgLeft[{i}] & {all}) == {all})\n\t{{\n{refill}\n\t}}\n\tnew k = -1"));
+            if gen.boolean(n, def, "random") {
+                b.line(format!("\tnew free[8], nf\n\tfor (new j = 0; j < {cnt}; j++)\n\t\tif (!(g_lsgLeft[{i}] & (1 << j)))\n\t\t\tfree[nf++] = j\n\tif (nf)\n\t\tk = free[random(nf)]"));
+            } else {
+                b.line(format!("\tfor (new j = 0; j < {cnt}; j++)\n\t{{\n\t\tnew q = ({start} + j) % {cnt}\n\t\tif (!(g_lsgLeft[{i}] & (1 << q)))\n\t\t{{\n\t\t\tk = q\n\t\t\tbreak\n\t\t}}\n\t}}"));
+            }
+            b.line(format!("\tif (k < 0)\n\t\treturn\n\tg_lsgLeft[{i}] |= 1 << k\n\tswitch (k)\n\t{{"));
+            for (k, pin) in outs.iter().enumerate().take(cnt) {
+                let e = exit(&format!("Out {k}"));
+                let call = next(pin).map(|c| format!("\t\t\t{c}\n")).unwrap_or_default();
+                b.line(format!("\t\tcase {k}:\n\t\t{{\n{}{call}\t\t}}", if e.is_empty() { String::new() } else { format!("\t\t{e}\n") }));
+            }
+            b.line("\t}");
+            after.push(multi_fn(gen, id, "reset", &format!("\tg_lsgLeft[{i}] = 0")));
         }
         "flow.flipflop" => {
             let c = gen.out_index(id, "is_a").unwrap_or(0);
@@ -5078,6 +5165,9 @@ fn lsg_secs(v: &Option<Val>) -> String {
 /// Every index is clamped and every array or map call checks its handle and size, so a
 /// graph can't read or write outside them.
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
+// W1: the utility nodes (w1_nodes.rs, w1_helpers.pawn)
+#[path = "w1_nodes.rs"]
+mod w1;
 
 /// The plugin's command check, from the same lists as the app's (`graph::cmd_rules`).
 pub fn safe_cmd_stock() -> String {
@@ -7509,7 +7599,7 @@ mod tests {
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
+        let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up", "event.on_tick"];
         for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind)) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
@@ -7834,6 +7924,11 @@ mod tests {
         let p5 = super::super::graph::validate_core(&g5);
         assert!(p5.is_empty(), "every_node_5: {:#?}", p5);
         let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).chain(g5.nodes.iter()).map(|n| n.kind.as_str()).collect();
+        // W1: the utility nodes are in every_node_w1.graph.json (w1_nodes.rs tests it)
+        let mut used = used;
+        for k in w1::PURE.iter().chain(w1::FLOW) {
+            used.insert(k);
+        }
         for d in &registry().nodes {
             assert!(used.contains(d.kind.as_str()), "every_node(_2/_3/_4).graph.json lacks {}", d.kind);
         }
