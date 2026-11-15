@@ -120,6 +120,11 @@
     var open = side.classList.toggle("open");
     menu.setAttribute("aria-expanded", open ? "true" : "false");
   });
+  var all = document.querySelector(".ref-all");
+  if (all && side) all.addEventListener("click", function () {
+    var on = side.classList.toggle("all");
+    all.setAttribute("aria-expanded", on ? "true" : "false");
+  });
 
   // a link to a card opens its details (a deep link shows everything about that one)
   function openTarget() {

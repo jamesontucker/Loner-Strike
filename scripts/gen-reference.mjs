@@ -211,7 +211,11 @@ const saysSame = (a, b) => {
   return !words.length || words.filter((w) => have.has(w)).length / words.length >= 0.6;
 };
 /** The node's kind: an event, a value (pure), flow, or an action. */
-const kindOf = (n) => (n.event ? "event" : n.pure ? "value" : n.category === "Flow" ? "flow" : "action");
+// Flow: the Flow category, every flow.* node, loops (an exec out called Each or
+// Loop Body) and plain True/False branches.
+const execOuts = (n) => (n.outputs || []).filter((p) => p.type === "exec").map((p) => (p.label || p.id || "").toLowerCase());
+const isFlow = (n) => n.category === "Flow" || n.type.startsWith("flow.") || /(^|\.)for_each/.test(n.type) || execOuts(n).some((l) => l === "each" || l === "loop body") || (execOuts(n).length === 2 && execOuts(n).every((l) => l === "true" || l === "false"));
+const kindOf = (n) => (n.event ? "event" : n.pure ? "value" : isFlow(n) ? "flow" : "action");
 /** What the help says about bots, sentence by sentence. */
 const botLines = (n) => [n.what, n.more, n.needs].join(" ").split(/(?<=[.!?])\s+/).filter((x) => /\bbots?\b/i.test(x));
 const hasBots = (n) => n.category === "Bots" || botLines(n).length > 0;
@@ -225,8 +229,10 @@ function baseCss() {
 /** A reference page: the docs' top bar, the search with filters, the sidebar, the main column, On this page. */
 function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true, section = "" }) {
   // (the three references and the guides are always one click away)
-  const sw = [["nodes", "reference/nodes.html", "Studio nodes"], ["entities", "reference/entities.html", "Map entities"], ["editor", "reference/editor.html", "Editor"], ["guides", "reference/#guides", "Guides"]]
-    .map(([id, href, label]) => `<a href="${up}${href}"${id === section ? ' aria-current="true"' : ""}>${label}</a>`).join("");
+  const sw = [["nodes", "reference/nodes.html", "Nodes", "Studio nodes"], ["entities", "reference/entities.html", "Entities", "Map entities"], ["editor", "reference/editor.html", "Editor", "Editor tools"], ["guides", "reference/#guides", "Guides", "Guides"]]
+    .map(([id, href, label, full]) => `<a href="${up}${href}" title="${full}"${id === section ? ' aria-current="true"' : ""}>${label}</a>`).join("");
+  // (phones: only the current category stays in the menu, the rest behind one button)
+  if ((side.match(/<details/g) || []).length > 8 && side.includes('class="here"')) side += `<button class="ref-all" type="button" aria-expanded="false">All ${section === "entities" ? "groups" : "categories"}</button>`;
   side = `<div class="ref-switch" role="navigation" aria-label="Reference sections">${sw}</div>${side}`;
   const filters = kinds
     ? `<label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
@@ -292,6 +298,17 @@ function nodeSide(data, here, up) {
 const pinColor = (types, t) => types[t]?.color ?? (t.startsWith("enum:") ? "#ff9ad5" : t.startsWith("struct:") ? "#7fb2ff" : t.startsWith("array:") ? "#b0b0b0" : "#cccccc");
 const CAT_COLORS = { Events: "#8b2e2e", Flow: "#4b4b4b", Conditions: "#3e6a3e", Numbers: "#3e6a3e", Text: "#5a3e6a", Variables: "#3e5a6a" };
 
+/** Nodes whose pins are counted get "+ Add pin" on the canvas (X2, pinCountOps.ts): how many show
+ *  at first and how many they can have. */
+function addPinNote(n) {
+  const count = (n.settings || []).find((s) => s.id === "count");
+  const cases = (n.settings || []).find((s) => s.id === "cases");
+  let text = "";
+  if (["flow.sequence", "flow.multi_gate", "array.make"].includes(n.type) && count) text = `${count.default} shown; add up to ${count.max} with + Add pin.`;
+  else if (["flow.switch_num", "flow.switch_text"].includes(n.type) && cases) text = `${String(cases.default).split(",").filter((x) => x.trim()).length} shown; add up to 16 with + Add pin.`;
+  return text ? `<p class="ty">${esc(text)}</p>` : "";
+}
+
 /** The node drawn like the Studio's: its title bar, inputs on the left, outputs on the right. */
 function nodeGfx(data, n) {
   const pin = (p, side) => {
@@ -320,12 +337,11 @@ function nodeCard(data, n, byType) {
   const bots = botLines(n).filter((x) => !norm(n.what).includes(norm(x)));
   const notes = [more, n.needs, n.risk ? `Careful: ${n.risk}` : "", n.cost ? `Cost: ${n.cost}` : ""].filter(Boolean);
   const sec = (label, count, body) => (count ? `<details><summary>${label} <span class="n">(${count})</span></summary>${body}</details>` : "");
-  const ins = n.inputs.filter((p) => p.type !== "exec"), outs = n.outputs.filter((p) => p.type !== "exec");
   return `<article class="card" id="${nodeId(n.type)}" aria-labelledby="${nodeId(n.type)}-h">
 <header><h3 id="${nodeId(n.type)}-h"><a href="#${nodeId(n.type)}">${esc(n.title)}</a></h3><span class="badge k-${k}">${k}</span><span class="id">${esc(n.type)}</span><button class="copy-link" type="button" data-id="${nodeId(n.type)}" aria-label="Copy a link to ${esc(n.title)}">Copy link</button></header>
 ${nodeGfx(data, n)}
-<p class="what">${esc(n.what)}</p>
-${sec("Inputs", ins.length, `<dl>${pinDl(n.inputs, "in")}</dl>`)}${sec("Outputs", outs.length, `<dl>${pinDl(n.outputs, "out")}</dl>`)}${sec("Settings", n.settings.length, `<dl>${n.settings.map(setting).join("")}</dl>`)}${sec("Limits", n.limits.length, `<dl>${n.limits.map((l) => `<dt>${esc(l.label)}</dt><dd>${esc(`${l.default} by default; hosts can raise it to ${l.max}. Above ${l.lagAbove} the server may slow down.`)}</dd>`).join("")}</dl>`)}${sec("Bots", bots.length, `<p>${esc(bots.join(" "))}</p>`)}${sec("Notes", notes.length, notes.map((t) => `<p>${esc(t)}</p>`).join(""))}
+<p class="what">${esc(n.what)}</p>${addPinNote(n)}
+${sec("Inputs", n.inputs.length, `<dl>${pinDl(n.inputs, "in")}</dl>`)}${sec("Outputs", n.outputs.length, `<dl>${pinDl(n.outputs, "out")}</dl>`)}${sec("Settings", n.settings.length, `<dl>${n.settings.map(setting).join("")}</dl>`)}${sec("Limits", n.limits.length, `<dl>${n.limits.map((l) => `<dt>${esc(l.label)}</dt><dd>${esc(`${l.default} by default; hosts can raise it to ${l.max}. Above ${l.lagAbove} the server may slow down.`)}</dd>`).join("")}</dl>`)}${sec("Bots", bots.length, `<p>${esc(bots.join(" "))}</p>`)}${sec("Notes", notes.length, notes.map((t) => `<p>${esc(t)}</p>`).join(""))}
 ${n.related.filter((r) => byType[r]).length ? `<div class="chips"><span class="lbl">Related:</span>${n.related.filter((r) => byType[r]).map((r) => `<a class="chip" href="${byType[r].category === n.category ? "" : `${slug(byType[r].category)}.html`}#${nodeId(r)}">${esc(byType[r].title)}</a>`).join("")}</div>` : ""}
 </article>`;
 }

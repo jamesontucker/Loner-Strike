@@ -108,3 +108,25 @@ test("the entity pages", async ({ request }) => {
   for (const m of index.matchAll(/href="(entities\/[^"]+\.html)"/g)) count += ((await (await request.get(`/reference/${m[1]}`)).text()).match(/class="card" id="e-/g) ?? []).length;
   expect(count).toBe(ents.length);
 });
+
+test("the switcher stays one line at 1024; the phone menu keeps only the current category; loops are Flow", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.goto("/reference/nodes/arrays.html");
+  const tops = await page.$$eval(".ref-switch a", (as) => new Set(as.map((a) => Math.round(a.getBoundingClientRect().top))).size);
+  expect(tops).toBe(1);
+  const card = page.locator("#n-flow-for-each-array");
+  await expect(card.locator(".badge")).toHaveText(/flow/i);
+  await expect(card.locator("summary", { hasText: "Inputs" })).toContainText("(3)");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click(".ref-menu-btn");
+  const side = page.locator(".ref-side");
+  await expect(side.locator("details.here > summary")).toContainText("Arrays");
+  await expect(side.locator("details:not(.here)").first()).toBeHidden();
+  await side.locator(".ref-all").click();
+  await expect(side.locator("details:not(.here)").first()).toBeVisible();
+  // (the landing's group header: the marker beside the label, like every other)
+  await page.goto("/reference/");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const gap = await page.$eval(".ref-side details.here > summary", (s) => s.querySelector("a")!.getBoundingClientRect().left - s.getBoundingClientRect().left);
+  expect(gap).toBeLessThan(40);
+});
