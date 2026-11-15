@@ -26,10 +26,9 @@ Retry every / Retry tries, and Then / Spawned / Failed / Entity / Success / Move
 nodes that have them (Spawn Prop, Spawn Creature, Spawn Entity, Spawn Weapon On Ground, Create Component), with a
 fallback chain and a Retry example; Limits' "What's skipped" points there.
 
-## Waiting on
-- Spawn Projectile, Spawn NPC and Spawn Interactable: the creature fixer is adding the same setting and outputs.
-  The guide says they're coming and to check their output with Is Valid? until then. When they commit, add them to
-  the node list at the top of "When the spot is taken" and drop that sentence.
+## Spawn outcome, the last three (2026-11-15, after 4a11ca7b)
+Spawn NPC, Spawn Interactable and Spawn Projectile added to "When the spot is taken", with their defaults (NPC: try a
+nearby spot; Interactable: don't spawn if blocked; Projectile: always spawn, it isn't solid).
 
 ## Types and casting (2026-11-15, after e5c437a7)
 site/reference/guides/types.html: the type menu's groups, one Number with # marks, Weapon / Hit Zone / Damage Kind into
