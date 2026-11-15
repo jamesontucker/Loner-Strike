@@ -8370,7 +8370,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Color choice: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Color choice."
 },
 {
 "id":"then",
@@ -22503,7 +22503,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Color choice: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Color choice."
 },
 {
 "id":"then",
@@ -24943,7 +24943,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Color choice: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Color choice."
 },
 {
 "id":"then",
@@ -25313,7 +25313,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Red, Green and Blue settings: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Red, Green and Blue settings."
 },
 {
 "id":"then",
@@ -25424,7 +25424,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Red, Green and Blue settings: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Red, Green and Blue settings."
 },
 {
 "id":"sprite",
@@ -25907,7 +25907,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Red, Green and Blue settings: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Red, Green and Blue settings."
 },
 {
 "id":"then",
@@ -26047,7 +26047,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): a color (red, green, blue). Optional."
+"help":"A color to use instead of the Red, Green and Blue settings: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: the Red, Green and Blue settings."
 },
 {
 "id":"then",
@@ -57916,12 +57916,12 @@
 {
 "id":"a",
 "dir":"in",
-"help":"A: a color (red, green, blue). Needs a wire."
+"help":"A: a color (a Color node with its picker, Make Color or a Color variable). Needs a wire."
 },
 {
 "id":"b",
 "dir":"in",
-"help":"B: a color (red, green, blue). Needs a wire."
+"help":"B: a color (a Color node with its picker, Make Color or a Color variable). Needs a wire."
 },
 {
 "id":"t",

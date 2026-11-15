@@ -19,7 +19,7 @@ TYPE_WORDS = {
     # (the typed values of graph version 4: a pin's help never falls back to the bare type id)
     "model": "a model file (.mdl)", "sprite": "a sprite file (.spr)", "sound": "a sound file (.wav)",
     "decal": "a decal (a spray-like mark from the game's decals)", "visual": "a model or sprite file",
-    "color": "a color (red, green, blue)", "component": "a component entity (a Component handle)",
+    "color": "a color (a Color node with its picker, Make Color or a Color variable)", "component": "a component entity (a Component handle)",
     "creature": "a creature entity (a Creature handle)", "npc": "an NPC entity (an NPC handle)",
     "projectile": "a projectile entity (a Projectile handle)", "volume": "a trigger volume entity (a Trigger Volume handle)",
     "objmarker": "an objective marker (an Objective Marker handle)", "soundloop": "a looping sound (a Sound Loop handle, to stop it later)",
@@ -331,6 +331,17 @@ NOTES.update({
 })
 
 EXEC_OUT = {"then": "Goes on when it's done.", "true": "Runs when the answer is yes.", "false": "Runs when the answer is no.", "each": "Runs once for every item.", "body": "Runs once for every step.", "none": "Runs when nothing was found.", "tick": "Runs every time the timer fires.", "done": "Runs when it's over.", "default": "Runs when no case matches.", "valid": "Runs when it's there.", "invalid": "Runs when it isn't."}
+
+
+# The optional Color pin on nodes that also have their own color settings (types step 3): what it
+# overrides. Their Red / Green / Blue settings still take three numbers and keep that wording.
+COLOR_PIN = {
+    "player.set_glow": "the Color choice", "player.fade": "the Color choice", "fx.beam": "the Color choice",
+    "msg.status_icon": "the Red, Green and Blue settings", "fx.marker": "the Red, Green and Blue settings",
+    "fun.trail": "the Red, Green and Blue settings", "fun.burst": "the Red, Green and Blue settings",
+}
+for _k, _what in COLOR_PIN.items():
+    NOTES.setdefault(_k, {}).setdefault("pins", {}).setdefault("color", f"A color to use instead of {_what}: wire a Color node (pick it with its picker), Make Color or a Color variable. Not wired: {_what}.")
 
 def pin_help(d, p, out, notes):
     if p["id"] in notes.get("pins", {}):
