@@ -58,7 +58,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 725
+    "y": 720
    },
    "params": {}
   },
@@ -67,7 +67,7 @@
    "type": "flow.for_each_entity",
    "pos": {
     "x": 3065,
-    "y": 679
+    "y": 685
    },
    "params": {
     "by": "class",
@@ -145,7 +145,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1856
+    "y": 1839
    },
    "params": {}
   },
@@ -154,7 +154,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1908
+    "y": 1891
    },
    "params": {
     "var": "alive"
@@ -165,7 +165,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1959
+    "y": 1944
    },
    "params": {
     "text": "Squads left:",
@@ -178,7 +178,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 2177
+    "y": 2165
    },
    "params": {
     "op": "le",
@@ -190,7 +190,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 2039
+    "y": 2028
    },
    "params": {}
   },
@@ -210,7 +210,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1839
+    "y": 1834
    },
    "params": {
     "text": "Winner:",
@@ -223,7 +223,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 3065,
-    "y": 1888
+    "y": 1882
    },
    "params": {
     "amount": 5
@@ -234,7 +234,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 2126
+    "y": 2108
    },
    "params": {}
   },
@@ -243,7 +243,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 2011
+    "y": 1995
    },
    "params": {}
   },
@@ -252,7 +252,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 2188
+    "y": 2170
    },
    "params": {
     "winner": "draw"
@@ -341,7 +341,7 @@
    "type": "bots.no_buy",
    "pos": {
     "x": 565,
-    "y": 701
+    "y": 696
    },
    "params": {
     "on": true
@@ -352,7 +352,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 1065,
-    "y": 701
+    "y": 696
    },
    "params": {
     "phase": "loot"
@@ -363,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 1565,
-    "y": 679
+    "y": 674
    },
    "params": {
     "var": "looting",
@@ -375,7 +375,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 2065,
-    "y": 701
+    "y": 696
    },
    "params": {
     "text": "Squads forming: say slash squad"
@@ -386,7 +386,7 @@
    "type": "br.lobby",
    "pos": {
     "x": 2565,
-    "y": 701
+    "y": 696
    },
    "params": {
     "secs": 15
@@ -397,7 +397,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 65,
-    "y": 1554
+    "y": 1539
    },
    "params": {}
   },
@@ -406,7 +406,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 1508
+    "y": 1515
    },
    "params": {
     "which": "alive"
@@ -513,7 +513,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 565,
-    "y": 1096
+    "y": 1091
    },
    "params": {}
   },
@@ -522,7 +522,7 @@
    "type": "dmg.block",
    "pos": {
     "x": 1065,
-    "y": 1120
+    "y": 1115
    },
    "params": {}
   },
@@ -531,7 +531,7 @@
    "type": "br.squads_alive",
    "pos": {
     "x": 65,
-    "y": 2185
+    "y": 2169
    },
    "params": {}
   }
@@ -1129,11 +1129,11 @@
    "text": "When one squad is left, a player of it is named the winner (5 points) and the round ends.",
    "pos": {
     "x": 41,
-    "y": 1793
+    "y": 1788
    },
    "size": {
     "w": 3778,
-    "h": 529
+    "h": 516
    }
   },
   {
