@@ -604,6 +604,7 @@ mod tests {
                 "lsg_vol_spawn(", "lsg_vol_has(", "lsg_vol_remove(", "lsg_vol_begin_hook(vol, who)", "lsg_vol_end_hook(vol, who)",
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
                 "if (lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
+                "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
             ] {
                 assert!(src.contains(want), "{want} (debug {debug})");
             }

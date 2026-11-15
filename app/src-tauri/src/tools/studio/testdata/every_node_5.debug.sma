@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_5"
 #define LSG_CTX 9
 #define LSG_TXT 2
-#define LSG_N 28
+#define LSG_N 31
 #define LSG_TASK 7310000
-#pragma dynamic 22016
+#pragma dynamic 23936
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -37,9 +37,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_OT 1
 
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
-#define LSD_N 28
-new const g_lsdIds[LSD_N][] = { "rs", "pk", "semi", "semi2", "vs", "vs2", "prop", "solid", "size", "dmg", "hp", "phpr", "povl", "rm", "ob", "pob", "oe", "poe", "ot", "pot", "bh", "pbh", "ld", "pld", "ah", "pah", "pt", "ppt" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 31
+new const g_lsdIds[LSD_N][] = { "rs", "pk", "semi", "semi2", "vs", "vs2", "prop", "solid", "size", "dmg", "hp", "phpr", "povl", "rm", "av", "av2", "avs", "ob", "pob", "oe", "poe", "ot", "pot", "bh", "pbh", "ld", "pld", "ah", "pah", "pt", "ppt" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -3319,7 +3319,7 @@ public lsg_pre_damage(victim, inflictor, attacker, Float:damage, bits)
 	lsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind
 	ctx[3] = bits & DMG_BULLET && get_ent_data(victim, "CBaseMonster", "m_LastHitGroup") == HIT_HEAD ? 1 : 0 // headshot (W2: as Player Hurt)
 	copy(g_lsgTxt[1], 63, lsg_hitgroup(victim, bits)) // hitgroup
-	lsg_n24(ctx)
+	lsg_n27(ctx)
 	new Float:now = g_lsgDmg, bool:block = g_lsgDmgBlock
 	g_lsgDmg = was
 	g_lsgDmgBlock = wasBlock
@@ -3355,12 +3355,12 @@ public lsg_on_player_touched(ent, id)
 	ctx[0] = id // player
 	ctx[1] = ent // entity
 	if (lsg_named(ent, "zone"))
-		lsg_n26(ctx)
+		lsg_n29(ctx)
 	return PLUGIN_CONTINUE
 }
 
-stock Float:g_lsgTouch18[2048]
-stock Float:g_lsgBullet20[33]
+stock Float:g_lsgTouch21[2048]
+stock Float:g_lsgBullet23[33]
 public lsg_col_pre(id)
 {
 	if (id < 1 || id > MaxClients || !is_user_alive(id))
@@ -3399,7 +3399,7 @@ public lsg_col_post(id)
 		ctx[1] = _:speed // speed
 		ctx[2] = _:lsg_fall_damage(speed) // damage
 		if (speed > 250.0)
-			lsg_n22(ctx)
+			lsg_n25(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -3421,7 +3421,7 @@ lsg_vol_begin_hook(vol, who)
 	ctx[0] = vol // volume
 	ctx[1] = who // who
 	if (lsg_named(vol, "zone"))
-		lsg_n14(ctx)
+		lsg_n17(ctx)
 	// (Player Touched hears a volume like a map's trigger_multiple)
 	if (who >= 1 && who <= MaxClients)
 		lsg_on_player_touched(vol, who)
@@ -3432,7 +3432,7 @@ lsg_vol_end_hook(vol, who)
 	new ctx[LSG_CTX]
 	ctx[0] = vol // volume
 	ctx[1] = who // who
-	lsg_n16(ctx)
+	lsg_n19(ctx)
 }
 
 public lsg_col_touch(ent, other)
@@ -3444,10 +3444,10 @@ public lsg_col_touch(ent, other)
 	new ctx[LSG_CTX]
 	ctx[0] = ent // entity
 	ctx[1] = other // other
-	if (now - g_lsgTouch18[ent] >= 1.0)
+	if (now - g_lsgTouch21[ent] >= 1.0)
 	{
-		g_lsgTouch18[ent] = now
-		lsg_n18(ctx)
+		g_lsgTouch21[ent] = now
+		lsg_n21(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -3461,7 +3461,7 @@ public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)
 	if (!id || skip != id)
 		return FMRES_IGNORED
 	new Float:now = get_gametime(), go = 0
-	if (now - g_lsgBullet20[id] >= 0.2)
+	if (now - g_lsgBullet23[id] >= 0.2)
 		go = 1
 	if (!go)
 		return FMRES_IGNORED
@@ -3481,10 +3481,10 @@ public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)
 	ctx[4] = hit ? 0 : 1 // world
 	copy(g_lsgTxt[0], 63, wn) // weapon
 	lsg_col_hitgroup(hit, tr, g_lsgTxt[1], 63) // hitgroup
-	if (now - g_lsgBullet20[id] >= 0.2)
+	if (now - g_lsgBullet23[id] >= 0.2)
 	{
-		g_lsgBullet20[id] = now
-		lsg_n20(ctx)
+		g_lsgBullet23[id] = now
+		lsg_n23(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -3756,41 +3756,54 @@ lsg_n13(ctx[])
 		lsd_error(13, "Nothing removed: that isn't a trigger volume.")
 	else
 		lsd_exit(13, "removed")
+	lsg_n14(ctx)
 }
 
-// Begin Overlap (ob)
+// Bots Avoid Area (av)
 lsg_n14(ctx[])
 {
+	new lsi1 = ctx[8]
 	if (lsd_want(14))
 	{
 	lsd_begin()
+	lsd_in_entity("At entity", lsi1)
 	}
 	if (lsd_enter(14, ctx))
 		return
-	lsd_exit(14, "ran")
+	if (!ls_components_running())
+		lsd_error(14, "Not done: gm_components isn't running on this server.")
+	else
+	{
+		ls_bots_avoid_ent("carrier", lsi1, 200.0, 7.0, 0.0, 1)
+		lsd_exit(14, "done")
+	}
 	lsg_n15(ctx)
 }
 
-// Print String (pob)
+// Bots Avoid Area (av2)
 lsg_n15(ctx[])
 {
-	new lsi0 = ctx[1]
+	new lsi0 = lsg_vec(0.0, 0.0, 36.0)
 	if (lsd_want(15))
 	{
 	lsd_begin()
-	lsd_in_entity("Value", lsi0)
+	lsd_in_text("Position", lsg_vtext(lsi0))
 	}
 	if (lsd_enter(15, ctx))
 		return
-	new t[192]
-	formatex(t, charsmax(t), "%s %d", "begin overlap", lsi0)
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(15, esc)
+	new Float:lsgAv[3]
+	lsg_vto(lsi0, lsgAv)
+	if (!ls_components_running())
+		lsd_error(15, "Not done: gm_components isn't running on this server.")
+	else
+	{
+		ls_bots_avoid("spot", lsgAv, 128.0, 3.0, 30.0, 0)
+		lsd_exit(15, "done")
+	}
+	lsg_n16(ctx)
 }
 
-// End Overlap (oe)
+// Bots Stop Avoiding (avs)
 lsg_n16(ctx[])
 {
 	if (lsd_want(16))
@@ -3799,189 +3812,239 @@ lsg_n16(ctx[])
 	}
 	if (lsd_enter(16, ctx))
 		return
-	lsd_exit(16, "ran")
-	lsg_n17(ctx)
+	if (!ls_components_running())
+		lsd_error(16, "Not done: gm_components isn't running on this server.")
+	else
+	{
+		ls_bots_avoid_stop("spot")
+		lsd_exit(16, "done")
+	}
 }
 
-// Print String (poe)
+// Begin Overlap (ob)
 lsg_n17(ctx[])
 {
-	new lsi0 = ctx[1]
 	if (lsd_want(17))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(17, ctx))
+		return
+	lsd_exit(17, "ran")
+	lsg_n18(ctx)
+}
+
+// Print String (pob)
+lsg_n18(ctx[])
+{
+	new lsi0 = ctx[1]
+	if (lsd_want(18))
 	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi0)
 	}
-	if (lsd_enter(17, ctx))
+	if (lsd_enter(18, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "begin overlap", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(18, esc)
+}
+
+// End Overlap (oe)
+lsg_n19(ctx[])
+{
+	if (lsd_want(19))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(19, ctx))
+		return
+	lsd_exit(19, "ran")
+	lsg_n20(ctx)
+}
+
+// Print String (poe)
+lsg_n20(ctx[])
+{
+	new lsi0 = ctx[1]
+	if (lsd_want(20))
+	{
+	lsd_begin()
+	lsd_in_entity("Value", lsi0)
+	}
+	if (lsd_enter(20, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "end overlap", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(17, esc)
+	lsd_exit(20, esc)
 }
 
 // Entity Touched (ot)
-lsg_n18(ctx[])
+lsg_n21(ctx[])
 {
-	if (lsd_want(18))
+	if (lsd_want(21))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(18, ctx))
+	if (lsd_enter(21, ctx))
 		return
-	lsd_exit(18, "ran")
-	lsg_n19(ctx)
+	lsd_exit(21, "ran")
+	lsg_n22(ctx)
 }
 
 // Print String (pot)
-lsg_n19(ctx[])
+lsg_n22(ctx[])
 {
 	new lsi0 = ctx[1]
-	if (lsd_want(19))
+	if (lsd_want(22))
 	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi0)
 	}
-	if (lsd_enter(19, ctx))
+	if (lsd_enter(22, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "touched", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(19, esc)
+	lsd_exit(22, esc)
 }
 
 // Bullet Hit (bh)
-lsg_n20(ctx[])
+lsg_n23(ctx[])
 {
-	if (lsd_want(20))
+	if (lsd_want(23))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(20, ctx))
+	if (lsd_enter(23, ctx))
 		return
-	lsd_exit(20, "ran")
-	lsg_n21(ctx)
+	lsd_exit(23, "ran")
+	lsg_n24(ctx)
 }
 
 // Print String (pbh)
-lsg_n21(ctx[])
+lsg_n24(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[1])
-	if (lsd_want(21))
+	if (lsd_want(24))
 	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
 	}
-	if (lsd_enter(21, ctx))
+	if (lsd_enter(24, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "bullet hit", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(21, esc)
+	lsd_exit(24, esc)
 }
 
 // Player Landed (ld)
-lsg_n22(ctx[])
+lsg_n25(ctx[])
 {
-	if (lsd_want(22))
+	if (lsd_want(25))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(22, ctx))
+	if (lsd_enter(25, ctx))
 		return
-	lsd_exit(22, "ran")
-	lsg_n23(ctx)
+	lsd_exit(25, "ran")
+	lsg_n26(ctx)
 }
 
 // Print String (pld)
-lsg_n23(ctx[])
+lsg_n26(ctx[])
 {
 	new Float:lsi0 = Float:ctx[1]
-	if (lsd_want(23))
+	if (lsd_want(26))
 	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
 	}
-	if (lsd_enter(23, ctx))
+	if (lsd_enter(26, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "landed", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(23, esc)
+	lsd_exit(26, esc)
 }
 
 // Player About To Be Hurt (ah)
-lsg_n24(ctx[])
+lsg_n27(ctx[])
 {
-	if (lsd_want(24))
+	if (lsd_want(27))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(24, ctx))
+	if (lsd_enter(27, ctx))
 		return
-	lsd_exit(24, "called")
-	lsg_n25(ctx)
+	lsd_exit(27, "called")
+	lsg_n28(ctx)
 }
 
 // Print String (pah)
-lsg_n25(ctx[])
+lsg_n28(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[1])
-	if (lsd_want(25))
+	if (lsd_want(28))
 	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
 	}
-	if (lsd_enter(25, ctx))
+	if (lsd_enter(28, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "about to be hurt", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(25, esc)
+	lsd_exit(28, esc)
 }
 
 // Player Touched (pt)
-lsg_n26(ctx[])
+lsg_n29(ctx[])
 {
-	if (lsd_want(26))
+	if (lsd_want(29))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(26, ctx))
+	if (lsd_enter(29, ctx))
 		return
-	lsd_exit(26, "ran")
-	lsg_n27(ctx)
+	lsd_exit(29, "ran")
+	lsg_n30(ctx)
 }
 
 // Print String (ppt)
-lsg_n27(ctx[])
+lsg_n30(ctx[])
 {
 	new lsi0 = ctx[0]
-	if (lsd_want(27))
+	if (lsd_want(30))
 	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
 	}
-	if (lsd_enter(27, ctx))
+	if (lsd_enter(30, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "player touched", lsg_name(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(27, esc)
+	lsd_exit(30, esc)
 }
 
 lsd_call(n, const data[])
@@ -4019,5 +4082,8 @@ lsd_call(n, const data[])
 		case 25: lsg_n25(ctx)
 		case 26: lsg_n26(ctx)
 		case 27: lsg_n27(ctx)
+		case 28: lsg_n28(ctx)
+		case 29: lsg_n29(ctx)
+		case 30: lsg_n30(ctx)
 	}
 }

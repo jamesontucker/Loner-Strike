@@ -2413,6 +2413,11 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                     p.push(Problem::warn(Some(&n.id), "There's no Spawn Trigger Volume in this mode: nothing makes a volume for this node."));
                 }
             }
+            "bots.avoid" => {
+                if v.data_source(&n.id, "at_ent").is_none() && v.data_source(&n.id, "pos").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Bots Avoid Area needs a Position or an entity wired into At entity."));
+                }
+            }
             // ---- end collision, overlap and hits ----
             "fun.burst" => {
                 if v.data_source(&n.id, "at").is_none() && v.data_source(&n.id, "pos").is_none() {

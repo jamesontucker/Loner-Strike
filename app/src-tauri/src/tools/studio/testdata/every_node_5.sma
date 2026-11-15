@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_5"
 #define LSG_CTX 9
 #define LSG_TXT 2
-#define LSG_N 28
+#define LSG_N 31
 #define LSG_TASK 7310000
-#pragma dynamic 22016
+#pragma dynamic 23936
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -2614,7 +2614,7 @@ public lsg_pre_damage(victim, inflictor, attacker, Float:damage, bits)
 	lsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind
 	ctx[3] = bits & DMG_BULLET && get_ent_data(victim, "CBaseMonster", "m_LastHitGroup") == HIT_HEAD ? 1 : 0 // headshot (W2: as Player Hurt)
 	copy(g_lsgTxt[1], 63, lsg_hitgroup(victim, bits)) // hitgroup
-	lsg_n24(ctx)
+	lsg_n27(ctx)
 	new Float:now = g_lsgDmg, bool:block = g_lsgDmgBlock
 	g_lsgDmg = was
 	g_lsgDmgBlock = wasBlock
@@ -2650,12 +2650,12 @@ public lsg_on_player_touched(ent, id)
 	ctx[0] = id // player
 	ctx[1] = ent // entity
 	if (lsg_named(ent, "zone"))
-		lsg_n26(ctx)
+		lsg_n29(ctx)
 	return PLUGIN_CONTINUE
 }
 
-stock Float:g_lsgTouch18[2048]
-stock Float:g_lsgBullet20[33]
+stock Float:g_lsgTouch21[2048]
+stock Float:g_lsgBullet23[33]
 public lsg_col_pre(id)
 {
 	if (id < 1 || id > MaxClients || !is_user_alive(id))
@@ -2694,7 +2694,7 @@ public lsg_col_post(id)
 		ctx[1] = _:speed // speed
 		ctx[2] = _:lsg_fall_damage(speed) // damage
 		if (speed > 250.0)
-			lsg_n22(ctx)
+			lsg_n25(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -2716,7 +2716,7 @@ lsg_vol_begin_hook(vol, who)
 	ctx[0] = vol // volume
 	ctx[1] = who // who
 	if (lsg_named(vol, "zone"))
-		lsg_n14(ctx)
+		lsg_n17(ctx)
 	// (Player Touched hears a volume like a map's trigger_multiple)
 	if (who >= 1 && who <= MaxClients)
 		lsg_on_player_touched(vol, who)
@@ -2727,7 +2727,7 @@ lsg_vol_end_hook(vol, who)
 	new ctx[LSG_CTX]
 	ctx[0] = vol // volume
 	ctx[1] = who // who
-	lsg_n16(ctx)
+	lsg_n19(ctx)
 }
 
 public lsg_col_touch(ent, other)
@@ -2739,10 +2739,10 @@ public lsg_col_touch(ent, other)
 	new ctx[LSG_CTX]
 	ctx[0] = ent // entity
 	ctx[1] = other // other
-	if (now - g_lsgTouch18[ent] >= 1.0)
+	if (now - g_lsgTouch21[ent] >= 1.0)
 	{
-		g_lsgTouch18[ent] = now
-		lsg_n18(ctx)
+		g_lsgTouch21[ent] = now
+		lsg_n21(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -2756,7 +2756,7 @@ public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)
 	if (!id || skip != id)
 		return FMRES_IGNORED
 	new Float:now = get_gametime(), go = 0
-	if (now - g_lsgBullet20[id] >= 0.2)
+	if (now - g_lsgBullet23[id] >= 0.2)
 		go = 1
 	if (!go)
 		return FMRES_IGNORED
@@ -2776,10 +2776,10 @@ public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)
 	ctx[4] = hit ? 0 : 1 // world
 	copy(g_lsgTxt[0], 63, wn) // weapon
 	lsg_col_hitgroup(hit, tr, g_lsgTxt[1], 63) // hitgroup
-	if (now - g_lsgBullet20[id] >= 0.2)
+	if (now - g_lsgBullet23[id] >= 0.2)
 	{
-		g_lsgBullet20[id] = now
-		lsg_n20(ctx)
+		g_lsgBullet23[id] = now
+		lsg_n23(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -2894,17 +2894,49 @@ lsg_n12(ctx[])
 lsg_n13(ctx[])
 {
 	lsg_vol_remove(g_lsgOut[5])
+	lsg_n14(ctx)
+}
+
+// Bots Avoid Area (av)
+lsg_n14(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_bots_avoid_ent("carrier", ctx[8], 200.0, 7.0, 0.0, 1)
+	}
+	lsg_n15(ctx)
+}
+
+// Bots Avoid Area (av2)
+lsg_n15(ctx[])
+{
+	new Float:lsgAv[3]
+	lsg_vto(lsg_vec(0.0, 0.0, 36.0), lsgAv)
+	if (!(!ls_components_running()))
+	{
+		ls_bots_avoid("spot", lsgAv, 128.0, 3.0, 30.0, 0)
+	}
+	lsg_n16(ctx)
+}
+
+// Bots Stop Avoiding (avs)
+lsg_n16(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_bots_avoid_stop("spot")
+	}
 	#pragma unused ctx
 }
 
 // Begin Overlap (ob)
-lsg_n14(ctx[])
+lsg_n17(ctx[])
 {
-	lsg_n15(ctx)
+	lsg_n18(ctx)
 }
 
 // Print String (pob)
-lsg_n15(ctx[])
+lsg_n18(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "begin overlap", ctx[1])
@@ -2912,13 +2944,13 @@ lsg_n15(ctx[])
 }
 
 // End Overlap (oe)
-lsg_n16(ctx[])
+lsg_n19(ctx[])
 {
-	lsg_n17(ctx)
+	lsg_n20(ctx)
 }
 
 // Print String (poe)
-lsg_n17(ctx[])
+lsg_n20(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "end overlap", ctx[1])
@@ -2926,13 +2958,13 @@ lsg_n17(ctx[])
 }
 
 // Entity Touched (ot)
-lsg_n18(ctx[])
+lsg_n21(ctx[])
 {
-	lsg_n19(ctx)
+	lsg_n22(ctx)
 }
 
 // Print String (pot)
-lsg_n19(ctx[])
+lsg_n22(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "touched", ctx[1])
@@ -2940,13 +2972,13 @@ lsg_n19(ctx[])
 }
 
 // Bullet Hit (bh)
-lsg_n20(ctx[])
+lsg_n23(ctx[])
 {
-	lsg_n21(ctx)
+	lsg_n24(ctx)
 }
 
 // Print String (pbh)
-lsg_n21(ctx[])
+lsg_n24(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "bullet hit", g_lsgTxt[1])
@@ -2955,13 +2987,13 @@ lsg_n21(ctx[])
 }
 
 // Player Landed (ld)
-lsg_n22(ctx[])
+lsg_n25(ctx[])
 {
-	lsg_n23(ctx)
+	lsg_n26(ctx)
 }
 
 // Print String (pld)
-lsg_n23(ctx[])
+lsg_n26(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "landed", lsg_ntext(Float:ctx[1]))
@@ -2969,13 +3001,13 @@ lsg_n23(ctx[])
 }
 
 // Player About To Be Hurt (ah)
-lsg_n24(ctx[])
+lsg_n27(ctx[])
 {
-	lsg_n25(ctx)
+	lsg_n28(ctx)
 }
 
 // Print String (pah)
-lsg_n25(ctx[])
+lsg_n28(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "about to be hurt", g_lsgTxt[1])
@@ -2984,13 +3016,13 @@ lsg_n25(ctx[])
 }
 
 // Player Touched (pt)
-lsg_n26(ctx[])
+lsg_n29(ctx[])
 {
-	lsg_n27(ctx)
+	lsg_n30(ctx)
 }
 
 // Print String (ppt)
-lsg_n27(ctx[])
+lsg_n30(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "player touched", lsg_name(ctx[0]))

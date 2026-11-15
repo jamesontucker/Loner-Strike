@@ -233,6 +233,47 @@
    "params": {}
   },
   {
+   "id": "av",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 3360,
+    "y": 0
+   },
+   "params": {
+    "tag": "carrier",
+    "radius": 200,
+    "strength": 7,
+    "secs": 0,
+    "team": "t"
+   }
+  },
+  {
+   "id": "av2",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 3600,
+    "y": 0
+   },
+   "params": {
+    "tag": "spot",
+    "radius": 128,
+    "strength": 3,
+    "secs": 30,
+    "team": "all"
+   }
+  },
+  {
+   "id": "avs",
+   "type": "bots.avoid_stop",
+   "pos": {
+    "x": 3840,
+    "y": 0
+   },
+   "params": {
+    "tag": "spot"
+   }
+  },
+  {
    "id": "ob",
    "type": "vol.on_begin",
    "pos": {
@@ -540,6 +581,39 @@
   {
    "id": "w13",
    "from": {
+    "node": "rm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "av",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "av",
+    "pin": "then"
+   },
+   "to": {
+    "node": "av2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "av2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "avs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
     "node": "pk",
     "pin": "player"
    },
@@ -549,7 +623,7 @@
    }
   },
   {
-   "id": "w14",
+   "id": "w17",
    "from": {
     "node": "vm",
     "pin": "out"
@@ -560,7 +634,7 @@
    }
   },
   {
-   "id": "w15",
+   "id": "w18",
    "from": {
     "node": "va",
     "pin": "out"
@@ -571,7 +645,7 @@
    }
   },
   {
-   "id": "w16",
+   "id": "w19",
    "from": {
     "node": "pk",
     "pin": "player"
@@ -582,7 +656,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w20",
    "from": {
     "node": "vo",
     "pin": "out"
@@ -593,7 +667,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w21",
    "from": {
     "node": "pk",
     "pin": "player"
@@ -604,7 +678,7 @@
    }
   },
   {
-   "id": "w19",
+   "id": "w22",
    "from": {
     "node": "prop",
     "pin": "out"
@@ -615,7 +689,7 @@
    }
   },
   {
-   "id": "w20",
+   "id": "w23",
    "from": {
     "node": "prop",
     "pin": "out"
@@ -626,7 +700,7 @@
    }
   },
   {
-   "id": "w21",
+   "id": "w24",
    "from": {
     "node": "prop",
     "pin": "out"
@@ -637,7 +711,7 @@
    }
   },
   {
-   "id": "w22",
+   "id": "w25",
    "from": {
     "node": "prop",
     "pin": "out"
@@ -648,7 +722,7 @@
    }
   },
   {
-   "id": "w23",
+   "id": "w26",
    "from": {
     "node": "prop",
     "pin": "out"
@@ -659,7 +733,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w27",
    "from": {
     "node": "hpr",
     "pin": "out"
@@ -670,7 +744,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w28",
    "from": {
     "node": "vs",
     "pin": "volume"
@@ -681,7 +755,7 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w29",
    "from": {
     "node": "pk",
     "pin": "player"
@@ -692,7 +766,7 @@
    }
   },
   {
-   "id": "w27",
+   "id": "w30",
    "from": {
     "node": "ovl",
     "pin": "out"
@@ -703,7 +777,7 @@
    }
   },
   {
-   "id": "w28",
+   "id": "w31",
    "from": {
     "node": "vs2",
     "pin": "volume"
@@ -714,51 +788,73 @@
    }
   },
   {
-   "id": "w29",
-   "from": {
-    "node": "ob",
-    "pin": "then"
-   },
-   "to": {
-    "node": "pob",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w30",
-   "from": {
-    "node": "ob",
-    "pin": "who"
-   },
-   "to": {
-    "node": "pob",
-    "pin": "value"
-   }
-  },
-  {
-   "id": "w31",
-   "from": {
-    "node": "oe",
-    "pin": "then"
-   },
-   "to": {
-    "node": "poe",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "w32",
    "from": {
-    "node": "oe",
-    "pin": "who"
+    "node": "pk",
+    "pin": "player"
    },
    "to": {
-    "node": "poe",
-    "pin": "value"
+    "node": "av",
+    "pin": "at_ent"
    }
   },
   {
    "id": "w33",
+   "from": {
+    "node": "vm",
+    "pin": "out"
+   },
+   "to": {
+    "node": "av2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ob",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pob",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "ob",
+    "pin": "who"
+   },
+   "to": {
+    "node": "pob",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "oe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "poe",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "oe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "poe",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w38",
    "from": {
     "node": "ot",
     "pin": "then"
@@ -769,7 +865,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w39",
    "from": {
     "node": "ot",
     "pin": "other"
@@ -780,7 +876,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w40",
    "from": {
     "node": "bh",
     "pin": "then"
@@ -791,7 +887,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w41",
    "from": {
     "node": "bh",
     "pin": "hitgroup"
@@ -802,7 +898,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w42",
    "from": {
     "node": "ld",
     "pin": "then"
@@ -813,7 +909,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w43",
    "from": {
     "node": "ld",
     "pin": "speed"
@@ -824,7 +920,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w44",
    "from": {
     "node": "ah",
     "pin": "then"
@@ -835,7 +931,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w45",
    "from": {
     "node": "ah",
     "pin": "hitgroup"
@@ -846,7 +942,7 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w46",
    "from": {
     "node": "pt",
     "pin": "then"
@@ -857,7 +953,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w47",
    "from": {
     "node": "pt",
     "pin": "player"

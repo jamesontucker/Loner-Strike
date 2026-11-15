@@ -2149,6 +2149,25 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        "bots.avoid" | "bots.avoid_stop" => {
+            let tag = pawn_str(&name_text(gen.text(n, def, "tag")));
+            let call = if def.kind == "bots.avoid_stop" {
+                format!("ls_bots_avoid_stop({tag})")
+            } else {
+                let num = |k: &str, lo: f64, hi: f64| float_lit(gen.num(n, def, k).clamp(lo, hi));
+                let team = match gen.choice(n, def, "team") { "t" => 1, "ct" => 2, _ => 0 };
+                let (r, st, secs) = (num("radius", 16.0, 4096.0), num("strength", 1.0, 10.0), num("secs", 0.0, 3600.0));
+                if v.data_source(id, "at_ent").is_some() {
+                    format!("ls_bots_avoid_ent({tag}, {}, {r}, {st}, {secs}, {team})", inp("at_ent", "entity"))
+                } else {
+                    b.line("\tnew Float:lsgAv[3]");
+                    b.line(format!("\tlsg_vto({}, lsgAv)", inp("pos", "vector")));
+                    format!("ls_bots_avoid({tag}, lsgAv, {r}, {st}, {secs}, {team})")
+                }
+            };
+            check(&mut b, comps, "Not done: gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]);
+            then_line(&mut b, "then");
+        }
         // ---- end collision, overlap and hits ----
         "cond.is_team" | "flow.branch" => {
             let cond = if def.kind == "cond.is_team" {

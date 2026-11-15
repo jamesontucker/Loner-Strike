@@ -28527,7 +28527,7 @@
 },
 {
 "id":"kind",
-"help":"Pick one: A perk, An upgrade bench, A mystery box, A trap's switch, A turret spot, An interactable (they press E on it)."
+"help":"Pick one: A perk, An upgrade bench, A mystery box, A trap's switch, A turret spot, An interactable (they press E on it), A pickup (they walk over it; Price is its weight 0-100, Order 0 an item, 1 a weapon, 2 health)."
 },
 {
 "id":"cost",
@@ -43068,8 +43068,8 @@
 ],
 "related":[
 "col.on_touch",
-"col.on_landed",
-"vol.on_end"
+"vol.on_end",
+"vol.on_begin"
 ],
 "example":{
 "caption":"Bullet Hit prints what it gives to the server console.",
@@ -43116,6 +43116,194 @@
 },
 "to":{
 "node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"bots.avoid":{
+"title":"Bots Avoid Area",
+"category":"Bots",
+"what":"Marks a place bots keep away from: a Position with a radius, or At entity (it rides along: a carrier, a burning player, a trigger volume; it ends when that's gone). Strength 1-10: 5 and up they won't stand in it, below they only path round it. Seconds: 0 till Bots Stop Avoiding. Which bots: every bot, or one team's (the carrier's own team can be left out). The same tag again moves or changes it. The bot brain keeps 32 at once.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"The position."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"tag",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+},
+{
+"id":"radius",
+"help":"A number from 16 to 4096."
+},
+{
+"id":"strength",
+"help":"A number from 1 to 10."
+},
+{
+"id":"secs",
+"help":"A number from 0 to 3600."
+},
+{
+"id":"team",
+"help":"Pick one: Every bot, Terrorist bots, Counter-Terrorist bots."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"bots.avoid_stop",
+"bot.release",
+"bot.trait"
+],
+"example":{
+"caption":"When a round starts, Bots Avoid Area runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"bots.avoid",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"tag":"danger",
+"radius":160,
+"strength":6,
+"secs":0,
+"team":"all"
+}
+},
+{
+"id":"vec",
+"type":"vec.make",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"x":0,
+"y":0,
+"z":64
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"pos"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"bots.avoid_stop":{
+"title":"Bots Stop Avoiding",
+"category":"Bots",
+"what":"Bots stop avoiding the place with this tag (Bots Avoid Area).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"tag",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"bots.avoid",
+"bot.release",
+"bot.trait"
+],
+"example":{
+"caption":"When a round starts, Bots Stop Avoiding runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"bots.avoid_stop",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"tag":"danger"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
 "pin":"exec"
 }
 }
