@@ -19798,6 +19798,100 @@
     }
    ],
    "keywords": "music soundtrack cd audio track mp3 cdaudio"
+  },
+  {
+   "type": "ent.bone_pos",
+   "title": "Get Bone Position",
+   "category": "Entities",
+   "help": "Where a bone of a player's or any model entity's skeleton is now (like Bip01 R Hand or Bip01 Head), and which way it points. Model is only for the list of bones; the bone is looked up by name in the model the entity really has, and Found is No when it has no such bone. Positions follow the server's animation: close, not pixel-exact.",
+   "inputs": [
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Angles"
+    },
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    }
+   ],
+   "params": [
+    {
+     "id": "model",
+     "label": "Model (for the list)",
+     "kind": "path",
+     "default": "models/player.mdl"
+    },
+    {
+     "id": "bone",
+     "label": "Bone",
+     "kind": "bone",
+     "default": "Bip01 R Hand"
+    }
+   ],
+   "pure": true,
+   "keywords": "bone skeleton hand head position bonepos"
+  },
+  {
+   "type": "ent.attachment_pos",
+   "title": "Get Attachment Position",
+   "category": "Entities",
+   "help": "Where an attachment point of an entity's model is now (a gun's muzzle, a hand; models number them 0 to 3), and its angles. Model is only for the list; Found is No when the entity's real model has no such attachment. Positions follow the server's animation: close, not pixel-exact.",
+   "inputs": [
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Angles"
+    },
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    }
+   ],
+   "params": [
+    {
+     "id": "model",
+     "label": "Model (for the list)",
+     "kind": "path",
+     "default": "models/player.mdl"
+    },
+    {
+     "id": "attachment",
+     "label": "Attachment",
+     "kind": "attachment",
+     "default": 0
+    }
+   ],
+   "pure": true,
+   "keywords": "attachment muzzle point position"
   }
  ]
 }

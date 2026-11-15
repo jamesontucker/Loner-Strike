@@ -14,6 +14,7 @@ import { askDelete } from "./DeleteDialog";
 import { useFreshFocus } from "./freshFocus";
 import { CreaturePicker } from "../common/CreaturePicker"; // shared creatures (CP-ui)
 import { AssetField, assetKindOf } from "../common/AssetField"; // T1fix: asset pickers
+import { ModelPointPicker } from "./ModelPointPicker"; // Y: Get Bone / Attachment Position
 
 /** Node params that name a creature type (tools/creatures.rs NODE_TYPE_PARAMS). */
 const CREATURE_PARAMS = ["creature.spawn:kind", "turret.setup:type", "creature.for_each:type", "creature.of_type:type", "creature.nearest:type"];
@@ -136,6 +137,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
       </select>
     );
   }
+  if (p.kind === "bone" || p.kind === "attachment") return <ModelPointPicker kind={p.kind} model={String(node.params.model ?? "models/player.mdl")} value={value as string | number} onChange={onChange} />;
   if (p.kind === "choice")
     return (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>

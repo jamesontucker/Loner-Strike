@@ -13,7 +13,7 @@ export type ParamDef = {
   label: string;
   /** name: an entity's name; keys: component keys; var: one of the graph's variables;
    *  varvalue: a value of that variable's type */
-  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "path" | "cevent" | "tline" | "table" | "column" | "marker" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases";
+  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "path" | "cevent" | "tline" | "table" | "column" | "marker" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "bone" | "attachment";
   default: string | number | boolean;
   choices?: [string, string][];
   min?: number;

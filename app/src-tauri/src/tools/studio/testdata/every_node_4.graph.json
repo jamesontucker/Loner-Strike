@@ -241,6 +241,78 @@
    "params": {
     "do": "release"
    }
+  },
+  {
+   "id": "bp",
+   "type": "ent.bone_pos",
+   "pos": {
+    "x": 4560,
+    "y": 300
+   },
+   "params": {
+    "model": "models/player.mdl",
+    "bone": "Bip01 R Hand"
+   }
+  },
+  {
+   "id": "ap",
+   "type": "ent.attachment_pos",
+   "pos": {
+    "x": 4800,
+    "y": 300
+   },
+   "params": {
+    "model": "models/player.mdl",
+    "attachment": 1
+   }
+  },
+  {
+   "id": "pb",
+   "type": "debug.print",
+   "pos": {
+    "x": 5040,
+    "y": 300
+   },
+   "params": {
+    "text": "hand [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pf",
+   "type": "debug.print",
+   "pos": {
+    "x": 5280,
+    "y": 300
+   },
+   "params": {
+    "text": "found [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pa",
+   "type": "debug.print",
+   "pos": {
+    "x": 5520,
+    "y": 300
+   },
+   "params": {
+    "text": "angles [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pt",
+   "type": "debug.print",
+   "pos": {
+    "x": 5760,
+    "y": 300
+   },
+   "params": {
+    "text": "att [0]",
+    "chat": false
+   }
   }
  ],
  "edges": [
@@ -605,6 +677,116 @@
    "to": {
     "node": "sp2",
     "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "cd1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "bp",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "pb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pf",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "bp",
+    "pin": "found"
+   },
+   "to": {
+    "node": "pf",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "pf",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pa",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "bp",
+    "pin": "angles"
+   },
+   "to": {
+    "node": "pa",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "pa",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "ap",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "pt",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bp",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ap",
+    "pin": "ent"
    }
   }
  ],

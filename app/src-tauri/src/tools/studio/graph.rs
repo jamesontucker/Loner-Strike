@@ -2672,6 +2672,15 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_path(s) => Ok(()),
             _ => Err(format!("{} is a file path of up to 64 letters, digits, _ - . or /.", def.label)),
         },
+        // a model's bone (by name) and attachment (0-3): Get Bone / Attachment Position
+        "bone" => match v.as_str() {
+            Some(s) if !s.is_empty() && valid_ent_name(s) => Ok(()),
+            _ => Err(format!("{} is a bone's name of up to 32 letters, digits, spaces, _ - or . (pick one from the list).", def.label)),
+        },
+        "attachment" => match v.as_f64() {
+            Some(n) if (0.0..=3.0).contains(&n) && n.fract() == 0.0 => Ok(()),
+            _ => Err(format!("{} is an attachment's number, 0 to 3.", def.label)),
+        },
         "entname" => match v.as_str() {
             Some(s) if valid_ent_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, spaces, _ - or .", def.label)),

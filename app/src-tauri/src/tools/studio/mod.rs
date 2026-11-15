@@ -28,6 +28,8 @@ pub mod tables;
 pub mod history;
 pub mod settings;
 pub mod modes_reload;
+// the bones and attachments of a model, for the Studio's picker (Y)
+pub mod modelpoints;
 #[cfg(test)]
 mod help_tests;
 #[cfg(test)]
@@ -1209,6 +1211,7 @@ async fn api_library_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Respo
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/tools/studio/status", get(api_status))
+        .merge(modelpoints::routes())
         .route("/api/tools/studio/graphs", get(api_graphs))
         .route("/api/tools/studio/graph/:id", get(api_graph).post(api_save))
         .route("/api/tools/studio/graph/:id/delete", post(api_delete))

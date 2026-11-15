@@ -31,6 +31,35 @@ const WEAPON_CLASSES: [&str; 29] = [
     "aug", "scout", "awp", "g3sg1", "sg550", "m249", "hegrenade", "flashbang", "smokegrenade", "c4",
 ];
 
+/// Get Bone Position / Get Attachment Position (pure: Entities, in this file too).
+const POINT_KINDS: [&str; 2] = ["ent.bone_pos", "ent.attachment_pos"];
+
+fn uses_points(g: &Graph) -> bool {
+    g.nodes.iter().any(|n| POINT_KINDS.contains(&n.kind.as_str()))
+}
+
+/// A Get Bone / Attachment Position output: the bone looked up by name (the attachment by number)
+/// in the model the entity really has, read from its file (cached); Found is whether it has it.
+pub(super) fn pure_value(gen: &Gen, node: &str, n: &Node, def: &'static NodeDef, pin: &str) -> Option<String> {
+    if !POINT_KINDS.contains(&def.kind.as_str()) {
+        return None;
+    }
+    let ent = gen.need(node, "ent", "entity");
+    let (what, kind) = if def.kind == "ent.bone_pos" {
+        let b = gen.text(n, def, "bone");
+        let b: String = b.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.".contains(*c)).take(32).collect();
+        (pawn_str(&b), 0)
+    } else {
+        ((gen.num(n, def, "attachment").round() as i64).clamp(0, 3).to_string(), 1)
+    };
+    let call = if kind == 0 { format!("lsg_mp_bone({ent}, {what})") } else { format!("lsg_mp_att({ent}, {what})") };
+    Some(match pin {
+        "found" => format!("({call} >= 0 ? 1 : 0)"),
+        "angles" => format!("lsg_mp_vec({ent}, {call}, {kind}, 1)"),
+        _ => format!("lsg_mp_vec({ent}, {call}, {kind}, 0)"),
+    })
+}
+
 pub(super) fn is_action(kind: &str) -> bool {
     KINDS.contains(&kind)
 }
@@ -203,6 +232,9 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
 
 /// Helpers and hooks, once, when any of these nodes is used.
 pub(super) fn blocks(g: &Graph, o: &mut Out) {
+    if uses_points(g) {
+        o.line(POINTS);
+    }
     if !any(g) {
         return;
     }
@@ -300,6 +332,107 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
         }
     }
 }
+
+const POINTS: &str = r##"// ---- Get Bone / Attachment Position: a model's bones by name and attachments by number, from
+// the entity's own model file (the header's tables), cached per model; -1 when it has none
+stock Trie:g_lsgMp = Invalid_Trie
+
+stock lsg_mp_model(ent, m[], len)
+{
+	m[0] = 0
+	if (ent < 1 || !pev_valid(ent))
+		return 0
+	pev(ent, pev_model, m, len)
+	new n = strlen(m)
+	return n > 4 && equali(m[n - 4], ".mdl") && pev(ent, pev_modelindex) > 0
+}
+
+stock lsg_mp_bone(ent, const name[])
+{
+	new m[96], key[140], k
+	if (!name[0] || !lsg_mp_model(ent, m, charsmax(m)))
+		return -1
+	formatex(key, charsmax(key), "b|%s|%s", m, name)
+	if (g_lsgMp == Invalid_Trie)
+		g_lsgMp = TrieCreate()
+	if (TrieGetCell(g_lsgMp, key, k))
+		return k
+	k = lsg_mp_read(m, name, -1)
+	TrieSetCell(g_lsgMp, key, k)
+	return k
+}
+
+stock lsg_mp_att(ent, n)
+{
+	new m[96], key[140], k
+	if (n < 0 || n > 3 || !lsg_mp_model(ent, m, charsmax(m)))
+		return -1
+	formatex(key, charsmax(key), "a|%s|%d", m, n)
+	if (g_lsgMp == Invalid_Trie)
+		g_lsgMp = TrieCreate()
+	if (TrieGetCell(g_lsgMp, key, k))
+		return k
+	k = lsg_mp_read(m, "", n)
+	TrieSetCell(g_lsgMp, key, k)
+	return k
+}
+
+// a bone's index by name (att -1), or the attachment number if the model has it
+stock lsg_mp_read(const m[], const name[], att)
+{
+	new f = fopen(m, "rb", true)
+	if (!f)
+		return -1
+	new id, ver, n, off, k = -1
+	fread(f, id, BLOCK_INT)
+	fread(f, ver, BLOCK_INT)
+	if (id == 0x54534449 && ver == 10)
+	{
+		fseek(f, att >= 0 ? 212 : 140, SEEK_SET)
+		fread(f, n, BLOCK_INT)
+		fread(f, off, BLOCK_INT)
+		if (att >= 0)
+			k = att < n ? att : -1
+		else
+		{
+			new nm[33]
+			for (new i = 0; i < n && i < 128; i++)
+			{
+				fseek(f, off + i * 112, SEEK_SET)
+				fread_blocks(f, nm, 32, BLOCK_CHAR)
+				nm[32] = 0
+				if (equali(nm, name))
+				{
+					k = i
+					break
+				}
+			}
+		}
+	}
+	fclose(f)
+	return k
+}
+
+// where (which 0) or which way (1) a bone (kind 0) or attachment (1) is now; the entity's own
+// place when it has none
+stock lsg_mp_vec(ent, k, kind, which)
+{
+	new Float:o[3], Float:a[3]
+	if (k >= 0 && pev_valid(ent))
+	{
+		if (kind)
+			engfunc(EngFunc_GetAttachment, ent, k, o, a)
+		else
+			engfunc(EngFunc_GetBonePosition, ent, k, o, a)
+	}
+	else if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		pev(ent, pev_angles, a)
+	}
+	return lsg_vfrom(which ? a : o)
+}
+"##;
 
 const RUNTIME: &str = r##"// ---- HUD & View (engine nodes): the game's own switches, kept through what resets them ----
 stock g_lsgHud[33], g_lsgHudSet[33], bool:g_lsgHudKeep[33], g_lsgFov[33], bool:g_lsgFovKeep[33]
@@ -663,6 +796,30 @@ mod tests {
         // a mode without them has none of it
         let plain = generate(&parse(include_str!("../testdata/markers.graph.json")).unwrap(), false).source;
         assert!(!plain.contains("lsg_eng_"));
+    }
+
+    /// Get Bone / Attachment Position: the bone by name, the attachment by number, both looked up
+    /// in the entity's own model file at run time; Found from the lookup; vectors through the ring.
+    #[test]
+    fn model_points_generate() {
+        let g = parse(G).unwrap();
+        let src = generate(&g, false).source;
+        assert!(src.contains("lsg_mp_vec(ctx[0], lsg_mp_bone(ctx[0], \"Bip01 R Hand\"), 0, 0)"), "{src}");
+        assert!(src.contains("(lsg_mp_bone(ctx[0], \"Bip01 R Hand\") >= 0 ? 1 : 0)"));
+        assert!(src.contains("lsg_mp_vec(ctx[0], lsg_mp_bone(ctx[0], \"Bip01 R Hand\"), 0, 1)"));
+        assert!(src.contains("lsg_mp_vec(ctx[0], lsg_mp_att(ctx[0], 1), 1, 0)"));
+        assert!(src.contains("engfunc(EngFunc_GetBonePosition, ent, k, o, a)") && src.contains("if (id == 0x54534449 && ver == 10)"));
+        // a bone name can't carry code
+        let mut v: serde_json::Value = serde_json::from_str(G).unwrap();
+        for n in v["nodes"].as_array_mut().unwrap() {
+            if n["id"] == "bp" {
+                n["params"]["bone"] = serde_json::json!("x\"); server_cmd(\"quit");
+            }
+        }
+        let g2 = graph::from_value(v).unwrap();
+        assert!(graph::validate(&g2).iter().any(|p| p.level == "error" && p.message.contains("bone's name")));
+        let src2 = generate(&g2, false).source;
+        assert!(!src2.contains("server_cmd(\"quit"));
     }
 
     /// Only what a graph uses is hooked: a soundtrack alone needs no spawn, deploy or message hooks.

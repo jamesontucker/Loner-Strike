@@ -706,6 +706,12 @@ node("eng.spectate", "Force Spectate", "HUD & View", "Makes a dead player or a s
 node("eng.soundtrack", "Play Soundtrack", "HUD & View", "Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do).",
      inputs=[X, PLO], outputs=[E()], params=[prm("do","Do","choice","play",choices=[["play","Play"],["stop","Stop"]]), prm("track","Track","choice","2",choices=CD_TRACKS), prm("loop","Loop","bool",False)], keywords="music soundtrack cd audio track mp3 cdaudio")
 
+# model points (Y): bones and attachments of an entity's model, read on the server
+node("ent.bone_pos", "Get Bone Position", "Entities", "Where a bone of a player's or any model entity's skeleton is now (like Bip01 R Hand or Bip01 Head), and which way it points. Model is only for the list of bones; the bone is looked up by name in the model the entity really has, and Found is No when it has no such bone. Positions follow the server's animation: close, not pixel-exact.",
+     inputs=[P("ent","entity","Entity",required=True)], outputs=[P("pos","vector","Position"), P("angles","vector","Angles"), P("found","bool","Found")], params=[prm("model","Model (for the list)","path","models/player.mdl"), prm("bone","Bone","bone","Bip01 R Hand")], pure=True, keywords="bone skeleton hand head position bonepos")
+node("ent.attachment_pos", "Get Attachment Position", "Entities", "Where an attachment point of an entity's model is now (a gun's muzzle, a hand; models number them 0 to 3), and its angles. Model is only for the list; Found is No when the entity's real model has no such attachment. Positions follow the server's animation: close, not pixel-exact.",
+     inputs=[P("ent","entity","Entity",required=True)], outputs=[P("pos","vector","Position"), P("angles","vector","Angles"), P("found","bool","Found")], params=[prm("model","Model (for the list)","path","models/player.mdl"), prm("attachment","Attachment","attachment",0)], pure=True, keywords="attachment muzzle point position")
+
 data = {
   "version": 4,
   "pinTypes": {

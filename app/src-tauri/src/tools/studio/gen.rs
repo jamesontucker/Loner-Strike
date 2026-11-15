@@ -702,6 +702,10 @@ impl<'a> Gen<'a> {
         // the item type of an array or map node, and where its items live
         let item = self.v.in_type(node, "item").or_else(|| self.v.out_type(node, "out")).unwrap_or_default();
         let ik = kind_of(&item);
+        // Get Bone / Attachment Position (engine.rs)
+        if let Some(e) = engine::pure_value(self, node, n, def, pin) {
+            return Val { expr: e, ty };
+        }
         let expr = match def.kind.as_str() {
             "math.compare" => {
                 let op = match self.choice(n, def, "op") {
