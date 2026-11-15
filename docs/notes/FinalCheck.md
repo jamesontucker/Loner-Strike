@@ -36,7 +36,20 @@ multi-map runs and long repeated sims. The version table and the freshness check
 | 4 | Short cost run plus BR | `--steps perf,br`: Classic against one heavy Studio mode (`perf_ls`, the Last Stand template) at 16 and 24 bots, one run each; one br-squads16 run | 25 min |
 | 5 | Editor | its browser specs (in 1), plus one compile and playtest of a map with the new stock entities and effect entities (below) | 15 min |
 
-The game parts run in one harness call: `node scripts/finalcheck.mjs --steps install,cover,stress,perf,br`.
+The game parts run in one harness call, the human step first while the user is awake (agreed: they
+join, about 10 minutes, until about 3–4 AM on 2026-11-15; if they've gone, stress runs without
+`--human` later and the overflow check waits for the morning):
+
+```sh
+node scripts/finalcheck.mjs --steps install,stress,cover,perf,br --human --stress-secs 80 --out /tmp/ls-finalcheck
+```
+
+- When the log says `HUMAN STEP READY` (also `/tmp/ls-finalcheck/HUMAN-READY.txt`), P5 messages the
+  coordinator with the exact command (`connect 127.0.0.1:27520` in the game's console) and waits for
+  their confirmation. The harness waits up to 30 minutes (`--human-wait`).
+- Then the stress graphs run one by one, 80 s each, nested loops last (a hang restarts the server).
+- For each one it records, server-side: overflow lines, whether the person was dropped, their highest
+  ping and packet loss (over 10% counts as a stutter), the longest RCON silence and the fps.
 
 **Item 5's map.**
 - Contents: a box room with one of each new stock point entity (`editor-stock-entities.spec.ts`

@@ -22,7 +22,11 @@
 //            answering (longest silence), no crash or Host_Error, no bot dropped, no overflow; the
 //            caps' log lines counted. stress_precache170 must be refused at install.
 //            --human: waits for a person to join first (the overflow check needs a real client:
-//            bots get no network messages), then checks they're still there after each run
+//            bots get no network messages): prints "HUMAN STEP READY: ... connect 127.0.0.1:<port>"
+//            and writes HUMAN-READY.txt in --out, waits --human-wait minutes (default 30), then
+//            records per run whether they were dropped, their ping and loss, overflow lines.
+//            Put stress early in --steps while the person is awake; --stress-secs 80 keeps the
+//            whole set near 10 minutes
 //   br       Battle Royale squads with 16 bots on this sim, as the re-check's br-squads16 step
 //
 // Everything is the latest of each piece (the user's rule), checked at start and listed in the
@@ -186,7 +190,12 @@ async function restartServer() {
 }
 async function botCount() {
   const s = (await rcon("status", 4000)) ?? "";
-  return { bots: (s.match(/ BOT /g) ?? []).length, humans: s.split("\n").filter((l) => /^#\s*\d+ /.test(l) && !l.includes(" BOT ")).length };
+  // a person's line: # 1 "name" userid uniqueid frag time ping loss adr
+  const people = s.split("\n").filter((l) => /^#\s*\d+ /.test(l) && !l.includes(" BOT ")).map((l) => {
+    const n = l.replace(/"[^"]*"/, "").trim().split(/\s+/);
+    return { line: l.trim(), ping: Number(n[n.length - 3]), loss: Number(n[n.length - 2]) };
+  });
+  return { bots: (s.match(/ BOT /g) ?? []).length, humans: people.length, people };
 }
 /** A map the sim doesn't have, from the game (APFS clones of the .bsp and what its .res lists). */
 function borrowMap(map) {
@@ -535,11 +544,19 @@ async function stress() {
   }
   let humans = 0;
   if (flag("--human")) {
-    log(`   waiting for a person to join 127.0.0.1:${PORT} (connect from the game's console)`);
-    for (let i = 0; i < 120 && humans < 1; i++, await sleep(5000)) humans = (await botCount()).humans;
-    if (!humans) results.notes.push("--human: nobody joined in 10 minutes; overflow not checked");
+    // the person joins from the game: say so loudly, and in a file the agent watches for
+    const wait = Number(opt("--human-wait", "30"));
+    const how = `connect 127.0.0.1:${PORT}`;
+    writeFileSync(join(OUT, "HUMAN-READY.txt"), `${how}\n(the game's console: ~ key; no password)\n`);
+    log(`   HUMAN STEP READY: in the game's console type: ${how}   (waiting up to ${wait} minutes)`);
+    for (let i = 0; i < wait * 12 && humans < 1; i++, await sleep(5000)) humans = (await botCount()).humans;
+    if (!humans) results.notes.push(`--human: nobody joined in ${wait} minutes; overflow not checked (left for later)`);
+    else log(`   a person joined: ${(await botCount()).people.map((p) => p.line).join(" | ")}`);
+    rmSync(join(OUT, "HUMAN-READY.txt"), { force: true });
   }
-  for (const f of graphFiles("stress_").filter((x) => !x.startsWith("stress_precache170"))) {
+  // (the nested loops last: if they hang the server it restarts, and a person would have to join again)
+  const order = graphFiles("stress_").filter((x) => !x.startsWith("stress_precache170")).sort((a, b) => (a.startsWith("stress_loops") ? 1 : 0) - (b.startsWith("stress_loops") ? 1 : 0));
+  for (const f of order) {
     const g = JSON.parse(readFileSync(join(GRAPHS, f), "utf8"));
     const id = g.mode.id;
     // (one map each: the trimmed check skips multi-map runs; --stress-maps a,b for more)
@@ -552,7 +569,19 @@ async function stress() {
       }
       const sw = await useMode(id, map, 16, `studio_${id}`);
       const before = await botCount();
-      const s = await sample(DRY ? 30 : 120);
+      // (the person's ping and loss every 5 s while it runs: a stutter shows there)
+      const seen = [];
+      let polling = !!humans;
+      const poll = (async () => {
+        while (polling) {
+          const n = await botCount();
+          seen.push({ t: Date.now(), humans: n.humans, ping: Math.max(0, ...n.people.map((p) => p.ping || 0)), loss: Math.max(0, ...n.people.map((p) => p.loss || 0)) });
+          await sleep(5000);
+        }
+      })();
+      const s = await sample(DRY ? 30 : Number(opt("--stress-secs", "120")));
+      polling = false;
+      await poll;
       const alive = !!(await rcon("echo alive", 8000));
       const after = alive ? await botCount() : { bots: 0, humans: 0 };
       const text = logText(sw.from ?? 0);
@@ -576,10 +605,12 @@ async function stress() {
         before.bots - after.bots > 1 && `bots ${before.bots} -> ${after.bots}`,
         ...flood.map(([k, r]) => `log flood: "${k}" ${r.toFixed(0)} a second`),
       ].filter(Boolean);
-      const row = { mode: id, map, ok: problems.length === 0, problems, longestSilenceMs: s.longest, cost: costOf(s.rows), capLines: caps.length, capKinds: capKinds.slice(0, 12), dropped: dropped.slice(0, 5) };
+      const person = humans ? { gone: seen.some((x) => x.humans < humans), maxPing: Math.max(0, ...seen.map((x) => x.ping)), maxLoss: Math.max(0, ...seen.map((x) => x.loss)) } : null;
+      if (person?.maxLoss > 10) problems.push(`the person lost ${person.maxLoss}% of packets (a stutter)`);
+      const row = { mode: id, map, ok: problems.length === 0, problems, person, longestSilenceMs: s.longest, cost: costOf(s.rows), capLines: caps.length, capKinds: capKinds.slice(0, 12), dropped: dropped.slice(0, 5) };
       results.stress.push(row);
       writeFileSync(join(OUT, `stress-${id}-${map}.log`), text);
-      log(`   ${id} on ${map}: ${row.ok ? "ok" : "PROBLEM: " + problems.join("; ")} - ${caps.length} cap lines (${capKinds.slice(0, 4).join(" | ")}), longest silence ${(s.longest / 1000).toFixed(1)} s, ${row.cost.fps} fps`);
+      log(`   ${id} on ${map}: ${row.ok ? "ok" : "PROBLEM: " + problems.join("; ")} - ${caps.length} cap lines (${capKinds.slice(0, 4).join(" | ")}), longest silence ${(s.longest / 1000).toFixed(1)} s, ${row.cost.fps} fps${person ? `; the person: ${person.gone ? "DROPPED" : "still in"}, ping up to ${person.maxPing}, loss up to ${person.maxLoss}%` : ""}`);
       if (!alive || s.crashed || s.longest > 10_000) await restartServer();
     }
   }
@@ -662,10 +693,9 @@ async function main() {
     results.brainModeVer = ver;
     version("brain's ls_mode_ver in the sim", String(ver || "missing"), ver >= Number(opt("--min-mode-ver", "4")));
     if (ver < Number(opt("--min-mode-ver", "4"))) throw new Error(`the sim's brain says ls_mode_ver ${ver || "nothing"} (wanted ${opt("--min-mode-ver", "4")}+): not the newest brain`);
-    await step("cover", cover);
-    await step("perf", perf);
-    await step("stress", stress);
-    await step("br", br);
+    // (in the order --steps names them: the human step goes early, while the person is awake)
+    const fns = { cover, perf, stress, br };
+    for (const name of STEPS.filter((x) => fns[x])) await step(name, fns[name]);
   }
   results.verdict = verdict;
   summary();
