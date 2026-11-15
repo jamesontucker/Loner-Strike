@@ -59,11 +59,27 @@ export function modelOf(e: DocEntity, creatures: Creature[] = []): string | null
       return "models/player/terror/terror.mdl";
     case "info_vip_start":
       return "models/player/vip/vip.mdl";
+    // pickups (EngineCoverage item 9): the game's own models
+    case "item_healthkit":
+      return "models/w_medkit.mdl";
+    case "item_battery":
+      return "models/w_battery.mdl";
+    case "item_kevlar":
+      return "models/w_kevlar.mdl";
+    case "item_assaultsuit":
+      return "models/w_assault.mdl";
+    case "item_thighpack":
+      return "models/w_thighpack.mdl";
+    case "item_longjump":
+      return "models/w_longjump.mdl";
+    case "ammo_buckshot":
+      return "models/w_shotbox.mdl";
     case "armoury_entity": {
       const i = Number(keyOf(e.keys, "item") ?? 0) || 0;
       return ARMOURY[i] ? `models/w_${ARMOURY[i]}.mdl` : null;
     }
   }
+  if (e.classname.startsWith("ammo_")) return "models/w_9mmclip.mdl";
   return null;
 }
 
