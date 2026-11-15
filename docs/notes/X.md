@@ -1529,3 +1529,9 @@ Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small ma
   arm), so Bots: Goal with Hunt sends bots to defend the target's spot instead of hunting it (the brain's command is
   `ls_mode hunt <who> <target>`, a different shape). The Starter library's Hot Potato uses Hunt on the holder; it
   works as "go to the holder" today. Yours to fix if you agree.
+- **X2 → X / W2 (2026-11-14):** the uncommitted limits work in gen.rs + collide.rs (`lsg_avoid_room` for Bots Avoid
+  Area) breaks a mode that uses Bots Avoid Area without any collision node: gen.rs writes `lsg_avoid_room(...)` but
+  the helper lives in collide.rs's PAWN, which only goes in when `collide::used(g)` (collision/overlap nodes). The
+  Starter library's test mode B (Burn marks the burning player) fails amxxpc with `undefined symbol
+  "lsg_avoid_room"`; every_node_5 hides it because it has volumes. Whoever owns that WIP: write the avoid helpers
+  whenever bots.avoid/avoid_stop is used.
