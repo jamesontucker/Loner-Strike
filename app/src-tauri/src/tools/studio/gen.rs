@@ -553,8 +553,19 @@ impl<'a> Gen<'a> {
             "text" => pawn_str(&safe_text(v.and_then(Value::as_str).unwrap_or(""), 60)),
             t if t.starts_with("enum:") => (v.and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 31.0) as i64).to_string(),
             t if assets::is_type(t) => assets::lit(v), // X-fx
+            "color" => color_lit(v.and_then(Value::as_str).unwrap_or("#ffffffff")),
             _ => "0".into(),
         }
+    }
+
+    /// A color input's red, green and blue (whole numbers): the wired Color when there is one,
+    /// else the node's own (a setting, a choice: what it did before).
+    fn rgb_or(&self, node: &str, own: (String, String, String)) -> (String, String, String) {
+        if self.v.data_source(node, "color").is_none() {
+            return own;
+        }
+        let c = self.need(node, "color", "color");
+        (format!("lsg_col_r({c})"), format!("lsg_col_g({c})"), format!("lsg_col_b({c})"))
     }
 
     /// An empty value of a type (an input nothing is wired into).
@@ -833,6 +844,11 @@ impl<'a> Gen<'a> {
             },
             "player.armor" => format!("float(lsg_ok({p}) ? get_user_armor({p}) : 0)", p = i("player", "player")),
             "player.has_helmet" => format!("(lsg_helmet({}) ? 1 : 0)", i("player", "player")),
+            "color.literal" => color_lit(self.text(n, def, "value")),
+            "color.make" => format!("lsg_col({}, {}, {}, {})", i("r", "number"), i("g", "number"), i("b", "number"), i("a", "number")),
+            "color.break" => format!("float(lsg_col_{}({}))", match pin { "g" => "g", "b" => "b", "a" => "a", _ => "r" }, i("in", "color")),
+            "color.lerp" => format!("lsg_col_mix({}, {}, {})", i("a", "color"), i("b", "color"), i("t", "number")),
+            "color.hsv" => format!("lsg_col_hsv({}, {}, {})", i("h", "number"), i("s", "number"), i("v", "number")),
             "player.weapon_held" if pin == "weapon" => format!("lsg_wpn_k(lsg_held({}))", i("player", "player")),
             "player.weapon_held" => format!("lsg_held({})", i("player", "player")),
             "player.ammo" => format!("float(lsg_ammo({}, {}))", i("player", "player"), if pin == "reserve" { 1 } else { 0 }),
@@ -1371,6 +1387,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
 
     o.line(HELPERS);
+    // (Color's helpers: a Color node, a Color pin wired, or a Color variable, field or local)
+    let color_types = serde_json::to_string(&(&g.variables, &g.functions, &g.structs, &g.macros)).unwrap_or_default();
+    if g.nodes.iter().any(|n| n.kind.starts_with("color.")) || g.edges.iter().any(|e| e.to.pin == "color" || v.out_type(&e.from.node, &e.from.pin).as_deref() == Some("color")) || color_types.contains("\"color\"") || color_types.contains("<color>") || color_types.contains(",color>") {
+        o.line(COLOR_HELPERS);
+    }
     // (the bigger node families' helpers only where they're used: a plugin's source stays short)
     if ["msg.status_icon", "fx.marker", "fx.marker_remove", "msg.killfeed"].iter().any(|k| has(k)) {
         o.line(&format!("stock const g_lsgIconNames[][] = {{ {} }}", STATUS_ICONS.iter().map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")));
@@ -2632,6 +2653,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     "off" => format!("set_user_rendering({p})"),
                     c => {
                         let (r, g, bl) = match c { "green" => (0, 255, 0), "blue" => (0, 80, 255), "yellow" => (255, 220, 0), "white" => (255, 255, 255), _ => (255, 0, 0) };
+                        let (r, g, bl) = gen.rgb_or(id, (r.to_string(), g.to_string(), bl.to_string()));
                         format!("set_user_rendering({p}, kRenderFxGlowShell, {r}, {g}, {bl}, kRenderNormal, 16)")
                     }
                 }),
@@ -3114,6 +3136,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "player.slap" => format!("lsg_slap({}, floatround({}))", p(), inp("dmg", "number")),
                 "player.fade" => {
                     let (r, g_, bl) = match gen.choice(n, def, "colour") { "black" => (0, 0, 0), "red" => (220, 20, 20), "green" => (20, 200, 40), _ => (255, 255, 255) };
+                    let (r, g_, bl) = gen.rgb_or(id, (r.to_string(), g_.to_string(), bl.to_string()));
                     format!("lsg_fade({}, {}, {r}, {g_}, {bl}, {})", p(), num("secs"), gen.num(n, def, "alpha").round().clamp(0.0, 255.0) as i64)
                 }
                 "player.shake" => format!("lsg_shake({}, {}, {})", p(), num("amp"), num("secs")),
@@ -3147,6 +3170,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "fx.explosion" => format!("lsg_explode({}, {}, {})", inp("pos", "vector"), inp("dmg", "number"), num("radius")),
                 "fx.beam" => {
                     let (r, g_, bl) = match gen.choice(n, def, "colour") { "green" => (40, 220, 60), "blue" => (60, 120, 255), "white" => (255, 255, 255), "gold" => (255, 200, 40), _ => (230, 30, 30) };
+                    let (r, g_, bl) = gen.rgb_or(id, (r.to_string(), g_.to_string(), bl.to_string()));
                     format!("lsg_beam({}, {}, {r}, {g_}, {bl}, {})", inp("a", "vector"), inp("b", "vector"), num("secs"))
                 }
                 "creature.go_to" | "creature.flee_to" => {
@@ -3290,7 +3314,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "fun.trail" => {
             b.line(format!("\tg_lsgMsgLim = {}", gen.limit_expr("messages")));
-            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            let cn = |k: &str| (gen.num(n, def, k).round().clamp(0.0, 255.0) as i64).to_string();
+            // (a wired Color wins over the red, green and blue settings)
+            let rgb = gen.rgb_or(id, (cn("r"), cn("g"), cn("b")));
+            let c = |k: &str| match k { "r" => rgb.0.clone(), "g" => rgb.1.clone(), "b" => rgb.2.clone(), _ => cn(k) };
             let call = format!(
                 "lsg_trail({}, {}, {}, {}, {}, {}, {}, {})",
                 inp("ent", "entity"),
@@ -3319,7 +3346,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(format!("\tlsg_vto({}, lsgAt)\n\tlsgOk = 1", inp("pos", "vector")));
             }
             let kind = ["sparks", "smoke", "blood", "firework", "implosion", "tar", "teleport", "lava", "flash"].iter().position(|k| *k == gen.choice(n, def, "kind")).unwrap_or(0);
-            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            let cn = |k: &str| (gen.num(n, def, k).round().clamp(0.0, 255.0) as i64).to_string();
+            // (a wired Color wins over the red, green and blue settings)
+            let rgb = gen.rgb_or(id, (cn("r"), cn("g"), cn("b")));
+            let c = |k: &str| match k { "r" => rgb.0.clone(), "g" => rgb.1.clone(), "b" => rgb.2.clone(), _ => cn(k) };
             let count = gen.num(n, def, "count").round().clamp(1.0, 10.0) as i64;
             // (a firework is two messages a burst)
             let cost = if kind == 3 { count * 2 } else { count };
@@ -3350,7 +3380,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // (one of the game's own hud.txt names, from the list: never a typed name)
             let icon = if STATUS_ICONS.contains(&icon) { icon } else { "buyzone" };
             let show = match gen.choice(n, def, "show") { "off" => 0, "flash" => 2, _ => 1 };
-            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            let cn = |k: &str| (gen.num(n, def, k).round().clamp(0.0, 255.0) as i64).to_string();
+            // (a wired Color wins over the red, green and blue settings)
+            let rgb = gen.rgb_or(id, (cn("r"), cn("g"), cn("b")));
+            let c = |k: &str| match k { "r" => rgb.0.clone(), "g" => rgb.1.clone(), "b" => rgb.2.clone(), _ => cn(k) };
             b.line(format!("\tlsg_icon({who}, {show}, {}, {}, {}, {}, {})", pawn_str(icon), c("r"), c("g"), c("b"), if gen.boolean(n, def, "death") { 1 } else { 0 }));
             let e = exit(if show == 0 { "hidden" } else { "shown" });
             if !e.is_empty() {
@@ -3368,7 +3401,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             let who = match gen.choice(n, def, "who") { "t" => 1, "ct" => 2, "player" => 3, _ => 0 };
             let forp = if who == 3 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
-            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            let cn = |k: &str| (gen.num(n, def, k).round().clamp(0.0, 255.0) as i64).to_string();
+            // (a wired Color wins over the red, green and blue settings)
+            let rgb = gen.rgb_or(id, (cn("r"), cn("g"), cn("b")));
+            let c = |k: &str| match k { "r" => rgb.0.clone(), "g" => rgb.1.clone(), "b" => rgb.2.clone(), _ => cn(k) };
             b.line(format!(
                 "\tg_lsgOut[{i}] = lsg_marker({}, {follow}, lsgAt, {}, {}, {}, {}, {}, {}, {}, {who}, {forp}, {})",
                 pawn_str(&sprite_text(gen.text(n, def, "sprite"))),
@@ -4051,6 +4087,57 @@ fn text_args(gen: &Gen, text: &str, value: Option<Val>) -> String {
     }
 }
 
+/// A stored color ("#rrggbb(aa)") as its packed cell (0xAARRGGBB, as a signed Pawn cell).
+fn color_lit(hex: &str) -> String {
+    let (r, g, b, a) = super::graph::color_hex(hex).unwrap_or((255, 255, 255, 255));
+    ((((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | b as u32) as i32).to_string()
+}
+
+/// Color's helpers: only in a plugin that uses a Color.
+pub const COLOR_HELPERS: &str = r##"// ---- Color: one cell, 0xAARRGGBB ----
+stock lsg_col(Float:r, Float:g, Float:b, Float:a)
+	return (clamp(floatround(a), 0, 255) << 24) | (clamp(floatround(r), 0, 255) << 16) | (clamp(floatround(g), 0, 255) << 8) | clamp(floatround(b), 0, 255)
+stock lsg_col_r(c)
+	return (c >> 16) & 255
+stock lsg_col_g(c)
+	return (c >> 8) & 255
+stock lsg_col_b(c)
+	return c & 255
+stock lsg_col_a(c)
+	return (c >>> 24) & 255
+stock lsg_col_mix(a, b, Float:t)
+{
+	t = floatclamp(t, 0.0, 1.0)
+	new Float:u = 1.0 - t
+	return lsg_col(float(lsg_col_r(a)) * u + float(lsg_col_r(b)) * t, float(lsg_col_g(a)) * u + float(lsg_col_g(b)) * t, float(lsg_col_b(a)) * u + float(lsg_col_b(b)) * t, float(lsg_col_a(a)) * u + float(lsg_col_a(b)) * t)
+}
+stock lsg_col_hsv(Float:h, Float:s, Float:v)
+{
+	h = floatfract(floatclamp(h, 0.0, 360.0) / 360.0) * 6.0
+	s = floatclamp(s, 0.0, 1.0)
+	v = floatclamp(v, 0.0, 1.0)
+	new i = floatround(h, floatround_floor) % 6
+	new Float:f = h - float(floatround(h, floatround_floor)), Float:p = v * (1.0 - s), Float:q = v * (1.0 - s * f), Float:t = v * (1.0 - s * (1.0 - f))
+	new Float:r, Float:g, Float:b
+	switch (i)
+	{
+		case 0: { r = v; g = t; b = p; }
+		case 1: { r = q; g = v; b = p; }
+		case 2: { r = p; g = v; b = t; }
+		case 3: { r = p; g = q; b = v; }
+		case 4: { r = t; g = p; b = v; }
+		default: { r = v; g = p; b = q; }
+	}
+	return lsg_col(r * 255.0, g * 255.0, b * 255.0, 255.0)
+}
+stock lsg_col_text(c)
+{
+	new t[12]
+	formatex(t, charsmax(t), "#%02x%02x%02x", lsg_col_r(c), lsg_col_g(c), lsg_col_b(c))
+	return t
+}
+"##;
+
 /// Any value as a text expression (Print String, Format Text, To Text, the debugger).
 fn to_text(gen: &Gen, val: &Val) -> String {
     let e = &val.expr;
@@ -4062,6 +4149,7 @@ fn to_text(gen: &Gen, val: &Val) -> String {
         "team" => format!("g_lsgTeamName[clamp({e}, 0, 3)]"),
         "bool" => format!("g_lsgYesNo[({e}) ? 1 : 0]"),
         "vector" => format!("lsg_vtext({e})"),
+        "color" => format!("lsg_col_text({e})"),
         "timer" => format!("g_lsgRun[lsg_tactive({e}) ? 1 : 0]"),
         t if t.starts_with("enum:") => match gen.v.enum_type(t) {
             Some(en) => format!("g_lsgE{}[clamp({e}, 0, {})]", gen.enum_index(&en.id), en.values.len().max(1) - 1),

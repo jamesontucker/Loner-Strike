@@ -1277,6 +1277,33 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== types: color (X) ====
+# a Color is one value (red, green, blue, alpha); the nodes that took three numbers or a fixed
+# choice keep them and gain an optional Color pin that wins when wired
+CP = dict(pure=True)
+node("color.literal", "Color", "Colors", "A color picked with the color picker (and how opaque: alpha).",
+     outputs=[P("out","color","Color")], params=[prm("value","Color","color","#ff4040ff")], keywords="colour rgb pick swatch constant", **CP)
+node("color.make", "Make Color", "Colors", "A color from red, green, blue and alpha (0 to 255 each).",
+     inputs=[P("r","number","Red",param="r",whole=True), P("g","number","Green",param="g",whole=True), P("b","number","Blue",param="b",whole=True), P("a","number","Alpha",param="a",whole=True)], outputs=[P("out","color","Color")],
+     params=[prm("r","Red","number",255,min=0,max=255), prm("g","Green","number",255,min=0,max=255), prm("b","Blue","number",255,min=0,max=255), prm("a","Alpha","number",255,min=0,max=255)], keywords="colour rgb rgba", **CP)
+node("color.break", "Break Color", "Colors", "A color's red, green, blue and alpha (0 to 255 each).",
+     inputs=[P("in","color","Color",required=True)], outputs=[P("r","number","Red",whole=True), P("g","number","Green",whole=True), P("b","number","Blue",whole=True), P("a","number","Alpha",whole=True)], keywords="colour rgb split", **CP)
+node("color.lerp", "Blend Colors", "Colors", "Between color A (Amount 0) and color B (Amount 1): 0.5 is halfway.",
+     inputs=[P("a","color","A",required=True), P("b","color","B",required=True), P("t","number","Amount",param="t")], outputs=[P("out","color","Color")],
+     params=[prm("t","Amount","number",0.5,min=0,max=1)], keywords="colour mix lerp fade between gradient", **CP)
+node("color.hsv", "Color From Hue", "Colors", "A color from hue (0 to 360: red, yellow, green, cyan, blue, magenta), saturation and brightness (0 to 1).",
+     inputs=[P("h","number","Hue",param="h"), P("s","number","Saturation",param="s"), P("v","number","Brightness",param="v")], outputs=[P("out","color","Color")],
+     params=[prm("h","Hue","number",0,min=0,max=360), prm("s","Saturation","number",1,min=0,max=1), prm("v","Brightness","number",1,min=0,max=1)], keywords="colour hsv hsb rainbow hue", **CP)
+if "Colors" not in data["categories"]:
+    data["categories"].insert(data["categories"].index("Vectors") + 1, "Colors")
+def _add_in(t, *pins):
+    d = next(d for d in nodes if d["type"] == t)
+    for p in pins:
+        if not any(o["id"] == p["id"] for o in d["inputs"]):
+            d["inputs"].append(p)
+for _t in ["player.set_glow", "player.fade", "fx.beam", "fun.trail", "fun.burst", "msg.status_icon", "fx.marker"]:
+    _add_in(_t, P("color","color","Color (wins over the setting)",optional=True))
+
 # ==== types: enums (X) ====
 # typed outputs beside the old text ones (StudioCompat.md: new outputs only, nothing removed)
 def _add_out(t, *pins):

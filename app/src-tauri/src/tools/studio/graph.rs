@@ -1031,8 +1031,19 @@ pub fn value_fits(ty: &str, v: &Value) -> bool {
         "text" => v.as_str().is_some_and(|s| valid_label(s, 60)),
         // assets (X-fx): a file of that kind, or "" (none)
         "model" | "sprite" | "sound" => v.as_str().is_some_and(|s| super::gen::assets::valid_asset(ty, s)),
+        "color" => v.as_str().is_some_and(|s| color_hex(s).is_some()),
         _ => false,
     }
+}
+
+/// A color as the Studio stores it: "#rrggbb" or "#rrggbbaa" -> (r, g, b, a).
+pub fn color_hex(s: &str) -> Option<(u8, u8, u8, u8)> {
+    let h = s.strip_prefix('#')?;
+    if !(h.len() == 6 || h.len() == 8) || !h.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let b = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+    Some((b(0)?, b(2)?, b(4)?, if h.len() == 8 { b(6)? } else { 255 }))
 }
 
 // ---- types ---------------------------------------------------------------------------------
@@ -2839,6 +2850,10 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
         _ => String::new(),
     };
     match def.kind.as_str() {
+        "color" => match v.as_str().and_then(color_hex) {
+            Some(_) => Ok(()),
+            None => Err(format!("{} needs a color (#rrggbb or #rrggbbaa).", def.label)),
+        },
         "choice" => match v.as_str() {
             Some(s) if def.choices.iter().any(|(k, _)| k == s) => Ok(()),
             _ => Err(format!("Pick one of the choices for {}.", def.label)),
@@ -3028,7 +3043,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 27] = ["enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
+    const TYPES: [&str; 40] = ["model", "sprite", "sound", "decal", "color", "visual", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];

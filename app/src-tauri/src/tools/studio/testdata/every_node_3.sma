@@ -1618,6 +1618,49 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+// ---- Color: one cell, 0xAARRGGBB ----
+stock lsg_col(Float:r, Float:g, Float:b, Float:a)
+	return (clamp(floatround(a), 0, 255) << 24) | (clamp(floatround(r), 0, 255) << 16) | (clamp(floatround(g), 0, 255) << 8) | clamp(floatround(b), 0, 255)
+stock lsg_col_r(c)
+	return (c >> 16) & 255
+stock lsg_col_g(c)
+	return (c >> 8) & 255
+stock lsg_col_b(c)
+	return c & 255
+stock lsg_col_a(c)
+	return (c >>> 24) & 255
+stock lsg_col_mix(a, b, Float:t)
+{
+	t = floatclamp(t, 0.0, 1.0)
+	new Float:u = 1.0 - t
+	return lsg_col(float(lsg_col_r(a)) * u + float(lsg_col_r(b)) * t, float(lsg_col_g(a)) * u + float(lsg_col_g(b)) * t, float(lsg_col_b(a)) * u + float(lsg_col_b(b)) * t, float(lsg_col_a(a)) * u + float(lsg_col_a(b)) * t)
+}
+stock lsg_col_hsv(Float:h, Float:s, Float:v)
+{
+	h = floatfract(floatclamp(h, 0.0, 360.0) / 360.0) * 6.0
+	s = floatclamp(s, 0.0, 1.0)
+	v = floatclamp(v, 0.0, 1.0)
+	new i = floatround(h, floatround_floor) % 6
+	new Float:f = h - float(floatround(h, floatround_floor)), Float:p = v * (1.0 - s), Float:q = v * (1.0 - s * f), Float:t = v * (1.0 - s * (1.0 - f))
+	new Float:r, Float:g, Float:b
+	switch (i)
+	{
+		case 0: { r = v; g = t; b = p; }
+		case 1: { r = q; g = v; b = p; }
+		case 2: { r = p; g = v; b = t; }
+		case 3: { r = p; g = q; b = v; }
+		case 4: { r = t; g = p; b = v; }
+		default: { r = v; g = p; b = q; }
+	}
+	return lsg_col(r * 255.0, g * 255.0, b * 255.0, 255.0)
+}
+stock lsg_col_text(c)
+{
+	new t[12]
+	formatex(t, charsmax(t), "#%02x%02x%02x", lsg_col_r(c), lsg_col_g(c), lsg_col_b(c))
+	return t
+}
+
 stock const g_lsgIconNames[][] = { "buyzone", "c4", "defuser", "rescue", "escape", "vipsafety", "stopwatch", "smallskull", "smallc4", "smallvip", "hostage", "dollar", "cross", "item_healthkit", "item_battery", "item_longjump", "dmg_poison", "dmg_bio", "dmg_chem", "dmg_drown", "dmg_gas", "dmg_cold", "dmg_heat", "dmg_rad", "dmg_shock" }
 // ---- Status Icon, Objective Marker, Kill Feed Line ----
 stock g_lsgIcon[33][16]

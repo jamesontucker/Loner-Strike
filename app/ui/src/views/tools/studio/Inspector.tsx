@@ -1,6 +1,7 @@
 // The side panel: the selected node's settings and help (or the mode's name and the problem
 // list when nothing is selected).
 
+import { ColorField } from "./ColorField";
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
@@ -74,6 +75,7 @@ function ValueField({ type, value, onChange, graph }: { type: GVariable["type"];
   }
   // assets (X-fx): a file variable starts as the file picked (or none)
   if (isAssetType(type)) return <AssetDefaultField kind={type} value={typeof value === "string" ? value : ""} onChange={onChange} />;
+  if (type === "color") return <ColorField value={value} onChange={onChange} label="Start value" />;
   if (type !== "bool" && type !== "text") return <em className="st-muted">{/^(array|map)</.test(type) ? "Starts empty" : type === "vector" ? "Starts at 0 0 0" : type.startsWith("struct:") ? "Starts with every field empty" : "Starts as nothing"}</em>;
   if (type === "bool")
     return (
@@ -152,6 +154,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
       </select>
     );
   if (p.kind === "number") return <NumberField value={Number(value)} min={p.min} max={p.max} onChange={onChange} />;
+  if (p.kind === "color") return <ColorField value={value} onChange={onChange} label={p.label} />;
   if (p.kind === "bool")
     return (
       <select className="st-field" value={value ? "1" : "0"} onChange={(e) => onChange(e.target.value === "1")}>

@@ -134,6 +134,7 @@
   "Structs",
   "Enums",
   "Vectors",
+  "Colors",
   "Spatial",
   "Timers",
   "Round clock",
@@ -4400,6 +4401,12 @@
      "type": "player",
      "label": "Player",
      "required": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
+     "optional": true
     }
    ],
    "outputs": [
@@ -10635,6 +10642,12 @@
      "type": "player",
      "label": "Player",
      "required": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
+     "optional": true
     }
    ],
    "outputs": [
@@ -12003,6 +12016,12 @@
      "type": "vector",
      "label": "To",
      "required": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
+     "optional": true
     }
    ],
    "outputs": [
@@ -12187,6 +12206,12 @@
      "id": "player",
      "type": "player",
      "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
      "optional": true
     }
    ],
@@ -12385,6 +12410,12 @@
      "id": "player",
      "type": "player",
      "label": "Player (for one player)",
+     "optional": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
      "optional": true
     }
    ],
@@ -12770,6 +12801,12 @@
      "type": "entity",
      "label": "On",
      "required": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
+     "optional": true
     }
    ],
    "outputs": [
@@ -12849,6 +12886,12 @@
      "id": "pos",
      "type": "vector",
      "label": "Position",
+     "optional": true
+    },
+    {
+     "id": "color",
+     "type": "color",
+     "label": "Color (wins over the setting)",
      "optional": true
     }
    ],
@@ -30914,6 +30957,258 @@
     }
    ],
    "keywords": "language locale lang translate",
+   "pure": true
+  },
+  {
+   "type": "color.literal",
+   "title": "Color",
+   "category": "Colors",
+   "help": "A color picked with the color picker (and how opaque: alpha).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "color",
+     "label": "Color"
+    }
+   ],
+   "params": [
+    {
+     "id": "value",
+     "label": "Color",
+     "kind": "color",
+     "default": "#ff4040ff"
+    }
+   ],
+   "keywords": "colour rgb pick swatch constant",
+   "pure": true
+  },
+  {
+   "type": "color.make",
+   "title": "Make Color",
+   "category": "Colors",
+   "help": "A color from red, green, blue and alpha (0 to 255 each).",
+   "inputs": [
+    {
+     "id": "r",
+     "type": "number",
+     "label": "Red",
+     "param": "r",
+     "whole": true
+    },
+    {
+     "id": "g",
+     "type": "number",
+     "label": "Green",
+     "param": "g",
+     "whole": true
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "Blue",
+     "param": "b",
+     "whole": true
+    },
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Alpha",
+     "param": "a",
+     "whole": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "color",
+     "label": "Color"
+    }
+   ],
+   "params": [
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "a",
+     "label": "Alpha",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "colour rgb rgba",
+   "pure": true
+  },
+  {
+   "type": "color.break",
+   "title": "Break Color",
+   "category": "Colors",
+   "help": "A color's red, green, blue and alpha (0 to 255 each).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "color",
+     "label": "Color",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "r",
+     "type": "number",
+     "label": "Red",
+     "whole": true
+    },
+    {
+     "id": "g",
+     "type": "number",
+     "label": "Green",
+     "whole": true
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "Blue",
+     "whole": true
+    },
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Alpha",
+     "whole": true
+    }
+   ],
+   "params": [],
+   "keywords": "colour rgb split",
+   "pure": true
+  },
+  {
+   "type": "color.lerp",
+   "title": "Blend Colors",
+   "category": "Colors",
+   "help": "Between color A (Amount 0) and color B (Amount 1): 0.5 is halfway.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "color",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "color",
+     "label": "B",
+     "required": true
+    },
+    {
+     "id": "t",
+     "type": "number",
+     "label": "Amount",
+     "param": "t"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "color",
+     "label": "Color"
+    }
+   ],
+   "params": [
+    {
+     "id": "t",
+     "label": "Amount",
+     "kind": "number",
+     "default": 0.5,
+     "min": 0,
+     "max": 1
+    }
+   ],
+   "keywords": "colour mix lerp fade between gradient",
+   "pure": true
+  },
+  {
+   "type": "color.hsv",
+   "title": "Color From Hue",
+   "category": "Colors",
+   "help": "A color from hue (0 to 360: red, yellow, green, cyan, blue, magenta), saturation and brightness (0 to 1).",
+   "inputs": [
+    {
+     "id": "h",
+     "type": "number",
+     "label": "Hue",
+     "param": "h"
+    },
+    {
+     "id": "s",
+     "type": "number",
+     "label": "Saturation",
+     "param": "s"
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Brightness",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "color",
+     "label": "Color"
+    }
+   ],
+   "params": [
+    {
+     "id": "h",
+     "label": "Hue",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 360
+    },
+    {
+     "id": "s",
+     "label": "Saturation",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 1
+    },
+    {
+     "id": "v",
+     "label": "Brightness",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 1
+    }
+   ],
+   "keywords": "colour hsv hsb rainbow hue",
    "pure": true
   },
   {

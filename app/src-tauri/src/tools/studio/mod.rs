@@ -1609,6 +1609,60 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// Color: the Color nodes, a Color variable, and a wired Color winning over the old settings on
+    /// Set Glow, Screen Fade, Beam, Trail, Effect Burst, Status Icon and Objective Marker.
+    pub fn color_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("sp", "event.player_spawned", json!({})),
+            n("lit", "color.literal", json!({"value": "#20c060"})),
+            n("glow", "player.set_glow", json!({"color": "red"})),
+            n("mk", "color.make", json!({"r": 10, "g": 20, "b": 250, "a": 255})),
+            n("fade", "player.fade", json!({"secs": 1, "alpha": 100})),
+            n("hsv", "color.hsv", json!({"h": 200, "s": 1, "v": 1})),
+            n("trail", "fun.trail", json!({"on": true})),
+            n("mix", "color.lerp", json!({"t": 0.25})),
+            n("burst", "fun.burst", json!({"kind": "sparks", "count": 2})),
+            n("gv", "var.get", json!({"var": "team_col"})),
+            n("ic", "msg.status_icon", json!({"icon": "dollar", "show": "on", "death": false})),
+            n("br", "color.break", json!({})),
+            n("pr", "debug.print", json!({"text": "green is", "chat": false})),
+            n("pc", "debug.print", json!({"text": "color", "chat": false})),
+        ];
+        let edges = vec![
+            e(1, "sp", "then", "glow", "exec"), e(2, "sp", "player", "glow", "player"), e(3, "lit", "out", "glow", "color"),
+            e(4, "glow", "then", "fade", "exec"), e(5, "sp", "player", "fade", "player"), e(6, "mk", "out", "fade", "color"),
+            e(7, "fade", "then", "trail", "exec"), e(8, "sp", "player", "trail", "ent"), e(9, "hsv", "out", "trail", "color"),
+            e(10, "trail", "then", "burst", "exec"), e(11, "sp", "player", "burst", "at"), e(12, "lit", "out", "mix", "a"), e(13, "gv", "out", "mix", "b"), e(14, "mix", "out", "burst", "color"),
+            e(15, "burst", "then", "ic", "exec"), e(16, "sp", "player", "ic", "player"), e(17, "gv", "out", "ic", "color"),
+            e(18, "ic", "then", "pr", "exec"), e(19, "gv", "out", "br", "in"), e(20, "br", "g", "pr", "value"),
+            e(21, "pr", "then", "pc", "exec"), e(22, "mix", "out", "pc", "value"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "colors", "name": "Colors"}, "nodes": nodes, "edges": edges,
+            "variables": [{"id": "team_col", "name": "Team color", "type": "color", "scope": "mode", "default": "#ffcc00"}]})).unwrap()
+    }
+
+    #[test]
+    fn colors_are_one_value_and_win_over_the_old_settings() {
+        let g = color_mode();
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level != "info").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in ["stock lsg_col(Float:r, Float:g, Float:b, Float:a)", "kRenderFxGlowShell, lsg_col_r(", "lsg_col_mix(", "lsg_col_hsv(", "float(lsg_col_g(", "lsg_col_text(", "lsg_fade("] {
+            assert!(src.contains(want), "{want}");
+        }
+        // #20c060 packed with full alpha, the variable's #ffcc00
+        assert!(src.contains(&(0xff20c060u32 as i32).to_string()) && src.contains(&(0xffffcc00u32 as i32).to_string()));
+        // unwired, the settings as before; and no Color helpers in a plugin without colors
+        let plain = gen::generate(&graph::parse(TEMPLATE).unwrap(), false).source;
+        assert!(!plain.contains("lsg_col("));
+        assert!(graph::color_hex("#12345").is_none() && graph::color_hex("#a1b2c3").is_some() && graph::color_hex("#a1b2c3d4") == Some((0xa1, 0xb2, 0xc3, 0xd4)));
+        let mut bad = g.clone();
+        bad.variables[0].default = json!("red");
+        assert!(graph::validate(&bad).iter().any(|p| p.level == "error"), "a color start value is #rrggbb");
+    }
+
     /// The built-in Weapon, Hit Zone and Damage Kind enums from the typed outputs beside the old
     /// text ones: into Switch on Enum (one output per value), into a text pin (a Weapon is its name).
     pub fn typed_enums_mode() -> Graph {
@@ -2004,6 +2058,7 @@ mod tests {
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("spawn_burst".into(), serde_json::to_string(&spawn_burst_mode()).unwrap()));
         graphs.push(("typed_enums".into(), serde_json::to_string(&typed_enums_mode()).unwrap()));
+        graphs.push(("colors".into(), serde_json::to_string(&color_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));

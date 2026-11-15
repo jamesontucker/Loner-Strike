@@ -1947,6 +1947,64 @@
    "params": {
     "value": 1
    }
+  },
+  {
+   "id": "col_lit",
+   "type": "color.literal",
+   "pos": {
+    "x": 0,
+    "y": 6070
+   },
+   "params": {
+    "value": "#336699"
+   }
+  },
+  {
+   "id": "col_mk",
+   "type": "color.make",
+   "pos": {
+    "x": 0,
+    "y": 6070
+   },
+   "params": {
+    "r": 1,
+    "g": 2,
+    "b": 3,
+    "a": 255
+   }
+  },
+  {
+   "id": "col_br",
+   "type": "color.break",
+   "pos": {
+    "x": 0,
+    "y": 6070
+   },
+   "params": {}
+  },
+  {
+   "id": "col_mix",
+   "type": "color.lerp",
+   "pos": {
+    "x": 0,
+    "y": 6070
+   },
+   "params": {
+    "t": 0.5
+   }
+  },
+  {
+   "id": "col_hsv",
+   "type": "color.hsv",
+   "pos": {
+    "x": 0,
+    "y": 6070
+   },
+   "params": {
+    "h": 120,
+    "s": 1,
+    "v": 1
+   }
   }
  ],
  "edges": [
@@ -4280,6 +4338,39 @@
    "to": {
     "node": "n177",
     "pin": "value"
+   }
+  },
+  {
+   "id": "col_e1",
+   "from": {
+    "node": "col_lit",
+    "pin": "out"
+   },
+   "to": {
+    "node": "col_br",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "col_e2",
+   "from": {
+    "node": "col_mk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "col_mix",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "col_e3",
+   "from": {
+    "node": "col_hsv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "col_mix",
+    "pin": "b"
    }
   }
  ],

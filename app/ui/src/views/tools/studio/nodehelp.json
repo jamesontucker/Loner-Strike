@@ -8368,6 +8368,11 @@
 "help":"The player. Needs a wire."
 },
 {
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -22471,6 +22476,11 @@
 "help":"The player. Needs a wire."
 },
 {
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -24901,6 +24911,11 @@
 "help":"To: a position or direction (X, Y, Z). Needs a wire."
 },
 {
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -25256,6 +25271,11 @@
 "help":"The player. Optional."
 },
 {
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -25360,6 +25380,11 @@
 "id":"player",
 "dir":"in",
 "help":"Player (for one player): a player. Optional."
+},
+{
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
 },
 {
 "id":"then",
@@ -25869,6 +25894,11 @@
 "help":"On: an entity (a thing in the map). Needs a wire."
 },
 {
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -26002,6 +26032,11 @@
 "id":"pos",
 "dir":"in",
 "help":"The position. Optional."
+},
+{
+"id":"color",
+"dir":"in",
+"help":"Color (wins over the setting): color. Optional."
 },
 {
 "id":"then",
@@ -57169,6 +57204,206 @@
 }
 ]
 }
+},
+"color.literal":{
+"title":"Color",
+"category":"Colors",
+"what":"A color picked with the color picker (and how opaque: alpha).",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"The color."
+}
+],
+"settings":[
+{
+"id":"value",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"color.make",
+"color.break",
+"color.lerp"
+]
+},
+"color.make":{
+"title":"Make Color",
+"category":"Colors",
+"what":"A color from red, green, blue and alpha (0 to 255 each).",
+"pins":[
+{
+"id":"r",
+"dir":"in",
+"help":"Red: a number. Leave it empty to use the setting."
+},
+{
+"id":"g",
+"dir":"in",
+"help":"Green: a number. Leave it empty to use the setting."
+},
+{
+"id":"b",
+"dir":"in",
+"help":"Blue: a number. Leave it empty to use the setting."
+},
+{
+"id":"a",
+"dir":"in",
+"help":"Alpha: a number. Leave it empty to use the setting."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The color."
+}
+],
+"settings":[
+{
+"id":"r",
+"help":"A number from 0 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"a",
+"help":"A number from 0 to 255. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"color.literal",
+"color.break",
+"color.lerp"
+]
+},
+"color.break":{
+"title":"Break Color",
+"category":"Colors",
+"what":"A color's red, green, blue and alpha (0 to 255 each).",
+"pins":[
+{
+"id":"in",
+"dir":"in",
+"help":"The color. Needs a wire."
+},
+{
+"id":"r",
+"dir":"out",
+"help":"Red: a number."
+},
+{
+"id":"g",
+"dir":"out",
+"help":"Green: a number."
+},
+{
+"id":"b",
+"dir":"out",
+"help":"Blue: a number."
+},
+{
+"id":"a",
+"dir":"out",
+"help":"Alpha: a number."
+}
+],
+"settings":[],
+"related":[
+"color.make",
+"color.lerp",
+"color.literal"
+]
+},
+"color.lerp":{
+"title":"Blend Colors",
+"category":"Colors",
+"what":"Between color A (Amount 0) and color B (Amount 1): 0.5 is halfway.",
+"pins":[
+{
+"id":"a",
+"dir":"in",
+"help":"A: color. Needs a wire."
+},
+{
+"id":"b",
+"dir":"in",
+"help":"B: color. Needs a wire."
+},
+{
+"id":"t",
+"dir":"in",
+"help":"Amount: a number. Leave it empty to use the setting."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The color."
+}
+],
+"settings":[
+{
+"id":"t",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"color.break",
+"color.hsv",
+"color.make"
+]
+},
+"color.hsv":{
+"title":"Color From Hue",
+"category":"Colors",
+"what":"A color from hue (0 to 360: red, yellow, green, cyan, blue, magenta), saturation and brightness (0 to 1).",
+"pins":[
+{
+"id":"h",
+"dir":"in",
+"help":"Hue: a number. Leave it empty to use the setting."
+},
+{
+"id":"s",
+"dir":"in",
+"help":"Saturation: a number. Leave it empty to use the setting."
+},
+{
+"id":"v",
+"dir":"in",
+"help":"Brightness: a number. Leave it empty to use the setting."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The color."
+}
+],
+"settings":[
+{
+"id":"h",
+"help":"A number from 0 to 360. A wire into the pin of the same name is used instead."
+},
+{
+"id":"s",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+},
+{
+"id":"v",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"color.lerp",
+"color.break",
+"color.make"
+]
 },
 "asset.model":{
 "title":"Model",
