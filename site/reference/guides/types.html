@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Types and casting · Loner-Strike reference</title>
+<meta name="description" content="Numbers, text, players, entities, vectors and lists, and turning one into another.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+<link rel="stylesheet" href="guides.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Types and casting <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../../reference/entities.html" title="Map entities">Entities</a><a href="../../reference/editor.html" title="Editor tools">Editor</a><a href="../../reference/#guides" title="Guides" aria-current="true">Guides</a></div><details open class="here"><summary><a href="../#guides">Guides</a><span class="n">7</span></summary><ul><li><a href="types.html" aria-current="page">Types and casting</a></li><li><a href="events-flow.html">Events and flow</a></li><li><a href="variables.html">Variables and saving</a></li><li><a href="spawning.html">Spawning and transforms</a></li><li><a href="limits.html">Limits</a></li><li><a href="bots.html">Steering bots</a></li><li><a href="sharing.html">Sharing</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Types and casting</h1>
+    <p class="lead">Numbers, text, players, entities, vectors and lists, and turning one into another.</p>
+<article class="guide">
+<!-- GUIDE:BEGIN (hand-written: scripts/gen-reference.mjs keeps everything between these markers) -->
+<p>Every pin and variable in Game Mode Studio has a type, and a wire only connects pins whose types fit. Most of the time you don't think about it: drag from a pin and the node list shows only nodes that fit. This guide covers the types worth knowing, how a value goes from one type to another, and what an app update can leave behind.</p>
+
+<h2 id="types">The types</h2>
+<p>A variable's type menu (and a function's inputs, outputs and struct fields) groups them like this:</p>
+<div class="table"><table>
+<thead><tr><th>Group</th><th>Types</th><th>For</th></tr></thead>
+<tbody>
+<tr><td>Basic</td><td>Number, Yes/No, Text, Vector, Color, Transform</td><td>Amounts, switches, words, positions and directions, colors, where something is</td></tr>
+<tr><td>Game</td><td>Player, Team, Weapon, Hit Zone, Damage Kind, Entity, NPC, Creature, Projectile, Trigger Volume, Objective Marker, Component</td><td>The things in a round</td></tr>
+<tr><td>Files (loaded with the map)</td><td>Model, Sprite, Sound, Decal</td><td>Files your mode uses</td></tr>
+<tr><td>Handles</td><td>Timer, Sound Loop</td><td>Something running that you may want to stop</td></tr>
+<tr><td>Mine</td><td>Your mode's own enums and structs</td><td>Choices and groups of values you define</td></tr>
+</tbody></table></div>
+<p>Under the list, <b>Array of</b> and <b>Map from</b> make a list or a lookup of any of these (see <a href="variables.html">Variables and saving</a>).</p>
+
+<h2 id="numbers">One Number type, and whole numbers</h2>
+<p>There's a single Number type for every amount. Pins and settings the game takes as whole numbers (counts, ammo, money, slots, rounds, lives, waves) show a small <b>#</b>, and their fields step by 1. A typed-in fraction there is rounded, and Problems says so: "Ammo is a whole number: 2.5 becomes 3." Whole numbers are exact up to about 16 million.</p>
+
+<h2 id="enums">Weapon, Hit Zone and Damage Kind</h2>
+<p>Three enums come built in:</p>
+<ul>
+  <li><b>Weapon</b>: ak47, m4a1, awp, deagle, knife, c4 and every other weapon by name.</li>
+  <li><b>Hit Zone</b>: generic, head, chest, stomach, left arm, right arm, left leg, right leg.</li>
+  <li><b>Damage Kind</b>: other, shot, slash, blast, burn, fall, shock, drown, poison.</li>
+</ul>
+<p>They come out of <a class="node" data-node="player.weapon_held" href="../nodes/players.html#n-player-weapon-held">Weapon Held</a> and <a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> (Weapon kind), <a class="node" data-node="event.player_hurt" href="../nodes/events.html#n-event-player-hurt">Player Hurt</a> and <a class="node" data-node="proj.on_hit" href="../nodes/projectiles.html#n-proj-on-hit">Projectile Hit</a> (Hit zone), and <a class="node" data-node="event.player_about_hurt" href="../nodes/events.html#n-event-player-about-hurt">Player About To Be Hurt</a> (Hit zone and Damage kind). The old text outputs are still there beside them.</p>
+<p>Wire one into <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> and it grows one output per value. Double damage on headshots:</p>
+<p class="chain"><a class="node" data-node="event.player_about_hurt" href="../nodes/events.html#n-event-player-about-hurt">Player About To Be Hurt</a> <span class="to">→</span> <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> (Hit zone) <span class="to">→</span> head <span class="to">→</span> <a class="node" data-node="dmg.scale" href="../nodes/damage.html#n-dmg-scale">Scale Damage</a> (2)</p>
+<p>A Weapon goes into a text pin as its name, so <a class="node" data-node="player.give_weapon" href="../nodes/players.html#n-player-give-weapon">Give Weapon</a>'s Weapon pin takes it. Your own enums work the same way (see <a href="variables.html#structs-enums">Structs and enums</a>).</p>
+
+<h2 id="color">Color</h2>
+<p>A Color is one value: red, green, blue and alpha. Make one with <a class="node" data-node="color.literal" href="../nodes/colors.html#n-color-literal">Color</a> (picked with a swatch, an Alpha slider and presets such as Terrorist red and Counter-Terrorist blue), <a class="node" data-node="color.make" href="../nodes/colors.html#n-color-make">Make Color</a>, <a class="node" data-node="color.hsv" href="../nodes/colors.html#n-color-hsv">Color From Hue</a> or <a class="node" data-node="color.lerp" href="../nodes/colors.html#n-color-lerp">Blend Colors</a>; split one with <a class="node" data-node="color.break" href="../nodes/colors.html#n-color-break">Break Color</a>.</p>
+<p><a class="node" data-node="player.set_glow" href="../nodes/players.html#n-player-set-glow">Set Glow</a>, <a class="node" data-node="player.fade" href="../nodes/players.html#n-player-fade">Screen Fade</a>, <a class="node" data-node="fx.beam" href="../nodes/effects.html#n-fx-beam">Beam</a>, <a class="node" data-node="fun.trail" href="../nodes/effects.html#n-fun-trail">Trail</a>, <a class="node" data-node="fun.burst" href="../nodes/effects.html#n-fun-burst">Effect Burst</a>, <a class="node" data-node="msg.status_icon" href="../nodes/messages.html#n-msg-status-icon">Status Icon</a> and <a class="node" data-node="fx.marker" href="../nodes/effects.html#n-fx-marker">Objective Marker</a> have a pin <b>Color (wins over the setting)</b>. Left empty, they use their own color settings. A glow that goes from green to red as health drops:</p>
+<p class="chain"><a class="node" data-node="event.player_hurt" href="../nodes/events.html#n-event-player-hurt">Player Hurt</a> <span class="to">→</span> <a class="node" data-node="player.set_glow" href="../nodes/players.html#n-player-set-glow">Set Glow</a> (Victim, Color: <a class="node" data-node="color.lerp" href="../nodes/colors.html#n-color-lerp">Blend Colors</a> (Red, Green, Amount: Health left ÷ 100))</p>
+<p>Color variables are fine; data table columns and mode settings can't be colors.</p>
+
+<h2 id="transform">Transform</h2>
+<p>A Transform is a built-in struct with Position, Rotation, Scale and Velocity. <a class="node" data-node="player.transform" href="../nodes/players.html#n-player-transform">Get Transform</a> and <a class="node" data-node="ent.transform" href="../nodes/entities.html#n-ent-transform">Get Entity Transform</a> give one; <a class="node" data-node="player.set_transform" href="../nodes/players.html#n-player-set-transform">Set Transform</a> (Transform (separate pins win)) and <a class="node" data-node="ent.set_transform" href="../nodes/entities.html#n-ent-set-transform">Set Entity Transform</a> take one. Search the node list for Make Transform or Break Transform. If a Transform and a separate pin are both wired, Problems warns: "Both Transform and Position are wired: Position wins." Players can't be resized: Scale is for props and sprites.</p>
+<p>A shared checkpoint: whoever reaches it saves the spot, and everyone respawns there.</p>
+<p class="chain"><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> ("checkpoint") <span class="to">→</span> <a class="node" data-node="cast.player" href="../nodes/players.html#n-cast-player">As Player</a> (Who) <span class="to">→</span> Success <span class="to">→</span> <a class="node" data-node="var.set" href="../nodes/variables.html#n-var-set">Set Variable</a> (Checkpoint, <a class="node" data-node="player.transform" href="../nodes/players.html#n-player-transform">Get Transform</a>'s Transform)<br><a class="node" data-node="event.player_spawned" href="../nodes/events.html#n-event-player-spawned">Player Spawned</a> <span class="to">→</span> <a class="node" data-node="player.set_transform" href="../nodes/players.html#n-player-set-transform">Set Transform</a> (Player, Transform: <a class="node" data-node="var.get" href="../nodes/variables.html#n-var-get">Get Variable</a> Checkpoint)</p>
+<p>Like every struct, a Transform variable is one for the whole mode.</p>
+
+<h2 id="files">Files: Model, Sprite, Sound and Decal</h2>
+<p>File pins are drawn as hollow squares. A Model is a models/….mdl, a Sprite a sprites/….spr, a Sound a .wav named from inside sound/ (ambience/thunder_clap.wav). A Decal is one of <a class="node" data-node="fx.decal" href="../nodes/effects.html#n-fx-decal">Decal</a>'s kinds (Bullet hole, Scorch mark, Blood…). The pin <b>Model or Sprite</b> on <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> takes either.</p>
+<p><b>Files are picked, never made from text.</b> The game loads every file a mode can use before the map starts, so there's no Text-to-Model conversion. The files a mode can hold are the ones you picked: in <a class="node" data-node="asset.model" href="../nodes/files.html#n-asset-model">Model</a>, <a class="node" data-node="asset.sprite" href="../nodes/files.html#n-asset-sprite">Sprite</a>, <a class="node" data-node="asset.sound" href="../nodes/files.html#n-asset-sound">Sound</a> or <a class="node" data-node="asset.decal" href="../nodes/files.html#n-asset-decal">Decal</a>, a variable's start value, a Set Variable value or a data table cell. A file that isn't on the server is skipped and logged. <a class="node" data-node="asset.file_name" href="../nodes/files.html#n-asset-file-name">File Name Of</a> gives a file's name as text to show or log.</p>
+<p>A random death sound from a list:</p>
+<p class="chain"><a class="node" data-node="event.player_killed" href="../nodes/events.html#n-event-player-killed">Player Killed</a> <span class="to">→</span> <a class="node" data-node="snd.play_at" href="../nodes/effects.html#n-snd-play-at">Play Sound at Location</a> (At entity: Victim, Sound: <a class="node" data-node="array.random" href="../nodes/arrays.html#n-array-random">Random Item</a> (Death Sounds))</p>
+
+<h2 id="handles">Handles, and the way up</h2>
+<p>Some outputs aren't just any Entity; they're known to be one kind. Their pins carry a letter: N (NPC), C (Creature), P (Projectile), V (Trigger Volume), M (Objective Marker), K (Component).</p>
+<ul>
+  <li><a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a> gives a Creature; <a class="node" data-node="npc.spawn" href="../nodes/npcs.html#n-npc-spawn">Spawn NPC</a> an NPC; <a class="node" data-node="npc.spawn_use" href="../nodes/npcs.html#n-npc-spawn-use">Spawn Interactable</a> and <a class="node" data-node="comp.create" href="../nodes/components.html#n-comp-create">Create Component</a> a Component.</li>
+  <li><a class="node" data-node="vol.spawn" href="../nodes/collision.html#n-vol-spawn">Spawn Trigger Volume</a> gives a Trigger Volume; <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> and <a class="node" data-node="proj.on_hit" href="../nodes/projectiles.html#n-proj-on-hit">Projectile Hit</a> a Projectile; <a class="node" data-node="fx.marker" href="../nodes/effects.html#n-fx-marker">Objective Marker</a> an Objective Marker.</li>
+  <li><a class="node" data-node="snd.loop" href="../nodes/effects.html#n-snd-loop">Loop Sound</a> gives a <b>Sound Loop</b>: keep it in a variable and give it to <a class="node" data-node="snd.stop" href="../nodes/effects.html#n-snd-stop">Stop Sound</a> to stop that loop and no other. A loop also stops at the round's end, or when what it rides on goes.</li>
+</ul>
+<p>Going up always works: a handle, or a Player, goes into any Entity pin as it is (<a class="node" data-node="ent.remove" href="../nodes/entities.html#n-ent-remove">Remove Entity</a>, <a class="node" data-node="bots.goal" href="../nodes/bots.html#n-bots-goal">Bots: Goal</a>'s At, <a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a>). Lists don't widen, though: an Array of Creatures can't go where an Array of Entities is written to.</p>
+
+<h2 id="casts">Casts: the way down</h2>
+<p>Going from Entity to a kind needs a cast, because the thing might be something else. <a class="node" data-node="cast.player" href="../nodes/players.html#n-cast-player">As Player</a>, <a class="node" data-node="cast.creature" href="../nodes/creatures.html#n-cast-creature">As Creature</a>, <a class="node" data-node="cast.npc" href="../nodes/npcs.html#n-cast-npc">As NPC</a>, <a class="node" data-node="cast.projectile" href="../nodes/projectiles.html#n-cast-projectile">As Projectile</a>, <a class="node" data-node="cast.volume" href="../nodes/collision.html#n-cast-volume">As Trigger Volume</a>, <a class="node" data-node="cast.objmarker" href="../nodes/effects.html#n-cast-objmarker">As Objective Marker</a> and <a class="node" data-node="cast.component" href="../nodes/components.html#n-cast-component">As Component</a> each have a <b>Success</b> output (with the typed value) and <b>Failed</b>.</p>
+<p>Talk to whoever walks into a volume, if it's an NPC:</p>
+<p class="chain"><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> <span class="to">→</span> <a class="node" data-node="cast.npc" href="../nodes/npcs.html#n-cast-npc">As NPC</a> (Who) <span class="to">→</span> Success <span class="to">→</span> <a class="node" data-node="npc.say" href="../nodes/npcs.html#n-npc-say">Say</a> (NPC: NPC, "Stay close.")</p>
+<p>Heal a player who steps on a pad, and ignore creatures:</p>
+<p class="chain"><a class="node" data-node="vol.on_begin" href="../nodes/events.html#n-vol-on-begin">Begin Overlap</a> ("pad") <span class="to">→</span> <a class="node" data-node="cast.player" href="../nodes/players.html#n-cast-player">As Player</a> (Who) <span class="to">→</span> Success <span class="to">→</span> <a class="node" data-node="player.set_health" href="../nodes/players.html#n-player-set-health">Set Health</a> (Player, 100)</p>
+<p>When several kinds are possible, ask first: <a class="node" data-node="ent.kind_of" href="../nodes/entities.html#n-ent-kind-of">Kind Of</a> gives an Entity Kind (Player, Bot, Creature, NPC, Interactable, Component, Prop, Map entity, None) for <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a>.</p>
+<p class="chain"><a class="node" data-node="col.on_touch" href="../nodes/events.html#n-col-on-touch">Entity Touched</a> <span class="to">→</span> <a class="node" data-node="flow.switch_enum" href="../nodes/enums.html#n-flow-switch-enum">Switch on Enum</a> (<a class="node" data-node="ent.kind_of" href="../nodes/entities.html#n-ent-kind-of">Kind Of</a> Other) <span class="to">→</span> Creature <span class="to">→</span> <a class="node" data-node="cast.creature" href="../nodes/creatures.html#n-cast-creature">As Creature</a> <span class="to">→</span> Success <span class="to">→</span> <a class="node" data-node="creature.set_health" href="../nodes/creatures.html#n-creature-set-health">Set Creature Health</a> (0)</p>
+<p>You rarely have to find the cast yourself: drop an Entity wire on a Creature (or NPC, Player…) pin and the Studio says "Check what it is with As Creature first (casting)", with an <b>Insert As Creature</b> button. One Undo takes it back.</p>
+
+<h2 id="updates">After an update: orphaned pins</h2>
+<p>Modes saved with 1.0 open as they are and make the same plugin. A file from a newer app says "That graph was made by a newer Loner-Strike (graph version N). Update the app to open it."</p>
+<p>If an update ever removes a pin you had wired, the wire stays on a red pin labeled <b>Orphaned: </b><i>its id</i>, and Problems says "This pin was removed in an update. Re-wire or delete it." Compile, Test and Publish wait until it's fixed; deleting the wire removes the orphan. A removed setting shows greyed in Details as "Orphaned: name = value", with Clear. View › <b>Refresh nodes</b> lists what an update left behind ("Nodes refreshed: 1 orphaned wire, …"). Saving keeps orphans as they are, so nothing is lost by opening a mode.</p>
+
+<h2 id="see-also" class="see">See also</h2>
+<ul>
+  <li><a href="variables.html">Variables and saving</a>: variables, arrays, maps, structs and enums.</li>
+  <li><a href="spawning.html">Spawning and transforms</a>: what the spawn nodes give back.</li>
+  <li><a href="../nodes/colors.html">Colors</a>, <a href="../nodes/files.html">Files</a> and <a href="../nodes/enums.html">Enums</a> in the reference.</li>
+</ul>
+<!-- GUIDE:END -->
+</article>
+    <p class="meta ty">A hand-written guide. Every node it names links to the node reference, which is made from the app's own catalog.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#types">The types</a></li><li><a href="#numbers">One Number type, and whole numbers</a></li><li><a href="#enums">Weapon, Hit Zone and Damage Kind</a></li><li><a href="#color">Color</a></li><li><a href="#transform">Transform</a></li><li><a href="#files">Files: Model, Sprite, Sound and Decal</a></li><li><a href="#handles">Handles, and the way up</a></li><li><a href="#casts">Casts: the way down</a></li><li><a href="#updates">After an update: orphaned pins</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

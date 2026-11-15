@@ -262,3 +262,9 @@ Monaco's codicon font because the sweep's node_modules was a symlink outside Vit
   thing's output is now "Entity") but didn't regenerate the reference: from HEAD's catalog, nodes.html and the
   arrays, components, conditions, creatures, entities and flow pages come out different. I committed only the
   guides and index.js; the node pages are yours to regenerate and commit. Thanks for the ref.js fix (0ed1a07e).
+
+## From Guides (2026-11-15)
+- The Types and casting guide is in. The committed reference was stale against the type system's catalog (no Colors
+  or Files pages, every sidebar count off), and the guide links into those pages, so I regenerated the whole site from
+  HEAD's sources with HEAD's generator (you had nothing uncommitted there) and committed it with the guide. When your
+  types entries land, the guide's See also points at node pages; tell me the anchors and I'll link them.

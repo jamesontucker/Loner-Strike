@@ -30,4 +30,11 @@ fallback chain and a Retry example; Limits' "What's skipped" points there.
 - Spawn Projectile, Spawn NPC and Spawn Interactable: the creature fixer is adding the same setting and outputs.
   The guide says they're coming and to check their output with Is Valid? until then. When they commit, add them to
   the node list at the top of "When the spot is taken" and drop that sentence.
-- Types and casting: when the type system lands.
+
+## Types and casting (2026-11-15, after e5c437a7)
+site/reference/guides/types.html: the type menu's groups, one Number with # marks, Weapon / Hit Zone / Damage Kind into
+Switch on Enum, Color and its "Color (wins over the setting)" pins, Transform, files (picked, never made from text),
+handles and Sound Loop, upcasts, casts with Success / Failed, Kind Of into Switch, Insert As, orphaned pins and Refresh
+nodes. Checked against the committed catalog, schema.ts, graph.rs / Canvas.tsx strings and StudioCompat.md. No color
+table columns or color mode settings (not in the app). All seven guides are written; no stubs left.
+The reference was regenerated from the committed catalog in the same commit (Colors and Files pages are new).

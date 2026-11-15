@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 // @ts-expect-error (a plain .mjs script, no types)
 import { guideProblems } from "../../../scripts/gen-reference.mjs";
 
-const GUIDES = ["events-flow", "variables", "spawning", "limits", "bots", "sharing"];
+const GUIDES = ["types", "events-flow", "variables", "spawning", "limits", "bots", "sharing"];
 
 test("every node a guide names is in the catalog", () => {
   expect(guideProblems(), "guide links to nodes that don't exist").toEqual([]);
@@ -33,19 +33,17 @@ test("each guide: its text between the markers, node links that open the node's 
   }
 });
 
-test("the front page and the docs list the written guides; Types and casting is still a stub", async ({ page }) => {
+test("the front page and the docs list every guide; no stubs left", async ({ page }) => {
   await page.goto("/reference/");
   for (const g of GUIDES) await expect(page.locator(`#guides ~ .grid a[href="guides/${g}.html"]`)).toBeVisible();
-  await expect(page.locator('#guides ~ .grid a[href="../docs.html#guide-types"]')).toContainText(/soon/i);
-  await page.goto("/docs.html#guide-spawning");
-  await expect(page.locator("#guide-spawning a[href='reference/guides/spawning.html']")).toBeVisible();
-  await expect(page.locator("#guide-types")).toHaveAttribute("data-stub", "1");
+  await expect(page.locator("#guides ~ .grid a[href^='../docs.html#guide-']")).toHaveCount(0);
+  await page.goto("/docs.html#guide-types");
+  await expect(page.locator("#guide-types a[href='reference/guides/types.html']")).toBeVisible();
+  await expect(page.locator("[data-stub]")).toHaveCount(0);
 });
 
 test("the search finds guides and their sections", async ({ page }) => {
   await page.goto("/reference/guides/limits.html");
-  // (the index loads once the page is idle; typing while it loads is the reference search's own case)
-  await page.waitForFunction(() => "LS_REFERENCE" in window);
   await page.locator("#ref-q").fill("double jump");
   const opts = page.locator("#ref-results [role=option]");
   await expect(page.locator("#ref-results [data-u='reference/guides/events-flow.html#examples']")).toBeVisible();
@@ -54,6 +52,8 @@ test("the search finds guides and their sections", async ({ page }) => {
   await page.locator("#ref-q").press("Enter");
   await expect(page).toHaveURL(/guides\/bots\.html#warning$/);
   await expect(page.locator("#warning")).toBeInViewport();
+  await page.locator("#ref-q").fill("casts creature");
+  await expect(page.locator("#ref-results [data-u='reference/guides/types.html#casts']")).toBeVisible();
 });
 
 test("phones: nothing sideways, the menu lists the guides", async ({ page }) => {
