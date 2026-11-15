@@ -1128,11 +1128,16 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
-// room for more messages this server frame (temp entities, HUD, chat): past the budget (the
-// Effect messages a frame limit) the effect is skipped, said in the log once a second; a unicast
-// (to a player) counts against that player too, at half the budget
+// The per-frame message budget (the Effect messages a frame limit; a unicast counts against its
+// player too, at half the budget). Two kinds of message use it:
+//  - cosmetic (effects, a sound, a chat line): lsg_msg_room; past the budget it's skipped, said in
+//    the log once a second
+//  - state (a scoreboard's team or tag, a score, an icon, weather: what lasts): lsg_msg_state;
+//    never dropped. Past the budget it waits in a queue that goes out on the next frames, in
+//    order; the same resend and key queued again keeps its place, and the resend reads the state
+//    when it goes, so the latest value wins
 stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
-stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+stock bool:lsg_msg_fits(cost, to, lim)
 {
 	if (lim <= 0)
 		lim = g_lsgMsgLim
@@ -1144,18 +1149,112 @@ stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
 		arrayset(g_lsgMsgP, 0, sizeof g_lsgMsgP)
 	}
 	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
-	{
-		if (now - g_lsgMsgSaid >= 1.0)
-		{
-			g_lsgMsgSaid = now
-			log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
-		}
 		return false
-	}
 	g_lsgMsgN += cost
 	if (to >= 1 && to <= 32)
 		g_lsgMsgP[to] += cost
 	return true
+}
+
+stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+{
+	if (lsg_msg_fits(cost, to, lim))
+		return true
+	new Float:now = get_gametime()
+	if (now - g_lsgMsgSaid >= 1.0)
+	{
+		g_lsgMsgSaid = now
+		log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
+	}
+	return false
+}
+
+// a state message: true, send it now; false, it's queued (resend: a public taking the key, which
+// sends the state as it is then; key: whose, usually the player)
+#define LSG_MSGQ 512
+stock g_lsgMsgQFn[LSG_MSGQ][32], g_lsgMsgQKey[LSG_MSGQ], g_lsgMsgQCost[LSG_MSGQ], g_lsgMsgQTo[LSG_MSGQ], g_lsgMsgQN, bool:g_lsgMsgQAsked, bool:g_lsgMsgQSending, g_lsgMsgQWaited, g_lsgMsgQFrames
+stock bool:lsg_msg_state(const what[], const resend[], key, cost = 1, to = 0, lim = 0)
+{
+	// (the queue sending it: its room is taken already)
+	if (g_lsgMsgQSending)
+		return true
+	// (others waiting: it waits behind them, so the order holds)
+	if (!g_lsgMsgQN && lsg_msg_fits(cost, to, lim))
+		return true
+	for (new i = 0; i < g_lsgMsgQN; i++)
+		if (g_lsgMsgQKey[i] == key && equal(g_lsgMsgQFn[i], resend))
+			return false
+	if (g_lsgMsgQN >= LSG_MSGQ)
+	{
+		// (never dropped: over the queue too, it goes now)
+		log_amx("[%s] %s sent over the budget: the queue of state messages is full", LSG_MODE, what)
+		return true
+	}
+	copy(g_lsgMsgQFn[g_lsgMsgQN], 31, resend)
+	g_lsgMsgQKey[g_lsgMsgQN] = key
+	g_lsgMsgQCost[g_lsgMsgQN] = cost
+	g_lsgMsgQTo[g_lsgMsgQN] = to
+	g_lsgMsgQN++
+	g_lsgMsgQWaited++
+	if (!g_lsgMsgQAsked)
+	{
+		g_lsgMsgQAsked = true
+		RequestFrame("lsg_msg_flush")
+	}
+	return false
+}
+
+// the queue: as many as the frame's budget holds, in order; the rest on the next frame
+public lsg_msg_flush()
+{
+	g_lsgMsgQAsked = false
+	g_lsgMsgQFrames++
+	new done = 0, fn[32]
+	while (done < g_lsgMsgQN && lsg_msg_fits(g_lsgMsgQCost[done], g_lsgMsgQTo[done], 0))
+	{
+		copy(fn, charsmax(fn), g_lsgMsgQFn[done])
+		new key = g_lsgMsgQKey[done]
+		done++
+		g_lsgMsgQSending = true
+		if (callfunc_begin(fn) == 1)
+		{
+			callfunc_push_int(key)
+			callfunc_end()
+		}
+		g_lsgMsgQSending = false
+	}
+	// (a frame with no room at all still sends one: the queue always moves)
+	if (!done && g_lsgMsgQN)
+	{
+		copy(fn, charsmax(fn), g_lsgMsgQFn[0])
+		g_lsgMsgQSending = true
+		if (callfunc_begin(fn) == 1)
+		{
+			callfunc_push_int(g_lsgMsgQKey[0])
+			callfunc_end()
+		}
+		g_lsgMsgQSending = false
+		done = 1
+	}
+	for (new i = done; i < g_lsgMsgQN; i++)
+	{
+		copy(g_lsgMsgQFn[i - done], 31, g_lsgMsgQFn[i])
+		g_lsgMsgQKey[i - done] = g_lsgMsgQKey[i]
+		g_lsgMsgQCost[i - done] = g_lsgMsgQCost[i]
+		g_lsgMsgQTo[i - done] = g_lsgMsgQTo[i]
+	}
+	g_lsgMsgQN -= done
+	if (g_lsgMsgQN && !g_lsgMsgQAsked)
+	{
+		g_lsgMsgQAsked = true
+		RequestFrame("lsg_msg_flush")
+	}
+	else if (!g_lsgMsgQN)
+	{
+		log_amx("[%s] %d state messages waited for room in the frame's budget: all sent, over %d more frames", LSG_MODE, g_lsgMsgQWaited, g_lsgMsgQFrames)
+		g_lsgMsgQWaited = 0
+		g_lsgMsgQFrames = 0
+	}
 }
 
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");
@@ -2188,12 +2287,43 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+stock const g_lsgIconNames[][] = { "buyzone", "c4", "defuser", "rescue", "escape", "vipsafety", "stopwatch", "smallskull", "smallc4", "smallvip", "hostage", "dollar", "cross", "item_healthkit", "item_battery", "item_longjump", "dmg_poison", "dmg_bio", "dmg_chem", "dmg_drown", "dmg_gas", "dmg_cold", "dmg_heat", "dmg_rad", "dmg_shock" }
 // ---- Status Icon, Objective Marker, Kill Feed Line ----
 stock g_lsgIcon[33][16]
+// (the last of each player's icons, for a send the budget put off: key = player * 64 + icon)
+stock g_lsgIconSt[33][64], g_lsgIconRgb[33][64]
 stock lsg_icon_send(to, status, const name[], r, g, b)
 {
-	if ((to && !is_user_connected(to)) || !lsg_msg_room("Status Icon", 1, to))
+	if (to && !is_user_connected(to))
 		return
+	new k = lsg_icon_k(name)
+	if (k >= 0)
+	{
+		g_lsgIconSt[to][k] = status
+		g_lsgIconRgb[to][k] = (r << 16) | (g << 8) | b
+		if (!lsg_msg_state("Status Icon", "lsg_icon_again", to * 64 + k, 1, to))
+			return
+	}
+	lsg_icon_put(to, status, name, r, g, b)
+}
+
+public lsg_icon_again(key)
+{
+	new to = key / 64, k = key % 64, c = g_lsgIconRgb[to][k]
+	if (!to || is_user_connected(to))
+		lsg_icon_put(to, g_lsgIconSt[to][k], g_lsgIconNames[k], (c >> 16) & 255, (c >> 8) & 255, c & 255)
+}
+
+stock lsg_icon_k(const name[])
+{
+	for (new k = 0; k < sizeof g_lsgIconNames; k++)
+		if (equal(g_lsgIconNames[k], name))
+			return k
+	return -1
+}
+
+stock lsg_icon_put(to, status, const name[], r, g, b)
+{
 	static msg
 	if (!msg)
 		msg = get_user_msgid("StatusIcon")
@@ -4432,14 +4562,19 @@ stock lsg_eng_light(id, what, bat)
 		lit = false
 	set_pev(id, pev_effects, lit ? (pev(id, pev_effects) | EF_DIMLIGHT) : (pev(id, pev_effects) & ~EF_DIMLIGHT))
 	set_ent_data_float(id, "CBasePlayer", "m_flFlashLightTime", get_gametime() + (lit ? 1.2 : 0.2))
-	if (!is_user_bot(id) && lsg_msg_room("Flashlight", 1, id))
-	{
-		message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
-		write_byte(lit ? 1 : 0)
-		write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
-		message_end()
-	}
+	if (!is_user_bot(id) && lsg_msg_state("Flashlight", "lsg_eng_light_again", id, 1, id))
+		lsg_eng_light_again(id)
 	return 1
+}
+
+public lsg_eng_light_again(id)
+{
+	if (!is_user_connected(id))
+		return
+	message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
+	write_byte((pev(id, pev_effects) & EF_DIMLIGHT) ? 1 : 0)
+	write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
+	message_end()
 }
 
 public lsg_eng_impulse(id)
@@ -4456,16 +4591,21 @@ stock lsg_eng_nvg(id, what)
 	if (what == 0 || what == 3 || what == 2)
 	{
 		set_ent_data(id, "CBasePlayer", "m_bNightVisionOn", on)
-		if (!is_user_bot(id) && lsg_msg_room("Night Vision", 1, id))
-		{
-			message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
-			write_byte(on ? 1 : 0)
-			message_end()
-		}
+		if (!is_user_bot(id) && lsg_msg_state("Night Vision", "lsg_eng_nvg_again", id, 1, id))
+			lsg_eng_nvg_again(id)
 	}
 	if (what == 0)
 		cs_set_user_nvg(id, 0)
 	return 1
+}
+
+public lsg_eng_nvg_again(id)
+{
+	if (!is_user_connected(id))
+		return
+	message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
+	write_byte(get_ent_data(id, "CBasePlayer", "m_bNightVisionOn") ? 1 : 0)
+	message_end()
 }
 
 // Silent Footsteps: the game waits for the next step sound
@@ -4482,11 +4622,17 @@ stock lsg_eng_tag(id, tag, bool:keep)
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
 	g_lsgEngAt[id] = get_gametime()
-	if (!lsg_msg_room("Scoreboard Tag", 2))
+	if (lsg_msg_state("Scoreboard Tag", "lsg_eng_tag_again", id, 2))
+		lsg_eng_tag_again(id)
+}
+
+public lsg_eng_tag_again(id)
+{
+	if (!is_user_connected(id))
 		return
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
-	write_byte(lsg_eng_real_attr(id) | tag)
+	write_byte(lsg_eng_real_attr(id) | g_lsgTag[id])
 	message_end()
 }
 
@@ -4512,9 +4658,15 @@ public lsg_eng_attr(msg, dest, to)
 stock lsg_eng_color(id, t)
 {
 	g_lsgShowTeam[id] = t
-	new real = _:cs_get_user_team(id)
-	if (!lsg_msg_room("Scoreboard Team Color", 2))
+	if (lsg_msg_state("Scoreboard Team Color", "lsg_eng_color_again", id, 2))
+		lsg_eng_color_again(id)
+}
+
+public lsg_eng_color_again(id)
+{
+	if (!is_user_connected(id))
 		return
+	new t = g_lsgShowTeam[id], real = _:cs_get_user_team(id)
 	message_begin(MSG_ALL, get_user_msgid("TeamInfo"))
 	write_byte(id)
 	write_string(g_lsgTeamWord[t ? t : clamp(real, 0, 3)])
@@ -4810,41 +4962,74 @@ stock lsg_eng_blip_off(who, viewer, bool:bomb, slot)
 	}
 }
 
+// (state messages: never dropped; past the frame's budget they go out on the next frames,
+// gen.rs lsg_msg_state, sending what's kept here then)
+stock g_lsgEngScore[3]
 stock lsg_eng_score(team, score)
 {
-	if (!lsg_msg_room("Show Team Score", 2))
-		return
+	team = team == 2 ? 2 : 1
+	g_lsgEngScore[team] = score
+	if (lsg_msg_state("Show Team Score", "lsg_eng_score_again", team, 2))
+		lsg_eng_score_again(team)
+}
+
+public lsg_eng_score_again(team)
+{
 	message_begin(MSG_ALL, get_user_msgid("TeamScore"))
 	write_string(team == 2 ? "CT" : "TERRORIST")
-	write_short(score)
+	write_short(g_lsgEngScore[team])
 	message_end()
 }
 
 // weather: 0 clear, 1 rain, 2 snow (0 player: everyone)
+stock g_lsgWeatherP[33], g_lsgFogP[33][4]
 stock lsg_eng_weather(id, k)
 {
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Weather", 1, p))
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p))
 			continue
-		message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
-		write_byte(k)
-		message_end()
+		g_lsgWeatherP[p] = k
+		if (lsg_msg_state("Set Weather", "lsg_eng_weather_again", p, 1, p))
+			lsg_eng_weather_again(p)
 	}
+}
+
+public lsg_eng_weather_again(p)
+{
+	if (!is_user_connected(p))
+		return
+	message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
+	write_byte(g_lsgWeatherP[p])
+	message_end()
 }
 
 // fog: the color and the thickness as the game's Fog message has it (the float's four bytes)
 stock lsg_eng_fog(id, r, g, b, Float:d)
 {
-	new bits = _:d
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Fog", 1, p))
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p))
 			continue
+		g_lsgFogP[p][0] = r
+		g_lsgFogP[p][1] = g
+		g_lsgFogP[p][2] = b
+		g_lsgFogP[p][3] = _:d
+		if (lsg_msg_state("Set Fog", "lsg_eng_fog_again", p, 1, p))
+			lsg_eng_fog_again(p)
+	}
+}
+
+public lsg_eng_fog_again(p)
+{
+	if (!is_user_connected(p))
+		return
+	new bits = g_lsgFogP[p][3]
+	{
 		message_begin(MSG_ONE, get_user_msgid("Fog"), _, p)
-		write_byte(r)
-		write_byte(g)
-		write_byte(b)
+		write_byte(g_lsgFogP[p][0])
+		write_byte(g_lsgFogP[p][1])
+		write_byte(g_lsgFogP[p][2])
 		write_byte(bits & 255)
 		write_byte((bits >> 8) & 255)
 		write_byte((bits >> 16) & 255)

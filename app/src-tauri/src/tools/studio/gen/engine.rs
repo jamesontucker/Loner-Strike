@@ -735,41 +735,74 @@ stock lsg_eng_blip_off(who, viewer, bool:bomb, slot)
 	}
 }
 
+// (state messages: never dropped; past the frame's budget they go out on the next frames,
+// gen.rs lsg_msg_state, sending what's kept here then)
+stock g_lsgEngScore[3]
 stock lsg_eng_score(team, score)
 {
-	if (!lsg_msg_room("Show Team Score", 2))
-		return
+	team = team == 2 ? 2 : 1
+	g_lsgEngScore[team] = score
+	if (lsg_msg_state("Show Team Score", "lsg_eng_score_again", team, 2))
+		lsg_eng_score_again(team)
+}
+
+public lsg_eng_score_again(team)
+{
 	message_begin(MSG_ALL, get_user_msgid("TeamScore"))
 	write_string(team == 2 ? "CT" : "TERRORIST")
-	write_short(score)
+	write_short(g_lsgEngScore[team])
 	message_end()
 }
 
 // weather: 0 clear, 1 rain, 2 snow (0 player: everyone)
+stock g_lsgWeatherP[33], g_lsgFogP[33][4]
 stock lsg_eng_weather(id, k)
 {
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Weather", 1, p))
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p))
 			continue
-		message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
-		write_byte(k)
-		message_end()
+		g_lsgWeatherP[p] = k
+		if (lsg_msg_state("Set Weather", "lsg_eng_weather_again", p, 1, p))
+			lsg_eng_weather_again(p)
 	}
+}
+
+public lsg_eng_weather_again(p)
+{
+	if (!is_user_connected(p))
+		return
+	message_begin(MSG_ONE, get_user_msgid("ReceiveW"), _, p)
+	write_byte(g_lsgWeatherP[p])
+	message_end()
 }
 
 // fog: the color and the thickness as the game's Fog message has it (the float's four bytes)
 stock lsg_eng_fog(id, r, g, b, Float:d)
 {
-	new bits = _:d
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p) || !lsg_msg_room("Set Fog", 1, p))
+		if ((id && p != id) || !is_user_connected(p) || is_user_bot(p))
 			continue
+		g_lsgFogP[p][0] = r
+		g_lsgFogP[p][1] = g
+		g_lsgFogP[p][2] = b
+		g_lsgFogP[p][3] = _:d
+		if (lsg_msg_state("Set Fog", "lsg_eng_fog_again", p, 1, p))
+			lsg_eng_fog_again(p)
+	}
+}
+
+public lsg_eng_fog_again(p)
+{
+	if (!is_user_connected(p))
+		return
+	new bits = g_lsgFogP[p][3]
+	{
 		message_begin(MSG_ONE, get_user_msgid("Fog"), _, p)
-		write_byte(r)
-		write_byte(g)
-		write_byte(b)
+		write_byte(g_lsgFogP[p][0])
+		write_byte(g_lsgFogP[p][1])
+		write_byte(g_lsgFogP[p][2])
 		write_byte(bits & 255)
 		write_byte((bits >> 8) & 255)
 		write_byte((bits >> 16) & 255)
@@ -906,14 +939,19 @@ stock lsg_eng_light(id, what, bat)
 		lit = false
 	set_pev(id, pev_effects, lit ? (pev(id, pev_effects) | EF_DIMLIGHT) : (pev(id, pev_effects) & ~EF_DIMLIGHT))
 	set_ent_data_float(id, "CBasePlayer", "m_flFlashLightTime", get_gametime() + (lit ? 1.2 : 0.2))
-	if (!is_user_bot(id) && lsg_msg_room("Flashlight", 1, id))
-	{
-		message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
-		write_byte(lit ? 1 : 0)
-		write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
-		message_end()
-	}
+	if (!is_user_bot(id) && lsg_msg_state("Flashlight", "lsg_eng_light_again", id, 1, id))
+		lsg_eng_light_again(id)
 	return 1
+}
+
+public lsg_eng_light_again(id)
+{
+	if (!is_user_connected(id))
+		return
+	message_begin(MSG_ONE, get_user_msgid("Flashlight"), _, id)
+	write_byte((pev(id, pev_effects) & EF_DIMLIGHT) ? 1 : 0)
+	write_byte(get_ent_data(id, "CBasePlayer", "m_iFlashBattery"))
+	message_end()
 }
 
 public lsg_eng_impulse(id)
@@ -930,16 +968,21 @@ stock lsg_eng_nvg(id, what)
 	if (what == 0 || what == 3 || what == 2)
 	{
 		set_ent_data(id, "CBasePlayer", "m_bNightVisionOn", on)
-		if (!is_user_bot(id) && lsg_msg_room("Night Vision", 1, id))
-		{
-			message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
-			write_byte(on ? 1 : 0)
-			message_end()
-		}
+		if (!is_user_bot(id) && lsg_msg_state("Night Vision", "lsg_eng_nvg_again", id, 1, id))
+			lsg_eng_nvg_again(id)
 	}
 	if (what == 0)
 		cs_set_user_nvg(id, 0)
 	return 1
+}
+
+public lsg_eng_nvg_again(id)
+{
+	if (!is_user_connected(id))
+		return
+	message_begin(MSG_ONE, get_user_msgid("NVGToggle"), _, id)
+	write_byte(get_ent_data(id, "CBasePlayer", "m_bNightVisionOn") ? 1 : 0)
+	message_end()
 }
 
 // Silent Footsteps: the game waits for the next step sound
@@ -956,11 +999,17 @@ stock lsg_eng_tag(id, tag, bool:keep)
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
 	g_lsgEngAt[id] = get_gametime()
-	if (!lsg_msg_room("Scoreboard Tag", 2))
+	if (lsg_msg_state("Scoreboard Tag", "lsg_eng_tag_again", id, 2))
+		lsg_eng_tag_again(id)
+}
+
+public lsg_eng_tag_again(id)
+{
+	if (!is_user_connected(id))
 		return
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
-	write_byte(lsg_eng_real_attr(id) | tag)
+	write_byte(lsg_eng_real_attr(id) | g_lsgTag[id])
 	message_end()
 }
 
@@ -986,9 +1035,15 @@ public lsg_eng_attr(msg, dest, to)
 stock lsg_eng_color(id, t)
 {
 	g_lsgShowTeam[id] = t
-	new real = _:cs_get_user_team(id)
-	if (!lsg_msg_room("Scoreboard Team Color", 2))
+	if (lsg_msg_state("Scoreboard Team Color", "lsg_eng_color_again", id, 2))
+		lsg_eng_color_again(id)
+}
+
+public lsg_eng_color_again(id)
+{
+	if (!is_user_connected(id))
 		return
+	new t = g_lsgShowTeam[id], real = _:cs_get_user_team(id)
 	message_begin(MSG_ALL, get_user_msgid("TeamInfo"))
 	write_byte(id)
 	write_string(g_lsgTeamWord[t ? t : clamp(real, 0, 3)])

@@ -778,11 +778,16 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
-// room for more messages this server frame (temp entities, HUD, chat): past the budget (the
-// Effect messages a frame limit) the effect is skipped, said in the log once a second; a unicast
-// (to a player) counts against that player too, at half the budget
+// The per-frame message budget (the Effect messages a frame limit; a unicast counts against its
+// player too, at half the budget). Two kinds of message use it:
+//  - cosmetic (effects, a sound, a chat line): lsg_msg_room; past the budget it's skipped, said in
+//    the log once a second
+//  - state (a scoreboard's team or tag, a score, an icon, weather: what lasts): lsg_msg_state;
+//    never dropped. Past the budget it waits in a queue that goes out on the next frames, in
+//    order; the same resend and key queued again keeps its place, and the resend reads the state
+//    when it goes, so the latest value wins
 stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
-stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+stock bool:lsg_msg_fits(cost, to, lim)
 {
 	if (lim <= 0)
 		lim = g_lsgMsgLim
@@ -794,18 +799,112 @@ stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
 		arrayset(g_lsgMsgP, 0, sizeof g_lsgMsgP)
 	}
 	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
-	{
-		if (now - g_lsgMsgSaid >= 1.0)
-		{
-			g_lsgMsgSaid = now
-			log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
-		}
 		return false
-	}
 	g_lsgMsgN += cost
 	if (to >= 1 && to <= 32)
 		g_lsgMsgP[to] += cost
 	return true
+}
+
+stock bool:lsg_msg_room(const what[], cost = 1, to = 0, lim = 0)
+{
+	if (lsg_msg_fits(cost, to, lim))
+		return true
+	new Float:now = get_gametime()
+	if (now - g_lsgMsgSaid >= 1.0)
+	{
+		g_lsgMsgSaid = now
+		log_amx("[%s] %s skipped: too many effects this frame", LSG_MODE, what)
+	}
+	return false
+}
+
+// a state message: true, send it now; false, it's queued (resend: a public taking the key, which
+// sends the state as it is then; key: whose, usually the player)
+#define LSG_MSGQ 512
+stock g_lsgMsgQFn[LSG_MSGQ][32], g_lsgMsgQKey[LSG_MSGQ], g_lsgMsgQCost[LSG_MSGQ], g_lsgMsgQTo[LSG_MSGQ], g_lsgMsgQN, bool:g_lsgMsgQAsked, bool:g_lsgMsgQSending, g_lsgMsgQWaited, g_lsgMsgQFrames
+stock bool:lsg_msg_state(const what[], const resend[], key, cost = 1, to = 0, lim = 0)
+{
+	// (the queue sending it: its room is taken already)
+	if (g_lsgMsgQSending)
+		return true
+	// (others waiting: it waits behind them, so the order holds)
+	if (!g_lsgMsgQN && lsg_msg_fits(cost, to, lim))
+		return true
+	for (new i = 0; i < g_lsgMsgQN; i++)
+		if (g_lsgMsgQKey[i] == key && equal(g_lsgMsgQFn[i], resend))
+			return false
+	if (g_lsgMsgQN >= LSG_MSGQ)
+	{
+		// (never dropped: over the queue too, it goes now)
+		log_amx("[%s] %s sent over the budget: the queue of state messages is full", LSG_MODE, what)
+		return true
+	}
+	copy(g_lsgMsgQFn[g_lsgMsgQN], 31, resend)
+	g_lsgMsgQKey[g_lsgMsgQN] = key
+	g_lsgMsgQCost[g_lsgMsgQN] = cost
+	g_lsgMsgQTo[g_lsgMsgQN] = to
+	g_lsgMsgQN++
+	g_lsgMsgQWaited++
+	if (!g_lsgMsgQAsked)
+	{
+		g_lsgMsgQAsked = true
+		RequestFrame("lsg_msg_flush")
+	}
+	return false
+}
+
+// the queue: as many as the frame's budget holds, in order; the rest on the next frame
+public lsg_msg_flush()
+{
+	g_lsgMsgQAsked = false
+	g_lsgMsgQFrames++
+	new done = 0, fn[32]
+	while (done < g_lsgMsgQN && lsg_msg_fits(g_lsgMsgQCost[done], g_lsgMsgQTo[done], 0))
+	{
+		copy(fn, charsmax(fn), g_lsgMsgQFn[done])
+		new key = g_lsgMsgQKey[done]
+		done++
+		g_lsgMsgQSending = true
+		if (callfunc_begin(fn) == 1)
+		{
+			callfunc_push_int(key)
+			callfunc_end()
+		}
+		g_lsgMsgQSending = false
+	}
+	// (a frame with no room at all still sends one: the queue always moves)
+	if (!done && g_lsgMsgQN)
+	{
+		copy(fn, charsmax(fn), g_lsgMsgQFn[0])
+		g_lsgMsgQSending = true
+		if (callfunc_begin(fn) == 1)
+		{
+			callfunc_push_int(g_lsgMsgQKey[0])
+			callfunc_end()
+		}
+		g_lsgMsgQSending = false
+		done = 1
+	}
+	for (new i = done; i < g_lsgMsgQN; i++)
+	{
+		copy(g_lsgMsgQFn[i - done], 31, g_lsgMsgQFn[i])
+		g_lsgMsgQKey[i - done] = g_lsgMsgQKey[i]
+		g_lsgMsgQCost[i - done] = g_lsgMsgQCost[i]
+		g_lsgMsgQTo[i - done] = g_lsgMsgQTo[i]
+	}
+	g_lsgMsgQN -= done
+	if (g_lsgMsgQN && !g_lsgMsgQAsked)
+	{
+		g_lsgMsgQAsked = true
+		RequestFrame("lsg_msg_flush")
+	}
+	else if (!g_lsgMsgQN)
+	{
+		log_amx("[%s] %d state messages waited for room in the frame's budget: all sent, over %d more frames", LSG_MODE, g_lsgMsgQWaited, g_lsgMsgQFrames)
+		g_lsgMsgQWaited = 0
+		g_lsgMsgQFrames = 0
+	}
 }
 
 // room for one more entity: free slots are kept for the game (it crashes with "no free edicts");

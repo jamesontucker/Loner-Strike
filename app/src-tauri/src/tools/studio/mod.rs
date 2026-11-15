@@ -1594,6 +1594,82 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// A burst of state at once (32 players spawning in the same frame, each told their scoreboard
+    /// team, tag, a team score and an icon): state messages are never dropped, the budget's
+    /// overflow is queued per resend and key and goes out on the next frames.
+    pub fn spawn_burst_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("sp", "event.player_spawned", json!({})),
+            n("col", "eng.score_color", json!({"team": "ct"})),
+            n("tag", "eng.score_tag", json!({"tag": "vip"})),
+            n("sc", "hud.team_score", json!({"team": "ct", "score": 7})),
+            n("ic", "msg.status_icon", json!({"icon": "dollar", "show": "on", "death": false})),
+        ];
+        let edges = vec![
+            e(1, "sp", "then", "col", "exec"), e(2, "sp", "player", "col", "player"), e(3, "col", "then", "tag", "exec"), e(4, "sp", "player", "tag", "player"),
+            e(5, "tag", "then", "sc", "exec"), e(6, "sc", "then", "ic", "exec"), e(7, "sp", "player", "ic", "player"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "spawn_burst", "name": "Spawn burst"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    /// The queue as the plugin runs it, step for step (lsg_msg_fits / lsg_msg_state / lsg_msg_flush):
+    /// 32 spawns in one frame, each sending 4 state messages (team color 2, tag 2, score 2, icon 1)
+    /// against the default budget of 48 a frame.
+    #[test]
+    fn a_spawn_burst_drops_no_state_and_arrives_in_a_few_frames() {
+        let src = gen::generate(&spawn_burst_mode(), false).source;
+        for s in ["lsg_msg_state(\"Scoreboard Team Color\", \"lsg_eng_color_again\", id, 2)", "lsg_msg_state(\"Scoreboard Tag\", \"lsg_eng_tag_again\", id, 2)",
+            "lsg_msg_state(\"Show Team Score\", \"lsg_eng_score_again\", team, 2)", "lsg_msg_state(\"Status Icon\", \"lsg_icon_again\", to * 64 + k, 1, to)",
+            "public lsg_msg_flush()", "RequestFrame(\"lsg_msg_flush\")"] {
+            assert!(src.contains(s), "{s}");
+        }
+        assert!(!src.contains("lsg_msg_room(\"Scoreboard") && !src.contains("lsg_msg_room(\"Show Team Score") && !src.contains("lsg_msg_room(\"Status Icon"), "state isn't dropped");
+        // the model: (resend, key, cost, to)
+        let lim = 48;
+        let mut frame_n = 0;
+        let mut per: [i32; 33] = [0; 33];
+        let mut q: Vec<(&str, i32, i32, usize)> = Vec::new();
+        let mut sent: Vec<(&str, i32)> = Vec::new();
+        let fits = |n: &mut i32, per: &mut [i32; 33], cost: i32, to: usize| -> bool {
+            if *n + cost > lim || (to >= 1 && per[to] + cost > lim / 2) { return false; }
+            *n += cost;
+            if to >= 1 { per[to] += cost; }
+            true
+        };
+        let mut state = |q: &mut Vec<(&'static str, i32, i32, usize)>, n: &mut i32, per: &mut [i32; 33], sent: &mut Vec<(&'static str, i32)>, f: &'static str, key: i32, cost: i32, to: usize| {
+            if q.is_empty() && fits(n, per, cost, to) { sent.push((f, key)); return; }
+            if !q.iter().any(|e| e.0 == f && e.1 == key) { q.push((f, key, cost, to)); }
+        };
+        for p in 1..=32usize {
+            state(&mut q, &mut frame_n, &mut per, &mut sent, "color", p as i32, 2, 0);
+            state(&mut q, &mut frame_n, &mut per, &mut sent, "tag", p as i32, 2, 0);
+            state(&mut q, &mut frame_n, &mut per, &mut sent, "score", 2, 2, 0);
+            state(&mut q, &mut frame_n, &mut per, &mut sent, "icon", p as i32 * 64 + 11, 1, p);
+        }
+        let mut frames = 0;
+        while !q.is_empty() {
+            frames += 1;
+            frame_n = 0;
+            per = [0; 33];
+            let mut done = 0;
+            while done < q.len() && fits(&mut frame_n, &mut per, q[done].2, q[done].3) {
+                sent.push((q[done].0, q[done].1));
+                done += 1;
+            }
+            if done == 0 { sent.push((q[0].0, q[0].1)); done = 1; }
+            q.drain(..done);
+        }
+        for p in 1..=32 {
+            assert!(sent.contains(&("color", p)) && sent.contains(&("tag", p)) && sent.contains(&("icon", p * 64 + 11)), "player {p}");
+        }
+        assert!(sent.contains(&("score", 2)));
+        // 32 * 5 + 2 cells of state a frame at 48: four more frames
+        assert!(frames <= 4, "{frames} frames");
+        // (it compiles: generated_plugins_compile_with_amxxpc has spawn_burst)
+    }
+
     /// The shared engine guards: effects check the per-frame message budget (the Effect messages
     /// a frame limit), the mode's own files are counted (a warning past 64, an error past 160, and
     /// the plugin refuses past 160 too).
@@ -1604,7 +1680,7 @@ mod tests {
         assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)"), "smoke twice, the default budget");
         assert!(src.contains("lsg_msg_room(\"Effect Burst\", 2, 0, 48)") && src.contains("g_lsgMsgLim = 48"), "the trail sets the budget");
         let src = gen::generate(&ui_nodes_mode(), false).source;
-        assert!(src.contains("lsg_msg_room(\"Kill Feed Line\", 1, p)") && src.contains("lsg_msg_room(\"Status Icon\", 1, to)"));
+        assert!(src.contains("lsg_msg_room(\"Kill Feed Line\", 1, p)") && src.contains("lsg_msg_state(\"Status Icon\", \"lsg_icon_again\""));
         assert!(src.contains("stock bool:lsg_pre_room(const p[])") && src.contains("if (!lsg_pre_room(p))"));
         // the mode's own files
         let mut g = ui_nodes_mode();
@@ -1864,6 +1940,7 @@ mod tests {
         graphs.push(("every_node_w1".into(), include_str!("testdata/every_node_w1.graph.json").into())); // W1
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
+        graphs.push(("spawn_burst".into(), serde_json::to_string(&spawn_burst_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));
