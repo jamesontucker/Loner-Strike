@@ -11,7 +11,7 @@ button.tools-crumb:hover { text-decoration: underline; }
 .tools-crumb.here { color: var(--bone); }
 .tools-back { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px 2px 4px; border: 0; border-radius: 2px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); font: inherit; font-weight: 600; cursor: pointer; }
 .tools-back:hover { background: var(--panel-2); }
-.tools-focus-btn { display: inline-flex; align-items: center; gap: 5px; }
+.tools-focus-btn, .tools-history-btn { display: inline-flex; align-items: center; gap: 5px; }
 
 /* Focus mode: only the tool, the whole window */
 html[data-tools-focus] .shell { grid-template-columns: minmax(0, 1fr); }
