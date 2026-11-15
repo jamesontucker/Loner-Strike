@@ -16,15 +16,44 @@ TYPE_WORDS = {
     "timer": "a timer", "any": "any value", "var": "the variable's type",
     "$T": "the type set in Holds", "$K": "the key type set in Keys", "$E": "the enum's value", "$S": "the struct",
     "$F": "the field's type",
+    # (the typed values of graph version 4: a pin's help never falls back to the bare type id)
+    "model": "a model file (.mdl)", "sprite": "a sprite file (.spr)", "sound": "a sound file (.wav)",
+    "decal": "a decal (a spray-like mark from the game's decals)", "visual": "a model or sprite file",
+    "color": "a color (red, green, blue)", "component": "a component entity (a Component handle)",
+    "creature": "a creature entity (a Creature handle)", "npc": "an NPC entity (an NPC handle)",
+    "projectile": "a projectile entity (a Projectile handle)", "volume": "a trigger volume entity (a Trigger Volume handle)",
+    "objmarker": "an objective marker (an Objective Marker handle)", "soundloop": "a looping sound (a Sound Loop handle, to stop it later)",
 }
+# the built-in enums and structs (graph.rs BUILTIN_ENUMS, schema.ts)
+ENUM_WORDS = {
+    "ls_kind": "an entity kind (player, bot, creature, NPC...)", "ls_comp_kind": "a component kind",
+    "ls_spawn_fail": "why the spawn failed (none, blocked, out of entity slots...)", "ls_who": "which players (the Who choices)",
+    "ls_weapon": "a weapon (ak47, awp, knife...)", "ls_hitzone": "where the hit landed (head, chest, stomach...)",
+    "ls_dmgkind": "the kind of damage (shot, slash, blast, burn, fall...)",
+}
+STRUCT_WORDS = {"ls_transform": "a transform (position, angles and scale)"}
 
 def type_words(t):
     if t in TYPE_WORDS:
         return TYPE_WORDS[t]
     if t.startswith("array<"):
-        return "a list of " + type_words(t[6:-1]).replace("a ", "", 1).replace("an ", "", 1) + "s"
+        inner = t[6:-1]
+        if inner.startswith("$") or inner in ("var", "any"):
+            return "a list of " + type_words(inner)
+        plural = {"bool": "yes-or-no values", "vector": "positions or directions (X, Y, Z)", "text": "pieces of text"}
+        if inner in plural:
+            return "a list of " + plural[inner]
+        w = type_words(inner)
+        w = w[2:] if w.startswith("a ") else w[3:] if w.startswith("an ") else w
+        head, sep, rest = w.partition(" (")
+        head = head[:-1] + "ies" if head.endswith("y") and not head.endswith(("ay", "ey", "oy")) else head if head.endswith("s") or head == "text" else head + "s"
+        return "a list of " + head + sep + rest
     if t.startswith("map<"):
         return "a map (keys to values)"
+    if t.startswith("enum:"):
+        return ENUM_WORDS.get(t[5:], "one of the enum's values")
+    if t.startswith("struct:"):
+        return STRUCT_WORDS.get(t[7:], "the struct's fields")
     return t
 
 # ---- hand-written notes ----------------------------------------------------------------------

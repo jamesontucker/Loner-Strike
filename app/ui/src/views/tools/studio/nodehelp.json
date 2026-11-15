@@ -151,7 +151,7 @@
 {
 "id":"weapon_kind",
 "dir":"out",
-"help":"Weapon kind: enum:ls_weapon."
+"help":"Weapon kind: a weapon (ak47, awp, knife...)."
 }
 ],
 "settings":[],
@@ -4700,7 +4700,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: component."
+"help":"Entity: a component entity (a Component handle)."
 },
 {
 "id":"spawned",
@@ -4725,7 +4725,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -6432,7 +6432,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: creature."
+"help":"Entity: a creature entity (a Creature handle)."
 },
 {
 "id":"spawned",
@@ -6457,7 +6457,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -6653,7 +6653,7 @@
 {
 "id":"zone",
 "dir":"out",
-"help":"Hit zone: enum:ls_hitzone."
+"help":"Hit zone: where the hit landed (head, chest, stomach...)."
 }
 ],
 "settings":[],
@@ -8370,7 +8370,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -12827,7 +12827,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: npc."
+"help":"Entity: an NPC entity (an NPC handle)."
 },
 {
 "id":"spawned",
@@ -12852,7 +12852,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -13053,7 +13053,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: component."
+"help":"Entity: a component entity (a Component handle)."
 },
 {
 "id":"spawned",
@@ -13078,7 +13078,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -13289,7 +13289,7 @@
 {
 "id":"model",
 "dir":"in",
-"help":"Model or sprite: visual. Leave it empty to use the setting."
+"help":"The model or sprite. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -13299,7 +13299,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: projectile."
+"help":"Entity: a projectile entity (a Projectile handle)."
 },
 {
 "id":"on_hit",
@@ -13369,7 +13369,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -13590,7 +13590,7 @@
 {
 "id":"zone",
 "dir":"out",
-"help":"Hit zone: enum:ls_hitzone."
+"help":"Hit zone: where the hit landed (head, chest, stomach...)."
 }
 ],
 "settings":[],
@@ -20509,7 +20509,7 @@
 {
 "id":"weapon",
 "dir":"out",
-"help":"Weapon kind: enum:ls_weapon."
+"help":"Weapon kind: a weapon (ak47, awp, knife...)."
 }
 ],
 "settings":[],
@@ -22027,7 +22027,7 @@
 {
 "id":"transform",
 "dir":"out",
-"help":"Transform: struct:ls_transform."
+"help":"The transform."
 }
 ],
 "settings":[],
@@ -22140,7 +22140,7 @@
 {
 "id":"transform",
 "dir":"in",
-"help":"Transform (separate pins win): struct:ls_transform. Optional."
+"help":"Transform (separate pins win): a transform (position, angles and scale). Optional."
 },
 {
 "id":"then",
@@ -22503,7 +22503,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -24129,7 +24129,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entities: a list of entity (thing in the map)s."
+"help":"Entities: a list of entities (a thing in the map)."
 }
 ],
 "settings":[
@@ -24232,7 +24232,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -24943,7 +24943,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -25313,7 +25313,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -25424,7 +25424,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"sprite",
@@ -25439,7 +25439,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Marker: objmarker."
+"help":"Marker: an objective marker (an Objective Marker handle)."
 }
 ],
 "settings":[
@@ -25907,7 +25907,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -26047,7 +26047,7 @@
 {
 "id":"color",
 "dir":"in",
-"help":"Color (wins over the setting): color. Optional."
+"help":"Color (wins over the setting): a color (red, green, blue). Optional."
 },
 {
 "id":"then",
@@ -27372,7 +27372,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Kind: enum:ls_kind."
+"help":"Kind: an entity kind (player, bot, creature, NPC...)."
 }
 ],
 "settings":[],
@@ -27395,7 +27395,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Component kind: enum:ls_comp_kind."
+"help":"The component kind."
 }
 ],
 "settings":[],
@@ -30825,12 +30825,12 @@
 {
 "id":"zone",
 "dir":"out",
-"help":"Hit zone: enum:ls_hitzone."
+"help":"Hit zone: where the hit landed (head, chest, stomach...)."
 },
 {
 "id":"dmg_kind",
 "dir":"out",
-"help":"Damage kind: enum:ls_dmgkind."
+"help":"Damage kind: the kind of damage (shot, slash, blast, burn, fall...)."
 }
 ],
 "settings":[],
@@ -33646,7 +33646,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"body",
@@ -34302,7 +34302,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Creatures: a list of entity (thing in the map)s."
+"help":"Creatures: a list of entities (a thing in the map)."
 }
 ],
 "settings":[
@@ -39220,7 +39220,7 @@
 {
 "id":"transform",
 "dir":"out",
-"help":"Transform: struct:ls_transform."
+"help":"The transform."
 }
 ],
 "settings":[],
@@ -40185,7 +40185,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Array: a list of the type set in Holdss."
+"help":"Array: a list of the type set in Holds."
 }
 ],
 "settings":[
@@ -40240,7 +40240,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"item",
@@ -40283,7 +40283,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"item",
@@ -40330,7 +40330,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"item",
@@ -40373,7 +40373,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"at",
@@ -40415,7 +40415,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"at",
@@ -40462,7 +40462,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"then",
@@ -40495,7 +40495,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"then",
@@ -40528,7 +40528,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"then",
@@ -40560,7 +40560,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"at",
@@ -40597,7 +40597,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"out",
@@ -40625,7 +40625,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"item",
@@ -40658,7 +40658,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"item",
@@ -40691,7 +40691,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"out",
@@ -40961,7 +40961,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Keys: a list of the key type set in Keyss."
+"help":"Keys: a list of the key type set in Keys."
 }
 ],
 "settings":[
@@ -40993,7 +40993,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Values: a list of the type set in Holdss."
+"help":"Values: a list of the type set in Holds."
 }
 ],
 "settings":[
@@ -44668,7 +44668,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entity: volume."
+"help":"Entity: a trigger volume entity (a Trigger Volume handle)."
 },
 {
 "id":"ok",
@@ -44678,7 +44678,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -48412,7 +48412,7 @@
 {
 "id":"points",
 "dir":"in",
-"help":"Points: a list of position or direction (X, Y, Z)s. Optional."
+"help":"Points: a list of positions or directions (X, Y, Z). Optional."
 },
 {
 "id":"then",
@@ -50588,7 +50588,7 @@
 {
 "id":"custom",
 "dir":"in",
-"help":"Custom model (empty: the one above): model. Leave it empty to use the setting."
+"help":"Custom model (empty: the one above): a model file (.mdl). Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -51187,7 +51187,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Handle: soundloop."
+"help":"Handle: a looping sound (a Sound Loop handle, to stop it later)."
 }
 ],
 "settings":[
@@ -51424,7 +51424,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -51634,7 +51634,7 @@
 {
 "id":"reason",
 "dir":"out",
-"help":"Failure reason: enum:ls_spawn_fail."
+"help":"Failure reason: why the spawn failed (none, blocked, out of entity slots...)."
 }
 ],
 "settings":[
@@ -51966,7 +51966,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Entities: a list of entity (thing in the map)s."
+"help":"Entities: a list of entities (a thing in the map)."
 }
 ],
 "settings":[
@@ -52432,7 +52432,7 @@
 {
 "id":"items",
 "dir":"in",
-"help":"Items: a list of the type set in Holdss. Optional."
+"help":"Items: a list of the type set in Holds. Optional."
 },
 {
 "id":"index",
@@ -53015,7 +53015,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Pieces: a list of texts."
+"help":"Pieces: a list of pieces of text."
 }
 ],
 "settings":[
@@ -53834,7 +53834,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Texts: a list of texts. Needs a wire."
+"help":"Texts: a list of pieces of text. Needs a wire."
 },
 {
 "id":"sep",
@@ -54201,7 +54201,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"then",
@@ -54229,7 +54229,7 @@
 {
 "id":"array",
 "dir":"in",
-"help":"Array: a list of the type set in Holdss. Needs a wire."
+"help":"Array: a list of the type set in Holds. Needs a wire."
 },
 {
 "id":"start",
@@ -54244,7 +54244,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Array: a list of the type set in Holdss."
+"help":"Array: a list of the type set in Holds."
 }
 ],
 "settings":[
@@ -57245,7 +57245,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The npc."
+"help":"NPC: an NPC entity (an NPC handle)."
 }
 ],
 "settings":[],
@@ -57462,7 +57462,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Trigger Volume: volume."
+"help":"The trigger volume."
 }
 ],
 "settings":[],
@@ -57570,7 +57570,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Objective Marker: objmarker."
+"help":"The objective marker."
 }
 ],
 "settings":[],
@@ -57777,7 +57777,7 @@
 {
 "id":"transform",
 "dir":"in",
-"help":"Transform: struct:ls_transform. Needs a wire."
+"help":"The transform. Needs a wire."
 },
 {
 "id":"then",
@@ -57916,12 +57916,12 @@
 {
 "id":"a",
 "dir":"in",
-"help":"A: color. Needs a wire."
+"help":"A: a color (red, green, blue). Needs a wire."
 },
 {
 "id":"b",
 "dir":"in",
-"help":"B: color. Needs a wire."
+"help":"B: a color (red, green, blue). Needs a wire."
 },
 {
 "id":"t",

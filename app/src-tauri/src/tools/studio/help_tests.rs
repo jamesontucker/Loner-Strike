@@ -63,3 +63,37 @@ fn every_help_example_passes_the_quick_check() {
     // most nodes have one (the ones without need the mode's own variables, Functions and such)
     assert!(with * 10 >= h.len() * 8, "only {with} of {} nodes have an example", h.len());
 }
+
+/// A pin's help says what the value is in words: never just the type's id ("Entity: npc.",
+/// "Kind: enum:ls_weapon.") and never the "Holdss" slip of the array template.
+#[test]
+fn pin_help_is_words_not_a_type_id() {
+    let h = help();
+    let reg = graph::registry();
+    let mut ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for d in &reg.nodes {
+        for p in d.inputs.iter().chain(&d.outputs) {
+            let mut t = p.ty.as_str();
+            ids.insert(t.to_string());
+            while let Some(inner) = t.strip_prefix("array<").and_then(|x| x.strip_suffix('>')) {
+                t = inner;
+                ids.insert(t.to_string());
+            }
+        }
+    }
+    let mut bad = vec![];
+    for (kind, e) in &h {
+        for p in e["pins"].as_array().unwrap() {
+            let text = p["help"].as_str().unwrap_or("");
+            // the words after "Label: ", up to the first sentence's end
+            let words = text.split_once(": ").map(|(_, w)| w).unwrap_or(text);
+            let words = words.split(". ").next().unwrap_or(words).trim_end_matches('.');
+            // ("text" is its own word: "Name: text." reads fine)
+            let raw = (words != "text" && ids.contains(words)) || ["enum:", "struct:", "array<", "map<", "$"].iter().any(|x| words.starts_with(x));
+            if raw || text.contains("Holdss") {
+                bad.push(format!("{kind}.{}: {text}", p["id"].as_str().unwrap_or("")));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "pin help that's only a type id (add words in node_help.py TYPE_WORDS / ENUM_WORDS, then make_nodes.py):\n{}", bad.join("\n"));
+}
