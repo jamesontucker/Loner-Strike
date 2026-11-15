@@ -428,6 +428,63 @@ mod tests {
         assert!(c.iter().all(|x| x.kind != "base"));
     }
 
+    /// The stock entities checked against the game DLL we ship (EngineCoverage item 9): each
+    /// is there with help, and the keys the game reads.
+    #[test]
+    fn stock_entities_from_the_game_dll() {
+        let c = parse(&shipped()).unwrap();
+        let find = |n: &str| c.iter().find(|x| x.name == n).unwrap_or_else(|| panic!("{n} is missing"));
+        let has = |n: &str, keys: &[&str]| {
+            let cls = find(n);
+            assert!(cls.description.len() > 20, "{n} needs help");
+            for k in keys {
+                assert!(cls.keys.iter().any(|x| x.name == *k), "{n} has no {k}");
+            }
+            cls
+        };
+        let point = [
+            "trigger_random", "trigger_random_time", "trigger_random_unique", "trigger_setorigin", "env_global", "game_score", "game_counter",
+            "game_counter_set", "game_team_master", "game_team_set", "game_player_team", "game_player_hurt", "path_track", "item_healthkit",
+            "item_battery", "item_kevlar", "item_assaultsuit", "item_thighpack", "item_longjump", "ammo_9mm", "ammo_338magnum",
+        ];
+        let solid = [
+            "game_zone_player", "momentary_door", "momentary_rot_button", "button_target", "func_tracktrain", "func_traincontrols",
+            "func_vehiclecontrols", "func_trackchange", "func_trackautochange", "func_platrot", "func_guntarget", "func_tank",
+            "func_tankmortar", "func_tanklaser", "func_tankcontrols", "func_healthcharger", "func_recharge",
+        ];
+        for n in point {
+            assert_eq!(find(n).kind, "point", "{n}");
+        }
+        for n in solid {
+            assert_eq!(find(n).kind, "solid", "{n}");
+        }
+        let r = has("trigger_random", &["targetname", "target_count", "target0", "target15", "min_delay", "max_delay"]);
+        let f = &r.keys.iter().find(|k| k.name == "spawnflags").unwrap().flags;
+        assert_eq!(f.iter().map(|x| x.bit).collect::<Vec<_>>(), vec![1, 2, 4, 8, 16]);
+        has("trigger_setorigin", &["target", "copypointer", "offset", "angleoffset", "invert_x"]);
+        has("env_global", &["globalstate", "triggermode", "initialstate"]);
+        has("game_counter", &["frags", "health", "target", "master"]);
+        has("game_zone_player", &["intarget", "outtarget", "incount", "outcount"]);
+        has("game_team_master", &["teamindex", "triggerstate"]);
+        has("path_track", &["target", "altpath", "message", "speed"]);
+        has("func_tracktrain", &["target", "speed", "startspeed", "height", "wheels", "bank", "sounds", "volume"]);
+        has("func_trackchange", &["train", "toptrack", "bottomtrack", "rotation", "movesnd"]);
+        let t = has("func_tank", &["yawrate", "yawrange", "pitchrange", "barrel", "bullet", "bullet_damage", "persistence", "firespread", "angles"]);
+        assert_eq!(t.keys.iter().find(|k| k.name == "firespread").unwrap().choices.len(), 5);
+        has("func_tanklaser", &["laserentity"]);
+        has("func_tankmortar", &["iMagnitude"]);
+        has("momentary_rot_button", &["distance", "returnspeed", "target"]);
+        has("func_healthcharger", &["health", "dmdelay"]);
+        has("func_recharge", &["armorvalue", "dmdelay"]);
+        has("item_healthkit", &["target", "spawnflags", "health"]);
+        // the map-ending and team-moving ones say so first
+        for n in ["game_end", "game_player_team"] {
+            assert!(find(n).description.starts_with("Warning:"), "{n}");
+        }
+        // not in the DLL's working set: rpg_rocket isn't in Counter-Strike, so no func_tankrocket
+        assert!(c.iter().all(|x| x.name != "func_tankrocket"));
+    }
+
     #[test]
     fn standard_fgd_bits() {
         let text = r#"
