@@ -266,6 +266,11 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	return e
 }
 
+// the volume is still out (a handler before may have removed it: Remove Trigger Volume frees the
+// entity at once, and its index can come back as something else)
+stock bool:lsg_vol_live(vol)
+	return lsg_vol_slot(vol) >= 0 && pev_valid(vol) != 0
+
 stock lsg_vol_slot(e)
 {
 	if (e <= 0)
@@ -568,14 +573,15 @@ pub(super) fn handlers(gen: &Gen, o: &mut Out) {
             let nodes = nodes_of(gen, kind);
             for (_, id) in &nodes {
                 let name = name_text(gen.text(v.nodes[id], v.defs[id], "name"));
+                // (each only while the volume is still out: an earlier handler may have removed it)
                 if name.is_empty() {
-                    t.push_str(&format!("\n\t{}(ctx)", gen.fname(id)));
+                    t.push_str(&format!("\n\tif (lsg_vol_live(vol))\n\t\t{}(ctx)", gen.fname(id)));
                 } else {
-                    t.push_str(&format!("\n\tif (lsg_named(vol, {}))\n\t\t{}(ctx)", pawn_str(&name), gen.fname(id)));
+                    t.push_str(&format!("\n\tif (lsg_vol_live(vol) && lsg_named(vol, {}))\n\t\t{}(ctx)", pawn_str(&name), gen.fname(id)));
                 }
             }
             if kind == "vol.on_begin" && player_touched {
-                t.push_str("\n\t// (Player Touched hears a volume like a map's trigger_multiple)\n\tif (who >= 1 && who <= MaxClients)\n\t\tlsg_on_player_touched(vol, who)");
+                t.push_str("\n\t// (Player Touched hears a volume like a map's trigger_multiple)\n\tif (who >= 1 && who <= MaxClients && lsg_vol_live(vol))\n\t\tlsg_on_player_touched(vol, who)");
             }
             if nodes.is_empty() && !(kind == "vol.on_begin" && player_touched) {
                 t.push_str("\n\t#pragma unused ctx");
@@ -655,7 +661,7 @@ mod tests {
                 "lsg_semiclip(2, 0, 1)", "lsg_semiclip(3, ", "lsg_set_solid(", "lsg_set_size(", "lsg_takes_damage(", "lsg_set_ent_health(", "lsg_ent_health(",
                 "lsg_vol_spawn(", "lsg_vol_has(", "lsg_vol_remove(", "lsg_vol_begin_hook(vol, who)", "lsg_vol_end_hook(vol, who)",
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
-                "if (lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
+                "if (lsg_vol_live(vol) && lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
                 "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
                 "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32, ", "g_lsgVolWhy = 3",
             ] {
@@ -713,6 +719,40 @@ mod tests {
             let (sw, th) = (body.find("\telse\n\t\t").unwrap(), body.rfind("\n\tlsg_n").unwrap());
             assert!(th > sw, "Then runs after Spawned / Failed: {body}");
         }
+    }
+
+    /// X2's sim (Starter library A): a Begin Overlap that removes its volume (a pickup taken) made the
+    /// next named handler read the freed entity (run time error 10 in lsg_named). Every handler in
+    /// both hooks now runs only while the volume is still out.
+    #[test]
+    fn vol_hooks_stop_once_the_volume_is_removed() {
+        let n = |id: &str, t: &str, p: serde_json::Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "vr", "name": "Removed"},
+            "nodes": [n("rs", "event.round_started", json!({})), n("vm", "vec.make", json!({"x": 0, "y": 0, "z": 0})), n("vs", "vol.spawn", json!({"name": "heal"})),
+                      n("b1", "vol.on_begin", json!({"name": "heal"})), n("rm", "vol.remove", json!({})),
+                      n("b2", "vol.on_begin", json!({"name": "weap"})), n("p2", "debug.print", json!({"text": "weap", "chat": false})),
+                      n("b3", "vol.on_begin", json!({"name": ""})), n("p3", "debug.print", json!({"text": "any", "chat": false})),
+                      n("e1", "vol.on_end", json!({"name": "heal"})), n("rm2", "vol.remove", json!({})),
+                      n("e2", "vol.on_end", json!({"name": "weap"})), n("p4", "debug.print", json!({"text": "left", "chat": false}))],
+            "edges": [e(1, "rs", "then", "vs", "exec"), e(2, "vm", "out", "vs", "pos"), e(3, "b1", "then", "rm", "exec"), e(4, "b1", "volume", "rm", "volume"),
+                      e(5, "b2", "then", "p2", "exec"), e(6, "b3", "then", "p3", "exec"),
+                      e(7, "e1", "then", "rm2", "exec"), e(8, "e1", "volume", "rm2", "volume"), e(9, "e2", "then", "p4", "exec")]})).unwrap();
+        assert!(graph::validate(&g).is_empty(), "{:#?}", graph::validate(&g));
+        let src = gen::generate(&g, false).source;
+        for hook in ["lsg_vol_begin_hook(vol, who)\n{", "lsg_vol_end_hook(vol, who)\n{"] {
+            let at = src.find(hook).unwrap_or_else(|| panic!("{hook}"));
+            let body = &src[at..at + src[at..].find("\n}").unwrap()];
+            let calls: Vec<&str> = body.lines().filter(|l| l.contains("(ctx)")).collect();
+            assert!(calls.len() >= 2, "{body}");
+            // every handler call sits under a still-out check (the line before it)
+            let lines: Vec<&str> = body.lines().collect();
+            for (i, l) in lines.iter().enumerate().filter(|(_, l)| l.contains("(ctx)")) {
+                assert!(lines[i - 1].contains("lsg_vol_live(vol)"), "unguarded after a possible removal:\n{body}\n(at {l})");
+            }
+            assert!(!body.contains("\tif (lsg_named(vol"), "a bare name check reads a freed volume: {body}");
+        }
+        assert!(src.contains("stock bool:lsg_vol_live(vol)"));
     }
 
     /// None of it in a mode without these nodes (other modes' plugins stay as they were).

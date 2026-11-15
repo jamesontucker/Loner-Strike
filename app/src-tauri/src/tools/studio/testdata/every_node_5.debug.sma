@@ -2236,6 +2236,11 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	return e
 }
 
+// the volume is still out (a handler before may have removed it: Remove Trigger Volume frees the
+// entity at once, and its index can come back as something else)
+stock bool:lsg_vol_live(vol)
+	return lsg_vol_slot(vol) >= 0 && pev_valid(vol) != 0
+
 stock lsg_vol_slot(e)
 {
 	if (e <= 0)
@@ -4202,10 +4207,10 @@ lsg_vol_begin_hook(vol, who)
 	new ctx[LSG_CTX]
 	ctx[0] = vol // volume
 	ctx[1] = who // who
-	if (lsg_named(vol, "zone"))
+	if (lsg_vol_live(vol) && lsg_named(vol, "zone"))
 		lsg_n17(ctx)
 	// (Player Touched hears a volume like a map's trigger_multiple)
-	if (who >= 1 && who <= MaxClients)
+	if (who >= 1 && who <= MaxClients && lsg_vol_live(vol))
 		lsg_on_player_touched(vol, who)
 }
 
@@ -4214,7 +4219,8 @@ lsg_vol_end_hook(vol, who)
 	new ctx[LSG_CTX]
 	ctx[0] = vol // volume
 	ctx[1] = who // who
-	lsg_n19(ctx)
+	if (lsg_vol_live(vol))
+		lsg_n19(ctx)
 }
 
 public lsg_col_touch(ent, other)
