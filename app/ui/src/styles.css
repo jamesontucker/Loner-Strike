@@ -387,8 +387,9 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 .row.center { justify-content: center; }
 .spacer { flex: 1; }
 .section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
-/* "Docs ↗" (a link) lines up with the buttons beside it (QA4-T1 L6) */
-.section-actions .docs-link { margin-left: 0 !important; display: inline-flex; align-items: center; vertical-align: baseline !important; }
+/* "Docs" (a link with an external-link icon), the same button as Focus and History beside it */
+a.btn.docs-link { display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; margin-left: 8px; }
+.section-actions a.btn.docs-link { margin-left: 0; }
 .server-more { margin: 4px 0 28px; gap: 8px; }
 p { margin: 0 0 8px; }
 a { color: var(--signal); }

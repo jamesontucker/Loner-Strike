@@ -356,11 +356,20 @@ export function HistoryPanel({ match, tools = [], none }: { match: string[]; too
 }
 
 /** A "History" button opening the history of these files in a sheet. */
-export function HistoryButton({ match, tools, label = "History", title = "History & restore" }: { match: string[]; tools?: string[]; label?: string; title?: string }) {
+/** A clock with an arrow going back, drawn like the tool header's other icons (Focus, Docs). */
+const HistoryIcon = () => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2" />
+  </svg>
+);
+
+/** `small`: the tool header's size, with an icon, like Focus and Docs beside it. */
+export function HistoryButton({ match, tools, label = "History", title = "History & restore", small }: { match: string[]; tools?: string[]; label?: string; title?: string; small?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="btn" onClick={() => setOpen(true)} title="Earlier versions of the files this tool changed: compare, restore, or go back to Loner-Strike's defaults">
+      <button className={small ? "btn small tools-history-btn" : "btn"} onClick={() => setOpen(true)} title="Earlier versions of the files this tool changed: compare, restore, or go back to Loner-Strike's defaults">
+        {small && <HistoryIcon />}
         {label}
       </button>
       {open && (
@@ -384,5 +393,5 @@ export function ToolHistory({ tool }: { tool: string }) {
   const arg = useToolArg();
   const h = historyFor(tool, arg);
   if (!h || (!h.match.length && !h.tools.length)) return null;
-  return <HistoryButton match={h.match} tools={h.tools} />;
+  return <HistoryButton match={h.match} tools={h.tools} small />;
 }
