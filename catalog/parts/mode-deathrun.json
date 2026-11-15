@@ -37,13 +37,6 @@
  "fetch": [],
  "maps": [
   {
-   "mod": 90787,
-   "file": 317539,
-   "maps": [
-    "deathrun_dojo"
-   ]
-  },
-  {
    "mod": 90772,
    "file": 315298,
    "maps": [
@@ -58,24 +51,10 @@
    ]
   },
   {
-   "mod": 91006,
-   "file": 296562,
-   "maps": [
-    "deathrun_jigsaw2"
-   ]
-  },
-  {
    "mod": 90744,
    "file": 303202,
    "maps": [
     "deathrun_crash_egypt"
-   ]
-  },
-  {
-   "mod": 91311,
-   "file": 302601,
-   "maps": [
-    "deathrun_starwars"
    ]
   }
  ],

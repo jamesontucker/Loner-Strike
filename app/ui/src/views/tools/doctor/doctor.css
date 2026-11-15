@@ -1,0 +1,61 @@
+/* The map doctor (views/tools/doctor): the checklist on the left, fixes and links at the side. */
+.doc-report { min-width: 0; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 10px; padding-right: 2px; }
+
+/* the verdict and the counts */
+.doc-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 14px; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; }
+.doc-verdict { display: grid; gap: 2px; flex: 1 1 220px; min-width: 0; padding-left: 10px; border-left: 4px solid var(--ok); }
+.doc-verdict strong { font-size: 18px; }
+.doc-verdict.ok strong { color: var(--ok); }
+.doc-verdict.warn { border-left-color: var(--warn); }
+.doc-verdict.warn strong { color: var(--warn); }
+.doc-verdict.bad { border-left-color: var(--weak); }
+.doc-verdict.bad strong { color: var(--weak); }
+.doc-counts { display: flex; gap: 6px; }
+.doc-count { display: grid; justify-items: center; min-width: 64px; padding: 4px 8px; border-radius: 2px; background: var(--bg); font: 700 20px/1.1 var(--text); font-variant-numeric: tabular-nums; }
+.doc-count small { font-size: 11px; font-weight: 600; color: var(--bone-faint); }
+.doc-count.bad { color: var(--weak); }
+.doc-count.warn { color: var(--warn); }
+.doc-count.ok { color: var(--ok); }
+
+/* a group of checks */
+.doc-group { padding: 12px 14px; }
+.doc-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; }
+.doc-group h3 .push { margin-left: auto; font-weight: 600; }
+.doc-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ok); }
+.doc-dot.warn { background: var(--warn); }
+.doc-dot.bad { background: var(--weak); }
+.doc-allok { margin: 2px 0 0 18px; }
+.doc-lines { list-style: none; margin: 0; padding: 0; }
+.doc-line { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid rgba(0, 0, 0, .18); }
+.doc-line:first-child { border-top: 0; }
+.doc-mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--signal-ink); margin-top: 1px; }
+.doc-line.ok .doc-mark { background: var(--ok); }
+.doc-line.warn .doc-mark { background: var(--warn); }
+.doc-line.bad .doc-mark { background: var(--weak); }
+.doc-text { min-width: 0; overflow-wrap: anywhere; display: grid; gap: 1px; }
+.doc-detail { color: var(--bone-dim); font-size: 14px; }
+.doc-action { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@container (max-width: 560px) {
+  .doc-line { grid-template-columns: 22px minmax(0, 1fr); }
+  .doc-action { grid-column: 2; justify-content: flex-start; }
+}
+.doc-report { container-type: inline-size; }
+.doc-more { margin-top: 2px; }
+.doc-more summary { cursor: pointer; color: var(--bone-faint); font-size: 13px; width: max-content; }
+.doc-tex { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: var(--bone-dim); margin: 4px 0 0; }
+.doc-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.doc-files li { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
+.doc-files code { font-size: 13px; overflow-wrap: anywhere; }
+.doc-files li.missing code { color: var(--weak); }
+.doc-files li.elsewhere code { color: var(--warn); }
+
+/* the side */
+.doc-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 14px; }
+.doc-facts dt { color: var(--bone-faint); font-weight: 600; }
+.doc-facts dd { margin: 0; overflow-wrap: anywhere; }
+.doc-safe { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 2px; }
+.doc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.doc-page .tools-panel h3 { display: flex; align-items: center; gap: 6px; }
+.tl-ab-state.doc-ab.ok { color: var(--ok); }
+.tl-ab-state.doc-ab.warn { color: var(--warn); }
+.tl-ab-state.doc-ab.bad { color: var(--weak); }

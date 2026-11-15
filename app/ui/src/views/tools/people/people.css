@@ -1,0 +1,65 @@
+/* Bot people editor (views/tools/people). Built on the shared rows (common.css). */
+.pp { display: grid; gap: 16px; }
+.pp h3 { margin: 0 0 8px; }
+.pp-sub { margin: 16px 0 4px; display: flex; align-items: center; gap: 6px; }
+.pp-hint { margin: 0 0 10px; font-size: 14px; max-width: 75ch; }
+.pp-count { font-size: 14px; font-weight: 500; margin-left: 6px; }
+
+.pp-problems { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 4px; }
+.pp-error { color: #f0b9a6; font-weight: 600; }
+.pp-warning { color: var(--warn); font-weight: 600; font-size: 14px; }
+
+.pp-kinds { display: grid; gap: 16px; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 860px) { .pp-kinds { grid-template-columns: minmax(0, 1fr); } }
+.pp-list { display: grid; gap: 8px; position: sticky; top: 8px; }
+.pp-list .search { width: 100%; }
+.pp-list ul { list-style: none; margin: 0; padding: 0; max-height: min(55vh, 600px); overflow: auto; display: grid; gap: 1px; }
+.pp-group { display: block; margin: 10px 4px 3px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--bone-faint); }
+.pp-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; border-radius: 2px; padding: 5px 10px; background: transparent; color: var(--bone); font: inherit; cursor: pointer; }
+.pp-item:hover { background: var(--panel-2); }
+.pp-item.on { background: var(--bg); box-shadow: inset 2px 0 0 var(--signal); }
+.pp-item:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.pp-w { font-size: 13px; }
+.pp-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pp-dot.err { background: #e07a5f; }
+.pp-none { padding: 8px; }
+.pp-list-actions { gap: 6px; }
+
+.pp-name { width: 260px; max-width: 100%; }
+.pp-num { display: inline-flex; align-items: center; gap: 8px; }
+.pp-num .search { flex: none; width: 80px; }
+.pp .search.pp-name, .pp .search.pp-newname { flex: 0 1 260px; }
+.pp-form select { max-width: 100%; }
+.pp-examples { margin: 12px 0 0; font-size: 14px; }
+
+.pp-weights { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.pp-weights > .pp-hint { grid-column: 1 / -1; }
+.pp-weight h4 { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+.pp-bar { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: var(--bg); box-shadow: var(--sunken); margin-bottom: 8px; }
+.pp-bar span { flex-basis: 0; min-width: 0; }
+.pp-bar span:nth-child(odd) { background: var(--signal); }
+.pp-bar span:nth-child(even) { background: #8c9a6a; }
+.pp-weight-rows { display: grid; gap: 2px; }
+.pp-weight-row { display: grid; grid-template-columns: minmax(90px, 140px) minmax(0, 1fr) 44px; gap: 10px; align-items: center; }
+.pp-weight-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-pct { text-align: right; font-size: 13px; }
+
+.pp-never { display: grid; gap: 6px; margin-bottom: 12px; }
+.pp-never-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pp-pair { display: inline-flex; gap: 4px; }
+
+.pp-names-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1000px) { .pp-names-grid { grid-template-columns: minmax(0, 1fr); } }
+.pp-add { gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.pp-names-grid .search { width: 100%; margin-bottom: 8px; }
+.pp-names, .pp-regs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 60vh; overflow: auto; }
+.pp-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 4px; border-bottom: 1px solid var(--bevel-lo); }
+.pp-name-text { flex: 0 0 auto; min-width: 9ch; }
+.pp-who { flex: 1 1 200px; min-width: 0; font-size: 14px; }
+.pp-name-actions { display: inline-flex; gap: 4px; margin-left: auto; }
+.pp-link { border: 0; background: none; padding: 0; font: inherit; color: var(--signal); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.pp-regs li { display: flex; align-items: center; gap: 10px; padding: 5px 4px; border-bottom: 1px solid var(--bevel-lo); }
+.pp-regs li strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pp-regs li.gone strong { text-decoration: line-through; color: var(--bone-faint); }
+.pp-regs + .btn { margin-top: 10px; }
+

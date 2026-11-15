@@ -20,7 +20,7 @@ const NOTES: Record<string, string> = {
   gm_hb_bhop: "Locked in, Hackers and Gods hop between fights",
   gm_regulars: "The same regulars keep coming back, plus the odd newcomer",
   gm_churn: "Now and then someone leaves and a new player takes the slot",
-  gm_hb_habits: "Each bot plays like its personality: favourite guns, warming up, getting tired, nervous reloads, a rival",
+  gm_hb_habits: "Each bot plays like its personality: favorite guns, warming up, getting tired, nervous reloads, a rival",
   gm_hb_tilt: "A bad run makes most bots sloppier (some careful); outnumbered or low on health, some panic",
   gm_hb_afk: "Now and then a bot is a moment slow to move at round start, and the odd regular one stands still a few seconds (not in deathmatch or matches)",
   gm_hb_sprays: "Bots spray the Loner-Strike logo now and then, after respawning in deathmatch too",
@@ -156,7 +156,7 @@ const DM = ["csdm", "csdm_ffa"];
 const FAMILIES: [string, string[]][] = [
   ["gm_gg_", GG], ["gg_", GG], ["gmdm_", DM], ["gm_zp_", ["zombie", "zp5"]], ["zp_", ["zombie", "zp5"]],
   ["wc3_", ["war3"]], ["sh_", ["shero"]], ["hns_", ["hns"]], ["pbmoves_", ["paintball"]], ["kz_", ["kreedz"]],
-  ["deathrun_", ["deathrun"]], ["dr_", ["deathrun"]], ["PBR_", ["paintball"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
+  ["deathrun_", ["deathrun"]], ["lst_", ["laststand"]], ["br_", ["br", "br_duo", "br_squads"]], ["dr_", ["deathrun"]], ["PBR_", ["paintball"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
 ];
 /** Settings only for modes with a flag in modes.ini (the Game Mode Menu's SD_NeedFlag). */
 const NEEDS_FLAG: Record<string, string> = { gm_weapons: "w", gm_gg_order: "g", gm_zp_specials: "z", mp_forcerespawn: "w", gm_autorespawn: "w" };

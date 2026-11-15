@@ -9,7 +9,12 @@ import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
+import { CommunityLink, communityMode, originText, useCommunity, useOrigins } from "./tools/community/chip";
 import { MatchMode } from "./MatchMode";
+import { ModeSettings } from "./ModeSettings";
+
+/** What starting the game answers; `note` is a quiet line to show (e.g. the fixed Ham Sandwich put back). */
+type LaunchReply = { ok?: boolean; error?: string; note?: string | null };
 
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
  *  can take a minute to open the game). */
@@ -20,6 +25,8 @@ const STUCK_MS = 20000;
 /** The game modes as cards, each saying how well bots play it: the same before a game (to
  *  pick the one to start in) and in one (to switch). */
 function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void }) {
+  const community = useCommunity(); // (community chip)
+  const origins = useOrigins(); // (origin: your own and remixed Studio modes)
   return (
     <div className="modes">
       {[...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
@@ -31,6 +38,8 @@ function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name
             </span>
             <span className="mode-name">{busy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
             {m.desc && <span className="mode-desc">{m.desc}</span>}
+            {communityMode(community, m.id) && <span className="mode-desc" title={`From Community: ${communityMode(community, m.id)!.name}`}>Community{communityMode(community, m.id)!.author ? ` · ${communityMode(community, m.id)!.author}` : ""}</span>}
+            {!communityMode(community, m.id) && origins?.modes[m.id] && <span className="mode-desc">{originText(origins.modes[m.id])}</span>}
             <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
           </button>
         );
@@ -84,9 +93,12 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   });
   const opts = optsQ.data && Array.isArray(optsQ.data.modes) ? optsQ.data : null;
   const launchMenu = () => run(key("open"), async () => {
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { menu: true }).catch(() => ({ error: "Couldn't reach the app." }));
+    const r = await postJson<LaunchReply>("/api/app/launch", { menu: true }).catch((): LaunchReply => ({ error: "Couldn't reach the app." }));
     if (r.error) toast(r.error, true);
-    else toast(`Opening ${game}…`);
+    else {
+      toast(`Opening ${game}…`);
+      if (r.note) toast(r.note);
+    }
   }, `Opening ${game}…`);
   // an open game ignores a new launch, so starting means closing it first (asked here; a
   // phone can't close it, and the app answers it with what to do)
@@ -99,12 +111,14 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
     return run(key("launch"), async () => {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start, ...(restart ? { restart: true } : {}) }).catch(() => ({ error: "Couldn't reach the app." }));
+      const r = await postJson<LaunchReply>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start, ...(restart ? { restart: true } : {}) }).catch((): LaunchReply => ({ error: "Couldn't reach the app." }));
       if (r.error) {
         endLaunch(t);
         toast(r.error, true);
       } else {
         toast(`Starting ${game}…`);
+        // (quiet: the app put the fixed Ham Sandwich back before starting, hamguard.rs)
+        if (r.note) toast(r.note);
         startLaunch(t);
       }
     }, `${closeHere ? "Restarting" : "Starting"} ${game}${map ? ` on ${map}` : ""}…`);
@@ -212,11 +226,13 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
               </button>
             </div>
           )}
+          {mode && <ModeSettings mode={mode.id} />}
           {pickingMode && (
             <Sheet label="Pick a mode" onClose={() => setPickingMode(false)} className="sheet wide switch-mode">
               <div className="sheet-body">
                 <SectionHead title="Pick a mode" note={MODES_NOTE}>{getMoreModes(() => setPickingMode(false))}</SectionHead>
                 <ModeCards modes={modes} current={mode?.id} onPick={(id) => { pickMode(id); setPickingMode(false); }} />
+                {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link before={() => setPickingMode(false)} /></p>}{/* (community) */}
                 <div className="row">
                   <button className="btn" onClick={() => setPickingMode(false)}>Cancel</button>
                 </div>
@@ -224,7 +240,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             </Sheet>
           )}
           <div className="field">
-            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favourites. Open the list and type to search." /></span>
+            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favorites. Open the list and type to search." /></span>
             <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={(m) => setDraft({ map: m })} labelledBy="start-map" />
           </div>
         </div>
@@ -328,6 +344,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
   return (
     <div className="stack">
       {st.mode === "match" && <MatchMode target={targetKey()} />}
+      {st.mode && <ModeSettings mode={st.mode} live />}
       {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) changeMap(map); } else switchMode(switching, map); }} />}
       {data.presets.length > 0 && (
         <section>
@@ -352,6 +369,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
       <section>
         <SectionHead title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
         <ModeCards modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
+        {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link /></p>}{/* (community) */}
       </section>
       {recent.length > 0 && (
         <section>
@@ -377,7 +395,7 @@ const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20",
 /** A touch screen: the search box doesn't take focus by itself (that opens the keyboard over the list). */
 const TOUCH = window.matchMedia("(pointer: coarse)").matches;
 
-/** A map list you can type into: the mode's maps, recent and favourites first. */
+/** A map list you can type into: the mode's maps, recent and favorites first. */
 function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelledBy }: { value: string; maps: MapInfo[]; mode?: string; modeName?: string; recent: MapInfo[]; favs: MapInfo[]; onPick: (m: string) => void; labelledBy: string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -404,7 +422,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
     : [
         [`Maps for ${modeName ?? "this mode"}`, forMode],
         ["Recently played", recent],
-        ["Favourites", favs],
+        ["Favorites", favs],
         ["All maps", have],
       ];
   const shown = groups.map(([label, list]) => [label, list.slice(0, query ? 80 : 200)] as [string, MapInfo[]]).filter(([, l]) => l.length);
@@ -455,7 +473,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
                   return (
                     <button key={label + m.name} id={optId(i)} type="button" role="option" tabIndex={-1} aria-selected={m.name === value} className={i === active ? "active" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(m.name)}>
                       {m.name}
-                      {m.fav && <span className="muted" aria-label="favourite"> ★</span>}
+                      {m.fav && <span className="muted" aria-label="favorite"> ★</span>}
                     </button>
                   );
                 })}
@@ -471,6 +489,8 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
 // Map names that suit a mode, for modes without their own map list
 const MODE_PREFIX: Record<string, string[]> = {
   zombie: ["zm_", "zp_", "ze_"], zp5: ["zm_", "zp_", "ze_"], hns: ["hns_", "hide_", "hide"], deathrun: ["deathrun_", "dr_"],
+  br: ["br_", "de_aztec", "cs_italy", "de_dust2", "de_inferno", "de_train"],
+  laststand: ["ls_", "de_dust2", "de_inferno", "de_nuke", "de_aztec", "cs_office"],
   kreedz: ["kz_", "bkz_", "xc_", "kzm_"], surf: ["surf_"], soccerjam: ["soccerjam", "sj_"], basebuilder: ["bb_", "basebuilder"],
   paintball: ["pb_", "paintball", "cspaintball"], knife: ["ka_", "knife", "35hp"], awp: ["awp_"], scoutz: ["scoutz", "scout"],
   pistols: ["aim_", "fy_", "pistol"], deagle: ["aim_", "fy_", "deagle"], classic: ["de_", "cs_", "as_"], war3: ["de_", "cs_"], shero: ["de_", "cs_"],
@@ -499,13 +519,13 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     ? listed.map((n) => byName.get(n.toLowerCase())).filter((m): m is MapInfo => !!m)
     : have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p)));
   const query = q.trim().toLowerCase();
-  // which maps: the mode's own (when it has any), every map, favourites or recently played;
+  // which maps: the mode's own (when it has any), every map, favorites or recently played;
   // the search narrows whichever is picked
   const [show, setShow] = useState<"mode" | "all" | "fav" | "recent" | null>(null);
   const filters: ["mode" | "all" | "fav" | "recent", string][] = [
     ...(suggested.length ? [["mode", `Maps for ${mode.name}`] as ["mode", string]] : []),
     ["all", "All"],
-    ["fav", "Favourites"],
+    ["fav", "Favorites"],
     ["recent", "Recent"],
   ];
   const which = show && filters.some(([id]) => id === show) ? show : listed === null ? "mode" : filters[0][0];
@@ -521,7 +541,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     useNav.getState().go(s, s === "more" ? "maps" : undefined);
   };
   const emptyNote =
-    which === "fav" ? <>No favourite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>
+    which === "fav" ? <>No favorite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>
     : which === "recent" ? "No maps played yet."
     : <>No maps yet. Get some from <button type="button" className="link inline" onClick={() => goTo("more")}>Get more</button>.</>;
   const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));

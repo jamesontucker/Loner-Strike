@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { addFromFile, currentTarget, getJsonAt, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
 import { useAppInfo, useMaps, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
@@ -6,20 +6,23 @@ import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
+import { CommunityChip, CommunityLink, communityMap, useCommunity, useOrigins } from "./tools/community/chip";
 import { CATS, CopyFromGame, CopyToServers } from "./MapCopy";
+import { remixUpdates, type RemixUpdate } from "./tools/editor/compileApi"; // Parity A
 
 /** Where a map came from and whether it's hidden or new to the bots: one menu, so the chips stay about map types. */
 const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by you"],
   ["nonav", "Bots haven't learned it"], ["hidden", "Hidden"],
+  ["community", "From Community"], ["mine", "Made by me"], // (community: origins, from Tools > Community)
 ];
 const TEACH_INFO = "A hidden server on this computer loads each map and a bot walks all of it, a few minutes per map. It runs in the background at low priority; the game doesn't need to be open. What the bots learn goes to your servers too.";
 const RELEARN_INFO = "Bots learn the picked maps again even if they know them already, replacing what they learned before. Useful when bots get stuck on a map.";
 const SEND_INFO = "Sends what bots learned about this map (its .nav file) to all your servers now. Only that file goes: a server without the map itself still needs the map.";
 const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played. In Counter-Strike 1.6, Condition Zero's own maps (which 1.6 can't load) show only when you pick them here.";
-const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
+const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favorites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
-const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you" };
+const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you", server: "From a server you joined" };
 /** Where a map came from: one added with "Add a map file" is filed as a download (with a negative mod) but is yours. */
 const sourceOf = (m: MapInfo): MapInfo["source"] => (m.source === "download" && (m.mod ?? 0) < 0 ? "added" : m.source);
 /** A map only in the other game's folder that this game can't load: a Condition Zero map
@@ -37,7 +40,7 @@ const PAGE = 150;
 export const COLLATOR = new Intl.Collator();
 
 /** What a map without a screenshot shows: its type and name, like a map-loading screen. */
-function NoPicture({ name }: { name: string }) {
+export function NoPicture({ name }: { name: string }) {
   const i = name.indexOf("_");
   const kind = i > 0 && i <= 5 ? name.slice(0, i) : "";
   return (
@@ -50,20 +53,25 @@ function NoPicture({ name }: { name: string }) {
 
 /** A map's card. Memoised: the Maps page has hundreds of them, so the handlers take the
  *  map instead of being made per card, and a card only redraws when its own map changes. */
-export const MapCard = memo(function MapCard({ map, onClick, current, onFav, selected }: { map: MapInfo; onClick: (map: MapInfo) => void; current?: boolean; onFav?: (map: MapInfo) => void; selected?: boolean }) {
+export const MapCard = memo(function MapCard({ map, onClick, current, onFav, selected, originalUpdated }: { map: MapInfo; onClick: (map: MapInfo) => void; current?: boolean; onFav?: (map: MapInfo) => void; selected?: boolean; originalUpdated?: boolean }) {
   // the picture can fail while the app is still looking for one: a newer answer in the
   // map list (thumb changes) tries again, with ?v= so the browser doesn't reuse the 404
   const [brokenFor, setBrokenFor] = useState<MapInfo["thumb"] | undefined>(undefined);
   const broken = brokenFor === map.thumb;
+  const cm = communityMap(useCommunity(), map.name); // (community chip)
+  const mine = useOrigins()?.maps[map.name.toLowerCase()]?.kind === "mine"; // (origin: a map you made)
   const card = (
     <button className={`map-card${selected ? " selected" : ""}`} onClick={() => onClick(map)} aria-current={current ? "true" : undefined} aria-pressed={selected === undefined ? undefined : selected} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
         {(map.thumb !== "radar" || broken) && <NoPicture name={map.name} />}
         {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png?v=${map.thumb}`)} alt="" loading="lazy" onError={() => setBrokenFor(map.thumb)} />}
-        {!onFav && map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
+        {!onFav && map.fav && <span className="fav-star" aria-label="Favorite">★</span>}
       </div>
       <span className="map-label">{map.name}</span>
       {map.other && <span className="map-sub" title={otherNote(map)[1]}>{otherNote(map)[0]}</span>}
+      {cm && <span className="map-sub" title={`From Community: ${cm.name}${cm.author ? ` by ${cm.author}` : ""}`}>Community{cm.author ? ` · ${cm.author}` : ""}</span>}
+      {!cm && mine && <span className="map-sub" title="You made this map (compiled or published from Loner-Strike)">Made by me</span>}
+      {originalUpdated && <span className="map-sub" title="The map you remixed was updated in Community. Open the map to see what changed.">Original updated</span>}
     </button>
   );
   if (!onFav) return card;
@@ -75,8 +83,8 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
         <button
           type="button"
           className={`fav-toggle${map.fav ? " on" : ""}`}
-          aria-label={map.fav ? `Remove ${map.name} from favourites` : `Add ${map.name} to favourites`}
-          title={map.fav ? "Remove from favourites" : "Add to favourites"}
+          aria-label={map.fav ? `Remove ${map.name} from favorites` : `Add ${map.name} to favorites`}
+          title={map.fav ? "Remove from favorites" : "Add to favorites"}
           onClick={() => onFav(map)}
         >
           {map.fav ? "★" : "☆"}
@@ -110,6 +118,19 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const isLoading = loading ?? mapsQ.isLoading;
   const [cat, setCat] = useState("all");
   const [show, setShow] = useState("all");
+  const community = useCommunity(); // (community: chips and the From Community filter)
+  // Parity A: your remixes whose original was updated in Community (the list the app has; your game only)
+  const [remixUpd, setRemixUpd] = useState<RemixUpdate[]>([]);
+  useEffect(() => {
+    if (currentTarget()) return;
+    let live = true;
+    void remixUpdates().then((r) => live && setRemixUpd(r.updates ?? []));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const updOf = (name: string) => remixUpd.find((u) => u.map.toLowerCase() === name.toLowerCase());
+  const origins = useOrigins(); // (origin: the Made by me filter)
   const [q, setQ] = useState("");
   // typing stays quick: the list filters a moment behind the box
   const search = useDeferredValue(q);
@@ -200,6 +221,8 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     const query = search.trim().toLowerCase();
     let list = show === "other" ? maps.filter((m) => m.other) : maps.filter((m) => !m.other && (show === "hidden" ? m.hidden : !m.hidden));
     if (show === "nonav") list = list.filter((m) => !m.nav);
+    else if (show === "community") list = list.filter((m) => !!communityMap(community, m.name));
+    else if (show === "mine") list = list.filter((m) => origins?.maps[m.name.toLowerCase()]?.kind === "mine");
     else if (show === "stock" || show === "download" || show === "added") list = list.filter((m) => sourceOf(m) === show);
     if (cat === "fav") list = list.filter((m) => m.fav);
     else if (cat === "recent") list = list.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent);
@@ -219,7 +242,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
       list = [...list].sort(order[sort] ?? byName);
     }
     return list;
-  }, [maps, cat, show, search, sort]);
+  }, [maps, cat, show, search, sort, community, origins]);
   // other filters start from the top again
 
   const remove = async (map: MapInfo) => {
@@ -242,10 +265,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/mapflag", { flag: f, map: map.name, on }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
     if (f === "hidden") toast(on ? `${map.name} is hidden. Find it with Show: Hidden.` : `${map.name} is back in the list.`);
-    if (f === "fav") toast(on ? `${map.name} added to favourites` : `${map.name} removed from favourites`);
+    if (f === "fav") toast(on ? `${map.name} added to favorites` : `${map.name} removed from favorites`);
     setPicked(null);
     reload();
-  }, f === "fav" ? (on ? `Adding ${map.name} to favourites…` : `Removing ${map.name} from favourites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
+  }, f === "fav" ? (on ? `Adding ${map.name} to favorites…` : `Removing ${map.name} from favorites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
 
   // the same function for every card, so the cards' memo holds
   const toggleFav = useStable((m: MapInfo) => flag(m, "fav", !m.fav));
@@ -289,6 +312,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             </select>
           </label>
           <Info text={SHOW_INFO} />
+          {!currentTarget() && <CommunityLink kind="map" label="More maps from Community" />}{/* (community) */}
           <label className="sort">
             <span>Sort</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} disabled={cat === "recent"}>
@@ -346,7 +370,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           {shown.slice(0, limit).map((m) => (
             picking
               ? <MapCard key={m.name} map={m} selected={chosen.has(m.name)} onClick={togglePick} />
-              : <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} />
+              : <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} originalUpdated={!!updOf(m.name)} />
           ))}
           {!shown.length && (maps.length ? <p className="muted">No maps match. <button type="button" className="link inline" onClick={() => { setQ(""); setCat("all"); setShow("all"); }}>Show all maps</button></p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
         </div>
@@ -367,7 +391,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             <h2 className="map-title">{picked.name}</h2>
             <p className="muted">
               {picked.title && picked.title !== picked.name ? `${picked.title} · ` : ""}
-              {picked.by !== "Other" ? `by ${picked.by}` : ""}
+              {picked.by !== "Other" ? `by ${picked.by}` : ""} <CommunityChip chip={communityMap(community, picked.name)} />
               {!picked.nav && " · Bots haven't learned this map yet. They learn it the first time it's played (a few minutes)."}
             </p>
             <p className="muted">
@@ -376,6 +400,15 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
             </p>
             {picked.other && <p className="muted">{otherNote(picked)[1]}.</p>}
+            {(() => {
+              const u = updOf(picked.name);
+              return u ? (
+                <p className="muted" data-testid="remix-updated">
+                  A remix of {u.original}. The original was updated.{" "}
+                  <a href={u.url} target="_blank" rel="noreferrer">See what changed.</a> Your map stays as it is.
+                </p>
+              ) : null;
+            })()}
             {!live && currentTarget() && !cantLoad(picked) && <p className="muted">Start the server to play it.</p>}
             {!live && !currentTarget() && picked.hidden && <p className="muted">Show it again to start a game on it.</p>}
             <div className="row">
@@ -384,7 +417,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               ) : (
                 !currentTarget() && !picked.hidden && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>
               )}
-              <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Remove from favourites" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
+              <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Remove from favorites" : "Favorite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
               <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />
               {canTeach && picked.nav && (
                 <span className="row">
@@ -394,6 +427,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               )}
               {canCopy && hasServers && (
                 <button className="btn" onClick={() => { setCopyMap(picked.name); setPicked(null); }}>Copy to a server</button>
+              )}
+              {/* look inside it (Tools is on this computer only, and reads your own game's maps) */}
+              {ON_THIS_COMPUTER && !currentTarget() && !picked.other && (
+                <button className="btn" onClick={() => { go("tools", `map:${picked.name}`); setPicked(null); }}>Open in Tools</button>
               )}
               {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
                 <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />

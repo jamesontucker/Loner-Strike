@@ -6,6 +6,7 @@ import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { NeedsSetup, setupPlace } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { FastdlMirror } from "./FastdlMirror";
 import { openTab, takeSub, TabLink } from "./goto";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
@@ -42,7 +43,7 @@ const COLORS: { id: Color; name: string; css: string }[] = [
   { id: "green", name: "Green", css: "var(--chat-green)" },
   { id: "red", name: "Red", css: "var(--chat-red)" },
   { id: "blue", name: "Blue", css: "var(--chat-blue)" },
-  { id: "grey", name: "Grey", css: "var(--chat-grey)" },
+  { id: "grey", name: "Gray", css: "var(--chat-grey)" },
 ];
 const PLACEHOLDERS: [string, string][] = [
   ["{server}", "the server's name"],
@@ -382,7 +383,16 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
                 )}
               </div>
             )}
-            {missing.length > 0 && <p className="err-text">Remove the maps that aren't installed before saving.</p>}
+            {missing.length > 0 && (
+              <div className="row rot-missing">
+                <p className="err-text">
+                  {missing.length === 1 ? "1 map in the list isn't installed" : `${missing.length} maps in the list aren't installed`}. Remove {missing.length === 1 ? "it" : "them"} before saving.
+                </p>
+                <button className="btn small" onClick={() => edit(list.filter((m) => installed.has(m.toLowerCase())))}>
+                  Remove the {missing.length === 1 ? "one that isn't" : `${missing.length} that aren't`} installed
+                </button>
+              </div>
+            )}
 
             <div className="row">
               <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && list.length === 0)} label="Save rotation" busyLabel="Saving…" onClick={save} />
@@ -507,7 +517,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 onChange={(e) => setMsg(i, { text: e.target.value })}
               />
               <div className="ad-tools">
-                <select value={m.color} aria-label={`Colour of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
+                <select value={m.color} aria-label={`Color of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
                   {COLORS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <button className="btn icon" aria-label={`Move message ${i + 1} up`} disabled={i === 0} onClick={() => move(i, i - 1)}><Glyph d={UP} /></button>
@@ -540,7 +550,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 </p>
               ))}
             </div>
-            <small>With example details. Red and blue show as the team colours.</small>
+            <small>With example details. Red and blue show as the team colors.</small>
           </div>
         )}
         <div className="row">
@@ -875,6 +885,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           )}
         </div>
         {ON_THIS_COMPUTER && !bySt && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
+        {ON_THIS_COMPUTER && open && !isSharedId(open) && <FastdlMirror id={open} current={d.settings.fastdl} save={(u, done) => saveSettings({ fastdl: u }, done)} />}
         {bySt ? (
           <p className="muted small-note">
             This address was set by Fast downloads under the server's {remote ? <TabLink tab="webstatus">Website status</TabLink> : "Website status"}, which serves the files from the server itself. There's nothing to upload.

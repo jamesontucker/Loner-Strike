@@ -1,0 +1,42 @@
+/* The callout editor (views/tools/callouts): the nav from above fills the stage. */
+.co-empty { flex: 1; display: grid; place-content: center; }
+.co-stage { background: #23271e; }
+.co-canvas { position: absolute; inset: 0; user-select: none; }
+.co-canvas canvas { display: block; touch-action: none; }
+.co-tip { position: absolute; pointer-events: none; background: rgba(20, 22, 16, .92); color: var(--bone); padding: 4px 8px; border-radius: 2px; font-size: 13px; white-space: nowrap; }
+.co-zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.co-zoom .btn { min-width: 30px; }
+.co-brush { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 2px; background: rgba(20, 22, 16, .86); color: var(--bone-dim); font-size: 13px; font-weight: 600; pointer-events: none; }
+.co-brush strong { color: var(--bone); }
+.co-page .tools-status { grid-template-columns: auto minmax(0, 1fr) minmax(0, auto); }
+.co-page .tools-status > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-page .tools-panel h3 { display: flex; align-items: center; gap: 6px; }
+
+/* the side */
+.co-name { display: grid; gap: 8px; }
+.co-name .search { max-width: none; }
+.co-bad { color: var(--weak); }
+.co-known summary { cursor: pointer; color: var(--bone-faint); font-size: 13px; width: max-content; }
+.co-known .chips { margin-top: 6px; max-height: 150px; overflow: auto; }
+.co-known .chip { font-size: 13px; padding: 2px 8px; }
+.co-places { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 300px; overflow: auto; }
+.co-places li { display: flex; gap: 6px; align-items: center; }
+.co-place { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; border: 1px solid transparent; border-radius: 2px; padding: 3px 8px; background: var(--panel-2); color: var(--bone); box-shadow: var(--raised); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.co-place:hover, .co-place:focus-visible { background: var(--side); }
+.co-place[aria-pressed="true"] { border-color: var(--signal); }
+.co-place-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-place .push { margin-left: auto; font-variant-numeric: tabular-nums; }
+.co-swatch { flex: none; width: 12px; height: 12px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4); display: inline-block; }
+.co-voice { font-size: 12px; }
+.co-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.co-issues { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.co-issue { display: grid; gap: 4px; padding: 5px 8px; border-left: 3px solid var(--bone-faint); background: var(--panel-2); border-radius: 2px; font-size: 14px; }
+.co-issue.bad { border-left-color: var(--weak); }
+.co-issue.warn { border-left-color: var(--warn); }
+.co-issue .row { gap: 6px; }
+.co-range { display: grid; grid-template-columns: 3em minmax(0, 1fr) 4ch; align-items: center; gap: 6px; }
+.co-range input { min-width: 0; width: 100%; }
+.co-num { font-size: 13px; color: var(--bone-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.co-all { margin-left: auto; }
+.co-foot { margin: 0 2px; }
+.co-page .linkish { border: 0; background: none; padding: 0; color: var(--signal); font: inherit; text-decoration: underline; cursor: pointer; }

@@ -136,7 +136,7 @@ impl Game {
     pub fn with_app_dir(hl: &Path, name: &str, app: &Path) -> Game {
         let dir = hl.join(name);
         let data = dir.join("addons/amxmodx/data/gamemodes");
-        let _ = std::fs::create_dir_all(app.join("cache"));
+        let _ = std::fs::create_dir_all(crate::localdata::join(app, "cache"));
         // The plugin reads the same file, so both sides share the RCON password. A game
         // without Loner-Strike (never set up, or removed) gets nothing written into it: the
         // file is written once it's set up (ensure_password_file)
@@ -165,7 +165,10 @@ impl Game {
     /// it the plugin sets no password while the panel knocks with a made-up one (Bad Rcon).
     /// A server on another machine gets it from its setup there instead.
     fn ensure_password_file(&self) {
-        if self.remote.is_some() {
+        // (a dedicated server on this computer gets it before it starts: servers.rs
+        // ensure_panel_rcon; written here under a running one, the server never reads it and the
+        // panel's new password locks the app out of it: QA4-F F5)
+        if self.remote.is_some() || self.dedicated {
             return;
         }
         let pw_file = self.data.join("panel_rcon.txt");
@@ -196,7 +199,7 @@ impl Game {
             Err(RconError::BadPassword) => return json!({"online": false, "reason": self.bad_password_reason_cached()}),
             // game_open: the game is open on this computer but not hosting a map (main menu,
             // or playing on someone else's server)
-            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
+            Err(RconError::Offline | RconError::Refused) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
         };
         let path = self.data.join("status.json");
         if let (Some(bytes), true) = (file, reply.contains("GM status written")) {
@@ -266,6 +269,7 @@ impl Game {
             Ok(reply) => Ok(reply.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()),
             Err(RconError::BadPassword) => Err(CmdError::Game(BAD_PASSWORD.into())),
             Err(RconError::Offline) => Err(CmdError::Game(OFFLINE.into())),
+            Err(RconError::Refused) => Err(CmdError::Game("That has characters the game's console can't take (emoji, other alphabets or line breaks).".into())),
         }
     }
 

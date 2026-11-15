@@ -79,6 +79,7 @@ pub const SECTIONS: &[Section] = &[
         kind: "Mod",
         cats: &[(1828, "HUDs"), (1831, "Menu backgrounds"), (1839, "Headshot icons"), (1825, "Other")],
     },
+    Section { key: "textures", label: "Textures", kind: "Mod", cats: &[(681, "Textures")] },
 ];
 
 pub fn section(key: &str) -> Option<&'static Section> {
@@ -116,6 +117,7 @@ pub fn allowed(section: &str, dest: &str) -> bool {
         "sounds" => (top == "sound" && p.len() >= 2 && ext == ".wav") || d == "media/gamestartup.mp3",
         "sprays" => d == "tempdecal.wad" || (top == "logos" && p.len() == 2 && ext == ".bmp"),
         "sprites" => sprite || d == "decals.wad",
+        "textures" => p.len() == 1 && ext == ".wad" && !["halflife.wad", "cstrike.wad", "czero.wad", "decals.wad", "tempdecal.wad", "pldecal.wad", "gfx.wad", "fonts.wad", "cached.wad", "liquids.wad", "xeno.wad", "spraypaint.wad"].contains(&d.as_str()),
         "gui" => {
             sprite
                 || vgui
@@ -207,6 +209,7 @@ pub fn plan(section: &str, rels: &[Vec<String>], existing: &Existing) -> (Vec<(u
             let near = |under: &str| existing.unique(&name, under);
             dest = match ext.as_str() {
                 _ if name == "tempdecal.wad" || name == "decals.wad" => Some(name.clone()),
+                ".wad" if section == "textures" => Some(file.clone()),
                 ".mdl" if ["v_", "p_", "w_"].iter().any(|p| name.starts_with(p)) => Some(format!("models/{file}")),
                 ".mdl" => match near("models") {
                     Ok(Some(d)) => Some(d),
@@ -361,6 +364,8 @@ impl Records {
                     let b = broot.join(&actual);
                     std::fs::create_dir_all(b.parent().unwrap()).map_err(|e| e.to_string())?;
                     std::fs::copy(&target, &b).map_err(|e| format!("Couldn't back up {actual} ({e})."))?;
+                    // and in the app-wide history (safety.rs), so History can put it back later too
+                    crate::safety::before("Downloads", &format!("Replaced {actual} with a download"), &target);
                     backup = json!(format!("{}/{actual}", key.replace(':', "-")));
                 }
                 if let Some(d) = target.parent() {

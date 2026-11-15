@@ -1,0 +1,5822 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "starter_test_b",
+  "name": "Starter library test B",
+  "description": "Starter library premades at once"
+ },
+ "variables": [
+  {
+   "id": "sp_on",
+   "name": "Protected",
+   "type": "bool",
+   "scope": "player",
+   "default": false
+  },
+  {
+   "id": "lv_n",
+   "name": "Lives",
+   "type": "number",
+   "scope": "player",
+   "default": 3
+  },
+  {
+   "id": "ks_n",
+   "name": "Kill streak",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "cd_left",
+   "name": "Countdown left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "cd_label",
+   "name": "Countdown label",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  },
+  {
+   "id": "lb_text",
+   "name": "Leaderboard text",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  },
+  {
+   "id": "qs_step",
+   "name": "Quest step",
+   "type": "text",
+   "scope": "player",
+   "default": ""
+  }
+ ],
+ "functions": [
+  {
+   "id": "sp_end",
+   "name": "End Spawn Protection",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "lv_reset",
+   "name": "Reset Lives",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "n",
+     "name": "Lives",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "lv_lose",
+   "name": "Lose a Life",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "left",
+     "name": "Lives left",
+     "type": "number"
+    },
+    {
+     "id": "gone",
+     "name": "Out",
+     "type": "bool"
+    }
+   ]
+  },
+  {
+   "id": "ks_kill",
+   "name": "Count Kill Streak",
+   "inputs": [
+    {
+     "id": "killer",
+     "name": "Killer",
+     "type": "player"
+    },
+    {
+     "id": "victim",
+     "name": "Victim",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "n",
+     "name": "Streak",
+     "type": "number"
+    }
+   ]
+  },
+  {
+   "id": "lb_show",
+   "name": "Show Leaderboard",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "cz_make",
+   "name": "Make Capture Zone",
+   "inputs": [
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "zone",
+     "name": "Zone",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "qs_set",
+   "name": "Set Quest Step",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "step",
+     "name": "Step",
+     "type": "text"
+    },
+    {
+     "id": "say",
+     "name": "Objective",
+     "type": "text"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "qs_of",
+   "name": "Quest Step Of",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "step",
+     "name": "Step",
+     "type": "text"
+    },
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "bool"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "id": "qs_done",
+   "name": "Quest Done",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "reward",
+     "name": "Reward",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  }
+ ],
+ "macros": [
+  {
+   "id": "sp_give",
+   "name": "Spawn Protection",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "st_burn",
+   "name": "Burn",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "by",
+     "name": "By",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "dps",
+     "name": "Damage a second",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "st_slow",
+   "name": "Slow",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "st_freeze",
+   "name": "Freeze",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "cd_run",
+   "name": "Countdown HUD",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "label",
+     "name": "Label",
+     "type": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "exec"
+    },
+    {
+     "id": "done",
+     "name": "Done",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "kc_show",
+   "name": "Kill Cam",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "victim",
+     "name": "Victim",
+     "type": "player"
+    },
+    {
+     "id": "killer",
+     "name": "Killer",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "vc_show",
+   "name": "Victory Camera",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "winner",
+     "name": "Winner",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "id": "sp_give_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_god",
+   "type": "player.godmode",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "color": "white"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_on",
+   "type": "var.set",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "var": "sp_on",
+    "value": true
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_end",
+   "type": "fn.call",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "func": "sp_end"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_end_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_on",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "sp_on"
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_god",
+   "type": "player.godmode",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "on": false
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_off",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "sp_on",
+    "value": false
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  },
+  {
+   "id": "lv_reset_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "lv_n"
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_lose_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_sub",
+   "type": "var.add",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "lv_n",
+    "amount": -1
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_g",
+   "type": "var.get",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "var": "lv_n"
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "text": "Lives left: [0]"
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 3,
+    "text": ""
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_out",
+   "type": "math.compare",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_lose"
+  },
+  {
+   "id": "st_burn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_burn",
+   "type": "fun.burn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "secs": 4,
+    "dps": 5
+   },
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "tag": "burning",
+    "radius": 110,
+    "strength": 5,
+    "secs": 4
+   },
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_slow_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 4
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 1080
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1260
+   },
+   "params": {
+    "value": 150
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 1080
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_slow",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_back",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "speed": 250
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_freeze_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 2
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_frz",
+   "type": "player.freeze",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "color": "blue"
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_thaw",
+   "type": "player.freeze",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "on": false
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_glow2",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "ks_kill_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_reset",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "ks_n",
+    "value": 0
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_self",
+   "type": "logic.equal",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "ne"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_add",
+   "type": "var.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "ks_n",
+    "amount": 1
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_g",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 360
+   },
+   "params": {
+    "var": "ks_n"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_sw",
+   "type": "flow.switch_num",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "cases": "3,5,7,10"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t3",
+   "type": "text.format",
+   "pos": {
+    "x": 2340,
+    "y": 900
+   },
+   "params": {
+    "text": "[0] is on a killing spree!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h3",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2600,
+    "y": 900
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s3",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 2860,
+    "y": 900
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t5",
+   "type": "text.format",
+   "pos": {
+    "x": 3120,
+    "y": 1080
+   },
+   "params": {
+    "text": "[0] is unstoppable!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h5",
+   "type": "msg.hud",
+   "pos": {
+    "x": 3380,
+    "y": 1080
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s5",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 3640,
+    "y": 1080
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t7",
+   "type": "text.format",
+   "pos": {
+    "x": 3900,
+    "y": 1260
+   },
+   "params": {
+    "text": "[0] is godlike!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h7",
+   "type": "msg.hud",
+   "pos": {
+    "x": 4160,
+    "y": 1260
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s7",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 4420,
+    "y": 1260
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t10",
+   "type": "text.format",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {
+    "text": "[0] is LEGENDARY!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h10",
+   "type": "msg.hud",
+   "pos": {
+    "x": 4940,
+    "y": 1440
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s10",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 5200,
+    "y": 1440
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "cd_run_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_setl",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "every": 1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_g",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 540
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_ft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 2340,
+    "y": 540
+   },
+   "params": {
+    "style": "ms"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_gl",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 720
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dlabel",
+   "type": "text.literal",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "value": "Time left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_lab",
+   "type": "logic.select",
+   "pos": {
+    "x": 3380,
+    "y": 720
+   },
+   "params": {
+    "of": "text"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "text": "[0]: [1]"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_hud",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": -1,
+    "y": 0
+   },
+   "params": {
+    "text": "",
+    "y": 0.12,
+    "seconds": 1.1,
+    "effect": "fade"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left",
+    "amount": -1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_over",
+   "type": "math.compare",
+   "pos": {
+    "x": 4160,
+    "y": 720
+   },
+   "params": {
+    "op": "lt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_stop",
+   "type": "timer.clear",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "lb_show_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_clear",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text",
+    "value": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_top",
+   "type": "save.top",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "key": "kills",
+    "order": "high"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g",
+   "type": "var.get",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_line",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "text": "[0][1]. [2]: [3][br]"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_add",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {
+    "var": "lb_text"
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_win",
+   "type": "msg.info_window",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "title": "Top players",
+    "text": ""
+   },
+   "graph": "lb_show"
+  },
+  {
+   "id": "lb_show_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lb_show"
+  },
+  {
+   "id": "cz_make_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_make",
+   "type": "comp.create",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "kind": "ls_capture_point",
+    "at": "",
+    "keys": "time=10|radius=160"
+   },
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_bots",
+   "type": "bots.goal",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "kind": "capture",
+    "prio": 60,
+    "secs": 3600,
+    "radius": 160
+   },
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cz_make"
+  },
+  {
+   "id": "kc_show_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_same",
+   "type": "logic.equal",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "ne"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_valid",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_view",
+   "type": "fun.view_from",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "who": "player",
+    "secs": 3,
+    "offset": 96,
+    "move": 2,
+    "freeze": false
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_kpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_vpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 720
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "vc_show_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_wpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_above",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 540
+   },
+   "params": {
+    "y": 0,
+    "z": 64
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_cam",
+   "type": "vec.op",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_view",
+   "type": "fun.view_from",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "secs": 5,
+    "offset": 128,
+    "move": 3,
+    "freeze": true
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 720
+   },
+   "params": {
+    "text": "[0] wins!"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 5,
+    "text": ""
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "qs_set_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_set",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "qs_step"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 720
+   },
+   "params": {
+    "text": "Objective: [0]"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "slot": "left",
+    "seconds": 6,
+    "text": ""
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "sound": "buttons/blip1.wav"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_of_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_g",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "qs_step"
+   },
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_not",
+   "type": "logic.not",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_done_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_set",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "qs_step",
+    "value": "done"
+   },
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_money",
+   "type": "player.add_money",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 4,
+    "text": "Quest complete!"
+   },
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  },
+  {
+   "id": "ev1",
+   "type": "event.round_started",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "ev2",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "ev3",
+   "type": "math.number",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {
+    "value": 3
+   }
+  },
+  {
+   "id": "ev4",
+   "type": "fn.call",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "func": "lv_reset"
+   }
+  },
+  {
+   "id": "ev5",
+   "type": "text.literal",
+   "pos": {
+    "x": 1500,
+    "y": 0
+   },
+   "params": {
+    "value": "survive"
+   }
+  },
+  {
+   "id": "ev6",
+   "type": "text.literal",
+   "pos": {
+    "x": 1800,
+    "y": 0
+   },
+   "params": {
+    "value": "Survive the round"
+   }
+  },
+  {
+   "id": "ev7",
+   "type": "fn.call",
+   "pos": {
+    "x": 2100,
+    "y": 0
+   },
+   "params": {
+    "func": "qs_set"
+   }
+  },
+  {
+   "id": "ev8",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev9",
+   "type": "fn.call",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {
+    "func": "cz_make"
+   }
+  },
+  {
+   "id": "ev10",
+   "type": "math.number",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "value": 120
+   }
+  },
+  {
+   "id": "ev11",
+   "type": "text.literal",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {
+    "value": "Round"
+   }
+  },
+  {
+   "id": "ev12",
+   "type": "macro.use",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "macro": "cd_run"
+   }
+  },
+  {
+   "id": "ev13",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 1500,
+    "y": 360
+   },
+   "params": {}
+  },
+  {
+   "id": "ev14",
+   "type": "math.number",
+   "pos": {
+    "x": 1800,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev15",
+   "type": "macro.use",
+   "pos": {
+    "x": 2100,
+    "y": 360
+   },
+   "params": {
+    "macro": "sp_give"
+   }
+  },
+  {
+   "id": "ev16",
+   "type": "event.weapon_fired",
+   "pos": {
+    "x": 0,
+    "y": 360
+   },
+   "params": {}
+  },
+  {
+   "id": "ev17",
+   "type": "fn.call",
+   "pos": {
+    "x": 300,
+    "y": 360
+   },
+   "params": {
+    "func": "sp_end"
+   }
+  },
+  {
+   "id": "ev18",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 600,
+    "y": 720
+   },
+   "params": {}
+  },
+  {
+   "id": "ev19",
+   "type": "fn.call",
+   "pos": {
+    "x": 900,
+    "y": 720
+   },
+   "params": {
+    "func": "ks_kill"
+   }
+  },
+  {
+   "id": "ev20",
+   "type": "fn.call",
+   "pos": {
+    "x": 1200,
+    "y": 720
+   },
+   "params": {
+    "func": "lv_lose"
+   }
+  },
+  {
+   "id": "ev21",
+   "type": "math.number",
+   "pos": {
+    "x": 1500,
+    "y": 720
+   },
+   "params": {
+    "value": 2
+   }
+  },
+  {
+   "id": "ev22",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 720
+   },
+   "params": {
+    "macro": "kc_show"
+   }
+  },
+  {
+   "id": "ev23",
+   "type": "math.number",
+   "pos": {
+    "x": 2100,
+    "y": 720
+   },
+   "params": {
+    "value": 100
+   }
+  },
+  {
+   "id": "ev24",
+   "type": "fn.call",
+   "pos": {
+    "x": 0,
+    "y": 720
+   },
+   "params": {
+    "func": "qs_done"
+   }
+  },
+  {
+   "id": "ev25",
+   "type": "save.add",
+   "pos": {
+    "x": 300,
+    "y": 720
+   },
+   "params": {
+    "key": "kills",
+    "amount": 1
+   }
+  },
+  {
+   "id": "ev26",
+   "type": "fn.call",
+   "pos": {
+    "x": 600,
+    "y": 720
+   },
+   "params": {
+    "func": "lb_show"
+   }
+  },
+  {
+   "id": "ev27",
+   "type": "event.player_hurt",
+   "pos": {
+    "x": 900,
+    "y": 1080
+   },
+   "params": {}
+  },
+  {
+   "id": "ev28",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1200,
+    "y": 1080
+   },
+   "params": {}
+  },
+  {
+   "id": "ev29",
+   "type": "math.number",
+   "pos": {
+    "x": 1500,
+    "y": 1080
+   },
+   "params": {
+    "value": 1
+   }
+  },
+  {
+   "id": "ev30",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 1080
+   },
+   "params": {
+    "macro": "st_freeze"
+   }
+  },
+  {
+   "id": "ev31",
+   "type": "math.number",
+   "pos": {
+    "x": 2100,
+    "y": 1080
+   },
+   "params": {
+    "value": 1
+   }
+  },
+  {
+   "id": "ev32",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 1080
+   },
+   "params": {
+    "value": 200
+   }
+  },
+  {
+   "id": "ev33",
+   "type": "macro.use",
+   "pos": {
+    "x": 300,
+    "y": 1080
+   },
+   "params": {
+    "macro": "st_slow"
+   }
+  },
+  {
+   "id": "ev34",
+   "type": "text.equals",
+   "pos": {
+    "x": 600,
+    "y": 1080
+   },
+   "params": {
+    "b": "knife"
+   }
+  },
+  {
+   "id": "ev35",
+   "type": "flow.branch",
+   "pos": {
+    "x": 900,
+    "y": 1080
+   },
+   "params": {}
+  },
+  {
+   "id": "ev36",
+   "type": "math.number",
+   "pos": {
+    "x": 1200,
+    "y": 1080
+   },
+   "params": {
+    "value": 3
+   }
+  },
+  {
+   "id": "ev37",
+   "type": "math.number",
+   "pos": {
+    "x": 1500,
+    "y": 1080
+   },
+   "params": {
+    "value": 4
+   }
+  },
+  {
+   "id": "ev38",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 1080
+   },
+   "params": {
+    "macro": "st_burn"
+   }
+  },
+  {
+   "id": "ev39",
+   "type": "event.time_up",
+   "pos": {
+    "x": 2100,
+    "y": 1440
+   },
+   "params": {}
+  },
+  {
+   "id": "ev40",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 0,
+    "y": 1440
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "ev41",
+   "type": "math.number",
+   "pos": {
+    "x": 300,
+    "y": 1440
+   },
+   "params": {
+    "value": 3
+   }
+  },
+  {
+   "id": "ev42",
+   "type": "macro.use",
+   "pos": {
+    "x": 600,
+    "y": 1440
+   },
+   "params": {
+    "macro": "vc_show"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "spawn_prot_w1",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "sp_give_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "spawn_prot_w2",
+   "from": {
+    "node": "sp_give_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "spawn_prot_w3",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "spawn_prot_w4",
+   "from": {
+    "node": "sp_give_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "spawn_prot_w5",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "sp_give_god",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w6",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_god",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w7",
+   "from": {
+    "node": "sp_give_god",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w8",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w9",
+   "from": {
+    "node": "sp_give_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_on",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w10",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_on",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w11",
+   "from": {
+    "node": "sp_give_on",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w12",
+   "from": {
+    "node": "sp_give_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "sp_give_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "spawn_prot_w13",
+   "from": {
+    "node": "sp_give_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "sp_give_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w14",
+   "from": {
+    "node": "sp_give_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "spawn_prot_w15",
+   "from": {
+    "node": "sp_give_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w16",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_end",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "spawn_prot_w17",
+   "from": {
+    "node": "sp_give_end",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_out",
+    "pin": "over"
+   }
+  },
+  {
+   "id": "spawn_prot_w18",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_on",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w19",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w20",
+   "from": {
+    "node": "sp_end_on",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_end_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "spawn_prot_w21",
+   "from": {
+    "node": "sp_end_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sp_end_god",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w22",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_god",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w23",
+   "from": {
+    "node": "sp_end_god",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w24",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w25",
+   "from": {
+    "node": "sp_end_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w26",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "spawn_prot_w27",
+   "from": {
+    "node": "sp_end_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "spawn_prot_w28",
+   "from": {
+    "node": "sp_end_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sp_end_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w1",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "n"
+   },
+   "to": {
+    "node": "lv_reset_n_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "lives_w2",
+   "from": {
+    "node": "lv_reset_n_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "lives_w3",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "n"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "lives_w4",
+   "from": {
+    "node": "lv_reset_n_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "lives_w5",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w6",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "lives_w7",
+   "from": {
+    "node": "lv_reset_n",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "lives_w8",
+   "from": {
+    "node": "lv_reset_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_reset_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w9",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_sub",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w10",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_sub",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "lives_w11",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "lives_w12",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "lives_w13",
+   "from": {
+    "node": "lv_lose_sub",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w14",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "lives_w15",
+   "from": {
+    "node": "lv_lose_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "lives_w16",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_out",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "lives_w17",
+   "from": {
+    "node": "lv_lose_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "lives_w18",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "lives_w19",
+   "from": {
+    "node": "lv_lose_out",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "gone"
+   }
+  },
+  {
+   "id": "status_w1",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w2",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w3",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "by"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "by"
+   }
+  },
+  {
+   "id": "status_w4",
+   "from": {
+    "node": "st_burn_burn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_burn_avoid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w5",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_burn_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "status_w6",
+   "from": {
+    "node": "st_burn_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_burn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "status_w7",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_slow_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w8",
+   "from": {
+    "node": "st_slow_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "status_w9",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w10",
+   "from": {
+    "node": "st_slow_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "status_w11",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "st_slow_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w12",
+   "from": {
+    "node": "st_slow_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "status_w13",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w14",
+   "from": {
+    "node": "st_slow_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "status_w15",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w16",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w17",
+   "from": {
+    "node": "st_slow_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "status_w18",
+   "from": {
+    "node": "st_slow_slow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w19",
+   "from": {
+    "node": "st_slow_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "st_slow_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "status_w20",
+   "from": {
+    "node": "st_slow_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "st_slow_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w21",
+   "from": {
+    "node": "st_slow_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "status_w22",
+   "from": {
+    "node": "st_slow_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_back",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w23",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_slow_back",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w24",
+   "from": {
+    "node": "st_slow_back",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_out",
+    "pin": "over"
+   }
+  },
+  {
+   "id": "status_w25",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_freeze_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w26",
+   "from": {
+    "node": "st_freeze_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "status_w27",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "status_w28",
+   "from": {
+    "node": "st_freeze_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "status_w29",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_freeze_frz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w30",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_frz",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w31",
+   "from": {
+    "node": "st_freeze_frz",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w32",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w33",
+   "from": {
+    "node": "st_freeze_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w34",
+   "from": {
+    "node": "st_freeze_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "st_freeze_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "status_w35",
+   "from": {
+    "node": "st_freeze_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "st_freeze_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w36",
+   "from": {
+    "node": "st_freeze_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "status_w37",
+   "from": {
+    "node": "st_freeze_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_thaw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w38",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_thaw",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w39",
+   "from": {
+    "node": "st_freeze_thaw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_glow2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "status_w40",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_glow2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "status_w41",
+   "from": {
+    "node": "st_freeze_glow2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_out",
+    "pin": "over"
+   }
+  },
+  {
+   "id": "kill_streak_w1",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w2",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ks_kill_reset",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_streak_w3",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_self",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "kill_streak_w4",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ks_kill_self",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "kill_streak_w5",
+   "from": {
+    "node": "ks_kill_reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w6",
+   "from": {
+    "node": "ks_kill_self",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "kill_streak_w7",
+   "from": {
+    "node": "ks_kill_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ks_kill_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w8",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_streak_w9",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_streak_w10",
+   "from": {
+    "node": "ks_kill_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_sw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w11",
+   "from": {
+    "node": "ks_kill_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_sw",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "kill_streak_w12",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "default"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w13",
+   "from": {
+    "node": "ks_kill_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w14",
+   "from": {
+    "node": "ks_kill_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "kill_streak_w15",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t3",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "kill_streak_w16",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c0"
+   },
+   "to": {
+    "node": "ks_kill_h3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w17",
+   "from": {
+    "node": "ks_kill_t3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "kill_streak_w18",
+   "from": {
+    "node": "ks_kill_h3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w19",
+   "from": {
+    "node": "ks_kill_s3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w20",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t5",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "kill_streak_w21",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c1"
+   },
+   "to": {
+    "node": "ks_kill_h5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w22",
+   "from": {
+    "node": "ks_kill_t5",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h5",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "kill_streak_w23",
+   "from": {
+    "node": "ks_kill_h5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w24",
+   "from": {
+    "node": "ks_kill_s5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w25",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t7",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "kill_streak_w26",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c2"
+   },
+   "to": {
+    "node": "ks_kill_h7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w27",
+   "from": {
+    "node": "ks_kill_t7",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h7",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "kill_streak_w28",
+   "from": {
+    "node": "ks_kill_h7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w29",
+   "from": {
+    "node": "ks_kill_s7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w30",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t10",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "kill_streak_w31",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c3"
+   },
+   "to": {
+    "node": "ks_kill_h10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w32",
+   "from": {
+    "node": "ks_kill_t10",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h10",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "kill_streak_w33",
+   "from": {
+    "node": "ks_kill_h10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_streak_w34",
+   "from": {
+    "node": "ks_kill_s10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w1",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w2",
+   "from": {
+    "node": "cd_run_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w3",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w4",
+   "from": {
+    "node": "cd_run_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w5",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w6",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "label"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w7",
+   "from": {
+    "node": "cd_run_setl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w8",
+   "from": {
+    "node": "cd_run_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w9",
+   "from": {
+    "node": "cd_run_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w10",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "countdown_w11",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_ft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "countdown_w12",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w13",
+   "from": {
+    "node": "cd_run_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w14",
+   "from": {
+    "node": "cd_run_dlabel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w15",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w16",
+   "from": {
+    "node": "cd_run_lab",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "countdown_w17",
+   "from": {
+    "node": "cd_run_ft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "countdown_w18",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w19",
+   "from": {
+    "node": "cd_run_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w20",
+   "from": {
+    "node": "cd_run_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w21",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_over",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w22",
+   "from": {
+    "node": "cd_run_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w23",
+   "from": {
+    "node": "cd_run_over",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w24",
+   "from": {
+    "node": "cd_run_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w25",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "handle"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "handle"
+   }
+  },
+  {
+   "id": "countdown_w26",
+   "from": {
+    "node": "cd_run_stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "done"
+   }
+  },
+  {
+   "id": "leaderboard_w1",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w2",
+   "from": {
+    "node": "lb_show_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_top",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w3",
+   "from": {
+    "node": "lb_show_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "leaderboard_w4",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "rank"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "leaderboard_w5",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "name"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "leaderboard_w6",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "value"
+   },
+   "to": {
+    "node": "lb_show_line",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "leaderboard_w7",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "each"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w8",
+   "from": {
+    "node": "lb_show_line",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_add",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "leaderboard_w9",
+   "from": {
+    "node": "lb_show_top",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "leaderboard_w10",
+   "from": {
+    "node": "lb_show_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "leaderboard_w11",
+   "from": {
+    "node": "lb_show_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lb_show_win",
+    "pin": "more"
+   }
+  },
+  {
+   "id": "leaderboard_w12",
+   "from": {
+    "node": "lb_show_win",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lb_show_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "capture_w1",
+   "from": {
+    "node": "cz_make_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "capture_w2",
+   "from": {
+    "node": "cz_make_entry",
+    "pin": "at"
+   },
+   "to": {
+    "node": "cz_make_make",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "capture_w3",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "capture_w4",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cz_make_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "capture_w5",
+   "from": {
+    "node": "cz_make_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "capture_w6",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cz_make_ret",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "kill_cam_w1",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_same",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "kill_cam_w2",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_same",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "kill_cam_w3",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_valid",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_cam_w4",
+   "from": {
+    "node": "kc_show_same",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "kill_cam_w5",
+   "from": {
+    "node": "kc_show_valid",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "kill_cam_w6",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "kc_show_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_cam_w7",
+   "from": {
+    "node": "kc_show_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "kill_cam_w8",
+   "from": {
+    "node": "kc_show_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "kill_cam_w9",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_cam_w10",
+   "from": {
+    "node": "kc_show_view",
+    "pin": "then"
+   },
+   "to": {
+    "node": "kc_show_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "kill_cam_w11",
+   "from": {
+    "node": "kc_show_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "kc_show_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "kill_cam_w12",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_kpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_cam_w13",
+   "from": {
+    "node": "kc_show_kpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "kill_cam_w14",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_vpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "kill_cam_w15",
+   "from": {
+    "node": "kc_show_vpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "victory_cam_w1",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "winner"
+   },
+   "to": {
+    "node": "vc_show_wpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "victory_cam_w2",
+   "from": {
+    "node": "vc_show_wpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_cam",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "victory_cam_w3",
+   "from": {
+    "node": "vc_show_above",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_cam",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "victory_cam_w4",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "victory_cam_w5",
+   "from": {
+    "node": "vc_show_cam",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "victory_cam_w6",
+   "from": {
+    "node": "vc_show_wpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "victory_cam_w7",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "winner"
+   },
+   "to": {
+    "node": "vc_show_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "victory_cam_w8",
+   "from": {
+    "node": "vc_show_view",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vc_show_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "victory_cam_w9",
+   "from": {
+    "node": "vc_show_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "victory_cam_w10",
+   "from": {
+    "node": "vc_show_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vc_show_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "quest_w1",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w2",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w3",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "step"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "quest_w4",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "say"
+   },
+   "to": {
+    "node": "qs_set_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "quest_w5",
+   "from": {
+    "node": "qs_set_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w6",
+   "from": {
+    "node": "qs_set_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_set_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "quest_w7",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "say"
+   },
+   "to": {
+    "node": "qs_set_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "quest_w8",
+   "from": {
+    "node": "qs_set_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w9",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w10",
+   "from": {
+    "node": "qs_set_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "quest_w11",
+   "from": {
+    "node": "qs_set_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w12",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w13",
+   "from": {
+    "node": "qs_set_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w14",
+   "from": {
+    "node": "qs_set_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "qs_set_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w15",
+   "from": {
+    "node": "qs_of_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_of_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w16",
+   "from": {
+    "node": "qs_of_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "quest_w17",
+   "from": {
+    "node": "qs_of_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_not",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "quest_w18",
+   "from": {
+    "node": "qs_of_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w19",
+   "from": {
+    "node": "qs_of_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "step"
+   }
+  },
+  {
+   "id": "quest_w20",
+   "from": {
+    "node": "qs_of_not",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "quest_w21",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w22",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w23",
+   "from": {
+    "node": "qs_done_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w24",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w25",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "reward"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "quest_w26",
+   "from": {
+    "node": "qs_done_money",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "quest_w27",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "quest_w28",
+   "from": {
+    "node": "qs_done_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w219",
+   "from": {
+    "node": "ev1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w220",
+   "from": {
+    "node": "ev2",
+    "pin": "each"
+   },
+   "to": {
+    "node": "ev4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w221",
+   "from": {
+    "node": "ev2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev4",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w222",
+   "from": {
+    "node": "ev3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev4",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "ev_w223",
+   "from": {
+    "node": "ev4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w224",
+   "from": {
+    "node": "ev2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev7",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w225",
+   "from": {
+    "node": "ev5",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev7",
+    "pin": "step"
+   }
+  },
+  {
+   "id": "ev_w226",
+   "from": {
+    "node": "ev6",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev7",
+    "pin": "say"
+   }
+  },
+  {
+   "id": "ev_w227",
+   "from": {
+    "node": "ev2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev8",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w228",
+   "from": {
+    "node": "ev8",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev9",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w229",
+   "from": {
+    "node": "ev8",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev9",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "ev_w230",
+   "from": {
+    "node": "ev9",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev12",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w231",
+   "from": {
+    "node": "ev10",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev12",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w232",
+   "from": {
+    "node": "ev11",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev12",
+    "pin": "label"
+   }
+  },
+  {
+   "id": "ev_w233",
+   "from": {
+    "node": "ev13",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev15",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w234",
+   "from": {
+    "node": "ev13",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev15",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w235",
+   "from": {
+    "node": "ev14",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev15",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w236",
+   "from": {
+    "node": "ev16",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev17",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w237",
+   "from": {
+    "node": "ev16",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev17",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w238",
+   "from": {
+    "node": "ev18",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w239",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "killer"
+   }
+  },
+  {
+   "id": "ev_w240",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev19",
+    "pin": "victim"
+   }
+  },
+  {
+   "id": "ev_w241",
+   "from": {
+    "node": "ev19",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev20",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w242",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev20",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w243",
+   "from": {
+    "node": "ev20",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w244",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "victim"
+   }
+  },
+  {
+   "id": "ev_w245",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "killer"
+   }
+  },
+  {
+   "id": "ev_w246",
+   "from": {
+    "node": "ev21",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w247",
+   "from": {
+    "node": "ev22",
+    "pin": "next"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w248",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w249",
+   "from": {
+    "node": "ev23",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "reward"
+   }
+  },
+  {
+   "id": "ev_w250",
+   "from": {
+    "node": "ev24",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev25",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w251",
+   "from": {
+    "node": "ev18",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev25",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ev_w252",
+   "from": {
+    "node": "ev25",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w253",
+   "from": {
+    "node": "ev18",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev26",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w254",
+   "from": {
+    "node": "ev27",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w255",
+   "from": {
+    "node": "ev27",
+    "pin": "headshot"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w256",
+   "from": {
+    "node": "ev28",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w257",
+   "from": {
+    "node": "ev27",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w258",
+   "from": {
+    "node": "ev29",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev30",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w259",
+   "from": {
+    "node": "ev28",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w260",
+   "from": {
+    "node": "ev27",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w261",
+   "from": {
+    "node": "ev31",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w262",
+   "from": {
+    "node": "ev32",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev33",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "ev_w263",
+   "from": {
+    "node": "ev27",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "ev34",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ev_w264",
+   "from": {
+    "node": "ev33",
+    "pin": "next"
+   },
+   "to": {
+    "node": "ev35",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w265",
+   "from": {
+    "node": "ev34",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev35",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w266",
+   "from": {
+    "node": "ev35",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w267",
+   "from": {
+    "node": "ev27",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w268",
+   "from": {
+    "node": "ev27",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "by"
+   }
+  },
+  {
+   "id": "ev_w269",
+   "from": {
+    "node": "ev36",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w270",
+   "from": {
+    "node": "ev37",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev38",
+    "pin": "dps"
+   }
+  },
+  {
+   "id": "ev_w271",
+   "from": {
+    "node": "ev39",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev40",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w272",
+   "from": {
+    "node": "ev40",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev42",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w273",
+   "from": {
+    "node": "ev40",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev42",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "ev_w274",
+   "from": {
+    "node": "ev41",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev42",
+    "pin": "secs"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "spawn_prot_help",
+   "graph": "sp_give",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Spawn Protection: Wire Player Spawned in. Call End Spawn Protection from Weapon Fired to end it as soon as they shoot. Bots get it too (and don't know they have it)."
+  },
+  {
+   "id": "lives_help",
+   "graph": "lv_lose",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Lives Counter: Wire Round Started into Reset Lives (For Each Player), and Player Killed's victim into Lose a Life; on Out, keep them dead or move them to spectators. Bots count lives like anyone."
+  },
+  {
+   "id": "status_help",
+   "graph": "st_burn",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Burn, Slow and Freeze: Call one from a hit, a trap or an ability. Each ends by itself; Slow puts the speed back to 250. Bots: they keep clear of a burning player while it burns."
+  },
+  {
+   "id": "status_c1",
+   "graph": "st_burn",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Burn uses Set On Fire's own timer; Seconds and Damage a second are its settings (wire them in to change them per call)."
+  },
+  {
+   "id": "kill_streak_help",
+   "graph": "ks_kill",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Kill Streak Announcer: Wire Player Killed in (Killer = attacker, Victim = victim). Streak is the killer's count after this kill. Bots' streaks are announced too."
+  },
+  {
+   "id": "countdown_help",
+   "graph": "cd_run",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Countdown HUD: Wire Round Started (or Freeze Time Ended) in. Label goes before the time (empty: Time left); it stops at 0 and runs Done. Bots don't read it."
+  },
+  {
+   "id": "leaderboard_help",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Leaderboard Display: Save the score with Add To Saved (the same Key) as players earn it, then call this from a say command, a key or the round's end. Bots are on it like anyone; they don't open it."
+  },
+  {
+   "id": "leaderboard_c1",
+   "graph": "lb_show",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Show Leaderboard: the Key is Top Players' setting (kills); change it to the key your mode saves."
+  },
+  {
+   "id": "capture_help",
+   "graph": "cz_make",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Capture Zone: Make Capture Zone at an entity; Point Captured runs when a team takes it (end the round there, or score). The time and size are the Create Component keys inside (time=10, radius=160): change them there. Bots: the zone is a capture goal for every bot."
+  },
+  {
+   "id": "kill_cam_help",
+   "graph": "kc_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Kill Cam: Wire Player Killed in (Victim, Killer). Nothing for a suicide or a fall. Bots get it too (it doesn't change what they do)."
+  },
+  {
+   "id": "victory_cam_help",
+   "graph": "vc_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Victory Camera: Wire it where your mode picks a winner (before End Round). Winner is the player to show. Bots' views move too."
+  },
+  {
+   "id": "quest_help",
+   "graph": "qs_set",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Quest Step Tracker: Set Quest Step when a talk ends (Run Dialog's Last row) or a task is done; Quest Step Of tells where a player is (empty: not started). Quest Done marks the end. Bots never start quests."
+  }
+ ]
+}

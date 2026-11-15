@@ -1,0 +1,14 @@
+/* Made by scripts/gen-reference.mjs: the guides' own bits (with base.css and ref.css). */
+article.guide { padding: 0; max-width: 780px; }
+article.guide h2 { scroll-margin-top: calc(var(--top) + 120px); }
+article.guide h3 { scroll-margin-top: calc(var(--top) + 120px); }
+a.node { color: var(--bone); text-decoration: none; font-weight: 600; box-shadow: inset 0 -1px 0 var(--signal); }
+a.node:hover { color: var(--signal); }
+.chain { background: #23271c; box-shadow: var(--sunken); border-radius: 2px; padding: 9px 12px; margin: 10px 0 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.chain .to { color: var(--signal); font-weight: 700; padding: 0 4px; }
+.chain .pin { display: inline; width: auto; height: auto; border: 0; margin: 0; color: var(--faint); font-size: .92em; }
+.guide .see { margin-top: 34px; }
+.guide .table td, .guide .table th { vertical-align: top; }
+.badge.k-guide { background: #6a5a2f; }
+.guide-soon { opacity: .7; }
+@media (max-width: 860px) { .chain { padding: 8px 10px; } }

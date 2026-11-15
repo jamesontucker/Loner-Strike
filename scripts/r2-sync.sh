@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keeps Loner-Strike's download mirror (Cloudflare R2, dl.lonerstrike.com) in step with the
-# downloads the app pins: Metamod-P, AMX Mod X, our ReGameDLL and ReHLDS, ReAPI,
-# relocalizebugfix (Windows and Linux). Each missing one is fetched from its original,
+# downloads the app pins: Metamod-P, AMX Mod X, our ReGameDLL and ReHLDS, ReAPI
+# (Windows and Linux). Each missing one is fetched from its original,
 # checked against its pinned SHA-256 and uploaded; once all of them are there, files no
 # longer pinned are deleted. The app tries the mirror first and the original after it.
 #

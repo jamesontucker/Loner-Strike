@@ -1,0 +1,209 @@
+{
+  "schema": "loner-strike/mode-kit",
+  "version": 1,
+  "mode": {
+    "id": "laststand",
+    "name": "Last Stand",
+    "description": "Hold the base against waves of creatures"
+  },
+  "source": "hand",
+  "markers": [
+    {
+      "id": "lst_base",
+      "label": "Base",
+      "description": "The room the team holds. Enemies inside it with no defender near overrun it. Without one, the base is a circle round the CT spawns (lst_base_radius).",
+      "type": "area",
+      "required": {
+        "min": 0,
+        "max": 1
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#2e86de",
+        "icon": "flag",
+        "shape": "box",
+        "size": [
+          1024,
+          1024,
+          256
+        ]
+      }
+    },
+    {
+      "id": "lst_shop",
+      "label": "Armory",
+      "description": "Where players press USE for repair kits, armor, grenades and ammo; the shopkeeper stands here. A func_buyzone named lst_shop works too. Without one, the armory is the base.",
+      "type": "point",
+      "required": {
+        "min": 0,
+        "max": 1
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#f39c12",
+        "icon": "star",
+        "shape": "diamond"
+      }
+    },
+    {
+      "id": "lst_hold",
+      "label": "Defender spot",
+      "description": "A raised spot bots like to hold (a firing step, a walkway). Without any, raised floor behind each gate is found by itself.",
+      "type": "point",
+      "required": {
+        "min": 0,
+        "max": 32
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#27ae60",
+        "icon": "person",
+        "shape": "diamond"
+      }
+    },
+    {
+      "id": "lst_perk",
+      "label": "Perk station",
+      "description": "Buy one perk here (lasts until you go down; 4 at most, each dearer). One station per perk; without any, perks are in the armory menu.",
+      "type": "point",
+      "required": {
+        "min": 0,
+        "max": 10
+      },
+      "keys": [
+        {
+          "name": "perk",
+          "type": "choice",
+          "default": "tough",
+          "help": "Which perk this station sells",
+          "choices": [
+            [
+              "tough",
+              "Tough (+50% health)"
+            ],
+            [
+              "hands",
+              "Quick hands (reload/swap)"
+            ],
+            [
+              "doubletap",
+              "Double tap (+25% damage)"
+            ],
+            [
+              "revive",
+              "Quick revive"
+            ],
+            [
+              "feet",
+              "Light feet (+10% speed)"
+            ]
+          ]
+        }
+      ],
+      "draw": {
+        "colour": "#e74c3c",
+        "icon": "heart",
+        "shape": "diamond"
+      }
+    },
+    {
+      "id": "lst_bench",
+      "label": "Upgrade bench",
+      "description": "Upgrade the gun in hand to Mk II, later Mk III. Without one, the armory menu does it.",
+      "type": "point",
+      "required": {
+        "min": 0,
+        "max": 2
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#e67e22",
+        "icon": "star",
+        "shape": "diamond"
+      }
+    },
+    {
+      "id": "lst_trap",
+      "label": "Electric trap",
+      "description": "Pay to switch on for 30 s: hurts creatures in the area hard, players a little. Put it in front of a gate, the area across the way in.",
+      "type": "area",
+      "required": {
+        "min": 0,
+        "max": 8
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#3498db",
+        "icon": "bolt",
+        "shape": "box",
+        "size": [
+          192,
+          192,
+          96
+        ]
+      }
+    },
+    {
+      "id": "lst_box",
+      "label": "Mystery box spot",
+      "description": "Where the mystery box can be (a random gun for a price). It moves between the spots after a few uses; 2-3 spots work best.",
+      "type": "point",
+      "required": {
+        "min": 0,
+        "max": 6
+      },
+      "keys": [],
+      "draw": {
+        "colour": "#9b59b6",
+        "icon": "crate",
+        "shape": "box",
+        "size": [
+          48,
+          32,
+          32
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "classname": "ls_wave_spawner",
+      "min": 1,
+      "max": 16,
+      "note": "Where creatures come in, out of sight of the base. Without one, waves start at the T spawn."
+    },
+    {
+      "classname": "ls_barricade",
+      "min": 0,
+      "max": 12,
+      "note": "Gates: a CLIP brush (or size) with boards=<its boards' name> and label=<gate name> for the gates list."
+    },
+    {
+      "classname": "ls_supply_drop",
+      "min": 0,
+      "max": 8,
+      "note": "Open ground near the base where supply crates land every few waves."
+    },
+    {
+      "classname": "ls_weapon_spawner",
+      "min": 0,
+      "max": 16,
+      "note": "Optional guns lying in or near the base."
+    }
+  ],
+  "creatures": [
+    "zombie",
+    "runner",
+    "brute",
+    "spitter",
+    "boss"
+  ],
+  "map": {
+    "size": "medium",
+    "players": {
+      "min": 1,
+      "max": 16
+    }
+  },
+  "notes": "One base the CTs defend, two to four ways in. Put gates (barricades) on the ways in: bullets pass the gaps between boards, creatures and players don't. Spawners far enough out that a wave takes 10-20 s to arrive. A nav mesh is needed (the bots and creatures walk it). Every CT spawn should be inside  Upgrades: perk stations, an upgrade bench in the armory, a trap at each gate and 2-3 mystery box spots."
+}

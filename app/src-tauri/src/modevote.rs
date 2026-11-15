@@ -21,7 +21,7 @@ use std::path::Path;
 /// The plugin's built-in list, in order (zp5 shows in the vote as "Zombie Plague")
 pub const DEFAULT: &[&str] = &[
     "classic", "csdm", "csdm_ffa", "gungame", "gungame_team", "deathrun", "basebuilder", "soccerjam", "zp5", "scoutz", "war3", "hns",
-    "paintball", "shero",
+    "paintball", "shero", "br", "br_duo", "br_squads",
 ];
 const FILE: &str = "votemodes.ini";
 const SHIPPED: &str = "addons/amxmodx/configs/gamemodes/votemodes.ini";
@@ -135,6 +135,7 @@ async fn api_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<S
     let Some(g) = st.game() else { return bad("No game found.") };
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         let path = g.data.join(FILE);
+        crate::safety::before("Settings", if req.reset { "Reset the mode vote list" } else { "Changed the mode vote list" }, &path);
         if req.reset {
             match std::fs::remove_file(&path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(format!("Couldn't reset the list ({e}).")),

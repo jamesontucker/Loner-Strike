@@ -1,0 +1,2915 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "every_node_ec",
+  "name": "Every Node EC",
+  "description": "Engine coverage nodes and NPC moves"
+ },
+ "variables": [],
+ "nodes": [
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "dmg",
+   "type": "damage.deal",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "amount": 5,
+    "kind": "burn",
+    "zone": "head",
+    "armor": true
+   }
+  },
+  {
+   "id": "pset",
+   "type": "ent.prop_set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "field": "renderfx",
+    "pick": "fx_glowshell"
+   }
+  },
+  {
+   "id": "pcol",
+   "type": "ent.prop_set",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "field": "color",
+    "r": 0,
+    "g": 200,
+    "b": 255
+   }
+  },
+  {
+   "id": "big",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "text": "Go!",
+    "effect": "type",
+    "r": 255,
+    "g": 80,
+    "b": 40
+   }
+  },
+  {
+   "id": "cc",
+   "type": "msg.color_chat",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "tag": "[EC]",
+    "text": "Hi",
+    "color": "team"
+   }
+  },
+  {
+   "id": "cc2",
+   "type": "msg.color_chat",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "tag": "",
+    "text": "Green 100%",
+    "color": "green"
+   }
+  },
+  {
+   "id": "push",
+   "type": "player.push",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "along": "up",
+    "strength": 300
+   }
+  },
+  {
+   "id": "jr",
+   "type": "player.jump_rules",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "air": 2,
+    "bhop": true,
+    "reset_death": true
+   }
+  },
+  {
+   "id": "jra",
+   "type": "player.jump_rules",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "noduck": true,
+    "air": 0,
+    "reset_round": true
+   }
+  },
+  {
+   "id": "radio",
+   "type": "msg.radio",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "line": "go",
+    "to": "all"
+   }
+  },
+  {
+   "id": "radio2",
+   "type": "msg.radio",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "line": "a_terwin",
+    "to": "t",
+    "text": true
+   }
+  },
+  {
+   "id": "motd",
+   "type": "msg.info_window",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "title": "Rules",
+    "text": "Hello [b]you[b][br]Have fun <3 & more"
+   }
+  },
+  {
+   "id": "vo",
+   "type": "player.voice_override",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "how": "hears"
+   }
+  },
+  {
+   "id": "pr1",
+   "type": "debug.print",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {
+    "text": "state",
+    "chat": false
+   }
+  },
+  {
+   "id": "pr2",
+   "type": "debug.print",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "text": "speed",
+    "chat": false
+   }
+  },
+  {
+   "id": "pr3",
+   "type": "debug.print",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "text": "zone",
+    "chat": false
+   }
+  },
+  {
+   "id": "pr4",
+   "type": "debug.print",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {
+    "text": "prop",
+    "chat": false
+   }
+  },
+  {
+   "id": "pr5",
+   "type": "debug.print",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {
+    "text": "color",
+    "chat": false
+   }
+  },
+  {
+   "id": "ms",
+   "type": "player.move_state",
+   "pos": {
+    "x": 3640,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "iz",
+   "type": "player.in_zone",
+   "pos": {
+    "x": 4160,
+    "y": 220
+   },
+   "params": {
+    "zone": "bomb"
+   }
+  },
+  {
+   "id": "pg",
+   "type": "ent.prop_get",
+   "pos": {
+    "x": 4420,
+    "y": 220
+   },
+   "params": {
+    "field": "health"
+   }
+  },
+  {
+   "id": "pg2",
+   "type": "ent.prop_get",
+   "pos": {
+    "x": 4680,
+    "y": 220
+   },
+   "params": {
+    "field": "color"
+   }
+  },
+  {
+   "id": "ms_name",
+   "type": "player.get_name",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "prm0",
+   "type": "debug.print",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "text": "duck",
+    "chat": false
+   }
+  },
+  {
+   "id": "prm1",
+   "type": "debug.print",
+   "pos": {
+    "x": 5200,
+    "y": 0
+   },
+   "params": {
+    "text": "water",
+    "chat": false
+   }
+  },
+  {
+   "id": "prm2",
+   "type": "debug.print",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "text": "level",
+    "chat": false
+   }
+  },
+  {
+   "id": "prm3",
+   "type": "debug.print",
+   "pos": {
+    "x": 5720,
+    "y": 0
+   },
+   "params": {
+    "text": "ladder",
+    "chat": false
+   }
+  },
+  {
+   "id": "mst",
+   "type": "event.map_started",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "noobj",
+   "type": "game.remove_objectives",
+   "pos": {
+    "x": 260,
+    "y": 660
+   },
+   "params": {
+    "buy": false
+   }
+  },
+  {
+   "id": "voice",
+   "type": "game.voice_rules",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {
+    "who": "team_life",
+    "dist": 1500
+   }
+  },
+  {
+   "id": "mt",
+   "type": "game.map_type",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "prt",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 660
+   },
+   "params": {
+    "text": "map",
+    "chat": false
+   }
+  },
+  {
+   "id": "prt0",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 660
+   },
+   "params": {
+    "text": "bomb",
+    "chat": false
+   }
+  },
+  {
+   "id": "prt1",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 660
+   },
+   "params": {
+    "text": "hostage",
+    "chat": false
+   }
+  },
+  {
+   "id": "prt2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 660
+   },
+   "params": {
+    "text": "vip",
+    "chat": false
+   }
+  },
+  {
+   "id": "prt3",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 660
+   },
+   "params": {
+    "text": "escape",
+    "chat": false
+   }
+  },
+  {
+   "id": "v1",
+   "type": "vec.make",
+   "pos": {
+    "x": 2080,
+    "y": 880
+   },
+   "params": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   }
+  },
+  {
+   "id": "v2",
+   "type": "vec.make",
+   "pos": {
+    "x": 2080,
+    "y": 1100
+   },
+   "params": {
+    "x": 128,
+    "y": 0,
+    "z": 0
+   }
+  },
+  {
+   "id": "v3",
+   "type": "vec.make",
+   "pos": {
+    "x": 2080,
+    "y": 1320
+   },
+   "params": {
+    "x": 128,
+    "y": 128,
+    "z": 0
+   }
+  },
+  {
+   "id": "npc",
+   "type": "npc.spawn",
+   "pos": {
+    "x": 2080,
+    "y": 660
+   },
+   "params": {
+    "model": "models/barney.mdl",
+    "name": "Walker"
+   }
+  },
+  {
+   "id": "mv",
+   "type": "npc.move_to",
+   "pos": {
+    "x": 2340,
+    "y": 660
+   },
+   "params": {
+    "speed": "run",
+    "stay": true
+   }
+  },
+  {
+   "id": "arr",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 440
+   },
+   "params": {
+    "text": "arrived",
+    "chat": true
+   }
+  },
+  {
+   "id": "fail",
+   "type": "debug.print",
+   "pos": {
+    "x": 2600,
+    "y": 880
+   },
+   "params": {
+    "text": "failed",
+    "chat": true
+   }
+  },
+  {
+   "id": "mk",
+   "type": "array.make",
+   "pos": {
+    "x": 2600,
+    "y": 1100
+   },
+   "params": {
+    "of": "vector",
+    "count": 2
+   }
+  },
+  {
+   "id": "fp",
+   "type": "npc.follow_path",
+   "pos": {
+    "x": 2860,
+    "y": 440
+   },
+   "params": {
+    "loop": false
+   }
+  },
+  {
+   "id": "atp",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 220
+   },
+   "params": {
+    "text": "at point",
+    "chat": false
+   }
+  },
+  {
+   "id": "fin",
+   "type": "debug.print",
+   "pos": {
+    "x": 3120,
+    "y": 440
+   },
+   "params": {
+    "text": "finished",
+    "chat": true
+   }
+  },
+  {
+   "id": "fp2",
+   "type": "npc.follow_path",
+   "pos": {
+    "x": 3120,
+    "y": 880
+   },
+   "params": {
+    "track": "path1",
+    "loop": true,
+    "speed": "walk"
+   }
+  },
+  {
+   "id": "stop",
+   "type": "npc.stop",
+   "pos": {
+    "x": 3380,
+    "y": 880
+   },
+   "params": {
+    "stay": true
+   }
+  },
+  {
+   "id": "prop",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 2340,
+    "y": 1320
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "solid": false
+   }
+  },
+  {
+   "id": "anim",
+   "type": "ent.play_anim",
+   "pos": {
+    "x": 2600,
+    "y": 1320
+   },
+   "params": {
+    "sequence": "idle",
+    "loop": true,
+    "length": 1.5
+   }
+  },
+  {
+   "id": "att",
+   "type": "ent.attach",
+   "pos": {
+    "x": 2860,
+    "y": 1320
+   },
+   "params": {
+    "point": "origin"
+   }
+  },
+  {
+   "id": "att2",
+   "type": "ent.attach",
+   "pos": {
+    "x": 3120,
+    "y": 1320
+   },
+   "params": {
+    "point": "a0",
+    "on_death": false
+   }
+  },
+  {
+   "id": "det",
+   "type": "ent.detach",
+   "pos": {
+    "x": 3380,
+    "y": 1320
+   },
+   "params": {
+    "fall": true
+   }
+  },
+  {
+   "id": "pset2",
+   "type": "ent.prop_set",
+   "pos": {
+    "x": 3640,
+    "y": 1320
+   },
+   "params": {
+    "field": "scale",
+    "value": 2
+   }
+  },
+  {
+   "id": "gt",
+   "type": "event.grenade_thrown",
+   "pos": {
+    "x": 0,
+    "y": 1760
+   },
+   "params": {
+    "type": "he"
+   }
+  },
+  {
+   "id": "fuse",
+   "type": "ent.grenade_fuse",
+   "pos": {
+    "x": 260,
+    "y": 1760
+   },
+   "params": {
+    "secs": 0.5
+   }
+  },
+  {
+   "id": "gpush",
+   "type": "player.push",
+   "pos": {
+    "x": 520,
+    "y": 1760
+   },
+   "params": {
+    "along": "dir",
+    "strength": 200
+   }
+  },
+  {
+   "id": "gprt",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1760
+   },
+   "params": {
+    "text": "thrown",
+    "chat": false
+   }
+  },
+  {
+   "id": "ge",
+   "type": "event.grenade_exploded",
+   "pos": {
+    "x": 0,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "gprt2",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 1980
+   },
+   "params": {
+    "text": "boom",
+    "chat": false
+   }
+  },
+  {
+   "id": "gpush2",
+   "type": "player.push",
+   "pos": {
+    "x": 520,
+    "y": 1980
+   },
+   "params": {
+    "along": "away",
+    "strength": 400,
+    "lift": 200,
+    "how": "replace"
+   }
+  },
+  {
+   "id": "gprt3",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1980
+   },
+   "params": {
+    "text": "grenade",
+    "chat": false
+   }
+  },
+  {
+   "id": "gprt4",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 1760
+   },
+   "params": {
+    "text": "thrower",
+    "chat": false
+   }
+  },
+  {
+   "id": "mf",
+   "type": "event.map_fired",
+   "pos": {
+    "x": 0,
+    "y": 2420
+   },
+   "params": {
+    "name": ""
+   }
+  },
+  {
+   "id": "mfp",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 2420
+   },
+   "params": {
+    "text": "fired",
+    "chat": false
+   }
+  },
+  {
+   "id": "mfp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 2420
+   },
+   "params": {
+    "text": "by",
+    "chat": false
+   }
+  },
+  {
+   "id": "mfp3",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 2420
+   },
+   "params": {
+    "text": "ent",
+    "chat": false
+   }
+  },
+  {
+   "id": "mfp4",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 2420
+   },
+   "params": {
+    "text": "caller",
+    "chat": false
+   }
+  },
+  {
+   "id": "mf2",
+   "type": "event.map_fired",
+   "pos": {
+    "x": 0,
+    "y": 2640
+   },
+   "params": {
+    "name": "door1"
+   }
+  },
+  {
+   "id": "mf2p",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 2640
+   },
+   "params": {
+    "text": "door1",
+    "chat": false
+   }
+  },
+  {
+   "id": "ws",
+   "type": "event.weapon_switched",
+   "pos": {
+    "x": 0,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "wsp",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 2860
+   },
+   "params": {
+    "text": "new",
+    "chat": false
+   }
+  },
+  {
+   "id": "wsp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 2860
+   },
+   "params": {
+    "text": "old",
+    "chat": false
+   }
+  },
+  {
+   "id": "wsp3",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 2860
+   },
+   "params": {
+    "text": "weapon",
+    "chat": false
+   }
+  },
+  {
+   "id": "wsp4",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 2860
+   },
+   "params": {
+    "text": "who",
+    "chat": false
+   }
+  },
+  {
+   "id": "ze",
+   "type": "event.zone_enter",
+   "pos": {
+    "x": 0,
+    "y": 3080
+   },
+   "params": {
+    "zone": "buy"
+   }
+  },
+  {
+   "id": "zep",
+   "type": "msg.color_chat",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {
+    "tag": "[Zone]",
+    "text": "Buy zone",
+    "color": "blue"
+   }
+  },
+  {
+   "id": "zl",
+   "type": "event.zone_leave",
+   "pos": {
+    "x": 0,
+    "y": 3300
+   },
+   "params": {
+    "zone": "bomb"
+   }
+  },
+  {
+   "id": "zlp",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": 260,
+    "y": 3300
+   },
+   "params": {
+    "text": "Left the site",
+    "x": 0.1,
+    "y": 0.8,
+    "effect": "flicker"
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "rer",
+   "type": "game.round_end_rules",
+   "pos": {
+    "x": 260,
+    "y": 3740
+   },
+   "params": {
+    "rule": "both"
+   }
+  },
+  {
+   "id": "vote",
+   "type": "game.start_vote",
+   "pos": {
+    "x": 520,
+    "y": 3740
+   },
+   "params": {
+    "question": "Weapons?",
+    "count": 3,
+    "o1": "Knives",
+    "o2": "Pistols",
+    "o3": "Rifles",
+    "secs": 10,
+    "bots": true
+   }
+  },
+  {
+   "id": "v_w1",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3520
+   },
+   "params": {
+    "text": "knives won",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_w3",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3740
+   },
+   "params": {
+    "text": "rifles won",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_tie",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3960
+   },
+   "params": {
+    "text": "tie",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_none",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 4180
+   },
+   "params": {
+    "text": "no votes",
+    "chat": true
+   }
+  },
+  {
+   "id": "vc",
+   "type": "game.vote_count",
+   "pos": {
+    "x": 1040,
+    "y": 3520
+   },
+   "params": {
+    "option": 0
+   }
+  },
+  {
+   "id": "bota",
+   "type": "botctl.add",
+   "pos": {
+    "x": 1040,
+    "y": 3740
+   },
+   "params": {
+    "count": 2,
+    "team": "ct",
+    "skill": "2"
+   }
+  },
+  {
+   "id": "botr",
+   "type": "botctl.remove",
+   "pos": {
+    "x": 1300,
+    "y": 3740
+   },
+   "params": {
+    "count": 1,
+    "team": "t"
+   }
+  },
+  {
+   "id": "ps2",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "hf",
+   "type": "player.has_flag",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {
+    "flag": "f"
+   }
+  },
+  {
+   "id": "hfp",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "text": "can change map",
+    "chat": false
+   }
+  },
+  {
+   "id": "ht",
+   "type": "ent.find_all",
+   "pos": {
+    "x": 520,
+    "y": 4620
+   },
+   "params": {
+    "by": "class",
+    "name": "hostage_entity"
+   }
+  },
+  {
+   "id": "hfirst",
+   "type": "array.get",
+   "pos": {
+    "x": 780,
+    "y": 4620
+   },
+   "params": {
+    "of": "entity"
+   }
+  },
+  {
+   "id": "hfol",
+   "type": "hostage.follow",
+   "pos": {
+    "x": 520,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "hif",
+   "type": "hostage.is_following",
+   "pos": {
+    "x": 780,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "hifp",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 4400
+   },
+   "params": {
+    "text": "following",
+    "chat": false
+   }
+  },
+  {
+   "id": "hifp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 4400
+   },
+   "params": {
+    "text": "leader",
+    "chat": false
+   }
+  },
+  {
+   "id": "hstop",
+   "type": "hostage.stop",
+   "pos": {
+    "x": 1300,
+    "y": 4400
+   },
+   "params": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dmg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "dmg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "pset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pcol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "pcol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "big",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "big",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "cc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cc2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "cc2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "push",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "push",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "jr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jra",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "jra",
+    "pin": "then"
+   },
+   "to": {
+    "node": "radio",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "radio",
+    "pin": "then"
+   },
+   "to": {
+    "node": "radio2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "radio2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "motd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "motd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vo",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "vo",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "pr1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "pr2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "pr3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "pr4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "dmg",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "dmg",
+    "pin": "attacker"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pset",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pcol",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "big",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cc",
+    "pin": "of"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "push",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "jr",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "radio",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "radio",
+    "pin": "from"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "motd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vo",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ms",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "ms",
+    "pin": "ground"
+   },
+   "to": {
+    "node": "pr1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ms",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "pr2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "iz",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "iz",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pg",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "pg",
+    "pin": "value"
+   },
+   "to": {
+    "node": "pr4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pg2",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "pg2",
+    "pin": "color"
+   },
+   "to": {
+    "node": "pr5",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ms_name",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ms_name",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cc2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ms",
+    "pin": "vspeed"
+   },
+   "to": {
+    "node": "big",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "pr5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "ms",
+    "pin": "duck"
+   },
+   "to": {
+    "node": "prm0",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "prm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "ms",
+    "pin": "water"
+   },
+   "to": {
+    "node": "prm1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "prm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "ms",
+    "pin": "level"
+   },
+   "to": {
+    "node": "prm2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "prm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prm3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "ms",
+    "pin": "ladder"
+   },
+   "to": {
+    "node": "prm3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "mt",
+    "pin": "type"
+   },
+   "to": {
+    "node": "prt",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "prt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prt0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "mt",
+    "pin": "bomb"
+   },
+   "to": {
+    "node": "prt0",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "prt0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prt1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "mt",
+    "pin": "hostage"
+   },
+   "to": {
+    "node": "prt1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "prt1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prt2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "mt",
+    "pin": "vip"
+   },
+   "to": {
+    "node": "prt2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "prt2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prt3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "mt",
+    "pin": "escape"
+   },
+   "to": {
+    "node": "prt3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "v1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "npc",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mv",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "v2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mv",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "mv",
+    "pin": "arrived"
+   },
+   "to": {
+    "node": "arr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "mv",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "fail",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "v2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mk",
+    "pin": "i0"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "v3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mk",
+    "pin": "i1"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "arr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fp",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "mk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fp",
+    "pin": "points"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "fp",
+    "pin": "point"
+   },
+   "to": {
+    "node": "atp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "fp",
+    "pin": "finished"
+   },
+   "to": {
+    "node": "fin",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "fail",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fp2",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "fp2",
+    "pin": "failed"
+   },
+   "to": {
+    "node": "stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "stop",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "anim",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "att",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "att",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "v2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "att",
+    "pin": "offset"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "att2",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "att2",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "det",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pset2",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "mst",
+    "pin": "then"
+   },
+   "to": {
+    "node": "noobj",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "noobj",
+    "pin": "then"
+   },
+   "to": {
+    "node": "voice",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "voice",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "prt3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "npc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mv",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "mv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "prop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "anim",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "anim",
+    "pin": "then"
+   },
+   "to": {
+    "node": "att",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "att",
+    "pin": "then"
+   },
+   "to": {
+    "node": "att2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "att2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "det",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "det",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pset2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "gt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fuse",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "fuse",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gpush",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "gpush",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gprt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "gt",
+    "pin": "grenade"
+   },
+   "to": {
+    "node": "fuse",
+    "pin": "grenade"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "gt",
+    "pin": "grenade"
+   },
+   "to": {
+    "node": "gpush",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "gt",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "gpush",
+    "pin": "dir"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "gt",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "gprt",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "ge",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gprt2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "gprt2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gpush2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "ge",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "gprt2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "ge",
+    "pin": "player"
+   },
+   "to": {
+    "node": "gpush2",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "ge",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "gpush2",
+    "pin": "point"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "gpush2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gprt3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "ge",
+    "pin": "grenade"
+   },
+   "to": {
+    "node": "gprt3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "gprt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gprt4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "gt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "gprt4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "mf",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mfp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "mfp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mfp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "mfp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mfp3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w116",
+   "from": {
+    "node": "mfp3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mfp4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w117",
+   "from": {
+    "node": "mf",
+    "pin": "name"
+   },
+   "to": {
+    "node": "mfp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w118",
+   "from": {
+    "node": "mf",
+    "pin": "activator"
+   },
+   "to": {
+    "node": "mfp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w119",
+   "from": {
+    "node": "mf",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "mfp3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "mf",
+    "pin": "caller"
+   },
+   "to": {
+    "node": "mfp4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "mf2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mf2p",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w122",
+   "from": {
+    "node": "ws",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wsp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w123",
+   "from": {
+    "node": "wsp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wsp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w124",
+   "from": {
+    "node": "wsp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wsp3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w125",
+   "from": {
+    "node": "wsp3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wsp4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w126",
+   "from": {
+    "node": "ws",
+    "pin": "new"
+   },
+   "to": {
+    "node": "wsp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w127",
+   "from": {
+    "node": "ws",
+    "pin": "old"
+   },
+   "to": {
+    "node": "wsp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w128",
+   "from": {
+    "node": "ws",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "wsp3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w129",
+   "from": {
+    "node": "ws",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wsp4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w130",
+   "from": {
+    "node": "ze",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w131",
+   "from": {
+    "node": "ze",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zep",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w132",
+   "from": {
+    "node": "zl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zlp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w133",
+   "from": {
+    "node": "zl",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zlp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "vote",
+    "pin": "w1"
+   },
+   "to": {
+    "node": "v_w1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "vote",
+    "pin": "w3"
+   },
+   "to": {
+    "node": "v_w3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "vote",
+    "pin": "tie"
+   },
+   "to": {
+    "node": "v_tie",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "vote",
+    "pin": "none"
+   },
+   "to": {
+    "node": "v_none",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "vc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "v_w1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "rer",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vote",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "vote",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bota",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "bota",
+    "pin": "then"
+   },
+   "to": {
+    "node": "botr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "ps2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hfp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hf",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "hf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "hfp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "hfol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hifp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "hifp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hifp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "hifp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hstop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "ht",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfirst",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "hostage"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hif",
+    "pin": "hostage"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "hif",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hifp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "hif",
+    "pin": "leader"
+   },
+   "to": {
+    "node": "hifp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hstop",
+    "pin": "hostage"
+   }
+  }
+ ]
+}

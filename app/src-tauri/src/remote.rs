@@ -282,6 +282,16 @@ fn with_session<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error
     unreachable!()
 }
 
+/// [Caps] What one command may print (a `find` of a big server folder is a few MB).
+const MAX_OUTPUT: u64 = 32 << 20;
+/// [Caps] The biggest file read whole from the machine: a long HLTV demo (a full match is
+/// 50-150 MB; demos.rs scans up to 1 GB).
+pub const MAX_READ: u64 = 1 << 30;
+
+fn too_big_read() -> ssh2::Error {
+    ssh2::Error::new(ssh2::ErrorCode::Session(-7), "That file on the server is over 1 GB, too big to copy here")
+}
+
 /// Runs a shell command; its exit code and output (stderr folded in).
 pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
     with_session(r, |s| {
@@ -290,7 +300,7 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
         ch.exec(&format!("{cmd} 2>&1"))?;
         // console text is Latin-1 (accented player names): bytes, not UTF-8
         let mut out = Vec::new();
-        let _ = ch.read_to_end(&mut out);
+        let _ = (&mut ch).take(MAX_OUTPUT).read_to_end(&mut out); // [Caps]
         ch.wait_close()?;
         Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
     })
@@ -313,7 +323,7 @@ pub fn exec_quick_for(r: &RemoteInfo, cmd: &str, secs: u32) -> Result<(i32, Stri
         // from here the command has run: never again on a retry (a kick or a ban twice)
         started.set(true);
         let mut out = Vec::new();
-        let _ = ch.read_to_end(&mut out);
+        let _ = (&mut ch).take(MAX_OUTPUT).read_to_end(&mut out); // [Caps]
         ch.wait_close()?;
         Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
     })
@@ -331,7 +341,10 @@ pub fn read_file_opt(r: &RemoteInfo, path: &str) -> Result<Option<Vec<u8>>, Stri
             Err(e) => return Err(e),
         };
         let mut v = Vec::new();
-        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        (&mut f).take(MAX_READ + 1).read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        if v.len() as u64 > MAX_READ {
+            return Err(too_big_read()); // [Caps]
+        }
         Ok(Some(v))
     })
 }
@@ -497,8 +510,30 @@ pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
         let mut f = sftp.open(Path::new(path))?;
         let mut v = Vec::new();
         // a read cut off part way is an error, not a shorter file
-        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        (&mut f).take(MAX_READ + 1).read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        if v.len() as u64 > MAX_READ {
+            return Err(too_big_read()); // [Caps]
+        }
         Ok(v)
+    })
+}
+
+/// W2 (fastdl.rs): `rel` under `root` is a plain file and no part of the way there is a link
+/// (SFTP lstat on each part), so a read of it can't be sent outside the folder.
+pub fn plain_file_under(r: &RemoteInfo, root: &str, rel: &str) -> Result<bool, String> {
+    with_session(r, |s| {
+        let sftp = s.sftp()?;
+        let parts: Vec<&str> = rel.split('/').collect();
+        let mut p = root.trim_end_matches('/').to_string();
+        for (i, part) in parts.iter().enumerate() {
+            p = format!("{p}/{part}");
+            let ft = sftp.lstat(Path::new(&p))?.file_type();
+            let last = i + 1 == parts.len();
+            if ft.is_symlink() || (last && !ft.is_file()) || (!last && !ft.is_dir()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     })
 }
 
@@ -856,15 +891,15 @@ fetch "$RH_URL" rh.zip "$RH_SHA"; unzip -o -q "$TMP/rh.zip" "bin/linux32/*" -d "
 done
 cp -rf "$TMP/rh/bin/linux32/." "$SRV/"
 chmod +x "$SRV/hlds_linux" "$SRV/hltv" 2>/dev/null || true
-# ReAPI for plugins, relocalizebugfix (names and chat that crash other players' games)
+# ReAPI for plugins
 fetch "$REAPI_URL" reapi.zip "$REAPI_SHA"; unzip -o -q "$TMP/reapi.zip" "addons/amxmodx/modules/reapi_amxx_i386.so" -d .
-fetch "$RLB_URL" rlb.zip "$RLB_SHA"; unzip -o -q "$TMP/rlb.zip" "addons/relocalizebugfix/relocalizebugfix_mm_i386.so" -d .
 mkdir -p addons/metamod
-# (lines added if missing: other Metamod plugins the owner put in stay)
+# (the line added if missing: other Metamod plugins the owner put in stay)
 touch addons/metamod/plugins.ini
-for p in addons/amxmodx/dlls/amxmodx_mm_i386.so addons/relocalizebugfix/relocalizebugfix_mm_i386.so; do
-  grep -qF "$p" addons/metamod/plugins.ini || printf 'linux %s\n' "$p" >> addons/metamod/plugins.ini
-done
+grep -qF addons/amxmodx/dlls/amxmodx_mm_i386.so addons/metamod/plugins.ini || printf 'linux %s\n' addons/amxmodx/dlls/amxmodx_mm_i386.so >> addons/metamod/plugins.ini
+# relocalizebugfix, which earlier versions put in, never loads on ReHLDS API 3 ("fail" in meta
+# list): out. The bot brain does its job ('#' in chat, '%' and '#' in names)
+sed -i '/relocalizebugfix/Id' addons/metamod/plugins.ini; rm -rf addons/relocalizebugfix
 if grep -q '^gamedll_linux' liblist.gam; then sed -i 's|^gamedll_linux.*|gamedll_linux "addons/metamod/dlls/metamod.so"|' liblist.gam
 else echo 'gamedll_linux "addons/metamod/dlls/metamod.so"' >> liblist.gam; fi
 rm -rf "$TMP"
@@ -885,8 +920,6 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
     ("RH_SHA", crate::setup::foundation::REHLDS.sha256),
     ("REAPI_URL", crate::setup::foundation::REAPI.url),
     ("REAPI_SHA", crate::setup::foundation::REAPI.sha256),
-    ("RLB_URL", crate::setup::foundation::RELOCALIZEBUGFIX.url),
-    ("RLB_SHA", crate::setup::foundation::RELOCALIZEBUGFIX.sha256),
     ("MIRROR", crate::setup::fetch::MIRROR),
 ];
 
@@ -944,8 +977,12 @@ fn watch_address(args: &[String]) -> String {
 }
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
-pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
+/// `list`: the address the Loner-Strike server list knows the server by (its public one): after
+/// every start the unit puts it back on the list (lsregister), when its friends.cfg says ls_list
+/// 1, so a restart on the machine (a reboot, a crash, lsctl) never leaves it off. Empty: none.
+pub fn service_sh(id: &str, game: &str, args: &[String], list: &str) -> String {
     let unit = unit(id);
+    let list_line = if list.is_empty() { String::new() } else { format!("ExecStartPost=-/usr/local/bin/lsregister {} $SRV/{game}\n", shell_quote(list)) };
     let dir = server_dir(id);
     // the game's port, for the watchdog to knock on
     let port = args.iter().position(|a| a == "-port").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u16>().ok()).unwrap_or(27015);
@@ -986,7 +1023,13 @@ Wants=network-online.target
 User=$(whoami)
 WorkingDirectory=$SRV
 Environment=LD_LIBRARY_PATH=$SRV
-ExecStart=$SRV/hlds_linux {args}
+# the fixed Ham Sandwich (the official one corrupts memory at map changes, see ensure_ham):
+# put back from the machine's copy before every start, whoever starts it (the app, lsctl, a
+# restart after a crash), if anything replaced it ($$: systemd's own escape for a shell variable)
+ExecStartPre=-/bin/sh -c 'f="$HOME/loner-strike/bin/hamsandwich_fixed_i386.so"; m="$SRV/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so"; if [ -f "\$\$f" ] && [ -f "\$\$m" ] && ! cmp -s "\$\$f" "\$\$m"; then cp "\$\$f" "\$\$m.new" && mv -f "\$\$m.new" "\$\$m"; fi'
+ExecStartPre=-/usr/local/bin/lscrashinfo start $SRV {game} {unit}
+ExecStopPost=-/usr/local/bin/lscrashinfo stop $SRV {game} {unit}
+{list_line}ExecStart=$SRV/hlds_linux {args}
 Restart=always
 RestartSec=5
 {sandbox}
@@ -1088,6 +1131,167 @@ while True:
     time.sleep(EVERY)
 LSWATCH
 sudo chmod 755 /usr/local/bin/lswatchdog
+sudo tee /usr/local/bin/lscrashinfo >/dev/null <<'LSCRASH'
+#!/usr/bin/env python3
+# lscrashinfo start|stop <server folder> <game> <unit>: the server's crash records, for the app
+# (crashes.rs) and the status service. start (ExecStartPre): crashes/modules.json, the modules
+# and whether Ham Sandwich is the fixed one. stop (ExecStopPost): when the game ended any way
+# but a clean exit, crashes/<UTC time>-<pid>.json with the map, the last log lines and the
+# game DLL's ls_crash.log entry (stack, marks); the newest 100 are kept.
+import glob, hashlib, json, os, subprocess, sys, time
+cmd, srv, game, unit = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+g = os.path.join(srv, game)
+out = os.path.join(g, "crashes")
+os.makedirs(out, exist_ok=True)
+HAM_FIXED = "HAMSHA_FIXED"
+HAM_OFFICIAL = ("d6197ed086b8c7ba92fff623ae399f7f0139e957c3ac9b37e061e982573256b6",)
+SIGNAMES = dict(zip(["11", "6", "7", "8", "4"], ["SEGV", "ABRT", "BUS", "FPE", "ILL"]))
+def sha(p):
+    try:
+        with open(p, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return ""
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+if cmd == "start":
+    mods = []
+    paths = glob.glob(os.path.join(g, "addons/amxmodx/modules/*.so")) + glob.glob(os.path.join(g, "addons/amxmodx/dlls/*.so")) + glob.glob(os.path.join(g, "dlls/*.so"))
+    for p in sorted(paths):
+        rel = os.path.relpath(p, g)
+        h = sha(p)
+        name = os.path.basename(p).split("_amxx")[0].split("_mm")[0].split(".")[0]
+        verdict, why = "unknown", ""
+        if name == "hamsandwich":
+            if h == HAM_FIXED:
+                verdict, why = "ok", "the fixed Ham Sandwich"
+            elif h in HAM_OFFICIAL:
+                verdict, why = "bad", "the official Ham Sandwich: it corrupts memory at map changes (the server crashes after a map vote)"
+            else:
+                why = "a Ham Sandwich the app doesn't know"
+        mods.append(dict(file=rel, name=name, sha256=h, verdict=verdict, why=why))
+    with open(os.path.join(out, "modules.json"), "w") as f:
+        json.dump(dict(schema="loner-strike/modules", version=1, time=now_iso(), modules=mods), f)
+    with open(os.path.join(out, ".started"), "w") as f:
+        f.write(str(time.time()))
+    sys.exit(0)
+result = os.environ.get("SERVICE_RESULT", "")
+code = os.environ.get("EXIT_CODE", "")
+status = os.environ.get("EXIT_STATUS", "")
+if result == "success" and code == "exited":
+    sys.exit(0)
+try:
+    jobs = subprocess.run(["systemctl", "list-jobs", "--no-legend", unit], capture_output=True, text=True).stdout.split()
+except OSError:
+    jobs = []
+at_stop = "stop" in jobs or "restart" in jobs or status == "TERM"
+kind = "hang" if status == "KILL" else ("abort" if status == "ABRT" else "crash")
+try:
+    with open(os.path.join(out, ".started")) as f:
+        started = float(f.read().strip())
+except (OSError, ValueError):
+    started = 0.0
+lines = []
+try:
+    with open(os.path.join(g, "qconsole.log"), "rb") as f:
+        f.seek(0, 2)
+        f.seek(max(0, f.tell() - 65536))
+        lines = f.read().decode("latin-1", "replace").splitlines()
+except OSError:
+    pass
+mp = ""
+for l in reversed(lines):
+    if "Mapchange to " in l:
+        mp = l.split("Mapchange to ", 1)[1].split()[0]
+        break
+mode = ""
+try:
+    with open(os.path.join(g, "addons/amxmodx/data/gamemodes/current.txt")) as f:
+        mode = f.read().strip()
+except OSError:
+    pass
+entry, stack, marks, fault, addr, module, offset = "", [], [], status, "", "", ""
+crashlog = os.path.join(g, "ls_crash.log")
+try:
+    if time.time() - os.path.getmtime(crashlog) < 300:
+        with open(crashlog, "r", errors="replace") as f:
+            parts = [p for p in f.read().split("\n\n") if p.strip()]
+        if parts:
+            entry = parts[-1]
+            sec = ""
+            for l in entry.splitlines():
+                t = l.strip()
+                if t.startswith("signal "):
+                    w = t.split()
+                    fault = "SIG" + SIGNAMES.get(w[1], w[1])
+                    addr = w[3] if len(w) > 3 else ""
+                elif t.startswith("where:"):
+                    module = t.split()[1].rsplit("/", 1)[-1]
+                    if "+0x" in t:
+                        offset = "0x" + t.split("+0x", 1)[1].split(")")[0]
+                elif t.startswith("stack"):
+                    sec = "stack"
+                elif t.startswith("last marks"):
+                    sec = "marks"
+                elif sec == "stack" and t:
+                    stack.append(t.rsplit("/", 1)[-1])
+                elif sec == "marks" and t and not t.startswith("("):
+                    marks.append(t)
+except OSError:
+    pass
+stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+pid = os.environ.get("MAINPID", "0")
+files = dict()
+if entry:
+    name = "ls_crash." + stamp + ".log"
+    with open(os.path.join(out, name), "w") as f:
+        f.write(entry + "\n")
+    files["crashLog"] = name
+rec = dict(schema="loner-strike/crash", version=1, time=now_iso(), map=mp, mode=mode,
+           uptimeSec=int(time.time() - started) if started else None, mapSec=None, players=None, bots=None,
+           kind=kind, fault=fault, address=addr, module=module, offset=offset,
+           stack=stack[:64], marks=marks[-50:], lastLines=lines[-40:], atStop=at_stop,
+           result=result, exitCode=code, exitStatus=status, files=files)
+with open(os.path.join(out, stamp + "-" + pid + ".json"), "w") as f:
+    json.dump(rec, f)
+for old in sorted(glob.glob(os.path.join(out, "2*.json")))[:-100]:
+    try:
+        os.remove(old)
+    except OSError:
+        pass
+LSCRASH
+sudo sed -i "s/HAMSHA_FIXED/{ham_sha}/" /usr/local/bin/lscrashinfo
+sudo chmod 755 /usr/local/bin/lscrashinfo
+sudo tee /usr/local/bin/lsregister >/dev/null <<'LSREG'
+#!/usr/bin/env python3
+# lsregister <address> <game folder>: after a start (the unit's ExecStartPost), puts the server
+# back on the Loner-Strike server list, when its friends.cfg says ls_list 1. Returns at once and
+# asks in the background while the map loads (the list checks the server itself). It names itself:
+# Cloudflare in front of the list turns away Python's default User-Agent (HTTP 403).
+import json, os, sys, time, urllib.request
+addr, game = sys.argv[1], sys.argv[2]
+try:
+    with open(os.path.join(game, "addons/amxmodx/data/gamemodes/friends.cfg"), encoding="latin-1") as f:
+        listed = any(line.split()[:2] == ["ls_list", "1"] for line in f)
+except OSError:
+    listed = False
+if not listed or os.fork():
+    sys.exit(0)
+os.setsid()
+time.sleep(45)
+for _ in range(10):
+    try:
+        req = urllib.request.Request("https://list.lonerstrike.com/register", data=json.dumps(dict(address=addr)).encode(), headers=dict([("Content-Type", "application/json"), ("User-Agent", "LonerStrike-lsregister/1")]))
+        with urllib.request.urlopen(req, timeout=20) as r:
+            if json.load(r).get("ok"):
+                print("lsregister: %s is on the Loner-Strike server list" % addr, flush=True)
+                sys.exit(0)
+    except Exception:
+        pass
+    time.sleep(30)
+print("lsregister: %s couldn't be put on the list (the app asks again when it sees it running)" % addr, flush=True)
+LSREG
+sudo chmod 755 /usr/local/bin/lsregister
 sudo tee /etc/systemd/system/{unit}-watchdog.service >/dev/null <<EOF
 [Unit]
 Description=Loner-Strike server {id} watchdog (starts it again if it freezes)
@@ -1109,13 +1313,14 @@ echo "@@STEP ready"
 "#,
         sandbox = SANDBOX,
         sandbox_paths = SANDBOX_PATHS,
-        rev = SERVICE_REV
+        rev = SERVICE_REV,
+        ham_sha = HAM_LINUX_SHA
     )
 }
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 6";
+pub const SERVICE_REV: &str = "loner-strike unit 9";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).
@@ -1332,7 +1537,15 @@ pub fn game_file(g: &crate::game::Game, rel: &str) -> Result<Option<Vec<u8>>, St
 /// server there), and keeps this computer's copy the same.
 pub fn put_game_file(g: &crate::game::Game, rel: &str, data: &[u8]) -> Result<(), String> {
     if let Some((r, dir)) = &g.remote {
-        write_file(r, &format!("{dir}/{rel}"), data)?;
+        let path = format!("{dir}/{rel}");
+        // (its folder may not be there yet: data/studio_settings before a mode's first save)
+        if let Some((parent, _)) = path.rsplit_once('/') {
+            let (code, out) = exec_quick(r, &format!("mkdir -p {}", shell_quote(parent)))?;
+            if code != 0 {
+                return Err(format!("Couldn't make the server's folder for {rel} ({}).", out.trim()));
+            }
+        }
+        write_file(r, &path, data)?;
     }
     let p = g.dir.join(rel);
     if let Some(d) = p.parent() {
@@ -1376,6 +1589,17 @@ const HAM_LINUX_SHA: &str = "dd398607f0dd15d22493dce920eb59f5bc62d5f6710205bff8b
 /// (or AMX Mod X isn't). Sent beside the old one and renamed over it, so a server running
 /// now keeps the copy it loaded; the fixed one loads from the next start. Whether it was sent.
 pub fn ensure_ham(r: &RemoteInfo, id: &str, game: &str) -> Result<bool, String> {
+    // the machine's own copy, which the unit puts back before every start (ExecStartPre)
+    let keep = "loner-strike/bin/hamsandwich_fixed_i386.so";
+    let (_, out) = exec_quick(r, &format!("cd \"$HOME\" && if [ -f {keep} ]; then sha256sum {keep} | cut -c1-64; else echo none; fi"))?;
+    if out.trim() != HAM_LINUX_SHA {
+        let (_, _) = exec_quick(r, "mkdir -p \"$HOME/loner-strike/bin\"")?;
+        write_file(r, &format!("{keep}.new"), HAM_LINUX)?;
+        let (code, out) = exec_quick(r, &format!("cd \"$HOME\" && mv -f {keep}.new {keep}"))?;
+        if code != 0 {
+            return Err(format!("Couldn't keep a copy of the fixed Ham Sandwich ({}).", out.trim()));
+        }
+    }
     let rel = format!("{}/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so", server_dir(id));
     let q = shell_quote(&rel);
     let (_, out) = exec_quick(r, &format!("cd \"$HOME\" && if [ -f {q} ]; then sha256sum {q} | cut -c1-64; else echo none; fi"))?;
@@ -1471,7 +1695,11 @@ mod tests {
         assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()], "play.example.com:27016");
+        // W2: back on the server list after every start (lsregister, when friends.cfg says so)
+        assert!(svc.contains("ExecStartPost=-/usr/local/bin/lsregister 'play.example.com:27016' $SRV/cstrike\nExecStart="), "{svc}");
+        assert!(svc.contains("sudo tee /usr/local/bin/lsregister") && svc.contains("[\"ls_list\", \"1\"]") && svc.contains("os.fork()") && svc.contains("(\"User-Agent\", \"LonerStrike-lsregister/1\")"), "named, or Cloudflare refuses it");
+        assert!(!service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "").contains("ExecStartPost=-/usr/local/bin/lsregister"), "no address: no line");
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x") && svc.contains("print(f\"{unit} hasn't"));
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
         // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
@@ -1488,7 +1716,7 @@ mod tests {
         assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+maxplayers", "20"])), "10.0.0.5");
         assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+ip", "192.168.1.9"])), "192.168.1.9");
         assert_eq!(watch_address(&a(&["+ip", "not;an ip"])), "127.0.0.1");
-        let svc = service_sh("x", "cstrike", &a(&["-game", "cstrike", "-port", "27016", "+ip", "10.0.0.5"]));
+        let svc = service_sh("x", "cstrike", &a(&["-game", "cstrike", "-port", "27016", "+ip", "10.0.0.5"]), "");
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x 10.0.0.5\n"));
     }
 
@@ -1497,7 +1725,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn lsctl_lists_only_servers() {
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "");
         let line = svc.lines().find(|l| l.starts_with("units() {")).unwrap();
         let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "units-").unwrap();
         let unit = |name: &str, exec: &str| std::fs::write(dir.join(format!("{name}.service")), format!("[Service]\nExecStart={exec}\n")).unwrap();
@@ -1519,7 +1747,7 @@ mod tests {
     #[cfg(unix)]
     fn scripts_parse() {
         use std::io::Write;
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "");
         for sh in [SETUP_SH.to_string(), svc] {
             let mut p = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
             p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();

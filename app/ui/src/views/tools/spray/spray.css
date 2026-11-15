@@ -1,0 +1,215 @@
+/* The spray composer (views/tools/spray). The plaster wall is drawn in CSS, so the preview
+   needs no game files; the sandstone and crate walls are the game's own textures. */
+.spray-wall {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: clamp(220px, 40vh, 360px);
+  border-radius: 2px;
+  box-shadow: var(--sunken);
+  overflow: hidden;
+  background-color: #8a7d68;
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 245, 220, .16), transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgba(0, 0, 0, .28), transparent 55%),
+    linear-gradient(rgba(60, 50, 38, .55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(60, 50, 38, .55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(60, 50, 38, .55) 2px, transparent 2px),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, .025) 0 2px, rgba(0, 0, 0, .03) 2px 4px);
+  background-size: 100% 100%, 100% 100%, 64px 32px, 64px 64px, 64px 64px, 6px 6px;
+  background-position: 0 0, 0 0, 0 0, 0 0, 32px 32px, 0 0;
+}
+.spray-wall.small { min-height: 0; width: 160px; height: 120px; flex: none; }
+.spray-wall.small .spray-img { max-width: 140px; max-height: 104px; width: auto; height: auto; }
+/* drawn exactly as the game does (checked in CS 1.6 and CZ, docs/notes/P10.md): plain alpha over the wall.
+   Full color: every pixel solid or clear. One color: the pixel's value is how much paint covers the wall. */
+.spray-img { display: block; max-width: 100%; height: auto; }
+.spray-empty { max-width: 32ch; text-align: center; color: #f2ecdf; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); padding: 24px; }
+.spray-busy { position: absolute; top: 10px; right: 10px; }
+.spray-caption { margin-top: 12px; flex-wrap: wrap; }
+.spray-caption .muted { min-width: 0; overflow-wrap: anywhere; }
+.spray-colour { width: 56px; height: 32px; padding: 0; border: 0; background: none; cursor: pointer; }
+.spray-actions { margin-top: 14px; }
+.spray-options h3 { margin-bottom: 6px; }
+.spray-done { margin: 12px 0 0; color: var(--ok); font-weight: 600; }
+.spray-done .muted { font-weight: 500; }
+.spray-now { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.spray-now-game { display: flex; gap: 14px; align-items: flex-start; }
+.spray-now-game p { margin: 4px 0 8px; font-size: 14px; }
+
+/* ---- the composer ---------------------------------------------------------------------- */
+.sc-page { container-type: inline-size; display: grid; gap: 14px; }
+.sc-page h3 { margin: 0; }
+.sc-page h4 { margin: 10px 0 2px; font-size: 13px; color: var(--bone-faint); text-transform: uppercase; letter-spacing: .05em; }
+.sc-hint { margin: 8px 0 0; font-size: 13px; }
+.sc-bar { gap: 8px 12px; }
+.sc-name .search { width: 220px; max-width: 40vw; font-weight: 700; }
+.sc-page .push { margin-left: auto; }
+
+/* three columns when there's room: add + layers | canvas | settings */
+.sc-grid { display: grid; gap: 14px; align-items: start; grid-template-columns: minmax(0, 1fr); }
+.sc-left, .sc-right { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.sc-centre { min-width: 0; }
+/* one column (a small window): the canvas first, then Add and Layers, then settings */
+.sc-centre { order: -1; }
+@container (min-width: 640px) {
+  .sc-grid { grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); grid-template-areas: "centre right" "left right"; }
+  .sc-centre { grid-area: centre; }
+  /* settings stay in sight while you add or pick layers in the list under the canvas */
+  .sc-right { grid-area: right; position: sticky; top: 0; max-height: calc(100dvh - 96px); overflow-y: auto; overscroll-behavior: contain; }
+  .sc-left { grid-area: left; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@container (min-width: 1060px) {
+  .sc-grid { grid-template-columns: 240px minmax(0, 1fr) 300px; grid-template-areas: "left centre right"; }
+  .sc-left { grid-template-columns: minmax(0, 1fr); }
+  .sc-centre { position: sticky; top: 0; }
+}
+
+.sc-stage-panel { display: grid; justify-items: center; }
+.sc-stage { position: relative; width: 100%; max-width: min(560px, 62vh); border-radius: 2px; box-shadow: var(--sunken); overflow: hidden; touch-action: none; }
+/* a short window: a smaller canvas, so it fits on the first screen with the bars */
+@media (max-height: 700px) { .sc-stage { max-width: min(560px, 48vh); } }
+.sc-stage.clear {
+  background-color: #6d6d6d;
+  background-image: linear-gradient(45deg, #8a8a8a 25%, transparent 25%, transparent 75%, #8a8a8a 75%), linear-gradient(45deg, #8a8a8a 25%, transparent 25%, transparent 75%, #8a8a8a 75%);
+  background-size: 24px 24px; background-position: 0 0, 12px 12px;
+}
+.sc-stage canvas, .sc-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sc-stage svg { cursor: default; }
+.sc-box polygon { fill: none; stroke: var(--signal); }
+.sc-box line { stroke: var(--signal); }
+.sc-handle { fill: #fff; stroke: #222; cursor: nwse-resize; }
+.sc-knob { fill: var(--signal); stroke: #222; cursor: grab; }
+.sc-guide { stroke: #ff3cc8; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+
+.sc-add { display: grid; gap: 10px; }
+.sc-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.sc-add-row .btn { flex: 1 1 auto; }
+.sc-stickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.sc-stickers.small { grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); }
+.sc-sticker { display: grid; place-items: center; aspect-ratio: 1; padding: 2px; border: 0; border-radius: 3px; background: var(--bg); box-shadow: var(--sunken); cursor: pointer; }
+.sc-sticker:hover { background: var(--panel-2); }
+.sc-sticker[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--signal); }
+.sc-sticker:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+
+.sc-layers { display: grid; gap: 8px; }
+.sc-layers-head, .sc-insp-head, .sc-game-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sc-none { margin: 0; font-size: 14px; }
+.sc-layer-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 320px; overflow: auto; }
+.sc-layer { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 2px; cursor: pointer; background: var(--bg); }
+.sc-layer:hover { background: var(--panel-2); }
+.sc-layer.on { box-shadow: inset 0 0 0 2px var(--signal); background: var(--panel-2); }
+.sc-layer.hidden .sc-layer-name { opacity: .5; text-decoration: line-through; }
+.sc-kind { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 2px; background: #2a2f25; font-weight: 800; font-size: 13px; overflow: hidden; }
+.sc-kind img { max-width: 100%; max-height: 100%; }
+.sc-layer-name { min-width: 0; display: grid; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; font-size: 14px; }
+.sc-layer-name small { font-weight: 500; font-size: 12px; }
+.sc-icon-btn { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 2px; background: none; color: var(--bone-faint); cursor: pointer; }
+.sc-icon-btn:hover { color: var(--bone); background: var(--panel); }
+.sc-icon-btn[aria-pressed="true"] { color: var(--signal); }
+.sc-layer-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* the picked layer: a name row, then Place and the layer's own look, one row per setting */
+.sc-inspector { display: grid; gap: 4px; align-content: start; }
+.sc-insp-head { margin-bottom: 4px; }
+.sc-section { display: grid; gap: 4px; padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--bevel-lo); }
+.sc-section h4 { margin: 0 0 2px; }
+.sc-field { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 4px 10px; align-items: center; min-height: 30px; }
+.sc-field.wide { grid-template-columns: minmax(0, 1fr); }
+.sc-field-name { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--bone-dim); min-width: 0; }
+.sc-current { font-size: 13px; }
+.sc-field-control { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.sc-field-control > .search, .sc-field-control > select, .sc-field-control > .sc-slider, .sc-field-control > .sc-grow { flex: 1 1 auto; width: 100%; max-width: none; }
+.sc-text { width: 100%; resize: vertical; font: inherit; }
+.sc-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sc-grow { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
+.sc-grow > select, .sc-grow > .sc-slider { flex: 1 1 0; min-width: 0; }
+.sc-slider { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sc-slider input[type="range"] { flex: 1 1 60px; min-width: 24px; }
+.sc-num { flex: none; position: relative; display: inline-flex; }
+.sc-num .search { width: 64px; min-width: 0; padding: 3px 18px 3px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+.sc-num .search::-webkit-inner-spin-button, .sc-num .search::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.sc-num .search { -moz-appearance: textfield; appearance: textfield; }
+.sc-unit { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--bone-faint); pointer-events: none; }
+.sc-colour { flex: none; width: 34px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+.sc-ibtn { display: inline-grid; place-items: center; width: 30px; height: 28px; padding: 0; }
+.sc-sep { width: 1px; height: 20px; background: var(--bevel-lo); margin: 0 2px; }
+.sc-page .btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--signal); color: var(--signal); }
+.sc-stickers.picker { width: 100%; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); }
+.sc-stickers.picker .sc-sticker { padding: 3px; }
+.sc-tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--bone-dim); }
+
+/* the canvas bar: undo, shape, background, snap */
+.sc-canvas-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; margin-bottom: 10px; }
+.sc-canvas-bar .seg button { padding-left: 10px; padding-right: 10px; }
+.sc-canvas-bar .sc-snap { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; height: 28px; }
+.sc-bar-group { display: inline-flex; align-items: center; gap: 4px; }
+.sc-bar-note { font-size: 13px; }
+
+.sc-game { display: grid; gap: 12px; }
+.sc-facts { display: inline-flex; gap: 6px; margin-left: 4px; }
+.sc-game-body { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@container (min-width: 900px) { .sc-game-body { grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr); } }
+.sc-preview { display: grid; gap: 8px; min-width: 0; }
+.sc-preview-bar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.sc-views { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.sc-views > .sc-wall { flex: 1 1 auto; min-width: 0; }
+.sc-view { margin: 0; display: grid; gap: 4px; justify-items: center; flex: none; }
+.sc-view figcaption { font-size: 13px; }
+.sc-wall { min-height: 300px; max-height: 420px; overflow: auto; }
+.sc-wall.tex { background-repeat: repeat; image-rendering: pixelated; }
+.sc-pixel { image-rendering: pixelated; image-rendering: crisp-edges; max-width: none; }
+.sc-actual { display: grid; place-items: center; width: 140px; height: 140px; background: #8a7d68; box-shadow: var(--sunken); border-radius: 2px; }
+.sc-options { display: grid; gap: 6px; align-content: start; padding: 10px 14px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.sc-options h4 { margin: 0 0 4px; }
+.sc-options .sc-field { grid-template-columns: 116px minmax(0, 1fr); }
+.sc-options .sc-field-control { flex-direction: column; align-items: flex-start; }
+.sc-options .sc-field-control.sc-inline, .sc-options .sc-field-control:has(> .switch) { flex-direction: row; align-items: center; }
+.sc-options small { font-size: 13px; }
+@container (max-width: 560px) { .sc-views { flex-direction: column; } .sc-views > .sc-wall { width: 100%; } .sc-field, .sc-options .sc-field { grid-template-columns: minmax(0, 1fr); } }
+
+/* "Start a spray" (StartFrom.tsx, in the tools' EditorDialog): one card size, four to a row */
+.sc-start { gap: 18px; }
+.sc-start-section { display: grid; gap: 10px; min-width: 0; }
+.sc-start-section + .sc-start-section { padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.sc-start-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sc-start-head h3 { margin: 0; font: 600 13px/1.3 var(--text); text-transform: uppercase; letter-spacing: .05em; color: var(--bone-dim); }
+.sc-start-head .muted { font-size: 13px; }
+.sc-start-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 620px) { .sc-start-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sc-start-card { position: relative; min-width: 0; display: flex; }
+.sc-start-open { flex: 1; min-width: 0; display: grid; grid-template-rows: auto 1fr; gap: 8px; padding: 8px 8px 10px; border: 0; border-radius: 4px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone); font: inherit; text-align: left; cursor: pointer; transition: background .12s, box-shadow .12s; }
+.sc-start-open:hover { background: var(--panel-2); }
+.sc-start-open:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sc-start-card.on .sc-start-open { box-shadow: inset 0 0 0 2px var(--signal); }
+/* the picture on a bit of plaster wall, as it would be sprayed */
+.sc-start-pic { display: grid; place-items: center; aspect-ratio: 1; border-radius: 3px; overflow: hidden; background-color: #8a7d68;
+  background-image: radial-gradient(ellipse at 30% 20%, rgba(255, 245, 220, .16), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(0, 0, 0, .28), transparent 55%), repeating-linear-gradient(45deg, rgba(255, 255, 255, .025) 0 2px, rgba(0, 0, 0, .03) 2px 4px); }
+.sc-start-pic img { width: 84%; height: 84%; object-fit: contain; display: block; }
+.sc-start-pic.blank { background: transparent; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14); color: var(--bone-dim); font-size: 40px; font-weight: 300; }
+.sc-start-open:hover .sc-start-pic.blank { color: var(--bone); }
+.sc-start-text { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.sc-start-text strong { font-size: 14px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-start-text small { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: calc(2 * 1.35em); }
+.sc-start-del { position: absolute; top: 12px; right: 12px; opacity: 0; transition: opacity .12s; }
+.sc-start-card:hover .sc-start-del, .sc-start-del:focus-visible, .sc-start-card.on .sc-start-del { opacity: 1; }
+@media (hover: none) { .sc-start-del { opacity: 1; } }
+.sc-start-empty { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px dashed rgba(255, 255, 255, .16); border-radius: 4px; color: var(--bone-dim); }
+.sc-start-empty svg { flex: none; }
+.sc-start-empty strong { color: var(--bone); }
+.sc-start-empty p { margin: 2px 0 0; font-size: 13px; max-width: 60ch; }
+.sc-opacity-note { flex-basis: 100%; font-size: 12px; }
+
+/* the lettering font picker (FontPicker.tsx) */
+.sc-font-button { flex: 1 1 140px; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: left; cursor: pointer; font-size: 17px; }
+.sc-font-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-font-button .caret { font-family: var(--text); font-size: 12px; color: var(--bone-dim); }
+.sc-font-missing { flex-basis: 100%; font-size: 12px; color: #ffcf8a; }
+.sc-font-pop { position: fixed; z-index: 60; width: 280px; display: grid; gap: 6px; padding: 8px; background: var(--panel); border-radius: 4px; box-shadow: var(--raised), 0 14px 40px rgba(0, 0, 0, .5); }
+.sc-font-pop > .search { width: 100%; max-width: none; }
+.sc-font-list { max-height: min(360px, 50vh); overflow: auto; overscroll-behavior: contain; }
+.sc-font-group { position: sticky; top: 0; z-index: 1; padding: 6px 6px 4px; background: var(--panel); font: 600 11px/1.3 var(--text); text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim); }
+.sc-font-item { padding: 5px 8px; border-radius: 3px; font-size: 18px; line-height: 1.3; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-font-item.at { background: var(--panel-2); }
+.sc-font-item[aria-selected="true"] { box-shadow: inset 3px 0 0 var(--signal); }
+.sc-font-note { margin: 4px 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }

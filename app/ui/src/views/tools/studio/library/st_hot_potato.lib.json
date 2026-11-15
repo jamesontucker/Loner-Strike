@@ -1,0 +1,1506 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Hot Potato",
+ "description": "A bomb one player holds for Seconds (0: 20): a hit passes it on, and when time runs out it blows up its holder.",
+ "category": "Starter: spectacle",
+ "kind": "function",
+ "root": "hp_give",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "hp_give",
+   "name": "Give Potato",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "hp_mark",
+   "name": "Mark Potato Holder",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "hp_pass",
+   "name": "Pass Potato",
+   "inputs": [
+    {
+     "id": "from",
+     "name": "Attacker",
+     "type": "player"
+    },
+    {
+     "id": "to",
+     "name": "Victim",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "passed",
+     "name": "Passed",
+     "type": "bool"
+    }
+   ]
+  },
+  {
+   "id": "hp_tick",
+   "name": "Potato Tick",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "boom",
+     "name": "Blew up",
+     "type": "bool"
+    }
+   ]
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "hp_holder",
+   "name": "Potato holder",
+   "type": "player",
+   "scope": "mode"
+  },
+  {
+   "id": "hp_left",
+   "name": "Potato left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "hp_give_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_hold",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_left",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_left"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_mark",
+   "type": "fn.call",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "func": "hp_mark"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_mark_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "color": "red"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "text": "[0] has the hot potato!"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 3,
+    "text": ""
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_clear",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "kind": "0",
+    "who": "all"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_hunt",
+   "type": "bots.goal",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "kind": "hunt",
+    "prio": 70,
+    "secs": 3600,
+    "radius": 64
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_isb",
+   "type": "player.is_bot",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_brb",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_far",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_follow",
+   "type": "bot.follow",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "secs": 6,
+    "influence": 20
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_pass_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_h0",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ish",
+   "type": "logic.equal",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "eq"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_fa",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ta",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ok",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_off",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_hold",
+   "type": "var.set",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_mark",
+   "type": "fn.call",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "func": "hp_mark"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ret2",
+   "type": "fn.return",
+   "pos": {
+    "x": 3380,
+    "y": 180
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_tick_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_left",
+    "amount": -1
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_lv",
+   "type": "var.get",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "var": "hp_left"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_zero",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_h1",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_pos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_boom",
+   "type": "fx.explosion",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "dmg": 500,
+    "radius": 180
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_off",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_clear",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "kind": "0",
+    "who": "all"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_ret2",
+   "type": "fn.return",
+   "pos": {
+    "x": 3640,
+    "y": 180
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_five",
+   "type": "math.compare",
+   "pos": {
+    "x": 3900,
+    "y": 900
+   },
+   "params": {
+    "op": "eq",
+    "b": 5
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br5",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_h2",
+   "type": "var.get",
+   "pos": {
+    "x": 4420,
+    "y": 1080
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {
+    "tag": "potato",
+    "radius": 260,
+    "strength": 8,
+    "secs": 5
+   },
+   "graph": "hp_tick"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "hp_give_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "hp_give_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "hp_give_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_hold",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_give_hold",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "hp_give_hold",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_left",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "hp_give_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_left",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "hp_give_left",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_give_mark",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "hp_give_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "hp_mark_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "hp_mark_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_mark_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "hp_mark_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "hp_mark_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_hunt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_hunt",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_isb",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "hp_mark_hunt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_brb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "hp_mark_isb",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_mark_brb",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "hp_mark_brb",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_mark_far",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "hp_mark_follow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "hp_mark_brb",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "none"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_ish",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "hp_pass_h0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ish",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_fa",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_ta",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "hp_pass_fa",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "hp_pass_ta",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "hp_pass_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ok",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "hp_pass_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "hp_pass_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_pass_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "hp_pass_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_hold",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_hold",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "hp_pass_hold",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_mark",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "hp_pass_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "hp_pass_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ret",
+    "pin": "passed"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "hp_pass_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_pass_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "hp_pass_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ret2",
+    "pin": "passed"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "hp_tick_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "hp_tick_lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_zero",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "hp_tick_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "hp_tick_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_br2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "hp_tick_alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br2",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_pos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "hp_tick_br2",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "hp_tick_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_boom",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "hp_tick_boom",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "hp_tick_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "hp_tick_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_ret",
+    "pin": "boom"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "hp_tick_br2",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "boom"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "hp_tick_lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_five",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "hp_tick_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "hp_tick_five",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br5",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "hp_tick_br5",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "hp_tick_h2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "hp_tick_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "hp_tick_br5",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "hp_give",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else chases the holder, a bot holder runs (it follows someone else away for a few seconds), and in the last 5 seconds every bot runs from the holder."
+  },
+  {
+   "id": "c1",
+   "graph": "hp_tick",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Potato Tick: call it every second (a Repeat from Round Started). Blew up is Yes on the tick it went off; give a new potato then."
+  }
+ ]
+}

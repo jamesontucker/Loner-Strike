@@ -9,6 +9,7 @@ import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO } from "../games";
+import { CommunityModes, OwnModes } from "./tools/community/Hooks";
 
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
@@ -22,6 +23,10 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
   { id: "awp", name: "AWP only", kind: "mode", description: "Free AWP every spawn" },
   { id: "scoutz", name: "Scoutz & Knivez", kind: "mode", description: "Scouts, low gravity, air control" },
   { id: "surf", name: "Surf", kind: "mode", description: "Air control, free guns, long rounds" },
+  { id: "br", name: "Battle Royale", kind: "mode", description: "Everyone for themselves (or squads): loot up, stay in the closing zone, be the last one standing" },
+  { id: "br_duo", name: "Battle Royale: Duos", kind: "mode", description: "Battle Royale in pairs: knocked down first, your partner gets you up" },
+  { id: "br_squads", name: "Battle Royale: Squads", kind: "mode", description: "Battle Royale in squads of four, teamed up in a lobby (say /squad)" },
+  { id: "laststand", name: "Last Stand", kind: "mode", description: "Hold the base with your team and bots against waves of creatures" },
   { id: "match", name: "Match (5v5)", kind: "mode", description: "Scrims and pick-up games: ready up, knife for sides, MR15 with half-time" },
   { id: "quakesounds", name: "Quake sounds", kind: "addon", description: "Killing spree and headshot announcers" },
 ];
@@ -126,6 +131,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
       const j = await waitForSetupJob();
       const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
       if (!j) toast("Lost track of it. Reload this page to see if it finished.", true);
+      else if (j.state === "done" && j.failed_compiles?.length) toast(`Done, but these didn't build, so they won't load: ${j.failed_compiles.join(", ")}.${(j.notes ?? []).filter((n) => n.includes("Couldn't compile") || n.includes("Left out of the mode list")).map((n) => ` ${n}`).join("")}`, true);
       else if (j.state === "done" && !id && again) toast(`Repaired.${running || !game.dedicated ? " Restart the game so it loads." : ""}`);
       else if (j.state === "done") toast(`${remove ? "Removed" : again ? "Reinstalled" : "Installed"} ${what}${running ? ". It loads on the next map." : ""}`);
       else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
@@ -241,6 +247,8 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
         </>
       )}
 
+      {setUp && <CommunityModes />}{/* (community) */}
+      {setUp && <OwnModes />}{/* (origin: made by me / remixed) */}
       {setUp && <OwnPlugins />}
 
       {/* the basics put in again where they are (a Steam update, a file check or an antivirus can undo
@@ -249,7 +257,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
         <div ref={repairRef} className={`panel row between lightable${lit ? " settings-lit" : ""}`}>
           <div>
             <b>Repair Loner-Strike</b>
-            <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay.</p>
+            <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay. Lines you added by hand to Loner-Strike's own mode files (like laststand.cfg or mappresets.ini) are replaced by an update or repair; your version is kept under Settings, Backups & defaults.</p>
           </div>
           <BusyButton className="btn" busy={busy === "core:repair"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
         </div>

@@ -11,6 +11,7 @@ import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet
 import { Admins } from "./Admins";
 import { BackupSheet, RestoreSheet } from "./Backup";
 import { AddShared, InviteModerator, ROLE_CAN, ROLE_NAME, ShareControl } from "./ShareControl";
+import { Applications, LinkHelp, RolesCard } from "./Roles"; // P5: community roles
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
 import { GetMore, ServerSkins } from "./GetMore";
@@ -26,12 +27,15 @@ import { DailyRestart, ServerExtras } from "./ServerExtras";
 import { TabLink } from "./goto";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
+import { CrashBadge, CrashPanel } from "./CrashPanel"; // MCP: crash tracking
+import { capName, NameLeft } from "../serverName";
 
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
 const Voice = lazyPage(() => import("./Voice").then((m) => ({ default: m.Voice })));
 const Addons = lazyPage(() => import("./Addons").then((m) => ({ default: m.Addons })));
 const WebStatus = lazyPage(() => import("./WebStatus").then((m) => ({ default: m.WebStatus })));
+const ServerContent = lazyPage(() => import("./tools/community/ServerContent")); // (community)
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -49,7 +53,7 @@ const FAILED_ON_COMPUTER = "Trying again, rebuilding and deleting are done on th
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
 const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if you switch on Keep running after I close Loner-Strike on its Overview tab.";
 const PUBLIC_ADDRESS_INFO =
-  "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (grey cloud), since the game's traffic can't go through its proxy.";
+  "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (gray cloud), since the game's traffic can't go through its proxy.";
 const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
 
 type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string; public_address?: string | null; listing?: { ok: boolean; error?: string } | null };
@@ -259,7 +263,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   return (
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")}>Add a shared server</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")} title="Paste a Moderator or Admin invite someone sent you">Join as moderator</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
 
@@ -301,6 +305,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                 </p>
               </div>
               <StateTag s={s} />
+              {!s.shared && <CrashBadge id={s.id} />}
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
             <UpdateNote s={s} busy={busy(`${s.id}:apply-updates`)} onUpdate={() => updateNow(s)} />
@@ -389,7 +394,7 @@ type Tab =
   | "overview" | "join" | "health" | "extras" | "hltv" | "webstatus"
   | "modes" | "bots" | "match" | "fun" | "addons" | "voice"
   | "players" | "moderation" | "stats" | "admins" | "welcome" | "share"
-  | "mods" | "maps" | "skins" | "sounds" | "more";
+  | "mods" | "maps" | "skins" | "sounds" | "more" | "creations";
 /** remote: only for servers on a Linux machine. Server comes first: a server's page opens on its Overview. */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -416,6 +421,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "skins", label: "Skins & models", group: "Library" },
   { id: "sounds", label: "Sounds", group: "Library" },
   { id: "more", label: "Get more", group: "Library" },
+  { id: "creations", label: "Community content", group: "Library" }, // (community: maps and Studio modes from Tools > Community)
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 /** Older names for a tab, as other pages may still ask for it (openServerTab). */
@@ -430,7 +436,7 @@ const SHARED_TABS: Record<"admin" | "moderator", Tab[]> = {
 };
 /** The tabs a server shows at all: Website status only for a Linux server, Shared control only on this computer. */
 function tabsShown(s: ServerInfo): Tab[] {
-  return TABS.filter((t) => (!t.remote || !!s.host) && (t.id !== "share" || ON_THIS_COMPUTER)).map((t) => t.id);
+  return TABS.filter((t) => (!t.remote || !!s.host) && ((t.id !== "share" && t.id !== "creations") || ON_THIS_COMPUTER)).map((t) => t.id);
 }
 /** The tabs you can use: all of yours, or your role's. */
 function tabsFor(s: ServerInfo): Tab[] {
@@ -739,7 +745,7 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}{role && <> <span className={`tag role-${role}`}>{ROLE_NAME[role]}</span></>}</h2>
             <p className="muted">
-              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>
+              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>{!role && <> <CrashBadge id={s.id} inline /></>}
             </p>
           </div>
           <div className="row">
@@ -773,6 +779,11 @@ export function ServerPage(props: {
       {!role && s.state === "setting-up" && (
         <div className="banner" role="status">
           <JobProgress server={s.id} long={!!s.host} onEnd={() => void reloadServers()} />
+        </div>
+      )}
+      {!role && data?.state.safemode && (
+        <div className="banner" role="status">
+          <div>{data.state.safemode}. It's playing Classic now; picking a mode clears this.</div>
         </div>
       )}
       {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} phase={s.update_phase} job={s.update_job} /></div>}
@@ -896,6 +907,7 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
+          {tab === "creations" && !role && ON_THIS_COMPUTER && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><ServerContent server={s} /></Suspense></PageBoundary>}
           {tab === "webstatus" && s.host && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><WebStatus server={s} /></Suspense></PageBoundary>}
           {tab === "voice" && <PageBoundary><Suspense fallback={<Skeleton rows={3} />}><Voice server={s} /></Suspense></PageBoundary>}
           {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}
@@ -903,6 +915,10 @@ export function ServerPage(props: {
           {tab === "stats" && <Community key="stats" target={s.id} part="stats" />}
           {tab === "share" && !role && <ShareControl server={s} />}
           {tab === "share" && role === "admin" && <InviteModerator server={s} />}
+          {/* P5: Loner-Strike roles (claim and switches for the owner; applications for the owner and Admins) */}
+          {tab === "share" && !role && <RolesCard server={s} />}
+          {tab === "share" && (!role || role === "admin") && <Applications server={s} />}
+          {tab === "share" && (!role || role === "admin") && <LinkHelp compact />}
           </>
           )}
         </>
@@ -1035,10 +1051,11 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
         <label className="field">
           <span>Name</span>
           <input
-            className="search" disabled={ro} maxLength={48} value={name}
-            onChange={(e) => { setName(e.target.value); setProblem((p) => ({ ...p, name: "" })); }}
+            className="search" disabled={ro} value={name}
+            onChange={(e) => { setName(capName(e.target.value)); setProblem((p) => ({ ...p, name: "" })); }}
             aria-invalid={!!problem.name} aria-describedby={problem.name ? "serverNameProblem" : undefined}
           />
+          <NameLeft name={name} />
           {problem.name && <small className="err-text" id="serverNameProblem">{problem.name}</small>}
         </label>
         {!sharedRole && (
@@ -1219,6 +1236,7 @@ function HealthTab({ server, others, installed, act, rebuild, wipeRebuild, busy,
       <SectionHead title="Health" note="Keeping the server up to date, safe and backed up, and repairing it when something's wrong." />
       {(server.loner || !server.imported) && <Updates server={server} act={act} busy={busy} onChanged={onChanged} />}
       {server.host && <SecurityPanel key={server.id} server={server} />}
+      {!server.shared && <CrashPanel key={`crash-${server.id}`} server={server} />}
       {ON_THIS_COMPUTER && <BackupPanel server={server} others={others} onChanged={onChanged} />}
       <DailyRestart target={server.id} />
       {ON_THIS_COMPUTER ? (
@@ -1782,7 +1800,8 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
         )}
         <label className="field">
           <span>Name</span>
-          <input ref={nameBox} className="search" autoFocus maxLength={48} placeholder="Like Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
+          <input ref={nameBox} className="search" autoFocus placeholder="Like Friday night frags" value={name} onChange={(e) => setName(capName(e.target.value))} />
+          <NameLeft name={name} />
           <small>Shown in the server browser and on the welcome page.</small>
         </label>
         <div className="field">
@@ -1922,7 +1941,7 @@ const GOOD_PRACTICE: { title: string; points: string[] }[] = [
     points: [
       "This network: only your Wi-Fi or LAN. Anyone with the address: friends you send it to. Listed on Steam: anyone, and it shows the server's address publicly (for a server on your PC, that's your home address).",
       "Friends outside your network need a way in: forward the server's UDP port on your router, or all play over a virtual LAN (ZeroTier, Radmin VPN, Tailscale). See the server's Who can join tab.",
-      "On Windows, allow Loner-Strike and the server through the firewall when it asks, or people can't connect.",
+      "On Windows, allow Loner-Strike and the server through the firewall when it asks, or people can't connect. Clicked Cancel? Windows Security › Allow an app through firewall › hlds.exe: tick Private and Public.",
     ],
   },
   {

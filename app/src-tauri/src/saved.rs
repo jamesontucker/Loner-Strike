@@ -325,6 +325,7 @@ async fn api_saved_addon(State(st): State<Shared>, headers: HeaderMap, Json(req)
         if let Some(on) = req.on {
             // what the plugin writes when one is switched (sounds.rs does the same for Sounds)
             let (txt, plugins) = crate::sounds::write_addons_offline(&read(&ini), &read(&g.data.join("addons.txt")), &req.id, on)?;
+            crate::safety::before("Settings", &format!("Switched the {} add-on", req.id), &g.data.join("addons.txt"));
             crate::sys::write_latin1_atomic(&g.data.join("addons.txt"), &txt).map_err(|e| e.to_string())?;
             crate::sys::write_latin1_atomic(&g.dir.join("addons/amxmodx/configs/plugins-gmaddons.ini"), &plugins).map_err(|e| e.to_string())?;
             return Ok(());
@@ -367,6 +368,7 @@ async fn api_saved_reset(State(st): State<Shared>, headers: HeaderMap, Json(req)
             if !path.is_file() {
                 return Ok(());
             }
+            crate::safety::before("Settings", "Reset the shared bot and fun settings", &path);
             crate::sys::write_latin1_atomic(&path, &without_shared(&read(&path))).map_err(|e| format!("Couldn't reset them ({e})."))
         }
         "mode" => {
@@ -374,6 +376,7 @@ async fn api_saved_reset(State(st): State<Shared>, headers: HeaderMap, Json(req)
             if !crate::maps::safe_arg(&mode) || !known_mode(g, &mode) {
                 return Err("That mode isn't installed.".into());
             }
+            crate::safety::before("Settings", &format!("Reset the {mode} mode's settings"), &g.data.join(format!("mode_{mode}.cfg")));
             match std::fs::remove_file(g.data.join(format!("mode_{mode}.cfg"))) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't reset them ({e}).")),
                 _ => Ok(()),

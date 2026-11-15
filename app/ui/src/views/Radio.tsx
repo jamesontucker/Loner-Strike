@@ -22,6 +22,10 @@ type Station = {
   now?: string;
   /** the stream's mount in an Icecast status with several (the one ending in /stream if not given) */
   mount?: string;
+  /** Nightride FM: the station's key in its /meta event stream */
+  nightride?: string;
+  /** a calm one, tagged Chill in the list */
+  chill?: boolean;
 };
 
 const STATIONS: Station[] = [
@@ -36,13 +40,49 @@ const STATIONS: Station[] = [
   { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
   { name: "0N 2000s", desc: "Hits from the 2000s", stream: "https://0n-2000s.radionetz.de/0n-2000s.mp3", site: "https://www.0nlineradio.com/", credit: "0nlineradio: 2000s", now: "https://0n-2000s.radionetz.de/status-json.xsl", mount: "/0n-2000s.mp3" },
   { name: "Radio Bob Nu Metal", desc: "Nu metal, from Korn to Linkin Park", stream: "https://streams.radiobob.de/numetal/mp3-192/", site: "https://www.radiobob.de/", credit: "Radio Bob" },
-  { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
+  { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, chill: true, now: "https://somafm.com/songs/groovesalad.json" },
+  { name: "SomaFM Drone Zone", desc: "Ambient textures with no beat", stream: "https://ice1.somafm.com/dronezone-128-mp3", site: "https://somafm.com/dronezone/", credit: "SomaFM: Drone Zone", soma: true, chill: true, now: "https://somafm.com/songs/dronezone.json" },
+  { name: "SomaFM Fluid", desc: "Instrumental hip-hop and future soul", stream: "https://ice1.somafm.com/fluid-128-mp3", site: "https://somafm.com/fluid/", credit: "SomaFM: Fluid", soma: true, chill: true, now: "https://somafm.com/songs/fluid.json" },
+  { name: "SomaFM Deep Space One", desc: "Deep ambient and space music", stream: "https://ice1.somafm.com/deepspaceone-128-mp3", site: "https://somafm.com/deepspaceone/", credit: "SomaFM: Deep Space One", soma: true, chill: true, now: "https://somafm.com/songs/deepspaceone.json" },
+  { name: "SomaFM Vaporwaves", desc: "Vaporwave, slowed and dreamy", stream: "https://ice1.somafm.com/vaporwaves-128-mp3", site: "https://somafm.com/vaporwaves/", credit: "SomaFM: Vaporwaves", soma: true, chill: true, now: "https://somafm.com/songs/vaporwaves.json" },
+  { name: "Nightride FM Chillsynth", desc: "Chill synthwave", stream: "https://stream.nightride.fm/chillsynth.mp3", site: "https://nightride.fm/", credit: "Nightride FM: Chillsynth", chill: true, nightride: "chillsynth", now: "https://nightride.fm/meta" },
+  { name: "Radio Paradise Mellow Mix", desc: "Mellow rock, folk and world music, mixed by hand", stream: "https://stream.radioparadise.com/mellow-192", site: "https://radioparadise.com/", credit: "Radio Paradise: Mellow Mix", chill: true },
+  { name: "Rainwave OC ReMix", desc: "Fan remixes of video game music", stream: "https://relay.rainwave.cc/ocremix.mp3", site: "https://rainwave.cc/ocremix/", credit: "Rainwave: OC ReMix", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=2" },
+  { name: "Rainwave Chiptune", desc: "Chiptunes from old consoles and computers", stream: "https://relay.rainwave.cc/chiptune.mp3", site: "https://rainwave.cc/chiptune/", credit: "Rainwave: Chiptune", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=4" },
+  { name: "Rainwave Chill", desc: "Calm video game music", stream: "https://relay.rainwave.cc/chill.mp3", site: "https://rainwave.cc/chill/", credit: "Rainwave: Chill", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=6" },
 ];
+
+/** Nightride FM: its /meta is a live event stream that opens with what's on every station. Read
+ *  until our station shows up, then hang up. */
+async function nightride(r: Response, key: string): Promise<string> {
+  const reader = r.body?.getReader();
+  if (!reader) return "";
+  const dec = new TextDecoder();
+  let buf = "";
+  try {
+    for (let n = 0; n < 50; n++) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      for (const line of buf.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        try {
+          const hit = [JSON.parse(line.slice(5))].flat().find((x: { station?: string }) => x?.station === key);
+          if (hit) return [hit.artist, hit.title].filter(Boolean).join(" - ");
+        } catch { /* half a line so far */ }
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return "";
+}
 
 /** What's on now: SomaFM, Rainwave and AzuraCast stations list the track; Bassdrive (mostly live DJ sets) names the show. */
 async function nowPlaying(s: Station, signal: AbortSignal): Promise<string> {
   if (!s.now) return "";
   const r = await fetch(s.now, { signal, cache: "no-store" });
+  if (s.nightride) return nightride(r, s.nightride);
   const j = await r.json();
   if (s.soma) {
     const song = j?.songs?.[0];
@@ -371,7 +411,7 @@ export function Radio() {
           {STATIONS.map((s, i) => (
             <li key={s.name}>
               <button type="button" aria-current={i === at ? "true" : undefined} onClick={() => pick(i)}>
-                <span>{i + 1}. {s.name}</span>
+                <span>{i + 1}. {s.name}{s.chill && <em className="radio-tag">Chill</em>}</span>
                 <small>{s.desc}</small>
               </button>
             </li>

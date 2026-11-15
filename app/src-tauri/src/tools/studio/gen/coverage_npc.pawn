@@ -1,0 +1,90 @@
+// ---- NPC moves (EC): gm_components walks them (ls_npc_move); Arrived / Failed come back here
+// with the flow's own values. A comfort limit (limits.rs ec_npc_moves, passed in as lim): moves waiting
+// for an answer at once; the array holds this many
+#define LSG_EC_NPCS 64
+stock g_lsgEcNpcEnt[LSG_EC_NPCS], g_lsgEcNpcNode[LSG_EC_NPCS], g_lsgEcNpcCtx[LSG_EC_NPCS][LSG_CTX]
+
+stock lsg_ec_npc_find(npc)
+{
+	if (npc <= 0)
+		return -1
+	for (new s = 0; s < LSG_EC_NPCS; s++)
+		if (g_lsgEcNpcEnt[s] == npc)
+			return s
+	return -1
+}
+
+stock lsg_ec_npc_keep(npc, node, const ctx[], lim)
+{
+	new s = lsg_ec_npc_find(npc), used = 0
+	for (new k = 0; k < LSG_EC_NPCS; k++)
+	{
+		if (g_lsgEcNpcEnt[k] && !pev_valid(g_lsgEcNpcEnt[k]))
+			g_lsgEcNpcEnt[k] = 0
+		if (g_lsgEcNpcEnt[k])
+			used++
+		else if (s < 0)
+			s = k
+	}
+	if (s < 0 || (used >= lim && lsg_ec_npc_find(npc) < 0))
+	{
+		log_amx("Studio: more than %d NPC moves at once (Limits: NPC moves at once); this one's Arrived won't run", lim)
+		return
+	}
+	g_lsgEcNpcEnt[s] = npc
+	g_lsgEcNpcNode[s] = node
+	for (new k = 0; k < LSG_CTX; k++)
+		g_lsgEcNpcCtx[s][k] = ctx[k]
+}
+
+stock bool:lsg_ec_npc_to(npc, to, pos, Float:speed, flags)
+{
+	if (!ls_components_running() || npc <= MaxClients || !pev_valid(npc))
+		return false
+	new Float:p[3]
+	if (to > 0 && pev_valid(to))
+		pev(to, pev_origin, p)
+	else if (pos >= 0)
+		lsg_vto(pos, p)
+	else
+		return false
+	// a player's or a prop's place: its feet
+	if (to > 0 && to <= MaxClients)
+		p[2] -= 36.0
+	new s = lsg_ec_npc_find(npc)
+	if (s >= 0)
+		g_lsgEcNpcEnt[s] = 0
+	return ls_npc_move(npc, p, 1, speed, flags)
+}
+
+stock bool:lsg_ec_npc_path(npc, arr, const track[], Float:speed, flags)
+{
+	if (!ls_components_running() || npc <= MaxClients || !pev_valid(npc))
+		return false
+	new s = lsg_ec_npc_find(npc)
+	if (s >= 0)
+		g_lsgEcNpcEnt[s] = 0
+	if (arr < 0)
+		return ls_npc_move_path(npc, track, speed, flags)
+	new n = min(lsg_alen(arr), 24)
+	if (n <= 0)
+		return false
+	new Float:pts[72], Float:o[3]
+	for (new i = 0; i < n; i++)
+	{
+		lsg_vto(lsg_agetv(arr, float(i)), o)
+		pts[i * 3] = o[0]
+		pts[i * 3 + 1] = o[1]
+		pts[i * 3 + 2] = o[2]
+	}
+	return ls_npc_move(npc, pts, n, speed, flags)
+}
+
+stock lsg_ec_npc_stop(npc, bool:stay)
+{
+	new s = lsg_ec_npc_find(npc)
+	if (s >= 0)
+		g_lsgEcNpcEnt[s] = 0
+	if (ls_components_running() && npc > MaxClients)
+		ls_npc_move_stop(npc, stay)
+}

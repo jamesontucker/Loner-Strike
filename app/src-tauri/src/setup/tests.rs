@@ -90,6 +90,47 @@ fn core_parts_install_and_undo() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// Modes made in the Game Mode Studio survive setup rewriting modes.ini; a line that only
+/// looks like one (no plugins.ini naming its studio_ plugin) doesn't.
+#[test]
+fn studio_modes_survive_setup() {
+    let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "studio-").unwrap();
+    let hl = root.join("Half-Life");
+    fake_game(&hl, "cstrike");
+    let install = install_at(&hl);
+    let res = repo_root();
+    let ctx = Ctx { install: &install, res: &res, progress: &Quiet, store: None };
+    let modes: BTreeSet<String> = core::CORE_MODES.iter().map(|s| s.to_string()).collect();
+    let addons = BTreeSet::new();
+    let configs = || {
+        let mut rec = Record::open(&hl.join("cstrike"));
+        rec.begin("core");
+        core::configs(&mut rec, &ctx, &modes, &addons).unwrap();
+        rec.done("core", json!(1)).unwrap();
+    };
+    configs();
+    let dir = hl.join("cstrike/addons/amxmodx/configs/gamemodes");
+    let ini = dir.join("modes.ini");
+    // the Studio installs a mode (tools/studio::register_mode); someone adds a stray line too
+    let g = crate::tools::studio::graph::parse(include_str!("../../../ui/src/views/tools/studio/templates/team-dm.graph.json")).unwrap();
+    crate::tools::studio::register_mode(&hl.join("cstrike/addons/amxmodx/configs"), &g, "studio_rifle_reward").unwrap();
+    let mut text = std::fs::read_to_string(&ini).unwrap();
+    text.push_str("fakemode  \"Fake\"  \"\"  \"\"  \"\"\r\n");
+    std::fs::write(&ini, text).unwrap();
+    // setup runs again (an update)
+    configs();
+    let after = std::fs::read_to_string(&ini).unwrap();
+    assert!(after.contains("rifle_reward  \"Rifle Reward\""), "{after}");
+    assert_eq!(after.matches("rifle_reward ").count(), 1);
+    assert!(!after.contains("fakemode"));
+    assert!(after.contains("classic"));
+    assert!(dir.join("rifle_reward.plugins.ini").is_file() && dir.join("rifle_reward.cfg").is_file());
+    // and again: still once
+    configs();
+    assert_eq!(std::fs::read_to_string(&ini).unwrap().matches("rifle_reward ").count(), 1);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// Settings files the player is told to edit: an update keeps their changes (the new version
 /// beside them as .new), and replaces them when they're still what Loner-Strike put there,
 /// also for a 0.1.2 install that has no note of what it wrote.
@@ -222,6 +263,25 @@ fn plan_checks_requests() {
         ids,
         ["czero/metamod", "czero/amxmodx", "czero/regamedll", "czero/liblist", "czero/mode-paintball", "czero/core-plugins", "czero/core-configs", "czero/core-quake", "czero/core-bots", "czero/core-keys", "czero/core-funmaps"]
     );
+    // QA4-CORE: the fun maps' share of the bar is sized by the maps still to download (the bar
+    // sat at 99% for minutes with a share of 1), and shrinks to almost nothing once they're in
+    let funmaps: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(res.join("catalog/funmaps.json")).unwrap()).unwrap();
+    let all = funmaps["maps"].as_array().unwrap().len();
+    let share = |plan: &InstallPlan| {
+        let total: f64 = plan.steps().iter().map(|s| s.weight).sum();
+        plan.steps().iter().find(|s| s.id.ends_with("core-funmaps")).unwrap().weight / total
+    };
+    assert_eq!(super::components::maps_to_get(&funmaps, &hl.join("cstrike/maps")), all);
+    assert!(share(&plan) > 0.5, "the maps are most of a basics install: {}", share(&plan));
+    std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+    for m in funmaps["maps"].as_array().unwrap() {
+        for n in m["maps"].as_array().unwrap() {
+            std::fs::write(hl.join(format!("cstrike/maps/{}.bsp", n.as_str().unwrap())), b"").unwrap();
+        }
+    }
+    assert_eq!(super::components::maps_to_get(&funmaps, &hl.join("cstrike/maps")), 0);
+    let plan = plan_install(install.clone(), &["czero".into()], &["mode-paintball".into()], &res, false).unwrap();
+    assert!(share(&plan) < 0.02, "{}", share(&plan));
     // a dedicated server doesn't get the fun maps
     let mut dedicated = install.clone();
     dedicated.dedicated = true;

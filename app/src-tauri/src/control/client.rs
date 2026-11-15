@@ -213,7 +213,8 @@ pub fn accept(invite: &str, name: &str) -> Result<Shared, String> {
         let Ok((base, c)) = endpoint(a, t.p, &t.f) else { continue };
         let r = c.post(format!("{base}/api/control/redeem")).json(&json!({"invite": t.c, "name": name, "version": VERSION})).send();
         let v: Value = match r {
-            Ok(r) => r.json().map_err(|_| "The owner's Loner-Strike answered strangely. Try again.".to_string())?,
+            // [Caps] an answer is a few KB
+            Ok(r) => crate::caps::read_up_to(r, "answer", 1 << 20).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or_else(|| "The owner's Loner-Strike answered strangely. Try again.".to_string())?,
             // only when it never got there is the next address tried: an invite works once
             Err(e) if not_owner(&e) => {
                 last = format!("Something answered at {a}, but it isn't the Loner-Strike that made this invite. Ask the owner for a new invite.");

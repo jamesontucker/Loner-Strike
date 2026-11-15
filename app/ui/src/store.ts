@@ -5,9 +5,9 @@ import { create } from "zustand";
 
 export type Section =
   | "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "browser" | "servers"
-  | "admins" | "community" | "stats" | "extras" | "welcome" | "more" | "mods" | "skins" | "sounds" | "settings";
+  | "admins" | "community" | "stats" | "extras" | "welcome" | "more" | "mods" | "skins" | "sounds" | "tools" | "settings";
 
-const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "stats", "extras", "welcome", "more", "mods", "skins", "sounds", "settings"];
+const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "stats", "extras", "welcome", "more", "mods", "skins", "sounds", "tools", "settings"];
 
 function saved<T>(key: string, fallback: T, ok: (v: string) => boolean = () => true): T {
   try {
@@ -192,3 +192,15 @@ export function useDirty(key: string, dirty: boolean) {
 }
 /** Whether a server tab has unsaved edits right now (for leaving from outside the page). */
 export const hasUnsavedEdits = () => Object.values(useDirtyStore.getState().dirty).some(Boolean);
+/** After "Leave without saving": the edits being left behind no longer count, so nothing on the
+ *  way out (a history step the question's sheet takes back, the page about to close) asks again. */
+export const forgetUnsavedEdits = () => useDirtyStore.setState({ dirty: {} });
+/** Asks before leaving unsaved edits; true when it's fine to go (then, once the question's sheet
+ *  has taken its history step back, nothing will ask again). */
+export async function confirmLeave(ask: (q: string, o: { ok: string; danger?: boolean }) => Promise<boolean>, q = "Leave without saving your changes?"): Promise<boolean> {
+  if (!hasUnsavedEdits()) return true;
+  if (!(await ask(q, { ok: "Leave", danger: true }))) return false;
+  forgetUnsavedEdits();
+  await new Promise((r) => setTimeout(r, 50));
+  return true;
+}

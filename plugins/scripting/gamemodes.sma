@@ -37,7 +37,7 @@ native gm_chat_blocked(id, const text[])
 #define AUTHOR  "local"
 
 #define ACCESS        ADMIN_CFG
-#define MAX_MODES     32
+#define MAX_MODES     128   // modes.ini lines read (the app refuses a mode past this)
 #define MAX_ADDONS    32
 #define TASK_LOADOUT  4100
 #define TASK_HINT     4200
@@ -133,6 +133,19 @@ new const SETTINGS[][SettingData] =
 	{ "pbmoves_enabled",       "Sprint (right-click)", "1 0",                       "On Off",                                CAT_MATCH, SC_MODE, "" },
 	{ "kz_hook_prize",         "Hook after finishing", "1 0",                       "On Off",                                CAT_MATCH, SC_MODE, "" },
 	{ "deathrun_lifesystem",   "Extra lives",         "0 1 2",                     "None|One|Two",                          CAT_MATCH, SC_MODE, "" },
+	{ "lst_waves",             "Waves",               "5 10 15 0",                 "5|10|15|Endless",                       CAT_MATCH, SC_MODE, "" },
+	{ "lst_difficulty",        "Wave difficulty",     "0 1 2 3",                   "Easy|Normal|Hard|Nightmare",            CAT_MATCH, SC_MODE, "" },
+	{ "lst_revive",            "Revive time",         "0 15 30 60",                "Off|15s|30s|60s",                       CAT_MATCH, SC_MODE, "" },
+	{ "br_squad",              "Squads",              "1 2 4",                     "Solo|Duos|Squads of 4",                 CAT_MATCH, SC_MODE, "" },
+	{ "br_start",              "Start with",          "knife knife+glock18",       "Knife|Knife and a pistol",              CAT_MATCH, SC_MODE, "" },
+	{ "br_drop",               "Loot-up time",        "10 20 40",                  "10s|20s|40s",                           CAT_MATCH, SC_MODE, "" },
+	{ "br_zone_start",         "Zone starts after",   "20 40 90",                  "20s|40s|90s",                           CAT_MATCH, SC_MODE, "" },
+	{ "lst_overrun",           "Base overrun after",  "10 15 25 0",                "10s|15s|25s|Never",                      CAT_MATCH, SC_MODE, "" },
+	{ "lst_last_chance",       "Bots' last chance",   "15 30 60 0",                "15s|30s|60s|Bots carry on alone",       CAT_MATCH, SC_MODE, "" },
+	{ "lst_lives",             "Nightmare lives",     "3 5 10",                    "3|5|10",                                CAT_MATCH, SC_MODE, "" },
+	{ "lst_shopkeeper",        "Shopkeeper",          "barney gman none",          "Barney|G-Man|Nobody (next map)",        CAT_MATCH, SC_MODE, "" },
+	{ "lst_buy_anywhere",      "Buy anywhere",        "0 1",                       "Off|Between waves",                     CAT_MATCH, SC_MODE, "" },
+	{ "lst_creatures",         "Enemies",             "1 0",                       "Creatures (next map)|Zombie bots",      CAT_MATCH, SC_MODE, "" },
 	{ "deathrun_giveusp",      "Runners get a USP",   "0 1",                       "No Yes",                                CAT_MATCH, SC_MODE, "" },
 	{ "dr_bot_traps",          "Bot springs traps",   "1 0",                       "On Off",                                CAT_BOT, SC_MODE, "" },
 	{ "dr_bot_trap_chance",    "Bot trap eagerness",  "15 35 70",                  "Low|Normal|High",                       CAT_BOT, SC_MODE, "" },
@@ -278,11 +291,12 @@ new const MAPCAT_NAMES[MC_COUNT][] = { "Bomb defusal (de_)", "Hostage rescue (cs
 
 new bool:g_BotHams
 new bool:g_Paused
-new g_ModeId[MAX_MODES][32]
-new g_ModeName[MAX_MODES][48]
-new g_ModeDesc[MAX_MODES][64]
-new g_ModeCmd[MAX_MODES][32]
-new g_ModeFlags[MAX_MODES][8]
+// (one more than modes.ini may fill: gm_modes_reload keeps a mode taken off while it plays)
+new g_ModeId[MAX_MODES + 1][32]
+new g_ModeName[MAX_MODES + 1][48]
+new g_ModeDesc[MAX_MODES + 1][64]
+new g_ModeCmd[MAX_MODES + 1][32]
+new g_ModeFlags[MAX_MODES + 1][8]
 new g_ModeCount
 new g_Cur
 
@@ -343,12 +357,23 @@ new bool:g_LearnGuard, Float:g_LearnTimelimit
 new bool:g_Reloading
 new bool:g_FirstMap               // the first map since the server started
 new g_ProfileLoaded[48]           // bot_profile_db as this map loaded (CZ reads it before plugins)
+new g_CurGone                     // gm_modes_reload: the mode playing now was taken off (listed until the map changes, not picked again)
 new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
 new g_NextMode = -1, g_NextMap[32] // a vote's mode for when this map ends (gm_pubserver), and its map
 new bool:g_NextByRotation         // ... picked by the mode rotation, not a vote
 new Float:g_MapsAt = -100.0       // when g_Maps was last read from the maps folders
 new g_pBotPlay                    // gm_botplay: how bots play together on this map (botplay.ini)
 new g_ReloadNote[96]
+#define MODEL_SLOTS 511
+#define MODEL_SLACK 4                // a map's own studio models (env_model, cyclers) and rounding
+// Base Builder's count before it has been measured on this server (Loner-Strike's plugins,
+// the game and Base Builder's ~95 models: 260-263 measured on the four shipped bb_ maps, 2026-11-14)
+#define BASEBUILDER_SLOTS 264
+new g_ModelMax                    // the highest model slot handed out on this map (see "Model slots")
+new bool:g_NoFit                  // this map has too many models for the mode: its plugins were paused
+new g_SafeFrom[32]                // safe mode: the mode turned off on this load (it stopped the server twice while starting)
+new bool:g_SafeWriting            // ... switching to Classic for it (its note stays)
+new g_NoFitMode[32]               // ... that mode
 new g_NavPolls
 
 new g_CfgDir[128], g_DataDir[128]
@@ -377,7 +402,11 @@ new g_EvSeq
 
 public plugin_precache()
 {
+	register_forward(FM_PrecacheModel, "fw_precache_model_post", 1)
 	g_BeamSpr = precache_model("sprites/laserbeam.spr")
+	safe_mode_guard()
+	if (!g_SafeFrom[0])
+		precache_guard()
 }
 
 public plugin_natives()
@@ -489,6 +518,7 @@ public plugin_init()
 	// Control panel API (sent over RCON by the companion web app)
 	register_srvcmd("gm_status", "srv_status")
 	register_srvcmd("gm_mode", "srv_mode")
+	register_srvcmd("gm_modes_reload", "srv_modes_reload")
 	register_srvcmd("gm_map", "srv_map")
 	register_srvcmd("gm_set", "srv_set")
 	register_srvcmd("gm_addon", "srv_addon")
@@ -503,6 +533,7 @@ public plugin_init()
 	register_srvcmd("gm_player", "srv_player")
 	register_srvcmd("gm_nav", "srv_nav")
 	register_srvcmd("gm_preset", "srv_preset")
+	register_srvcmd("gm_mapfit", "srv_mapfit")
 	register_srvcmd("gm_presetsave", "srv_presetsave")
 	register_srvcmd("gm_presetdel", "srv_presetdel")
 	register_clcmd("gm_presetname", "cmd_presetname")
@@ -548,7 +579,17 @@ public plugin_init()
 	check_roster_file()
 	load_addons()
 	load_presets()
-	check_map_presets()
+	if (g_SafeFrom[0])
+		fall_back_safe()
+	else if (g_NoFit)
+		fall_back_from_nofit()
+	else
+	{
+		// past the map's first 20 s of frames: this mode starts fine (safe mode)
+		set_task(20.0, "task_started_ok")
+		remember_model_slots()
+		check_map_presets()
+	}
 }
 
 public plugin_cfg()
@@ -719,6 +760,8 @@ public fw_setmodel_post(ent, const model[])
 public plugin_end()
 {
 	write_data_line("session.txt", "clean")
+	// a normal map change or quit: never counts against the mode (safe mode)
+	safe_mark("end")
 	apply_next_mode()
 	if (g_Maps != Invalid_Array)
 	{
@@ -798,7 +841,8 @@ load_modes()
 		return
 	}
 
-	while (!feof(f) && g_ModeCount < MAX_MODES)
+	new over
+	while (!feof(f))
 	{
 		fgets(f, line, charsmax(line))
 		trim(line)
@@ -809,6 +853,11 @@ load_modes()
 		parse(line, id, charsmax(id), name, charsmax(name), desc, charsmax(desc), cmd, charsmax(cmd), flags, charsmax(flags))
 		if (!id[0])
 			continue
+		if (g_ModeCount >= MAX_MODES)
+		{
+			over++
+			continue
+		}
 
 		copy(g_ModeId[g_ModeCount], charsmax(g_ModeId[]), id)
 		copy(g_ModeName[g_ModeCount], charsmax(g_ModeName[]), name[0] ? name : id)
@@ -818,6 +867,56 @@ load_modes()
 		g_ModeCount++
 	}
 	fclose(f)
+	if (over)
+	{
+		log_amx("modes.ini lists %d modes; the Game Mode Menu holds %d, so the last %d are left out. Remove some modes.", MAX_MODES + over, MAX_MODES, over)
+		server_print("[Game Mode] modes.ini lists more than %d modes: the last %d are left out.", MAX_MODES, over)
+	}
+}
+
+// gm_modes_reload: reads modes.ini again now (the app sends it after adding or taking off a
+// mode), so gm_mode <new> works on this map. Picks held by index keep pointing at the same
+// mode by id; the mode playing now stays listed until the map changes even if it went.
+public srv_modes_reload()
+{
+	status_stale()
+	new cur[32], go[32], next[32], pick[33][32]
+	copy(cur, charsmax(cur), g_ModeId[g_Cur])
+	if (g_GoMode >= 0)
+		copy(go, charsmax(go), g_ModeId[g_GoMode])
+	if (g_NextMode >= 0)
+		copy(next, charsmax(next), g_ModeId[g_NextMode])
+	for (new i = 1; i <= 32; i++)
+		if (g_PickMode[i] >= 0 && g_PickMode[i] < g_ModeCount)
+			copy(pick[i], charsmax(pick[]), g_ModeId[g_PickMode[i]])
+	new name[48], desc[64], cmd[32], flags[8]
+	copy(name, charsmax(name), g_ModeName[g_Cur])
+	copy(desc, charsmax(desc), g_ModeDesc[g_Cur])
+	copy(cmd, charsmax(cmd), g_ModeCmd[g_Cur])
+	copy(flags, charsmax(flags), g_ModeFlags[g_Cur])
+
+	g_ModeCount = 0
+	load_modes()
+	new listed = g_ModeCount
+
+	g_Cur = find_mode(cur)
+	g_CurGone = g_Cur < 0
+	if (g_CurGone)
+	{
+		g_Cur = g_ModeCount++
+		copy(g_ModeId[g_Cur], charsmax(g_ModeId[]), cur)
+		copy(g_ModeName[g_Cur], charsmax(g_ModeName[]), name)
+		copy(g_ModeDesc[g_Cur], charsmax(g_ModeDesc[]), desc)
+		copy(g_ModeCmd[g_Cur], charsmax(g_ModeCmd[]), cmd)
+		copy(g_ModeFlags[g_Cur], charsmax(g_ModeFlags[]), flags)
+	}
+	g_GoMode = go[0] ? find_mode(go) : -1
+	g_NextMode = next[0] ? find_mode(next) : -1
+	for (new i = 1; i <= 32; i++)
+		if (g_PickMode[i] >= 0)
+			g_PickMode[i] = pick[i][0] ? find_mode(pick[i]) : -1
+	server_print("[Game Mode] Modes reloaded: %d", listed)
+	return PLUGIN_HANDLED
 }
 
 find_mode(const id[])
@@ -900,6 +999,9 @@ write_mode_plugins(mode)
 	}
 	fclose(out)
 	write_data_line("current.txt", g_ModeId[mode])
+	// a mode picked again: safe mode's note has done its job
+	if (!g_SafeWriting)
+		write_data_line("safemode.txt", "")
 }
 
 exec_if_exists(const path[])
@@ -1125,8 +1227,16 @@ check_map_presets()
 	new target = preset_mode_for(map)
 	if (target >= 0)
 	{
-		if (target == g_Cur)
+		// (a variant of the preset's mode stays: Battle Royale Duos on a br_ map) W3
+		if (target == g_Cur || mode_family(g_ModeId[target], g_ModeId[g_Cur])) // W3
 			return
+		// a map with more models than the engine can load with the mode's own (the server
+		// would stop while loading it): stay in this mode
+		if (!mode_fits_map(target, map))
+		{
+			log_amx("Map preset: %s has too many models for %s (%d of %d slots) - staying in %s", map, g_ModeName[target], map_models_needed(target, map), MODEL_SLOTS, g_ModeName[g_Cur])
+			return
+		}
 		if (!premode[0])
 			write_data_line("premode.txt", g_ModeId[g_Cur])
 		formatex(g_ReloadNote, charsmax(g_ReloadNote), "Map preset: %s", g_ModeName[target])
@@ -1147,6 +1257,365 @@ check_map_presets()
 	g_Reloading = true
 	write_data_line("reloadnote.txt", g_ReloadNote)
 	log_amx("%s - reloading %s", g_ReloadNote, map)
+}
+
+// ---------------------------------------------------------------------------
+// Model slots: the engine loads at most 512 models a map (slot 0 is never used). The
+// game, every plugin and the map's own brush pieces (doors, breakables, Base Builder's
+// blocks: "*1", "*2"...) share them, and one too many stops the server while the map
+// loads ("Model '*252' failed to precache because the item count is over the 512
+// limit"). A map's brush pieces load after everything else, so a mode fits a map when
+// the mode's own count (the game, the plugins and the mode's models, measured each time
+// the mode plays) plus the map's pieces stay under the limit.
+// ---------------------------------------------------------------------------
+
+new Trie:g_MapPieces = Invalid_Trie
+
+public fw_precache_model_post(const model[])
+{
+	new n = get_orig_retval()
+	if (n > g_ModelMax)
+		g_ModelMax = n
+}
+
+// the map's brush pieces (models lump size / 64, minus the world itself); 0 when unknown
+map_pieces(const map[])
+{
+	if (!map[0])
+		return 0
+	new key[32], n
+	copy(key, charsmax(key), map)
+	strtolower(key)
+	if (g_MapPieces == Invalid_Trie)
+		g_MapPieces = TrieCreate()
+	else if (TrieGetCell(g_MapPieces, key, n))
+		return n
+	n = 0
+	new f = fopen(fmt("maps/%s.bsp", map), "rb", true)
+	if (f)
+	{
+		// header: version, then 15 lumps of (offset, length); the models lump is number 14
+		new version, len
+		fread(f, version, BLOCK_INT)
+		if (version == 30 && fseek(f, 4 + 14 * 8 + 4, SEEK_SET) == 0 && fread(f, len, BLOCK_INT) > 0 && len > 0)
+			n = max(len / 64 - 1, 0)
+		fclose(f)
+	}
+	TrieSetCell(g_MapPieces, key, n)
+	return n
+}
+
+// the mode's own count: measured the last time it played here, else a known one
+mode_slots_for(const id[])
+{
+	new path[192], line[64], m[32], v[12], n
+	new datadir[128]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, charsmax(path), "%s/gamemodes/modelslots.ini", datadir)
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			parse(line, m, charsmax(m), v, charsmax(v))
+			if (equali(m, id))
+			{
+				n = str_to_num(v)
+				break
+			}
+		}
+		fclose(f)
+	}
+	if (n <= 0 && equali(id, "basebuilder"))
+		n = BASEBUILDER_SLOTS
+	return n
+}
+
+map_models_needed(mode, const map[])
+{
+	if (mode < 0 || mode >= g_ModeCount)
+		return 0
+	return mode_slots_for(g_ModeId[mode]) + map_pieces(map)
+}
+
+bool:slots_fit(slots, pieces)
+{
+	return slots <= 0 || pieces <= 0 || slots + pieces + MODEL_SLACK <= MODEL_SLOTS
+}
+
+bool:mode_fits_map(mode, const map[])
+{
+	if (mode < 0 || mode >= g_ModeCount)
+		return true
+	return slots_fit(mode_slots_for(g_ModeId[mode]), map_pieces(map))
+}
+
+// gm_mapfit <mode> <map>: whether the mode can play the map (its model slots)
+public srv_mapfit()
+{
+	new id[32], map[32]
+	read_argv(1, id, charsmax(id))
+	read_argv(2, map, charsmax(map))
+	new mode = find_mode(id)
+	if (mode < 0 || !is_map_valid(map))
+	{
+		server_print("[Game Mode] Usage: gm_mapfit <mode id> <installed map>")
+		return PLUGIN_HANDLED
+	}
+	new slots = mode_slots_for(g_ModeId[mode]), pieces = map_pieces(map)
+	server_print("[Game Mode] %s on %s: %d model slots for the mode + %d map pieces of %d - %s", g_ModeName[mode], map, slots, pieces, MODEL_SLOTS, slots_fit(slots, pieces) ? "fits" : "too many")
+	return PLUGIN_HANDLED
+}
+
+// While this map loads, before the mode's plugins load their models: when the mode can't fit
+// the map (a map change the checks above didn't see: the app starting a game, a rotation, the
+// console), pause the mode's plugins so the map still loads; plugin_init then picks a mode
+// that fits and loads the map again.
+precache_guard()
+{
+	new datadir[128], path[192], mode[32], map[32]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, charsmax(path), "%s/gamemodes/current.txt", datadir)
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	fgets(f, mode, charsmax(mode))
+	fclose(f)
+	trim(mode)
+	get_mapname(map, charsmax(map))
+	new slots = mode_slots_for(mode), pieces = map_pieces(map)
+	if (!mode[0] || slots_fit(slots, pieces))
+		return
+
+	new paused = pause_mode_plugins()
+	g_NoFit = true
+	copy(g_NoFitMode, charsmax(g_NoFitMode), mode)
+	log_amx("%s has too many models for %s (%d + %d of %d slots): its %d plugins are paused on this load", map, mode, slots, pieces, MODEL_SLOTS, paused)
+}
+
+// pauses the mode's plugins (plugins-gamemode.ini) on this load, before their precache and init
+pause_mode_plugins()
+{
+	new cfg[128], path[192], line[128], plugin[64], paused
+	get_configsdir(cfg, charsmax(cfg))
+	formatex(path, charsmax(path), "%s/plugins-gamemode.ini", cfg)
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			if (!line[0] || line[0] == ';')
+				continue
+			parse(line, plugin, charsmax(plugin))
+			if (containi(plugin, ".amxx") != -1 && pause("ac", plugin))
+				paused++
+		}
+		fclose(f)
+	}
+	return paused
+}
+
+// ---------------------------------------------------------------------------
+// Safe mode: data/gamemodes/modestart.txt is "<mode> <map> <start|ok|end> <starts that failed>".
+// "start" is written while a map loads, "ok" once it's had 20 s of frames, "end" on a normal map
+// change or quit. A start still at "start" when the next one begins ended in a crash or a hang
+// (the watchdog ended it); two of the same mode in a row and the server starts in Classic, with
+// a note for the app (safemode.txt) until a mode is picked again.
+// ---------------------------------------------------------------------------
+
+// failed starts in a row, given the last record and the mode about to start (pure: the decision)
+stock safe_fails(const lastMode[], const lastState[], lastFails, const mode[])
+{
+	if (!mode[0] || !equali(lastMode, mode) || !equal(lastState, "start"))
+		return 0
+	return lastFails + 1
+}
+
+stock bool:safe_fall_back(fails, const mode[])
+{
+	return fails >= 2 && mode[0] && !equali(mode, "classic")
+}
+
+safe_path(path[], len, const file[])
+{
+	new datadir[128]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, len, "%s/gamemodes/%s", datadir, file)
+}
+
+safe_write(const mode[], const map[], const st[], fails)
+{
+	new path[192]
+	safe_path(path, charsmax(path), "modestart.txt")
+	new f = fopen(path, "wt")
+	if (f)
+	{
+		fprintf(f, "%s %s %s %d^n", mode, map, st, fails)
+		fclose(f)
+	}
+}
+
+// the mode and map of this load, as recorded, with a new state
+safe_mark(const what[])
+{
+	new path[192], line[128], mode[32], map[32], st[8], n[8]
+	safe_path(path, charsmax(path), "modestart.txt")
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	fgets(f, line, charsmax(line))
+	fclose(f)
+	parse(line, mode, charsmax(mode), map, charsmax(map), st, charsmax(st), n, charsmax(n))
+	if (mode[0])
+		safe_write(mode, map, what, 0)
+}
+
+public task_started_ok()
+{
+	safe_mark("ok")
+}
+
+// While this map loads (before the mode's plugins load): the last start of this same mode never
+// got going, twice: its plugins are paused, and plugin_init switches to Classic and loads again
+safe_mode_guard()
+{
+	new path[192], line[128], mode[32], map[32], lm[32], lmap[32], lst[8], ln[8]
+	safe_path(path, charsmax(path), "current.txt")
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		fclose(f)
+	}
+	trim(mode)
+	safe_path(path, charsmax(path), "modestart.txt")
+	f = fopen(path, "rt")
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		parse(line, lm, charsmax(lm), lmap, charsmax(lmap), lst, charsmax(lst), ln, charsmax(ln))
+	}
+	get_mapname(map, charsmax(map))
+	new fails = safe_fails(lm, lst, str_to_num(ln), mode)
+	if (!safe_fall_back(fails, mode))
+	{
+		safe_write(mode[0] ? mode : "classic", map, "start", fails)
+		return
+	}
+	new paused = pause_mode_plugins()
+	copy(g_SafeFrom, charsmax(g_SafeFrom), mode)
+	log_amx("Safe mode: %s stopped the server %d times in a row while starting (last on %s): its %d plugins are paused, starting in Classic", mode, fails, lmap, paused)
+	// (the reload into Classic is a normal start of its own)
+	safe_write("classic", map, "end", 0)
+}
+
+// after safe_mode_guard: Classic, the note, and load the map again
+fall_back_safe()
+{
+	new map[32]
+	get_mapname(map, charsmax(map))
+	write_data_line("lastmap.txt", map)
+	write_data_line("premode.txt", "")
+	new target = find_mode("classic")
+	if (target < 0)
+		target = 0
+	new was = find_mode(g_SafeFrom), wasname[48], note[192]
+	copy(wasname, charsmax(wasname), was >= 0 ? g_ModeName[was] : g_SafeFrom)
+	formatex(note, charsmax(note), "%s was turned off after it stopped the server twice while starting; fix it or switch back to it", wasname)
+	write_data_line("safemode.txt", note)
+	formatex(g_ReloadNote, charsmax(g_ReloadNote), "%s stopped the server twice while starting: Classic", wasname)
+	write_data_line("reloadnote.txt", g_ReloadNote)
+	g_SafeWriting = true
+	write_mode_plugins(target)
+	g_SafeWriting = false
+	g_Cur = target
+	g_Reloading = true
+	log_amx("Safe mode: %s - reloading %s in %s", note, map, g_ModeName[target])
+}
+
+// after precache_guard: back to the mode from before a map preset, else Classic, and reload
+fall_back_from_nofit()
+{
+	new map[32], premode[32]
+	get_mapname(map, charsmax(map))
+	// the reload must not apply this map's preset again
+	write_data_line("lastmap.txt", map)
+	read_data_line("premode.txt", premode, charsmax(premode))
+	write_data_line("premode.txt", "")
+	new target = find_mode(premode)
+	if (target < 0 || equali(g_ModeId[target], g_NoFitMode) || !mode_fits_map(target, map))
+		target = find_mode("classic")
+	if (target < 0 || equali(g_ModeId[target], g_NoFitMode))
+		return
+	new was = find_mode(g_NoFitMode), wasname[48]
+	copy(wasname, charsmax(wasname), was >= 0 ? g_ModeName[was] : "that mode")
+	formatex(g_ReloadNote, charsmax(g_ReloadNote), "%s has too many models for %s: %s", map, wasname, g_ModeName[target])
+	write_mode_plugins(target)
+	g_Cur = target
+	g_Reloading = true
+	write_data_line("reloadnote.txt", g_ReloadNote)
+	log_amx("%s - reloading %s", g_ReloadNote, map)
+}
+
+// Measures the mode's own count on this map (every slot handed out, less the map's brush
+// pieces) for mode_slots_for. The world and any studio models the map places count as the
+// mode's, so it errs on the safe side.
+remember_model_slots()
+{
+	new total = g_ModelMax, most = global_get(glb_maxEntities), model[8], pieces
+	new bool:seen[MODEL_SLOTS + 1]
+	for (new e = 1; e < most; e++)
+	{
+		if (!pev_valid(e))
+			continue
+		new idx = pev(e, pev_modelindex)
+		if (idx <= 0 || idx > MODEL_SLOTS)
+			continue
+		if (idx > total)
+			total = idx
+		pev(e, pev_model, model, charsmax(model))
+		if (model[0] == '*' && !seen[idx])
+		{
+			seen[idx] = true
+			pieces++
+		}
+	}
+	new slots = total - pieces
+	if (slots <= 0 || g_Cur < 0 || g_Cur >= g_ModeCount)
+		return
+
+	// rewrite modelslots.ini with this mode's line replaced
+	new path[192], line[64], m[32]
+	formatex(path, charsmax(path), "%s/modelslots.ini", g_DataDir)
+	new Array:keep = ArrayCreate(64)
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			parse(line, m, charsmax(m))
+			if (line[0] && line[0] != ';' && !equali(m, g_ModeId[g_Cur]))
+				ArrayPushString(keep, line)
+		}
+		fclose(f)
+	}
+	f = fopen(path, "wt")
+	if (f)
+	{
+		fprintf(f, "; Model slots each mode uses before a map's own pieces (gamemodes.amxx measures them)^n")
+		for (new i = 0; i < ArraySize(keep); i++)
+		{
+			ArrayGetString(keep, i, line, charsmax(line))
+			fprintf(f, "%s^n", line)
+		}
+		fprintf(f, "%s %d^n", g_ModeId[g_Cur], slots)
+		fclose(f)
+	}
+	ArrayDestroy(keep)
 }
 
 // ---------------------------------------------------------------------------
@@ -2547,7 +3016,7 @@ show_map_root(id)
 	menu_additem(menu, "Random map", "rnd")
 	new favs = list_count("favorites.txt"), hidden = list_count("hidden_maps.txt")
 	if (favs)
-		menu_additem(menu, fmt("Favourites \d(%d)", favs), "c-3")
+		menu_additem(menu, fmt("Favorites \d(%d)", favs), "c-3")
 	if (list_count("recent.txt") > 1)
 		menu_additem(menu, "Recently played", "c-4")
 
@@ -2568,7 +3037,7 @@ show_map_root(id)
 
 	if (g_PickMode[id] < 0)
 	{
-		menu_additem(menu, list_has("favorites.txt", cur) ? fmt("Remove %s from favourites", cur) : fmt("Add %s to favourites", cur), "fav")
+		menu_additem(menu, list_has("favorites.txt", cur) ? fmt("Remove %s from favorites", cur) : fmt("Add %s to favorites", cur), "fav")
 		if (hidden)
 			menu_additem(menu, fmt("Hidden maps \d(%d)", hidden), "c-5")
 		menu_additem(menu, "Bot navigation tools", "nav")
@@ -2744,6 +3213,13 @@ go_map(id, const map[])
 // mode -1 keeps the current mode (map presets may still apply on load)
 do_go(mode, const map[])
 {
+	if (!mode_fits_map(mode >= 0 ? mode : g_Cur, map))
+	{
+		new m = mode >= 0 ? mode : g_Cur
+		gm_print(0, "%s has too many models to play %s on it (it needs %d of the engine's %d). Pick another map.", map, g_ModeName[m], map_models_needed(m, map), MODEL_SLOTS)
+		log_amx("Not switching: %s has too many models for %s (%d of %d slots)", map, g_ModeName[m], map_models_needed(m, map), MODEL_SLOTS)
+		return
+	}
 	g_GoMode = mode
 	if (mode >= 0)
 	{
@@ -3638,6 +4114,15 @@ public admin_handler(id, menu, item)
 // RCON output is too lossy for large replies, so the panel reads the file.
 // ---------------------------------------------------------------------------
 
+// safe mode's note for the app (JSON-escaped), "" when there's none
+safe_note()
+{
+	static note[192], esc[256]
+	read_data_line("safemode.txt", note, charsmax(note))
+	json_escape(note, esc, charsmax(esc))
+	return esc
+}
+
 json_escape(const src[], out[], len)
 {
 	new j
@@ -3695,10 +4180,10 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"learn^":%d,^"learnstep^":^"%s^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^"}^n",
+	fprintf(f, "{^"t^":^"state^",^"learn^":%d,^"learnstep^":^"%s^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^",^"safemode^":^"%s^"}^n",
 		g_LearnPct, g_LearnStep, g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
 		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
-		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name())
+		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name(), safe_note())
 
 	for (new i = 0; i < g_ModeCount; i++)
 	{
@@ -3793,7 +4278,7 @@ public srv_mode()
 	read_argv(1, id, charsmax(id))
 	read_argv(2, map, charsmax(map))
 	new mode = find_mode(id)
-	if (mode < 0)
+	if (mode < 0 || (g_CurGone && mode == g_Cur))
 	{
 		server_print("[Game Mode] Unknown mode: %s", id)
 		return PLUGIN_HANDLED
@@ -4834,7 +5319,7 @@ show_quick(id)
 		menu_additem(menu, fmt("Peaceful bots: %s", get_cvar_num("bot_zombie") ? "\yOn" : "\dOff"), "peace")
 	new map[32]
 	get_mapname(map, charsmax(map))
-	menu_additem(menu, list_has("favorites.txt", map) ? fmt("Favourite map: \y%s", map) : fmt("Add %s to favourites", map), "fav")
+	menu_additem(menu, list_has("favorites.txt", map) ? fmt("Favorite map: \y%s", map) : fmt("Add %s to favorites", map), "fav")
 	menu_additem(menu, "Heal me", "heal")
 	if (!g_Career)
 		menu_additem(menu, "Give me $16000", "money")
@@ -4870,7 +5355,7 @@ public quick_handler(id, menu, item)
 		get_mapname(map, charsmax(map))
 		new bool:on = !list_has("favorites.txt", map)
 		list_set("favorites.txt", map, on)
-		gm_print(id, on ? "%s added to your favourite maps." : "%s removed from your favourite maps.", map)
+		gm_print(id, on ? "%s added to your favorite maps." : "%s removed from your favorite maps.", map)
 	}
 	else if (equal(info, "heal"))    server_cmd("gm_do heal")
 	else if (equal(info, "money"))   server_cmd("gm_do money")
@@ -5042,6 +5527,32 @@ new const MODE_PREFIXES[][][] =
 	{ "shero",       "de_ cs_" }
 }
 
+// P5: everyday maps a mode is also made for, by exact name, besides its own (br_*, ls_*): its map
+// votes keep to these and its own, never the everyday filler (the app's Play page lists the same)
+new const MODE_ALSO[][][] =
+{
+	{ "br",        "de_aztec cs_italy de_dust2 de_inferno de_train" },
+	{ "laststand", "de_dust2 de_inferno de_nuke de_aztec cs_office" }
+}
+
+// The MODE_ALSO entry of this mode or its family (br_duo, br_squads: br), or -1
+also_of(const id[])
+{
+	for (new i = 0; i < sizeof MODE_ALSO; i++)
+		if (mode_family(MODE_ALSO[i][0], id))
+			return i
+	return -1
+}
+
+bool:also_fits(a, const map[])
+{
+	new tok[32], pos
+	while ((pos = argparse(MODE_ALSO[a][1], pos, tok, charsmax(tok))) != -1)
+		if (equali(map, tok))
+			return true
+	return false
+}
+
 // Modes that only work on maps made for them: never offered on an everyday map
 new const MAP_MODES[][] = { "kreedz", "surf", "soccerjam", "basebuilder", "deathrun" }
 // Modes with a look of their own: their maps aren't everyday maps for other modes
@@ -5116,9 +5627,16 @@ bool:made_for(const id[], const map[], Array:pats, Array:ids)
 	new preset[32]
 	preset_id_of(pats, ids, map, preset, charsmax(preset))
 	if (preset[0])
-		return bool:equali(preset, id)
+		return mode_family(preset, id) // W3: br_ maps suit br_duo and br_squads too
 	return name_fits(id, map)
 }
+
+// W3: a mode and its variants ("br", "br_duo", "br_squads") are one family for map presets
+bool:mode_family(const base[], const id[]) // W3
+{ // W3
+	new n = strlen(base) // W3
+	return equali(base, id) || (equali(id, base, n) && id[n] == '_') // W3
+} // W3
 
 // Made for a mode that needs its own maps, or one with its own look
 bool:special_map(const map[], Array:pats, Array:ids)
@@ -5198,15 +5716,16 @@ mode_maps(mode, Array:out)
 	}
 	if (!ArraySize(withNav) && !ArraySize(without))
 	{
+		new also = also_of(id) // P5
 		new Array:pats = ArrayCreate(64), Array:ids = ArrayCreate(32)
 		read_preset_list(pats, ids)
 		for (new i = 0; i < ArraySize(g_Maps); i++)
 		{
 			ArrayGetString(g_Maps, i, map, charsmax(map))
-			if (made_for(id, map, pats, ids))
+			if (made_for(id, map, pats, ids) || (also >= 0 && also_fits(also, map)))
 				add_suited(map, bool:ArrayGetCell(g_MapNav, i), withNav, without, seen, hidden)
 		}
-		if (!needs_maps(id) && ArraySize(withNav) < 3)
+		if (!needs_maps(id) && also < 0 && ArraySize(withNav) < 3)
 		{
 			for (new i = 0; i < ArraySize(g_Maps); i++)
 			{
@@ -5222,13 +5741,15 @@ mode_maps(mode, Array:out)
 	for (new i = 0; i < ArraySize(withNav); i++)
 	{
 		ArrayGetString(withNav, i, map, charsmax(map))
-		ArrayPushString(out, map)
+		if (mode_fits_map(mode, map))
+			ArrayPushString(out, map)
 	}
 	if (ArraySize(withNav) < 2)
 		for (new i = 0; i < ArraySize(without); i++)
 		{
 			ArrayGetString(without, i, map, charsmax(map))
-			ArrayPushString(out, map)
+			if (mode_fits_map(mode, map))
+				ArrayPushString(out, map)
 		}
 	TrieDestroy(hidden)
 	TrieDestroy(seen)

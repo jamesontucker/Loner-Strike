@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Loner-Strike community database backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=20m
+# runs at the next boot if the machine was off at that time
+Persistent=true
+
+[Install]
+WantedBy=timers.target

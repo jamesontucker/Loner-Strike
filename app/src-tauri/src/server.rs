@@ -60,6 +60,8 @@ impl AppState {
             g.sharing.retarget(&g.data, g.port);
             // admins/VIPs whose time ran out leave users.ini
             crate::admins::sync(g);
+            // backups: this game's folder may be kept and written (safety.rs)
+            crate::safety::use_game(g);
         }
         *self.current.write().unwrap() = g;
     }
@@ -308,6 +310,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::admins::routes())
         .merge(crate::setup_api::routes())
         .merge(crate::servers::routes())
+        .merge(crate::crashes::routes()) // MCP: crash tracking
         .merge(crate::hltv::routes())
         .merge(crate::voice::routes())
         .merge(crate::webstatus::routes())
@@ -317,10 +320,12 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::modevote::routes())
         .merge(crate::scrim::routes())
         .merge(crate::community::routes())
+        .merge(crate::deeplink::routes()) // P5: loner-strike:// links
         .merge(crate::prefs::routes())
         .merge(crate::plugins::routes())
         .merge(crate::sounds::routes())
         .merge(crate::saved::routes())
+        .merge(crate::roles::routes()) // MCP: community roles (owner, or a shared-control Admin for applications)
         .fallback(ui);
     // X-Target is applied after the computer-only routes are merged (a layer only covers
     // routes already there), and the listener's guard stays outermost
@@ -330,15 +335,21 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::app_api::local_routes())
             .merge(crate::servers::local_routes())
             .merge(crate::mapcopy::local_routes())
+            .merge(crate::tools::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())
             .merge(crate::backup::local_routes())
             .merge(crate::plugins::local_routes())
             .merge(crate::sounds::local_routes())
             .merge(crate::extras::local_routes())
+            .merge(crate::fastdl::local_routes())
             .merge(crate::browser::routes())
             .merge(crate::smartchat::local_routes())
             .merge(crate::control::local_routes())
+            .merge(crate::mcp::local_routes())
+            .merge(crate::safety::routes())
+            // a POST that kept a backup says so (X-LS-Undo), for the page's "Undo"
+            .layer(middleware::from_fn(crate::safety::mark_saves))
             .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))
             .layer(middleware::from_fn_with_state(state.clone(), guard_local)),

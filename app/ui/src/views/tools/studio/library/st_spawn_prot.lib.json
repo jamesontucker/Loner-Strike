@@ -1,0 +1,603 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Spawn Protection",
+ "description": "God mode and a glow for Seconds (0: 3) after a player spawns; it ends early if they shoot.",
+ "category": "Starter: player state",
+ "kind": "macro",
+ "root": "sp_give",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "sp_end",
+   "name": "End Spawn Protection",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  }
+ ],
+ "macros": [
+  {
+   "id": "sp_give",
+   "name": "Spawn Protection",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "sp_on",
+   "name": "Protected",
+   "type": "bool",
+   "scope": "player",
+   "default": false
+  }
+ ],
+ "nodes": [
+  {
+   "id": "sp_give_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_god",
+   "type": "player.godmode",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "color": "white"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_on",
+   "type": "var.set",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "var": "sp_on",
+    "value": true
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_give_end",
+   "type": "fn.call",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "func": "sp_end"
+   },
+   "graph": "sp_give"
+  },
+  {
+   "id": "sp_end_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_on",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "sp_on"
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_god",
+   "type": "player.godmode",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "on": false
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_off",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "sp_on",
+    "value": false
+   },
+   "graph": "sp_end"
+  },
+  {
+   "id": "sp_end_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {},
+   "graph": "sp_end"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "sp_give_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "sp_give_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "sp_give_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "sp_give_god",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_god",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "sp_give_god",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "sp_give_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_on",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_on",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "sp_give_on",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "sp_give_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "sp_give_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "sp_give_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "sp_give_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "sp_give_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_give_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "sp_give_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "sp_give_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_give_end",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "sp_give_end",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_give_out",
+    "pin": "over"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_on",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "sp_end_on",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sp_end_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "sp_end_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sp_end_god",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_god",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "sp_end_god",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "sp_end_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "sp_end_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "sp_end_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "sp_end_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_end_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "sp_end_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sp_end_ret",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "sp_give",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Spawn Protection: Wire Player Spawned in. Call End Spawn Protection from Weapon Fired to end it as soon as they shoot. Bots get it too (and don't know they have it)."
+  }
+ ]
+}

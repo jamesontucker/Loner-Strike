@@ -1,0 +1,167 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Capture Zone",
+ "description": "A capture point at an entity that a team takes by standing in it for 10 seconds; bots are sent to take it.",
+ "category": "Starter: rounds and scoring",
+ "kind": "function",
+ "root": "cz_make",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "cz_make",
+   "name": "Make Capture Zone",
+   "inputs": [
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "zone",
+     "name": "Zone",
+     "type": "entity"
+    }
+   ]
+  }
+ ],
+ "macros": [],
+ "variables": [],
+ "nodes": [
+  {
+   "id": "cz_make_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_make",
+   "type": "comp.create",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "kind": "ls_capture_point",
+    "at": "",
+    "keys": "time=10|radius=160"
+   },
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_bots",
+   "type": "bots.goal",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "kind": "capture",
+    "prio": 60,
+    "secs": 3600,
+    "radius": 160
+   },
+   "graph": "cz_make"
+  },
+  {
+   "id": "cz_make_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cz_make"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "cz_make_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "cz_make_entry",
+    "pin": "at"
+   },
+   "to": {
+    "node": "cz_make_make",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cz_make_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "cz_make_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cz_make_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "cz_make_make",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cz_make_ret",
+    "pin": "zone"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "cz_make",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Capture Zone: Make Capture Zone at an entity; Point Captured runs when a team takes it (end the round there, or score). The time and size are the Create Component keys inside (time=10, radius=160): change them there. Bots: the zone is a capture goal for every bot."
+  }
+ ]
+}

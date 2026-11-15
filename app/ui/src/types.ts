@@ -28,6 +28,8 @@ export type LiveState = {
   rounds_ct?: number;
   /** the map after this one ("" when it's this one again) */
   nextmap?: string;
+  /** safe mode: a mode turned off after it stopped the server twice while starting ("" or missing: none) */
+  safemode?: string;
   /** bots learning this map: percent done (-1 or missing: not learning), and what step */
   learn?: number;
   learnstep?: string;
@@ -89,7 +91,7 @@ export type MapInfo = {
   nav: boolean;
   thumb: "shot" | "radar" | "lookup" | null;
   by: string;
-  source: "stock" | "download" | "added";
+  source: "stock" | "download" | "added" | "server";
   mod?: number;
   modName?: string;
   pack?: string[];
@@ -115,7 +117,11 @@ export type GbJob = { id: string; mod: number; file: number; state: string; mess
 export type AppInfo = {
   version: string;
   update: { version: string; notes?: string } | null;
-  game: { id: string; dir: string; hl: string; dedicated?: boolean; port?: number; installed?: string[]; outdated?: string[]; unmanaged?: string[]; unbuilt?: string[] } | null;
+  game: {
+    id: string; dir: string; hl: string; dedicated?: boolean; port?: number; installed?: string[]; outdated?: string[]; unmanaged?: string[]; unbuilt?: string[];
+    /** the other game in the same Half-Life folder, set up and with parts waiting (Parity A) */
+    others?: { id: string; dir: string; hl: string; outdated: string[] }[];
+  } | null;
   bots?: number | null;
   lastmap?: string | null;
 };

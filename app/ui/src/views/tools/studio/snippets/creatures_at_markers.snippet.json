@@ -1,0 +1,120 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Creatures at markers",
+ "description": "A zombie at every entity named creature_spot each round; 100 for each one killed.",
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 20,
+    "y": 66
+   },
+   "params": {}
+  },
+  {
+   "id": "each",
+   "type": "flow.for_each_entity",
+   "pos": {
+    "x": 340,
+    "y": 31
+   },
+   "params": {
+    "by": "name",
+    "name": "creature_spot"
+   }
+  },
+  {
+   "id": "make",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 660,
+    "y": 20
+   },
+   "params": {
+    "kind": "zombie",
+    "at": "creature_spot"
+   }
+  },
+  {
+   "id": "ck",
+   "type": "creature.on_killed",
+   "pos": {
+    "x": 20,
+    "y": 207
+   },
+   "params": {}
+  },
+  {
+   "id": "pay",
+   "type": "player.add_money",
+   "pos": {
+    "x": 340,
+    "y": 205
+   },
+   "params": {
+    "amount": 100
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "each",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "make",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ck",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "ck",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

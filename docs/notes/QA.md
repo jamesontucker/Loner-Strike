@@ -1,0 +1,323 @@
+# QA — independent real tests of Tools (editor, compile, Game Mode Studio, Last Stand, Battle Royale)
+
+2026-11-12, agent QA (+ three QA sub-runs). Everything below was run for real: dev servers on the real routes, SDHLT
+through CrossOver, HLDS sims (QA1 27380, QA4/QA5 27386-7, QA7/QA8 27388-9, all clones of Sim/LSPLAY) and once the real
+CS 1.6 client. No product code was changed. Bugs are filed in the owners' notes under "Requests from QA":
+editor → P5.md, compile → P4.md, Game Mode Studio → X.md, Last Stand / BR / components → W1.md, DLL/creatures → Y.md.
+Scripts, logs and screenshots: QA's scratch (`scratchpad/qa/`), not in the repo; third-party map sources were only
+downloaded there (licences: TWHL 6398 and 6452 CC BY; 6216 All Rights Reserved, read only) and the WADs QA put in the
+game folder for compiling were removed afterwards.
+
+## Summary
+| Area | Features tested | Pass | Partial / not verifiable | Fail |
+|---|---|---|---|---|
+| RMF/JMF import → compile → HLDS (8 real files) | 8 | 2 (pmk_m2, pmk_m3 load like the reference) | 1 (carver: no inside) | 5 (geometry drift → leaks / broken brushes) |
+| Export / compile / play (from scratch, leak, cordon, outpost, valley, client) | 9 | 9 | 0 | 0 |
+| Editor features through the UI (WebKit + Chromium) | ~60 rows | 41 | 12 (incl. not reached) | 1 to check by hand (3D push/pull) |
+| Game Mode Studio nodes + routes | 27 rows | 17 | 4 | 6 |
+| Last Stand + Battle Royale playthroughs | 23 rows | 14 | 4 | 5 |
+
+Worst: (1) RMF/JMF import moves slanted brushes → real Hammer/J.A.C.K. maps leak (P5); (2) Studio Drop Weapon crashes
+HLDS (DLL, X + Y); (3) Studio modes never load gm_components, so templates and component/creature nodes stall (X);
+(4) a Studio breakpoint inside For Each freezes the server with no Resume (X); (5) Last Stand bots never buy guns, BR
+start loadout and drop-in broken (W1). **Y's hang after a boss-wave loss: not reproduced** (3 boss losses, see Y.md).
+
+## 1. Real Hammer / J.A.C.K. imports (agent QA, devserve 27381, HLDS Sim/QA1 port 27380)
+
+Sources (real projects, kept outside the repo in QA's scratch, not redistributed):
+- `regamedll_test_map_v8.rmf` (ReGameDLL_CS `extra/Test Maps/src`, Hammer RMF 2.2, + `regamedll_zedit.wad` and the shipped `.bsp`)
+- TWHL vault 6452 "2020 Practice" (CC BY): `pmk_m1/2/3.rmf` (RMF 2.2) + their BSPs
+- TWHL vault 6398 "A Dozen Map Sources" (CC BY, J.A.C.K.): `de_kobbl_v102.jmf`, `aim_stadium_gsu_v01.jmf`, `pustinya_v0002.jmf`, `carver1.jmf`
+- TWHL vault 6216 de_kobbl v1.0.2.1 release BSP (for comparing the JMF import's entities; All Rights Reserved, only read)
+
+Route used: the Project panel's Open on a .rmf/.jmf beside a project (`POST /api/tools/editor/project/action {action:"open"}`),
+because `import-other` (File > Import) only works with the app's native dialog (see bug QA-12). Then Save (project), reopen,
+Export .map, live checks, `POST /api/tools/compile/start` Normal, copy the .bsp to an HLDS and load it (console log +
+an entity-count plugin `qa_ents` on QA1). Reference: QA's own RMF reader (`rmfcount.py`, reads the whole file to the
+last byte) for counts, and QA's own RMF→.map converter (`rmf2map.py`, Hammer's stored plane points, as Hammer exports)
+compiled with the same SDHLT command lines.
+
+| Map | Counts source → editor (brushes / faces / entities / brush ents / groups / visgroups / textures) | Entity keys | Geometry vs source | Compile (Normal) | HLDS load |
+|---|---|---|---|---|---|
+| regamedll_test_map_v8.rmf | 760/4834/442/154/18/0/77 → identical | 431/442 identical; 8 spawnflags differ (QA-2), 3 game_text messages lost (QA-3) | 154 brushes off by >0.1 u, worst 2.7 u (QA-1) | **FAIL**: leak + 2 illegal brushes; reference .map from the same RMF: no leak, no illegal brushes | reference build loads (455 edicts, 151 brush models); a cordoned part of the import compiles and loads (90 edicts) |
+| pmk_m1.rmf | 172/1059/62/21/4/1 ("subway")/41 → identical | 62/62 | 47 brushes >0.1 u, worst 2.3 u | **FAIL**: leak; reference: clean | reference loads |
+| pmk_m2.rmf | 185/1138/77/52/3/0/66 → identical | 77/77 | 9 >0.1 u, worst 0.26 u | PASS (6 s) | PASS: 73 edicts / 33 brush models, same as the reference build |
+| pmk_m3.rmf | 308/1677/109/35/1/0/60 → identical | 109/109 | 104 >0.1 u, worst 9.3 u | PASS with 3 "illegal brush" warnings (reference: 0) | PASS: 89 / 19, same as reference |
+| de_kobbl_v102.jmf (CS) | 5118 brushes, 1137 entities, 11 groups, 11 visgroups (6 hidden ones noted) | every targetname of the released BSP present; class counts ≥ release | 52 brushes the editor itself calls broken, one with empty bounds | **FAIL**: "brush outside world" (the empty brush); live checks also show false limit errors (QA-6) | – |
+| aim_stadium_gsu_v01.jmf (CS) | 738 brushes, 385 entities, 16 groups, 3 visgroups | – | 5 illegal brushes at compile | **FAIL**: leak | – |
+| pustinya_v0002.jmf (CS) | 1008 brushes, 69 entities | – | – | **FAIL**: leak + planes 132 % of the limit | – |
+| carver1.jmf (tutorial) | 226 brushes, 1 entity | – | – | fails with the raw "Portal file … does not exist" (no entities: expected to fail, words aren't friendly, QA-10) | – |
+
+Imports are fast (0.01–0.12 s) and never errored. Counts, groups, visgroup names, entity keys and point origins match.
+**Brush geometry does not**: see QA-1. Everything an RMF/JMF user imports with slanted brushes comes out a bit moved,
+which leaks or breaks brushes on 4 of 6 real maps that compiled cleanly from the same source.
+
+## 2. Real export / compile / play
+
+| Test | Real test done | Result | Evidence |
+|---|---|---|---|
+| Build from nothing via routes | new → delete all → box 1024×1024×256 → hollow 16 (6 walls) → textures on 5 walls → fit/shift/scale/rotate/world/justify on the floor → crate + clip keep-both → cylinder → box tied to func_door (+speed, angles) → 2 CT + 2 T spawns, light, light_environment → components ls_weapon_spawner + ls_loot_container → prefab builtin:stairs → duplicate + undo + redo → live checks → save | PASS (26/26 steps, counts checked in `GET doc`) | `scratchmap/build_log.json` |
+| Export + compile Normal + install (the Playtest compile path) | compile `{preset: normal, install: true}` | PASS: CSG/BSP/VIS/RAD in 5 s, installed to cstrike/maps | BSP entity lump: 10 entities, 2 models |
+| Playtest in the real game | started CS 1.6 through CrossOver's Steam `-applaunch 10 +map qa_box` exactly like the app's launch | PASS: listen server on qa_box, bots joined, learned the map (nav saved), room/door/textures visible | `client_qa_box_game.png`, client console log. The app's own Playtest button (`/api/app/launch`) needs the app window, not run. Note: the game started in mode "fefwefew" (someone's Studio test had set current.txt) |
+| qa_box on a dedicated server | QA1, classic and laststand | PASS: 40 edicts, func_door brush model, 4 bots; in Last Stand "2 components on qa_box" | load logs |
+| Leak detection | wall deleted, compile Fast | PASS: fails with "The map leaks…", leak line from `.lin` (10 points through the gap), linked to the entity it starts from | |
+| Cordon | same leaky map, cordon box + spawns + keep lights | PASS: compiled sealed, playtest spawns added, loads on QA1 (40 edicts, bots) | also on the imported RMF (a 700×700 area: compiled, warnings for targets outside, loads) |
+| ls_outpost source | open .map, save, export, compile Normal, Last Stand on QA1 | PASS: export identical except the header comment and a trailing `;` in `wad`; compiled entity lump identical to the shipped ls_outpost.bsp (100 ents, 22 models); "19 components on qa_outpost" | |
+| br_valley source (uncommitted, snapshot 22:28) | same | PASS: 2974 brushes, compile 243 s (VIS 152 s), only number formatting differs on export (87.500 → 87.5), loads (66 edicts, 13 brush models) | |
+
+Also by route (QA): autosave → `kill -9` the dev server → restart → recovery found (7 brushes) → recover → 7 brushes
+(PASS); two saves → two backups listed in the Project panel (PASS); history panel route lists the undo steps (PASS).
+
+## 3. Editor features through the UI (Playwright, WebKit and Chromium; results checked in `GET doc`)
+| Feature | Real test | WebKit | Chromium | Result |
+|---|---|---|---|---|
+| Box tool in Top / in 3D | drag; brush exactly at the grid points / on z=0 | ✓ | ✓ | PASS |
+| Undo/redo (buttons, Mod+Z, Mod+Shift+Z) after box, hollow, carve, merge, clip, vertex, find/replace, duplicate | brush counts back and forth | ✓ | ✓ | PASS |
+| Click pick, box select in a flat view | | ✓ | ✓ | PASS |
+| Box select in 3D | | – | – | not reached |
+| Hollow / carve / merge | 1→6 walls; 8→11 (cutter kept); 8→7 | ✓ | ✓ | PASS |
+| Clip tool (Tab cycles sides, Enter) | +1 brush at x=−192 | ✓ | ✓ | PASS |
+| Vertex tool | corner −128→−96; .map stays whole numbers | ✓ | ✓ | PASS (float noise in UI sizes, P5 #9) |
+| Transform dialog, mirror, turn 90°, line up / spread out | | ✓ | ✓ | PASS |
+| Group / ungroup, pick groups vs objects | | ✓ | ✓ | PASS |
+| Tie to entity / move to world | | ✓ | ✓ | PASS (selection after tie, P5 #9) |
+| Copy / paste / paste special (4 copies) / cut | 8→12→8 | ✓ | ✓ | PASS |
+| Alt ignores snap, snap to grid (Mod+B) | | ✓ | ✓ | PASS |
+| Entity tool; FGD form: colour+brightness, flags, choices, angle dial, new key | `_light`, spawnflags=1, rendermode=1, angle=90 | ✓ | ✓ | PASS |
+| Duplicate with renaming (Mod+D) | t1 → t2 and the relay's target → t2, originals kept, one undo | ✓ | ✓ | PASS |
+| Multi-entity keys | angle 270 on 2 spawns, one undo "Set angle on 2" | ✓ | ✓ | PASS |
+| Find and replace textures | 36 places / 6 brushes; one undo; redo | ✓ | ✓ | PASS (also used by QA on 4 real imports) |
+| Select same texture / same type | | ✓ | ✓ | PASS |
+| Select touching / all / none / invert | | – | – | not reached |
+| Go to (editor id, "Entity 0, Brush 0") | | ✓ | ✓ | PASS |
+| Hide / show all / isolate; lock / unlock all | | ✓ | ✓ | PASS |
+| Outliner search / eye / lock | search filters; eye/lock buttons not reached | ✓ | ✓ | PARTIAL (P5 #9) |
+| Visibility sets | new from pick, untick hides, pick contents | – | ✓ | PASS |
+| Texture browser + apply | "crate" 88 tiles, 6/6 faces | ✓ | ✓ | PASS |
+| Texture tool + face sheet (shift 16, scale 0.5, turn 45, justify, fit) | one face only | – | ✓ | PASS; also all align actions by route on qa_box (fit, shift, scale, rotate, world, justify) |
+| Fit N×M, texture lock on move, drag handles | | – | – | not reached |
+| Shapes: cylinder, wedge, spike, sphere, arch | 0 broken brushes | – | ✓ | PASS |
+| Move tool drag; arrow nudge | +64 x; nudge did nothing | – | ✓ | PASS / check by hand |
+| Measure | 502.41 units | – | ✓ | PASS |
+| Push/pull a face in 3D | drag up 80 px on the picked box | – | ✓ | FAIL? check by hand (P5 #9) |
+| Move/rotate/scale gizmos, Shift-drag copy | | – | – | not reached |
+| History panel (list / jump) | list OK; jump test mis-clicked | – | ✓ | PARTIAL |
+| Live checks with fixes, click to pick | | – | ✓ | PASS |
+| Entity report, map information, grid dialog, `]` | | – | ✓ | PASS |
+| Map properties | opens; edit not reached | – | ✓ | PARTIAL |
+| Unreal camera RMB+WASDQE with a search box / Inspect field focused | view moves, nothing typed | – | ✓ | PASS |
+| Blender / Hammer camera presets | | – | ✓ | not verified |
+| Layouts (Single, Quad, 1+3, Two), maximise (Shift+Space, double-click) | | – | ✓ | PASS |
+| Per-pane drawing style | listed; switching not reached | – | ✓ | PARTIAL |
+| Docking: drag tab to bottom, float, remembered after reload, presets, ⋯ menu | | – | ✓ | PASS (resize handle not verified) |
+| Command palette / cheat sheet / key sets | | – | – | not reached |
+| Prefabs: place, save what's picked; replace with prefab | | – | ✓ | PASS / not reached |
+| Components library (18) → ls_barricade | | – | ✓ | PASS (+ by route: 2 and 19 components seen by gm_components in HLDS) |
+| Publish… | opens Community publish for the map | – | ✓ | PASS |
+| Save/open/export/import through the UI, History & restore page | | – | – | not reached in the UI (all done by route in parts 1-2) |
+| Unsaved-changes question; console errors | | ✓ | ✓ | PASS, none |
+WebKit covered the first half of the list; the run was cut before the second half (Chromium only there).
+
+## 4a. Game Mode Studio (sims QA4/QA5, bots; evidence = Studio debug events + a QA dump plugin + console)
+| Node / feature | Result | Evidence / bug |
+|---|---|---|
+| Player actions: give weapon/item, health, armour, money, frags, speed, gravity, glow, model, role | PASS | `hp=150 ap=77 money=2034 frags=2 grav=0.50 maxspeed=200 … m249` |
+| Player readouts | PASS | |
+| Freeze, teleport, launch, no-fall, set team, strip, kill, respawn | PASS | teleport moved, strip → knife, respawn → glock18 |
+| Drop Weapon | **FAIL: HLDS crash** | X #1, Y |
+| Damage scale / set / block | PASS (Player Hurt fires for blocked hits) | hp 100→88 at ×0.5; X #9 |
+| Down / revive / timeout | PASS | 8 downed, 1 revived by a bot at 50 HP |
+| Squads + friendly fire off | PASS | 114 hurt, 0 kills in 250 s |
+| Buying rules incl. bots | PASS | pistols only / m249+ak47 / money untouched |
+| Saved values survive kill -9 | PASS | 4 → 5,6,7 after restart |
+| Round clock set/add/pause/resume, Time Up | PASS | Time Up at 66.02 s (≈65) |
+| Variables, maths, conditions, functions, flow, timers | PASS | |
+| Events (map, round, join/leave, team, bomb) | PASS (Team Changed ×3) | bomb defused never happened |
+| Player used / touched | not tested | no fitting entity, bots don't USE |
+| Chat command | PASS | `cc called` |
+| Menu | not verifiable with bots | needs a person |
+| Game settings, use entity | PASS | |
+| Bot orders (go to, hold, follow, release) | plausible | not measured to the unit |
+| Component nodes | MIXED | X #2, #8 |
+| Creature nodes | FAIL alone, PASS with gm_laststand | X #3 |
+| Last Stand Lite template | **FAIL: stalls** | X #4 |
+| Royale Lite template | FAIL as installed; PASS with gm_components | X #2/#4 |
+| Compile / playtest / install / uninstall / source / delete routes | PASS (leftovers on uninstall) | real game folder, cleaned up |
+| Switch an open game | not run (needs the game) | |
+| Breakpoints server side | PASS | world paused 8 s, resume runs the node |
+| Breakpoints in the page (WebKit + Chromium) | **FAIL** | X #5, #6 |
+| `npm run test:studio` | 12/14 | X #9 |
+| studio-playtest.spec (WebKit + Chromium) | PASS | |
+
+## 4b. Last Stand and Battle Royale (QA7 ls_outpost v2, QA8 br_valley + de_dust2, bots)
+| Feature | Result | Evidence / bug |
+|---|---|---|
+| 7 full stands (Normal/Easy, 5-8 bots), phases, "wave N held" | PASS | |
+| Loss → new stand (5 losses) / a win (lst_waves 3) | PASS | win not logged (W1 #7) |
+| Creatures, 3 boss waves, 361 kills, best-wave record | PASS | records 2 → 4 |
+| Barricade boards drop / repair / break → not solid | PASS | 5/5 → 3/5 → 0/5 → 5/5 |
+| Barricades block movement | PASS | 0 overlaps (0.5 s probe) |
+| Bullets pass barricades | PASS | 504/504 (`ls_comp_tracestats`) |
+| Hold-USE repair by a person, shop menu, HUD/chat text | not verifiable without a person | |
+| Shop: bots buy at the armory; Barney loaded | PASS | |
+| CS buying between waves (bots) | **FAIL** | W1 #1 |
+| Revive | PASS | back in 5 s mid-wave |
+| Supply drops land / opened | land PASS; opened FAIL (0/27) | W1 #5 |
+| Creatures through intact gate | FAIL? | W1 #4 |
+| AMXX / engine errors | PASS, none | |
+| BR 6 games to a winner, zone stages + damage, crate loot | PASS | |
+| BR start loadout | **FAIL** | W1 #2 |
+| BR drop-in | **FAIL** (with br_dropin 0: PASS) | W1 #3 |
+| BR squads | PARTIAL | ran; friendly fire between mates not checked |
+| br_valley loot hints | FAIL (32-slot cap ×1092 log lines) | W1 #6 |
+| **Y's hang after a boss-wave loss** | **not seen** | 22:27:11, 22:32:36, 22:44:21 losses; rcon answered after each (Y.md) |
+
+## Not covered (needs the app window or a person)
+The app's own Playtest button end to end (`/api/app/launch`; QA launched the client the same way by hand instead),
+File > Import's native dialog, Studio "switch an open game", menus / HUD / hold-USE repair as a player, the real
+WKWebView / WebView2 compositor (Playwright WebKit/Chromium stand in), native Windows.
+
+## Round 2 (2026-11-12, late)
+
+### (1) Fresh setup, then an update
+How: QA's harness test (`qa_fresh_setup_and_update`, in a scratch copy of the crate only, never committed) on an APFS clone of
+the game folder (`drive_c/Loner-Strike/QAfresh`), `LS_APP_DIR` = a fresh scratch app folder. Step 0: the real uninstall,
+then `addons/` and our maps wiped (hand-copied leftovers no record knows about), leaving stock liblist/mp.dll. Step 1:
+`plan_install` + `run_install` of foundation + core + mode-deathrun (the real setup job, downloads + amxxpc via CrossOver).
+Step 2: a Studio mode and a community mode installed with the real `register_mode`, a community map, a line added to
+laststand.cfg and to mappresets.ini. Step 3: a shipped file changed (br.cfg), install run again (the update path).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Install job finishes | PASS ("done", 215 s) but **with a failed compile** | notes below |
+| ls_outpost + br_valley: bsp, nav, lsv, res, overview txt + bmp | PASS: all 12 present and byte-identical to the repo | |
+| modes.ini lines laststand + br | PASS | |
+| laststand / br cfg + plugins.ini (gm_components + mode plugin) | PASS | |
+| gm_components.amxx, gamemodes.amxx compiled | PASS | |
+| **gm_laststand.amxx, gm_battleroyale.amxx compiled** | **FAIL**: `fatal error 100: cannot read from file: "loner"`: setup copies only the .sma files, not `scripting/include/loner.inc` | W1.md round 2 #1 (Critical) |
+| mappresets ls_* → laststand, br_* → br | PASS | |
+| deathrun.cfg brain settings (with mode-deathrun) | PASS: bot_ls_deathrun 1, bot_ls_fight 1, bot_ls_solo 0; DeathrunManager + dr_bot_traps compiled | |
+| Update keeps Studio mode (modes.ini line, plugins.ini, amxx) | PASS | |
+| Update keeps community mode + community map | PASS | |
+| Update brings the changed shipped file | PASS | |
+| Update keeps a player's own line in laststand.cfg / mappresets.ini | FAIL (overwritten; Low, maybe intended) | W1.md round 2 #2 |
+| Update also fails gm_laststand / gm_battleroyale | FAIL (same cause) | |
+
+### (2) Editor UI, the rest, WebKit and Chromium
+| Feature | WebKit | Chromium | Result |
+|---|---|---|---|
+| Box select in 3D | ✓ | ✓ | PASS (5 picked) |
+| Select touching / all / none / invert | ✓ | ✓ | PASS (2 / 13 / 0 / 12) |
+| Outliner search, row click, eye, lock | ✓ | ✓ | PASS |
+| Visibility sets | ✓ | ✓ | PASS (doc visSets) |
+| Texture tool + face sheet; fit N×M; align to world; drag on the face; texture lock on move | ✓ | ✓ | PASS (only that face's line changes; lock keeps the texture in place) |
+| Texture drag handles (turn ring, stretch ends) | – | – | not tested |
+| Shapes (cylinder, wedge, spike, sphere, arch) | ✓ | ✓ | PASS |
+| Move tool drag; arrow nudges | ✓ | ✓ | PASS (round 1's nudge failure was the test) |
+| Measure | ✓ | ✓ | PASS |
+| Push/pull a face in 3D | ✓ | ✗ | PARTIAL: works in WebKit, nothing in Chromium (P5 round 2 #1) |
+| Rotate gizmo | ✓ | ✓ | PASS |
+| Move / scale gizmo handles, Shift-drag copy | ✗ | ✗ | INCONCLUSIVE (Playwright never hit a handle; hand check) |
+| History panel jump | ✓ | ✓ | PASS (9 → 7 → 9) |
+| Map properties (Sky) | ✓ | ✓ | PASS |
+| Camera presets: Unreal (Alt orbit, MMB pan, wheel), Blender orbit, Hammer Z look | ✓ | ✓ | PASS |
+| Per-pane drawing style | ✓ | ✓ | PASS (no control in Single layout: P5 round 2 #3) |
+| Dock resize | – | – | INCONCLUSIVE (handle not found by the test) |
+| Command palette, cheat sheet, key sets (Hammer → Quad, Shift+B box) | ✓ | ✓ | PASS |
+| Replace with prefab | ✓ | ✓ | PASS (duplicate prefab names: P5 round 2 #2) |
+| Entity report, map info, grid dialog, `]` | ✓ | ✓ | PASS |
+| New, Save (Mod+S), dirty dot, backups, Save as, Open, Recent | ✓ | ✓ | PASS |
+| Autosave (clock moved 3 min) | ✓ | ✓ | PASS (autosave.lsmap, recovery route found=true) |
+| Recovery banner after kill -9 | – | ✗ | NOT CONFIRMED: the disk filled up (ENOSPC) at that moment; route-level recovery passed in round 1 |
+| Export / import .map through the UI, History & restore page | – | – | not tested (disk full); export/import done by route in round 1 |
+
+**Machine note:** the data volume reached 100 % (206 MB free) during round 2: 31 GB under /private/tmp/claude-501 (all
+sessions), 13 GB of cargo target, many HLDS sims. QA deleted its own finished sims (QA4, QA5, QA7, QA8, QAfresh) and
+clones; QA1 is kept for re-tests.
+
+### (3) Re-tests as fixes land
+| Bug | Fix | Re-test (real) | Result |
+|---|---|---|---|
+| P4 #1 WAD beside the project not found | 05b4602 | regamedll_test_map project with regamedll_zedit.wad beside it, Fast compile from a fresh build of the tree (WAD not in any game folder) | **FIXED**: found, `-wadinclude regamedll_zedit.wad`, CSG ran (the map still leaks: P5 #1, geometry) |
+| P4 #2 empty WAD said as "not on this computer" | 05b4602 | aim_stadium with the 0-byte stgswad3.wad listed | **FIXED**: "These texture files can't be read: stgswad3.wad (it's empty (0 bytes))…" |
+| P4 #3 raw "Portal file … does not exist" | 05b4602 | carver1.jmf, Normal | **FIXED**: "The map has nothing inside it for the compiler to start from. Put a player spawn…" |
+| SDHLT download into a fresh app folder | – | dev server with a fresh app dir: `POST compile/setup` | PASS: downloaded from GitHub, checked, installed in 2 s |
+| P5 #1-#6 (RMF/JMF geometry, spawnflags, text, checks) | uncommitted work in rmf.rs/checks.rs at 00:10 | waiting for the commit | – |
+| X #1-#9, W1 #1-#7, W1 round 2 #1, Y | not landed yet | waiting | – |
+Note: a dev server run with a different HOME can't find the CrossOver bottle (steam::find_installs), so compiling says
+"Set up the game first"; the dev server's own temp app folder (LS_APP_DIR, new) is enough isolation.
+
+## Rule from Y (2026-11-13): touch only your own server processes
+- Never attach a debugger (`winedbg <pid>`, `attach`, DebugBreakProcess, anything that puts a thread into another
+  process) to a running hlds under CrossOver: the injected thread starts at 0xfff4fadc and kills the server.
+- Stop, signal or inspect only the processes your own script started: by the PID you got when you started it, or by a
+  pattern that names your own sim folder (`Sim[\\/]<yours>[\\/]hlds.exe`). Never by name (`hlds.exe`, `winedbg`) and
+  never by "the newest process". Before a start, make sure your port is free (`lsof -nP -iUDP:<port>`).
+- Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
+  winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
+  `cstrike/ls_watchdog.log` in the server folder.
+
+## Round 3 re-tests (2026-11-13, HEAD 1ceff77 + X's uncommitted Studio edits; brains r43392249830 → r43393053888 → r43395720981)
+
+### Hammer / J.A.C.K. imports (fixed importer 3958840, compile b8944a4/05b4602), each re-imported → saved → exported → Normal → HLDS
+| Map | Geometry vs source | Entities | Compile | Server load (edicts / named / brush models) |
+|---|---|---|---|---|
+| regamedll_test_map_v8.rmf | **0 brushes off** (worst 0.001 u; was 154 >0.1 u) | 439/442 identical with Hammer's flags rule (was 431); "Фаза - #1" decoded, exported back as the same cp1251 bytes (d4 e0 e7 e0) | **done** (was leak) | 455 / 439 / 151 = exactly the reference build |
+| pmk_m1.rmf | 0 off (was 47) | 62/62 | **done** (was leak) | 59 / 44 / 11 |
+| pmk_m2.rmf | 0 off | ok | done | 73 / 58 / 33 (= reference) |
+| pmk_m3.rmf | 0 off (was 104, worst 9.3 u) | ok | done, **no illegal brushes** (was 3) | 89 / 74 / 19 (= reference) |
+| de_kobbl_v102.jmf | 0 brushes without a polygon (was 1 + 52 broken); 6 "not closed" warnings left | WADs picked from the game + beside the file | **done in 73 s** (was "brush outside world"); no false too-many-entities/models (P5 #5 fixed) | 539 / 524 / 226 after installing its custom sprites; **without them the server died: "Mod_LoadModel: sprites/de_kobbl/blin.spr not found"** → P5 round 3 #1 (High) |
+| aim_stadium_gsu_v01.jmf | – | – | **done** (was leak + 5 illegal) | 235 / 220 / 9 |
+| pustinya_v0002.jmf | – | – | **done in 46 s** (was leak + planes 132 %: limits now use the last report) | 43 / 28 / 24 |
+| carver1.jmf | – | – | fails with the plain "nothing inside it… put a player spawn" (correct) | – |
+Imports now also say which WADs they found ("Texture files for this map: …") and set them; missing ones are named.
+
+### Editor UI (WebKit + Chromium, P5 1ceff77): all re-tests PASS
+Push/pull in Chromium; prefab name clash (Keep both / Replace); Single-layout style picker; recovery banner after kill -9
+(8/8 brushes back); export/import .map through the UI; History & restore; move and scale gizmos; Shift-drag copy; dock
+resize. New Low findings (P5 round 3): status bar counts worldspawn; unchanged component save adds a History entry;
+Shift-drag copy undo says "Move".
+
+### Fresh setup end to end (7a32fd5, 2531ebf)
+| Check | Result |
+|---|---|
+| Clean clone → install base + core + Deathrun | **PASS**: done in 43 s, no failed compiles, nothing missing (gm_laststand / gm_battleroyale build now) |
+| Maps, overviews, modes, cfgs, mappresets, deathrun brain lines | PASS (as round 2) |
+| Update keeps Studio + community modes and the community map, brings the shipped change | PASS |
+| A hand-edited laststand.cfg / mappresets.ini on update | Replaced with a note ("yours is kept under Settings, Backups & defaults"); **the copy is really in the app's backups** |
+| A plugin that doesn't build (gm_battleroyale.sma broken on purpose in QA's copy) | PASS: "Couldn't compile gm_battleroyale.sma … error 010", "Left out of the mode list until their plugins build: Battle Royale"; br not in modes.ini |
+
+### Game Mode Studio (X c5d56a2+)
+| Bug | Result |
+|---|---|
+| Component nodes → gm_components in the mode's plugin list (also via the real install route) | **FIXED** |
+| Creature Spawn without Last Stand (precache) | **FIXED** |
+| Last Stand Lite plays (wave 1 cleared, base falls, new stand) / Royale Lite to a winner | **FIXED** |
+| For Each breakpoint: pause per round, Resume, page Paused/Resume (WebKit + Chromium) | **FIXED** |
+| Resume sent with a breakpoint change | **FIXED** |
+| Debugger value = used value (25 random branches) | **FIXED** |
+| Drop Weapon node (250 bot drops) | **FIXED** (no crash) |
+| Create trap / extraction, In Zone on a created zone, Player Hurt on blocked damage, Find Component with spaces, Creature Count, Team Changed ×1, uninstall leftovers | **FIXED** |
+| Zone Set / Shrink with a wired Shrinking Zone | **still broken** (`ls_zone_center` run-time error 10) → X / W1 |
+| For Each reports "N times" while rounds wait at a breakpoint | new, Low → X |
+| Library save/version/delete routes | PASS (export/import is a page file picker, not run); Entry/Return details, shortcuts, snippet routing, leave flow: pending (not committed) |
+| `npm run test:studio` | 20/20 |
+
+### Brain drop crash (Y)
+Raw `engclient_cmd(bot,"drop")` stress (Y's qa_drop: drop / drop_all / drop_dead): **r43392249830 crashed at round 24**
+(`exception 0xc0000005 … last text: drop`, logs kept in Sim/QA5 and scratch); **r43395720981: 30/30 rounds, no crash.**
+
+### Last Stand / Battle Royale (W1 28b3652, ff51cea, f9daa11; gm_battleroyale working tree d0885d80; brains r43393053888 + r43395720981)
+| Bug | Result |
+|---|---|
+| LS bots buy guns between waves | **Partly**: every bot buys (14-17 guns a stand), but only SMGs (mp5/ump45/p90): money stays $200-2500, never a rifle; stands still fall on wave 5 |
+| LS supply drops opened by bots | **FIXED** (3/4, 4/5, ~5 s after landing) |
+| BR supply drops opened by bots | still failing (1 of 8) |
+| Creatures killing defenders through intact gates | **NOT FIXED** (14 deaths 20-50 u behind solid West/East gates) |
+| Won stand logged; money reset after a loss; 32-slot log spam | **FIXED** (spam 1092 → 0) |
+| BR start loadout (knife, $0) | **FIXED** |
+| BR drop-in: no landing deaths, no stacking | **FIXED** (26 landings, 0 damage taken, ≥60 u apart) |
+| BR squads, no damage between mates | Partial (no leak seen; squads not exposed to check directly) |
+| New: a repaired barricade stays non-solid ~20 s into the next wave; some drop-in spots on high roofs (z 564) and one into the tunnels | → W1 |
+| New: stopping a server writes an "unhandled exception" ls_crash.log on r43393053888 (looks like a crash) | → Y |
+| Hang after a boss-wave loss | not seen (3 more losses; still no real person on the server) |

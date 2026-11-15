@@ -422,7 +422,7 @@ mod tests {
     const TUNNEL: &str = "eyJhIjoiNGQ2ZTFhYjM0NTY3ODkwYWJjZGVmIiwidCI6IjEyMzQ1Njc4LWFiY2QtZWZnaCJ9";
     const PHONE: &str = "Qm9yZWQ1dGhpc2lzYXRva2Vu";
     const HOME_IP: &str = "178.62.14.201";
-    const KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n-----END OPENSSH PRIVATE KEY-----";
+    const KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n-----END OPENSSH PRIVATE KEY-----"; // gitleaks:allow (made-up test key)
 
     fn fixture() -> Facts {
         let mut local: crate::servers::Entry = serde_json::from_value(serde_json::json!({

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJsonAt, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import { BusyButton, SectionHead, Sheet, Skeleton, useToast } from "../ui";
+import { DiscordButton } from "./DiscordButton";
 
 /** Find servers, after Steam's old server browser: Internet (the Loner-Strike server list,
  *  the servers hosts chose to share), Favorites, History and LAN. Every server is asked from
@@ -142,7 +143,9 @@ export function ServerBrowser() {
       <SectionHead
         title="Find servers"
         note="Servers other Loner-Strike players share, your favorites and the ones you've played on, and games on your own network. Double-click a server to join it."
-      />
+      >
+        <DiscordButton />
+      </SectionHead>
       <div className="browser-window">
         <div className="browser-tabs" role="tablist" aria-label="Server lists">
           {TABS.map(([id, label]) => (

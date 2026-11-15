@@ -86,12 +86,12 @@ fn dir_size(dir: &Path) -> u64 {
 
 /// Downloaded mods and maps (kept so reinstalls don't download again).
 fn download_dirs() -> Vec<PathBuf> {
-    vec![crate::setup::fetch::cache_dir(), crate::sys::app_dir().join("cache").join("downloads")]
+    vec![crate::setup::fetch::cache_dir(), crate::localdata::dir("cache").join("downloads")]
 }
 
 /// Map pictures: GameBanana screenshots and the converted thumbnails.
 fn picture_files() -> Vec<PathBuf> {
-    let cache = crate::sys::app_dir().join("cache");
+    let cache = crate::localdata::dir("cache");
     let mut out: Vec<PathBuf> = crate::archive::walk(&cache.join("gbshots"));
     for e in std::fs::read_dir(&cache).into_iter().flatten().flatten() {
         let p = e.path();
@@ -308,6 +308,7 @@ pub(crate) const SETUP_SKIP: &[&str] = &[
     "panel_rcon.txt", "status.json", "seen.json", "seen.log", "seen.log.reading", "friends.cfg", "navqueue.txt",
     "stats.json", "stats.json.part", "playtime.txt", "reports.json", "matches.json", "scrim_status.json", "recent.txt", "bots.txt",
     "current.txt", "premode.txt", "lastmap.txt", "session.txt", "lastpreset.txt", "crashmap.txt", "reloadnote.txt",
+    "modestart.txt", "safemode.txt",
 ];
 
 /// Separates the files machine_setup_files prints.

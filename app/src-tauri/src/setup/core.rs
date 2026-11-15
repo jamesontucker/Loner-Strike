@@ -10,10 +10,10 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 /// Modes that need nothing beyond Loner-Strike's own plugins
-pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match"];
+pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match", "laststand", "br", "br_duo", "br_squads"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
-pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_botsurf", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content"];
+pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_botsurf", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content", "gm_components", "gm_laststand", "gm_battleroyale"];
 /// listed in plugins.ini. restmenu is AMX Mod X's own (amx_restrict), which its plugins.ini
 /// ships switched off: the weapon modes (knife, pistols, deagle, awp, scoutz, gm_weapons)
 /// restrict buying with it, so without it they restrict nothing.
@@ -127,21 +127,37 @@ fn install_is_crossover(ctx: &Ctx) -> bool {
     ctx.install.kind == "crossover"
 }
 
-/// Our plugin sources, compiled. Ok(false) if any didn't compile.
-pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
+/// Our plugin sources, compiled. Ok(the plugins that didn't compile), each with a note giving
+/// the compiler's reason.
+pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<Vec<String>, String> {
     let src = ctx.res.join("plugins").join("scripting");
     for name in OUR_PLUGINS {
         rec.copy(&src.join(format!("{name}.sma")), &format!("addons/amxmodx/scripting/{name}.sma"))?;
     }
+    // our own includes (loner.inc, ls_components.inc): the modes' sources #include them
+    for inc in ["loner.inc", "ls_components.inc"] {
+        rec.copy(&src.join("include").join(inc), &format!("addons/amxmodx/scripting/include/{inc}"))?;
+    }
     // files the plugins use in the game itself (the bots' spray), at the same place there
     for (full, rel) in tree(&ctx.res.join("plugins").join("game")) {
+        // the hand-written mode map kits are the app's (the map editor and the Studio read them)
+        if let Some(name) = rel.strip_prefix("kits/") {
+            let dir = crate::sys::app_dir().join("kits");
+            let _ = std::fs::create_dir_all(&dir);
+            if let Err(e) = std::fs::copy(&full, dir.join(name)) {
+                ctx.progress.note(&format!("Couldn't copy the mode map kit {name} ({e})."));
+            }
+            continue;
+        }
         rec.copy(&full, &rel)?;
     }
-    let mut ok = true;
+    let mut failed = vec![];
     for (i, name) in OUR_PLUGINS.iter().enumerate() {
         ctx.progress.detail(&format!("Compiling {name} ({} of {})", i + 1, OUR_PLUGINS.len()));
         ctx.progress.fraction(i as f64 / OUR_PLUGINS.len() as f64);
-        ok = compile_plugin(rec, ctx, &format!("{name}.sma"), name, None)? && ok;
+        if !compile_plugin(rec, ctx, &format!("{name}.sma"), name, None)? {
+            failed.push(name.to_string());
+        }
     }
     let pl = rec.read("addons/amxmodx/configs/plugins.ini").unwrap_or_default();
     let mine: Vec<String> = rec.read(MY_PLUGINS).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
@@ -149,7 +165,27 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
     if new != pl {
         rec.write("addons/amxmodx/configs/plugins.ini", &new)?;
     }
-    Ok(ok)
+    Ok(failed)
+}
+
+/// Built-in modes that can't run: their <mode>.plugins.ini lists one of our plugins that
+/// didn't compile and has no .amxx in the game (an update keeps the last good build).
+/// (id, name) each, for leaving them out of the mode list.
+pub fn unbuilt_modes(rec: &Record, ctx: &Ctx, failed: &[String]) -> Vec<(String, String)> {
+    let gm = ctx.res.join("plugins").join("configs").join("gamemodes");
+    let missing: Vec<&String> = failed.iter().filter(|p| !rec.exists(&format!("addons/amxmodx/plugins/{p}.amxx"))).collect();
+    if missing.is_empty() {
+        return vec![];
+    }
+    let names = crate::extras::parse_modes(&crate::sys::read_latin1(&gm.join("modes.ini")).unwrap_or_default());
+    CORE_MODES
+        .iter()
+        .filter(|m| {
+            let ini = crate::sys::read_latin1(&gm.join(format!("{m}.plugins.ini"))).unwrap_or_default();
+            ini.lines().map(str::trim).filter(|l| !l.starts_with(';')).any(|l| missing.iter().any(|p| l.split_whitespace().next() == Some(&format!("{p}.amxx"))))
+        })
+        .map(|m| (m.to_string(), names.iter().find(|(id, _)| id == m).map(|(_, n)| n.clone()).unwrap_or(m.to_string())))
+        .collect()
 }
 
 /// The Mods page's list of the player's own plugins (plugins.rs)
@@ -171,8 +207,15 @@ pub fn plugins_ini(pl: &str, mine: &[String]) -> String {
         .collect();
     let mut out = pl.to_string();
     if !add.is_empty() {
-        let lines: String = add.iter().map(|n| format!("{n}.amxx\t\t; Loner-Strike\r\n")).collect();
+        let lines: String = add.iter().map(|n| format!("{n}.amxx debug\t\t; Loner-Strike\r\n")).collect();
         out = format!("{}\r\n{lines}", pl.trim_end_matches(['\r', '\n']));
+    }
+    // our plugins run with AMX Mod X's debug flag, so a run time error in the log names the
+    // plugin's line (crash tracking) instead of "debug not enabled"; a line already there
+    // without a flag gets it, one the player gave its own flag keeps theirs
+    for n in ALWAYS_ON {
+        let re = Regex::new(&format!(r"(?m)^(\s*{}\.amxx)([ \t]*;[^\r\n]*)?(\r?)$", regex::escape(n))).unwrap();
+        out = re.replace_all(&out, "$1 debug$2$3").into_owned();
     }
     // (a plugins.ini an older Loner-Strike put back to stock gets the block again)
     if !mine.is_empty() {
@@ -191,6 +234,29 @@ fn filter_lines(text: &str, keep: impl Fn(&str) -> bool) -> String {
         }
     }
     out.join("\r\n") + "\r\n"
+}
+
+/// The lines of a modes.ini for modes made in the Game Mode Studio: the mode's plugins.ini
+/// lists its own `studio_<id>.amxx` (tools/studio). Setup keeps them when it rewrites modes.ini,
+/// unless the new modes.ini (`shipped`) has a mode with the same id.
+pub fn studio_mode_lines(current: &str, gamemodes_dir: &std::path::Path, shipped: &str) -> Vec<String> {
+    let shipped_ids: BTreeSet<&str> = splitlines(shipped, false).into_iter().filter_map(|l| l.split_whitespace().next()).collect();
+    splitlines(current, false)
+        .into_iter()
+        .filter(|l| {
+            let t = l.trim();
+            if t.is_empty() || t.starts_with(';') || t.starts_with("//") {
+                return false;
+            }
+            let id = t.split_whitespace().next().unwrap_or("");
+            if !crate::tools::studio::graph::valid_mode_id(id) || shipped_ids.contains(id) {
+                return false;
+            }
+            let plugin = format!("{}.amxx", crate::tools::studio::gen::plugin_name(id));
+            crate::sys::read_latin1(&gamemodes_dir.join(format!("{id}.plugins.ini"))).is_ok_and(|p| p.lines().any(|x| x.trim() == plugin))
+        })
+        .map(|l| l.trim_end().to_string())
+        .collect()
 }
 
 /// Python's str.strip() / lstrip() whitespace test for one char.
@@ -296,9 +362,49 @@ fn untouched(name: &str, current: Option<&[u8]>, written: Option<&str>) -> bool 
     written == Some(h.as_str()) || SHIPPED_BEFORE.iter().any(|(n, s)| *n == name && *s == h)
 }
 
+/// A shipped Game Mode Menu settings file as setup writes it: the lists of modes and add-ons
+/// (modes.ini, addons.ini, mappresets.ini, presets.ini) cut down to the ones installed, with
+/// the Game Mode Studio's modes kept in modes.ini (`current` is the modes.ini there now).
+/// Every other file is written as shipped. Also what "Restore Loner-Strike's default" puts back.
+pub fn shape_config(base: &str, text: String, mode_ok: &dyn Fn(&str) -> bool, addon_ok: &dyn Fn(&str) -> bool, current: &str, gamemodes_dir: &std::path::Path) -> String {
+    let quoted = Regex::new(r#""([^"]*)""#).unwrap();
+    match base {
+        "modes.ini" => {
+            // modes made in the Game Mode Studio aren't shipped: their lines stay
+            let mut t = filter_lines(&text, mode_ok);
+            for line in studio_mode_lines(current, gamemodes_dir, &t) {
+                t.push_str(&line);
+                t.push_str("\r\n");
+            }
+            t
+        }
+        "addons.ini" => filter_lines(&text, addon_ok),
+        "mappresets.ini" => {
+            let keep: Vec<&str> = splitlines(&text, false)
+                .into_iter()
+                .filter(|l| is_comment_or_blank(l) || mode_ok(l.split_whitespace().last().unwrap_or("")))
+                .collect();
+            keep.join("\r\n") + "\r\n"
+        }
+        "presets.ini" => {
+            let keep: Vec<&str> = splitlines(&text, false)
+                .into_iter()
+                .filter(|l| {
+                    if is_comment_or_blank(l) {
+                        return true;
+                    }
+                    let m: Vec<&str> = quoted.captures_iter(l).map(|c| c.get(1).unwrap().as_str()).collect();
+                    m.len() < 3 || mode_ok(m[2])
+                })
+                .collect();
+            keep.join("\r\n") + "\r\n"
+        }
+        _ => text,
+    }
+}
+
 pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &BTreeSet<String>) -> Result<(), String> {
     let cfg_src = ctx.res.join("plugins").join("configs").join("gamemodes");
-    let quoted = Regex::new(r#""([^"]*)""#).unwrap();
     let mode_ok = |m: &str| modes.contains(m);
     let mut wanted = BTreeSet::new();
     for (full, rel) in tree(&cfg_src) {
@@ -315,31 +421,8 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
             continue;
         }
         let text = crate::sys::read_latin1(&full).map_err(|e| format!("Couldn't read {rel} from Loner-Strike's files ({e})."))?;
-        let text = match base.as_str() {
-            "modes.ini" => filter_lines(&text, mode_ok),
-            "addons.ini" => filter_lines(&text, |a| addons.contains(a)),
-            "mappresets.ini" => {
-                let keep: Vec<&str> = splitlines(&text, false)
-                    .into_iter()
-                    .filter(|l| is_comment_or_blank(l) || mode_ok(l.split_whitespace().last().unwrap_or("")))
-                    .collect();
-                keep.join("\r\n") + "\r\n"
-            }
-            "presets.ini" => {
-                let keep: Vec<&str> = splitlines(&text, false)
-                    .into_iter()
-                    .filter(|l| {
-                        if is_comment_or_blank(l) {
-                            return true;
-                        }
-                        let m: Vec<&str> = quoted.captures_iter(l).map(|c| c.get(1).unwrap().as_str()).collect();
-                        m.len() < 3 || mode_ok(m[2])
-                    })
-                    .collect();
-                keep.join("\r\n") + "\r\n"
-            }
-            _ => text,
-        };
+        let current = if base == "modes.ini" { rec.read(&dest).unwrap_or_default() } else { String::new() };
+        let text = shape_config(&base, text, &mode_ok, &|a| addons.contains(a), &current, &rec.full("addons/amxmodx/configs/gamemodes")?);
         if EDITABLE.contains(&rel.as_str()) {
             // as it'll be on disk (written as Latin-1)
             let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
@@ -354,6 +437,24 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
                 wanted.insert(dest);
                 ctx.progress.note(&format!("Kept your changes to {rel}. This version's is beside it as {rel}.new."));
                 continue;
+            }
+            let notes = rec.data.extra.entry(WRITTEN.to_string()).or_insert_with(|| serde_json::json!({}));
+            if !notes.is_object() {
+                *notes = serde_json::json!({});
+            }
+            notes[dest.as_str()] = serde_json::json!(content_hash(&bytes));
+        } else {
+            // a shipped file the player edited by hand (laststand.cfg, mappresets.ini, ...) is
+            // replaced: their version is kept first (Settings, Backups & defaults) and they're told
+            let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+            let full = rec.full(&dest)?;
+            if let Some(current) = std::fs::read(&full).ok().filter(|c| content_hash(c) != content_hash(&bytes)) {
+                let written = rec.data.extra.get(WRITTEN).and_then(|w| w.get(&dest)).and_then(|h| h.as_str()).map(String::from);
+                crate::safety::before("Setup", "Updated by Loner-Strike's setup", &full);
+                // (modes.ini: the Game Mode Studio's lines in it stay, see shape_config)
+                if base != "modes.ini" && written.is_some_and(|w| w != content_hash(&current)) {
+                    ctx.progress.note(&format!("Your changes to {rel} were replaced by this version's; yours is kept under Settings, Backups & defaults."));
+                }
             }
             let notes = rec.data.extra.entry(WRITTEN.to_string()).or_insert_with(|| serde_json::json!({}));
             if !notes.is_object() {
@@ -482,7 +583,11 @@ mod tests {
     fn plugins_ini_keeps_the_players_lines() {
         let stock = "; AMX Mod X plugins\r\nadmin.amxx\r\n;restmenu.amxx\r\n";
         let first = plugins_ini(stock, &[]);
-        assert!(first.starts_with(stock.trim_end()) && first.contains("\r\ngamemodes.amxx\t\t; Loner-Strike\r\n"));
+        assert!(first.starts_with(stock.trim_end()) && first.contains("\r\ngamemodes.amxx debug\t\t; Loner-Strike\r\n"));
+        // an older line without the flag gets it; the same twice
+        let old = format!("{}\r\ngamemodes.amxx\t\t; Loner-Strike\r\n", stock.trim_end());
+        assert!(plugins_ini(&old, &[]).contains("\r\ngamemodes.amxx debug\t\t; Loner-Strike\r\n"));
+        assert_eq!(plugins_ini(&first, &[]), first);
         // their own line, a Loner-Strike plugin they moved, and the Mods page's block all stay
         let theirs = format!("{first}myline.amxx debug\r\n");
         let with_block = crate::plugins::rewrite_ini(&theirs, &["mine".into()]);
@@ -494,7 +599,7 @@ mod tests {
         assert!(back.contains("\r\nmine.amxx\r\n") && back.contains("gm_people.amxx"));
         assert_eq!(plugins_ini(&back, &["mine".into()]), back);
         // an always-on plugin they switched off stays off; restmenu (stock: off) is switched on
-        assert!(first.contains("\r\nrestmenu.amxx\t\t; Loner-Strike\r\n"));
+        assert!(first.contains("\r\nrestmenu.amxx debug\t\t; Loner-Strike\r\n"));
         let off = first.replace("\r\ngm_botping.amxx", "\r\n;gm_botping.amxx");
         assert_eq!(plugins_ini(&off, &[]), off);
         assert!(!plugins_ini(&off, &[]).contains("\r\ngm_botping.amxx"));

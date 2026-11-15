@@ -1,0 +1,920 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Burn, Slow and Freeze",
+ "description": "Status effects with timers: Burn (Seconds 0: 4, Damage a second 0: 5), Slow (0: 4 s at 0: 150 speed) and Freeze (0: 2 s).",
+ "category": "Starter: player state",
+ "kind": "macro",
+ "root": "st_burn",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "st_burn",
+   "name": "Burn",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "by",
+     "name": "By",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "dps",
+     "name": "Damage a second",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "st_slow",
+   "name": "Slow",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "st_freeze",
+   "name": "Freeze",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "over",
+     "name": "Over",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [],
+ "nodes": [
+  {
+   "id": "st_burn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_burn",
+   "type": "fun.burn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "secs": 4,
+    "dps": 5
+   },
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_burn_avoid",
+   "type": "bots.avoid",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "tag": "burning",
+    "radius": 110,
+    "strength": 5,
+    "secs": 4
+   },
+   "graph": "st_burn"
+  },
+  {
+   "id": "st_slow_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 4
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 1080
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1260
+   },
+   "params": {
+    "value": 150
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 1080
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_slow",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_slow_back",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "speed": 250
+   },
+   "graph": "st_slow"
+  },
+  {
+   "id": "st_freeze_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 2
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_frz",
+   "type": "player.freeze",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "color": "blue"
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_thaw",
+   "type": "player.freeze",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "on": false
+   },
+   "graph": "st_freeze"
+  },
+  {
+   "id": "st_freeze_glow2",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "st_freeze"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "by"
+   },
+   "to": {
+    "node": "st_burn_burn",
+    "pin": "by"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "st_burn_burn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_burn_avoid",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "st_burn_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_burn_avoid",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "st_burn_avoid",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_burn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_slow_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "st_slow_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "st_slow_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "st_slow_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "st_slow_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "st_slow_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "st_slow_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_slow",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "st_slow_slow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "st_slow_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "st_slow_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "st_slow_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "st_slow_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "st_slow_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_slow_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "st_slow_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_back",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "st_slow_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_slow_back",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "st_slow_back",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_slow_out",
+    "pin": "over"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_freeze_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "st_freeze_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "st_freeze_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "st_freeze_frz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_frz",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "st_freeze_frz",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "st_freeze_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "st_freeze_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "st_freeze_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "st_freeze_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "st_freeze_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "st_freeze_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "st_freeze_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "st_freeze_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_thaw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_thaw",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "st_freeze_thaw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_glow2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "st_freeze_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "st_freeze_glow2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "st_freeze_glow2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st_freeze_out",
+    "pin": "over"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "st_burn",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Burn, Slow and Freeze: Call one from a hit, a trap or an ability. Each ends by itself; Slow puts the speed back to 250. Bots: they keep clear of a burning player while it burns."
+  },
+  {
+   "id": "c1",
+   "graph": "st_burn",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Burn uses Set On Fire's own timer; Seconds and Damage a second are its settings (wire them in to change them per call)."
+  }
+ ]
+}

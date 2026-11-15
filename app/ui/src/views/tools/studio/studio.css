@@ -1,0 +1,567 @@
+/* Game Mode Studio (st- prefix). Loaded with the Studio's own chunk. */
+
+.st-page { --st-grid: #1c2126; --st-grid-major: #2a3139; --st-exec: #f2f2f2; --st-bad: #ff5b4f; --st-warn: #ffb347; --st-run: #ffe066; --st-node: #22262b; --st-node-2: #2b3036;
+  display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; gap: 8px; }
+/* the Studio fills the page's height, like the map viewer: the page stops scrolling */
+/* the Studio fills the page's height and never scrolls as a whole: its panels scroll inside
+   themselves (whatever wraps .st-page, the page stays the size of the window) */
+.content:has(.st-page) { display: flex; flex-direction: column; padding-bottom: 16px; overflow: hidden; }
+.st-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.st-toolbar .btn { white-space: nowrap; }
+.st-name { margin: 0 6px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.st-grow { flex: 1; }
+.st-status { font-size: 13px; color: var(--ok); white-space: nowrap; }
+.st-status.bad { color: var(--st-bad); }
+.st-field { background: var(--sunken); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; min-width: 0; }
+.st-field-num { width: 70px; }
+.st-main { flex: 1; min-height: 0; }
+.st-canvas { flex: 1; position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #15181b; outline: none; }
+.st-canvas:focus-visible { box-shadow: 0 0 0 2px var(--signal); }
+.st-canvas .react-flow { --xy-background-color: #15181b; --xy-minimap-background-color: #1d2125; --xy-controls-button-background-color: #2a2f35; --xy-controls-button-color: #ddd; --xy-controls-button-border-color: #3a4048; }
+.st-minimap { opacity: .9; --xy-minimap-mask-background-color: rgba(0,0,0,.55); --xy-minimap-node-background-color: #4a525c; }
+.st-muted { color: var(--bone-dim, #9aa); font-size: 13px; }
+.st-bad-text { color: var(--st-bad); }
+.st-link { background: none; border: 0; padding: 0; color: var(--signal); cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* nodes */
+.st-node { position: relative; min-width: 190px; max-width: 280px; background: var(--st-node); color: #e9ecef; border: 1px solid #3a4048; border-radius: 7px; font-size: 12.5px; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.st-node.selected { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 2px 8px rgba(0,0,0,.5); }
+.st-node.has-error { border-color: var(--st-bad); }
+.st-node.has-warning { border-color: var(--st-warn); }
+.st-node.paused { box-shadow: 0 0 0 3px var(--st-run), 0 0 18px var(--st-run); }
+.st-node.ran-error { border-color: var(--st-bad); }
+.st-node.ran-false { border-style: dashed; }
+.st-node-head { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px 6px 0 0; font-weight: 600; background: #3b4250; }
+.st-cat-ev .st-node-head { background: #7a2b2b; }
+.st-cat-cond .st-node-head { background: #2f4f7a; }
+.st-cat-player .st-node-head { background: #2f6a4a; }
+.st-cat-score .st-node-head { background: #6a4a8a; }
+.st-cat-msg .st-node-head { background: #7a6a2b; }
+.st-cat-num .st-node-head { background: #3d6b3a; }
+.st-cat-var .st-node-head { background: #5a5a6e; }
+.st-cat-timer .st-node-head { background: #2f6a6a; }
+.st-cat-comp .st-node-head { background: #6a4a2f; }
+.st-cat-creature .st-node-head { background: #5e2f5e; }
+.st-vars-list { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 6px; }
+.st-var { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 5px; }
+.st-var-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.st-var-row > .st-field { flex: 1 1 120px; min-width: 0; }
+.st-var-row > .st-field-num { flex: 0 0 80px; }
+.st-node-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-node-badge { width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 16px; text-align: center; color: #111; }
+.st-node-badge.err { background: var(--st-bad); }
+.st-node-badge.warn { background: var(--st-warn); }
+.st-bp { width: 11px; height: 11px; padding: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.5); background: transparent; cursor: pointer; flex: none; }
+.st-bp.on { background: #e5383b; border-color: #ff8a8a; }
+.st-bp.on.off { background: transparent; border-color: #e5383b; }
+.st-node-pins { padding: 4px 0; }
+.st-pin-row { display: flex; justify-content: space-between; min-height: 22px; }
+.st-pin { position: relative; display: flex; align-items: center; padding: 0 12px; min-height: 22px; }
+.st-pin-out { justify-content: flex-end; }
+.st-pin.bad .st-pin-label { color: var(--st-bad); }
+.st-pin-label { color: #cfd4da; white-space: nowrap; }
+.st-handle.react-flow__handle { margin: 0; width: 11px; height: 11px; background: #15181b; border: 2px solid #aaa; }
+.st-handle-exec.react-flow__handle { width: 12px; height: 12px; border: 0; border-radius: 0; background: #ddd; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.st-handle-exec.react-flow__handle:not(.wired) { background: #777; }
+.st-handle.react-flow__handle.connectingto, .st-handle.react-flow__handle.valid { box-shadow: 0 0 0 3px rgba(255, 224, 102, .6); }
+.st-node-params { padding: 3px 10px 6px; color: #b9c0c8; border-top: 1px solid #333a42; }
+.st-node-run { padding: 4px 10px; font-size: 12px; border-top: 1px solid #333a42; color: #bfe6bf; background: rgba(60, 120, 60, .18); border-radius: 0 0 6px 6px; }
+.st-node-run.false { color: #ffd38a; background: rgba(160, 110, 30, .2); }
+.st-node-run.err { color: #ffb3ad; background: rgba(170, 40, 30, .25); }
+.st-node-run.paused { color: #222; background: var(--st-run); font-weight: 600; }
+.st-node-count { opacity: .6; float: right; }
+.st-node-problem { padding: 4px 10px; font-size: 12px; color: #ffb3ad; border-top: 1px solid #333a42; }
+.st-node-unknown { padding: 8px; color: var(--st-bad); }
+/* "node ran": a glow drawn once that fades by opacity only (the compositor's work, no repaint per
+   frame: an animated box-shadow repainted every frame, 13-20 fps on a big canvas in WebKit,
+   StudioPerfAudit #2) */
+.st-flash { position: absolute; inset: -3px; border-radius: 9px; pointer-events: none; box-shadow: 0 0 0 3px var(--st-run), 0 0 22px var(--st-run); opacity: 0; animation: st-flash .9s ease-out; }
+@keyframes st-flash { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .st-flash { animation-duration: 2s; } }
+
+.st-reroute { width: 16px; height: 16px; border-radius: 50%; background: #15181b; border: 3px solid #aaa; }
+.st-reroute.exec { border-radius: 3px; transform: rotate(45deg); }
+.st-reroute.selected { box-shadow: 0 0 0 2px var(--signal); }
+.st-reroute.bad { box-shadow: 0 0 0 2px var(--st-bad); }
+.st-handle-reroute.react-flow__handle { opacity: 0; width: 16px; height: 16px; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 0; }
+
+.st-comment { --st-comment: #4a5a6a; width: 100%; height: 100%; border-radius: 6px; background: color-mix(in srgb, var(--st-comment) 22%, transparent); border: 1px solid color-mix(in srgb, var(--st-comment) 70%, transparent); }
+.st-comment.selected { border-color: var(--signal); }
+.st-comment-head { padding: 5px 10px; background: color-mix(in srgb, var(--st-comment) 65%, transparent); color: #eef; font-weight: 600; font-size: 13px; border-radius: 6px 6px 0 0; cursor: move; white-space: pre-wrap; }
+.st-comment-edit { width: 100%; min-height: 48px; font: inherit; background: #111; color: #eee; border: 1px solid var(--signal); }
+
+/* (no filters on wires or nodes: a filter makes WebKit draw that layer as a bitmap, blurry when zoomed) */
+/* the wires on a layer of their own: WebKit otherwise repaints the whole graph-sized wire layer on
+   any change (a commit, a selection, a sheet over the canvas): seconds to open, edit and undo a big
+   graph on a Mac (StudioPerfAudit #1). A transform hint, not a filter: wires stay sharp when zoomed */
+.st-canvas .react-flow__edges { will-change: transform; }
+.st-edge-exec.lit path, .react-flow__edge.lit .react-flow__edge-path { stroke: var(--st-run) !important; stroke-width: 4px !important; }
+.react-flow__edge.selected .react-flow__edge-path { stroke: var(--signal) !important; }
+
+/* node search */
+.st-palette { position: absolute; z-index: 20; width: 320px; max-height: 370px; display: flex; flex-direction: column; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); overflow: hidden; }
+.st-palette-search { margin: 8px; padding: 6px 8px; background: var(--sunken); color: var(--text); border: 1px solid var(--line); border-radius: 5px; font: inherit; }
+.st-palette-list { overflow-y: auto; padding-bottom: 6px; }
+.st-palette-cat { padding: 6px 12px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); }
+.st-palette-item { display: block; width: 100%; text-align: left; padding: 5px 12px; background: none; border: 0; color: var(--text); cursor: pointer; font: inherit; }
+.st-palette-item.cur { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-palette-title { display: block; font-weight: 600; }
+.st-palette-help { display: block; font-size: 12px; color: var(--bone-dim, #9aa); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-palette-none { padding: 10px 12px; color: var(--bone-dim, #9aa); }
+
+/* side panel */
+.st-side { min-width: 0; overflow-y: auto; padding: 4px 4px 12px; }
+.st-side-title { margin: 0 0 4px; font-size: 16px; }
+.st-side-sub { margin: 14px 0 4px; }
+.st-side-help { font-size: 13px; color: var(--bone-dim, #9aa); margin: 0 0 10px; }
+.st-side-fields { display: grid; gap: 8px; }
+.st-side-field { display: grid; gap: 3px; font-size: 13px; }
+.st-side-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; }
+.st-side-check.st-inline { margin: 0; white-space: nowrap; }
+.st-side-run { margin-top: 12px; font-size: 13px; }
+.st-side-run h4 { margin: 0 0 4px; }
+.st-keys { margin-top: 18px; line-height: 1.6; }
+.st-problems { list-style: none; padding: 0; margin: 6px 0; font-size: 13px; display: grid; gap: 5px; }
+.st-problems li { padding: 5px 8px; border-left: 3px solid var(--st-warn, #ffb347); background: rgba(255,255,255,.03); }
+.st-problems li.error { border-left-color: var(--st-bad, #ff5b4f); }
+.st-values { margin: 6px 0; font-size: 13px; display: grid; gap: 3px; }
+.st-values div { display: flex; gap: 8px; }
+.st-values dt { min-width: 70px; color: var(--bone-dim, #9aa); }
+.st-values dd { margin: 0; }
+
+/* playtest panel */
+.st-debug { border: 1px solid var(--line); border-radius: 6px; background: var(--panel, #1d2125); max-height: 260px; display: flex; flex-direction: column; }
+.st-debug-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.st-dot { width: 10px; height: 10px; border-radius: 50%; background: #666; }
+.st-dot.on { background: var(--ok); }
+.st-dot.paused { background: var(--st-run); box-shadow: 0 0 6px var(--st-run); }
+.st-debug-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding: 8px 10px; overflow-y: auto; }
+.st-debug-col h4 { margin: 0 0 6px; }
+.st-debug-col p { margin: 0 0 6px; }
+.st-vars { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin-bottom: 6px; }
+.st-players { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+.st-players th { text-align: left; color: var(--bone-dim, #9aa); font-weight: 500; }
+.st-players td, .st-players th { padding: 2px 6px 2px 0; }
+.st-players tr.dead { opacity: .5; }
+.st-log ol { list-style: none; margin: 0; padding: 0; font-size: 12.5px; display: grid; gap: 2px; }
+.st-log li.err { color: #ffb3ad; }
+.st-log li.paused { color: var(--st-run); }
+
+/* start screen, code sheet */
+.st-start { max-width: 760px; }
+.st-start-head { margin: 18px 0 8px; }
+.st-graph-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.st-graph-list li { display: flex; align-items: center; gap: 8px; }
+.st-graph-open { flex: 1; min-width: 0; display: grid; text-align: left; padding: 8px 10px; background: var(--raised, #262a30); color: var(--text); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: inherit; }
+.st-graph-open span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tag { font-size: 12px; padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--ok) 30%, transparent); white-space: nowrap; }
+.st-code { padding: 16px; max-width: 900px; }
+.st-code pre { max-height: 60vh; overflow: auto; background: #111; color: #ddd; padding: 10px; border-radius: 6px; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .st-side { width: 220px; }
+}
+.st-var > .btn.small { justify-self: end; }
+.st-var-row > select.st-field { flex: 1 1 100%; }
+
+.st-step { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; color: var(--bone, #ddd); }
+/* comment boxes: only the title bar (and the resize handles) take the mouse; inside, the canvas pans and box-selects as anywhere */
+.react-flow__node-comment { pointer-events: none !important; }
+.react-flow__node-comment .st-comment { pointer-events: none; }
+.react-flow__node-comment .st-comment-head, .react-flow__node-comment .react-flow__resize-control { pointer-events: all; }
+
+/* ---- Blueprint-style look ---------------------------------------------------------------- */
+.st-kind-event .st-node-head { background: linear-gradient(90deg, #9a2a2a, #6e1e1e); }
+.st-kind-pure .st-node-head { background: linear-gradient(90deg, #2f6a3a, #24502c); }
+.st-kind-func .st-node-head { background: linear-gradient(90deg, #6a3f8f, #4b2c66); }
+.st-kind-flow .st-node-head { background: linear-gradient(90deg, #555c66, #3d434b); }
+.st-kind-action .st-node-head { background: linear-gradient(90deg, #2d5a8c, #213f63); }
+.st-node { border-radius: 8px; background: rgba(28, 32, 37, 0.96); }
+.st-node-head { border-radius: 7px 7px 0 0; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5); }
+/* exec pins: white pentagon arrows (hollow until wired); data pins: coloured circles */
+.st-handle-exec.react-flow__handle { width: 13px; height: 13px; clip-path: polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%); background: #e8e8e8; }
+.st-handle-exec.react-flow__handle:not(.wired) { background: #8a8f96; }
+.st-handle-data.react-flow__handle { width: 11px; height: 11px; border-width: 2px; }
+
+/* the three panels: My mode | canvas | Details, results under them */
+.st-main { display: grid; grid-template-columns: 230px minmax(0, 1fr) 290px; gap: 8px; min-height: 0; }
+.st-mb { overflow-y: auto; padding: 2px 2px 12px; border-right: 1px solid var(--line); }
+.st-mb-section { margin-bottom: 6px; }
+.st-mb-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.st-mb-toggle { background: none; border: 0; color: var(--text); font: 600 13px/1.2 inherit; cursor: pointer; padding: 2px; text-align: left; flex: 1; }
+.st-mb-caret { display: inline-block; width: 12px; color: var(--bone-dim, #9aa); }
+.st-mb-add { background: none; border: 1px solid var(--line); color: var(--text); width: 22px; height: 22px; border-radius: 4px; cursor: pointer; line-height: 1; }
+.st-mb-add:hover { border-color: var(--signal); }
+.st-mb-body { display: grid; gap: 1px; padding: 4px 0; }
+.st-mb-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 4px 6px; border-radius: 4px; cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-mb-item:hover { background: rgba(255, 255, 255, 0.05); }
+.st-mb-item.on { background: color-mix(in srgb, var(--signal) 22%, transparent); }
+.st-mb-item[draggable="true"] { cursor: grab; }
+.st-mb-dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.st-mb-dot.ev { background: #9a2a2a; }
+.st-mb-dot.fn { background: #6a3f8f; }
+.st-mb-dot.sn { background: #4a5a6a; }
+.st-mb-pin { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.st-mb-note { margin-left: auto; font-size: 11px; }
+.st-mb-empty { margin: 2px 6px; }
+.st-mb-filter { width: 100%; margin: 2px 0 4px; }
+.st-mb-snippet { display: flex; align-items: center; gap: 2px; }
+.st-mb-save { margin-top: 6px; width: 100%; }
+.st-side-kicker { margin: 0 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bone-dim, #9aa); }
+.st-swatches { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; padding: 0; }
+.st-swatch { box-sizing: border-box; width: 24px; height: 24px; margin: 0; padding: 0; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .35); box-shadow: none; cursor: pointer; }
+.st-swatch.on { outline: 2px solid var(--signal); outline-offset: 2px; }
+.st-swatch:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
+.st-results { border: 1px solid var(--line); border-radius: 6px; background: var(--panel, #1d2125); max-height: 170px; display: flex; flex-direction: column; flex: none; }
+.st-results.closed { max-height: none; }
+.st-results-tabs { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-bottom: 1px solid var(--line); }
+.st-results-tabs [role="tab"] { background: none; border: 0; color: var(--bone-dim, #9aa); font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+.st-results-tabs [role="tab"].on { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.st-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: rgba(255, 255, 255, 0.1); font-size: 11px; text-align: center; }
+.st-count.bad { background: var(--st-bad); color: #111; }
+.st-count.warn { background: var(--st-warn); color: #111; }
+.st-results-list { list-style: none; margin: 0; padding: 4px 8px; overflow-y: auto; font-size: 13px; display: grid; gap: 3px; }
+.st-results-level { display: inline-block; min-width: 58px; font-size: 11px; text-transform: uppercase; color: var(--st-warn); }
+.st-results-list li.error .st-results-level { color: var(--st-bad); }
+.st-results-out { margin: 0; padding: 6px 8px; overflow: auto; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+.st-find { position: relative; }
+.st-find-list { position: absolute; top: 100%; left: 0; z-index: 30; width: 320px; max-height: 300px; overflow-y: auto; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+.st-vardrop { position: absolute; z-index: 20; min-width: 180px; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); padding: 4px 0; }
+/* an empty event graph: where to start (UX review H7) */
+.st-empty-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; max-width: 360px; padding: 16px 18px; background: var(--panel, #22262b); border: 1px dashed var(--line); border-radius: 8px; text-align: center; }
+.st-empty-card p { margin: 6px 0 12px; font-size: 13px; color: var(--bone-dim, #9aa); }
+.st-empty-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+@media (max-width: 1100px) {
+  .st-main { grid-template-columns: 190px minmax(0, 1fr) 240px; }
+}
+
+/* graph version 3: tabs, containers, Functions, Macros, structs, enums */
+.st-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 4px; }
+.st-tabs { display: flex; gap: 2px; overflow-x: auto; flex: none; border-bottom: 1px solid var(--line); }
+.st-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: #1b1f23; border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--bone-dim, #9aa); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.st-tab.on { background: #15181b; color: var(--text); box-shadow: inset 0 2px 0 var(--signal); }
+.st-tab.dragging { opacity: .5; }
+.st-tab-x { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; border-radius: 3px; }
+.st-tab-x:hover { background: rgba(255, 255, 255, .1); color: var(--text); }
+.st-mb-dot.mac { background: #3f6f8f; }
+.st-mb-dot.st { background: #2f6fd6; border-radius: 50%; }
+.st-mb-dot.en { background: #1f8a70; border-radius: 50%; }
+.st-mb-dot.mk { background: #d9c27a; transform: rotate(45deg); border-radius: 1px; }
+.st-mb-item.open { box-shadow: inset 2px 0 0 var(--signal); }
+.st-mb-pin.arr { border-radius: 1px; outline: 1px dotted rgba(0, 0, 0, .6); outline-offset: -3px; }
+.st-mb-pin.map { border-radius: 1px; transform: rotate(45deg) scale(.85); }
+/* an array pin is a little grid, a map pin a diamond (as in Blueprints) */
+.st-handle-array.react-flow__handle { border-radius: 2px; background-image: linear-gradient(90deg, transparent 45%, rgba(0, 0, 0, .55) 45% 55%, transparent 55%), linear-gradient(transparent 45%, rgba(0, 0, 0, .55) 45% 55%, transparent 55%); }
+.st-handle-map.react-flow__handle { border-radius: 1px; transform: rotate(45deg) scale(.9); }
+.st-pin.watched .st-pin-label { text-decoration: underline dotted; text-underline-offset: 3px; }
+.st-typepick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.st-typepick .st-field { flex: 1 1 90px; min-width: 0; }
+.st-ctx { position: fixed; z-index: 60; min-width: 220px; max-width: 320px; background: #22272c; border: 1px solid var(--line); border-radius: 6px; padding: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+.st-ctx-item { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; width: 100%; text-align: left; padding: 5px 10px; background: none; border: 0; border-radius: 3px; color: var(--text); cursor: pointer; font: inherit; }
+.st-ctx-item:hover, .st-ctx-item:focus-visible, .st-ctx-item:focus { background: color-mix(in srgb, var(--signal) 25%, transparent); outline: none; }
+.st-ctx-item[aria-disabled="true"] { opacity: .5; cursor: default; background: none; }
+.st-ctx-item.danger .st-ctx-label { color: #ff8a7a; }
+.st-ctx-label { font-weight: 600; }
+.st-ctx-keys { font: 12px/1.4 inherit; color: var(--bone-dim, #9aa); background: none; border: 0; }
+.st-ctx-help { grid-column: 1 / -1; font-size: 12px; color: var(--bone-dim, #9aa); }
+.st-ctx-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.st-mb-cat { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--bone-dim, #9aa); padding: 6px 6px 2px; }
+.st-libform { display: grid; gap: 10px; padding: 16px; min-width: min(420px, 90vw); }
+.st-libform h3 { margin: 0; }
+.st-libform-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.st-update { margin: 6px 0; padding: 8px; border: 1px solid var(--signal); border-radius: 6px; }
+
+/* ---- a light Loner-Strike touch (non-semantic only: category, pin and wire colours and every
+   text colour stay as they are). Option A (st-skin-a, the default): the app's squarer VGUI corners
+   and bevel, a 1px highlight along the top of title bars (above the text, so no contrast is lost),
+   a bone outline for the selection (the app's yellow is kept for running and paused), an olive
+   tint in the grid, the app's olive for comment boxes, bevelled tabs. (Option B, the app's bold
+   caps for titles and a dark hatch on title bars, was tried and left out: docs/notes/X.md.) */
+.st-skin-a { --st-grid: #1d211b; --st-grid-major: #2b3127; }
+.st-skin-a .st-canvas{ background: #151814; }
+.st-skin-a .st-canvas .react-flow{ --xy-background-color: #151814; }
+.st-skin-a .st-node{ border-radius: 4px; box-shadow: inset 1px 1px 0 rgba(216, 222, 211, .07), inset -1px -1px 0 rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .45); }
+.st-skin-a .st-node-head{ border-radius: 3px 3px 0 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -1px 0 rgba(0, 0, 0, .3); }
+.st-skin-a .st-node-run{ border-radius: 0 0 3px 3px; }
+.st-skin-a .st-node.selected{ border-color: var(--bone); box-shadow: 0 0 0 1px var(--bone), 0 0 0 3px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .5); }
+.st-skin-a .st-comment{ --st-comment: #5b6a4b; border-radius: 3px; }
+.st-skin-a .st-comment-head{ border-radius: 3px 3px 0 0; }
+.st-skin-a .st-tab{ background: var(--panel); color: var(--bone-dim); border-radius: 0; box-shadow: var(--raised); border: 0; }
+.st-skin-a .st-tab.on{ background: #151814; color: var(--bone); box-shadow: var(--sunken), inset 0 2px 0 var(--signal); }
+.st-side-embed { margin: 8px 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.st-mb-row { display: flex; gap: 6px; margin-top: 6px; }
+
+/* the details panels: one left edge, one field size, buttons at their own width */
+.st-side .st-field { font-size: 13px; }
+.st-side p > .btn.small:first-child { margin-left: 0; }
+.st-side-field > .btn { justify-self: start; }
+.st-mk-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px auto; gap: 4px; align-items: center; }
+.st-num-row > .st-field-num { flex: 1 1 0; width: auto; }
+.st-results-from { display: inline-block; min-width: 82px; font-size: 11px; color: var(--st-muted, #999); }
+.st-results-list li.stale { opacity: 0.6; }
+.st-results-status { list-style: none; }
+/* Compile: the button, its status icon (gray stale, green ok, yellow warnings, red errors) */
+.st-check { display: inline-flex; align-items: center; gap: 6px; }
+.st-check-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; background: none; font-size: 12px; line-height: 1; cursor: pointer; color: var(--st-muted, #999); padding: 0; }
+.st-check-icon.ok { color: var(--st-ok, #5cb85c); }
+.st-check-icon.warn { color: var(--st-warn); }
+.st-check-icon.error, .st-check-icon.failed { color: var(--st-bad); }
+.st-check-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+/* Test run (Results tab) */
+.st-test { padding: 6px 8px; overflow-y: auto; font-size: 13px; display: grid; gap: 6px; align-content: start; }
+.st-test-empty { padding: 6px 8px; margin: 0; font-size: 13px; }
+.st-test-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.st-test-steps li { display: flex; align-items: center; gap: 6px; color: var(--st-muted, #999); }
+.st-test-steps li.on { color: var(--text); }
+.st-test-done { color: var(--st-ok, #5cb85c); width: 14px; text-align: center; }
+.st-test-verdict { margin: 0; font-weight: 600; }
+.st-test-verdict.pass { color: var(--st-ok, #5cb85c); }
+.st-test-verdict.warn { color: var(--st-warn); }
+.st-test-verdict.fail { color: var(--st-bad); }
+.st-test-summary { margin: 0; padding-left: 18px; }
+.st-test-never { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 6px; }
+.st-test-status { font-size: 12px; white-space: nowrap; color: var(--st-muted, #999); cursor: pointer; background: none; border: 0; padding: 0; }
+.st-test-status.pass { color: var(--st-ok, #5cb85c); }
+.st-test-status.warn { color: var(--st-warn); }
+.st-test-status.fail { color: var(--st-bad); }
+/* the All Actions palette: folders, favorites, recents, Context Sensitive */
+.st-palette { width: 360px; max-height: 440px; }
+.st-palette-head { display: flex; flex-direction: column; }
+.st-palette-head .st-palette-search { margin-bottom: 4px; }
+.st-palette-context { display: flex; align-items: center; gap: 4px; margin: 0 10px 6px; font-size: 12px; color: var(--bone-dim, #9aa); }
+.st-palette-folder { display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 4px 8px; background: none; border: 0; color: var(--bone, #ddd); cursor: pointer; font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.st-palette-folder.cur, .st-palette-row.cur { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-palette-caret { width: 10px; display: inline-block; }
+.st-palette-count { margin-left: auto; color: var(--bone-dim, #9aa); font-size: 11px; text-transform: none; }
+.st-palette-row { display: flex; align-items: center; }
+.st-palette-row .st-palette-item { flex: 1; min-width: 0; padding-left: 4px; }
+.st-palette-star { background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 14px; padding: 2px 8px; visibility: hidden; }
+.st-palette-row:hover .st-palette-star, .st-palette-row.cur .st-palette-star, .st-palette-star.on { visibility: visible; }
+.st-palette-star.on { color: var(--signal); }
+
+/* Node help (NodeHelp.tsx): a panel over the right side of the canvas */
+.st-help { position: fixed; top: 164px; right: 16px; bottom: 64px; z-index: 30; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; background: var(--panel, #22262b); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); overflow: hidden; }
+.st-help-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.st-help-pad { padding: 12px; }
+.st-help-list { overflow-y: auto; padding-bottom: 8px; }
+.st-help-body { overflow-y: auto; padding: 4px 14px 14px; line-height: 1.45; }
+.st-help-body h3 { margin: 8px 0 0; }
+.st-help-body h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); }
+.st-help-body p { margin: 6px 0; }
+.st-help-pins { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.st-help-pins li { padding: 4px 8px; background: rgba(255,255,255,.03); border-radius: 5px; }
+.st-help-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.st-help-note { padding: 6px 8px; border-left: 3px solid var(--signal, #5ab0ff); background: rgba(255,255,255,.03); }
+.st-help-note.cost { border-left-color: var(--st-warn, #ffb347); }
+.st-help-note.risk { border-left-color: var(--st-bad, #ff5b4f); }
+.st-help-actions { gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.st-help-related { display: flex; flex-wrap: wrap; gap: 4px; }
+.st-help-menu { position: relative; }
+.st-help-menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 220px; display: flex; flex-direction: column; padding: 4px; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.st-help-menu-list button { text-align: left; padding: 6px 10px; background: none; border: 0; border-radius: 5px; color: var(--text); font: inherit; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.st-help-menu-list button:hover, .st-help-menu-list button:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-help-menu-list kbd { color: var(--bone-dim, #9aa); font: inherit; font-size: 12px; }
+.st-examples { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.st-examples .st-graph-open { width: 100%; height: 100%; }
+.st-examples .st-graph-open span { white-space: normal; }
+
+/* The Studio tour (Tour.tsx): a ring round the control and a card beside it */
+.st-tour { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.st-tour-ring { position: fixed; border: 2px solid var(--signal, #5ab0ff); border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,.45); transition: left .2s, top .2s, width .2s, height .2s; }
+.st-tour-dim { position: fixed; inset: 0; background: rgba(0,0,0,.45); }
+.st-tour-card { position: fixed; pointer-events: auto; padding: 12px 14px; background: var(--panel, #22262b); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.6); line-height: 1.45; }
+.st-tour-card h3 { margin: 2px 0 6px; font-size: 15px; }
+.st-tour-card p { margin: 0 0 10px; }
+.st-tour-count { font-size: 12px; margin: 0; }
+.st-tour-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.st-tour-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; }
+@media (prefers-reduced-motion: reduce) { .st-tour-ring { transition: none; } }
+/* the Timeline editor */
+.st-tl { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; background: var(--sunken, #15181b); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; outline: none; }
+.st-tl-bar, .st-tl-key { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.st-tl-bar label, .st-tl-key label { display: inline-flex; align-items: center; gap: 4px; }
+.st-tl-key { background: color-mix(in srgb, var(--signal) 8%, transparent); }
+.st-tl-ruler { padding-top: 2px; }
+.st-tl-tracks { flex: 1 1 0; overflow-y: auto; }
+.st-tl-track { display: flex; border-bottom: 1px solid var(--line); position: relative; }
+/* (UX review M8) the key row keeps its space; a lane's bottom edge resizes it */
+.st-tl-key { height: 44px; box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+.st-tl-key-hint { font-size: 12px; }
+/* (a small window) the toolbar stays one line and scrolls sideways: wrapped, it took the lanes'
+   room, and the lanes scrolled under a click (P5 re-check: a new key moved the lane 12 px) */
+.st-tl-bar { flex: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+.st-tl-bar > *, .st-tl-bar label { flex: none; white-space: nowrap; }
+.st-tl-ruler, .st-tl-key { flex: none; }
+.st-tl-tracks { min-height: 120px; }
+.st-tl-key > span, .st-tl-key label { white-space: nowrap; flex: none; }
+.st-tl-resize { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: ns-resize; z-index: 1; }
+/* a game setting's whole name (UX review M9) */
+.st-setting-pick { width: 100%; }
+/* the breakpoint dot: on hover, on a picked node, or when set (UX review L5) */
+.st-node .st-bp:not(.on) { opacity: 0; transition: opacity .12s; }
+.st-node:hover .st-bp, .st-node.selected .st-bp, .st-node .st-bp:focus-visible { opacity: 1; }
+/* a whole-mode variable's Get: a pill (UX review M4) */
+.st-node.st-node-pill { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 10px; border-radius: 14px; }
+.st-node-pill .st-node-title { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.st-node-pill .st-pin { margin-left: auto; }
+/* a pin's value typed on the node (UX review H6) */
+.st-pin-value { margin-left: 4px; font: inherit; font-size: 11.5px; color: #e9ecef; background: rgba(0, 0, 0, .35); border: 1px solid #4a515b; border-radius: 3px; padding: 0 3px; height: 18px; box-sizing: border-box; min-width: 0; }
+.st-pin-value:focus { outline: 1px solid var(--signal, #e8c35a); border-color: transparent; }
+.st-pin-num { width: 58px; }
+.st-pin-text { width: 92px; }
+.st-pin-choice { max-width: 120px; padding: 0 1px; }
+input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; accent-color: var(--signal, #e8c35a); }
+/* a track's header: exactly its lane's height, one line (name, kind, ×), centered on the lane; the lane's
+   value range in its corners (beside the lane, never under a key) */
+.st-tl-head { flex: none; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 0 6px 0 8px; position: relative; font-size: 12px; box-sizing: border-box; overflow: hidden; }
+.st-tl-head .st-field { flex: 1 1 auto; min-width: 0; height: 24px; padding: 0 6px; font-size: 12px; line-height: 22px; box-sizing: border-box; }
+.st-tl-head > .st-muted { flex: none; white-space: nowrap; }
+.st-tl-x { flex: none; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 15px; line-height: 1; }
+.st-tl-x:hover, .st-tl-x:focus-visible { color: var(--danger, #f2c3b2); border-color: var(--line); }
+.st-tl-ax { position: absolute; right: 6px; font-size: 10px; color: var(--bone-dim, #9aa); font-variant-numeric: tabular-nums; pointer-events: none; }
+.st-tl-ax.hi { top: 3px; }
+.st-tl-ax.lo { bottom: 3px; }
+.st-tl-sep { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--line); }
+.st-tl-lane { flex: none; cursor: crosshair; touch-action: none; }
+.st-tl-k { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 2; cursor: grab; }
+.st-tl-k.ease { stroke-dasharray: 2 1; }
+.st-tl-k.on { fill: var(--signal, #e8c35a); }
+.st-tl-empty { padding: 12px; }
+
+/* The delete question (DeleteDialog.tsx) */
+.st-del { display: grid; gap: 10px; max-width: 520px; padding: 16px 18px; }
+.st-del h3 { margin: 0; }
+.st-del p { margin: 0; }
+.st-del-choices { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.st-del-choices label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.st-del-choices label > span { display: grid; gap: 2px; }
+.st-del-off { opacity: .55; }
+.st-del-help { font-size: 12.5px; }
+.st-del-actions { justify-content: flex-end; gap: 8px; }
+.st-live-edit { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+
+/* Data tables (TableEditor.tsx) */
+.st-table-sheet { width: min(1100px, calc(100vw - 32px)); max-width: none; }
+.st-table-ed { display: grid; gap: 10px; padding: 14px 16px; }
+.st-table-bar, .st-table-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.st-table-scroll { overflow: auto; max-height: min(60vh, 560px); border: 1px solid var(--line); border-radius: 6px; }
+.st-table-grid { border-collapse: collapse; font-size: 13px; }
+.st-table-grid th, .st-table-grid td { padding: 3px 4px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+.st-table-grid th { position: sticky; top: 0; background: var(--panel, #22262b); z-index: 1; }
+.st-table-grid th.key { box-shadow: inset 0 -2px 0 var(--signal, #5ab0ff); }
+.st-table-grid .st-field { width: 100%; min-width: 90px; }
+.st-table-colbar { display: flex; gap: 2px; margin-top: 2px; }
+.st-table-keytag { font-size: 11px; }
+.st-table-csv { display: grid; gap: 6px; }
+.st-table-csv textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.st-help-menu-list a.st-help-menu-link { padding: 6px 10px; border-radius: 5px; color: var(--text); text-decoration: none; }
+.st-help-menu-list a.st-help-menu-link:hover, .st-help-menu-list a.st-help-menu-link:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-bookmarks { min-width: 280px; }
+.st-bookmark-row { display: flex; align-items: center; }
+.st-bookmark-row > button:first-child { flex: 1; }
+.st-bookmark-x { flex: none !important; }
+/* Version history marks on the canvas (VersionHistory.tsx) */
+.st-node.st-mark-added { box-shadow: 0 0 0 3px #4caf50, 0 2px 6px rgba(0,0,0,.4); }
+.st-node.st-mark-changed { box-shadow: 0 0 0 3px #e0a030, 0 2px 6px rgba(0,0,0,.4); }
+.st-mark.added { color: #6fcf73; }
+.st-mark.changed { color: #e8b04a; }
+.st-versions-pick { border-top: 1px solid var(--line); }
+.st-help-quick { font-size: 12.5px; margin: 0; padding-top: 0; }
+.st-tl-tan { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 1.5; cursor: grab; }
+
+/* UX review H4: the node list drawn over the page (Canvas.tsx), so a small canvas doesn't clip it */
+.st-portal .st-palette { position: fixed; z-index: 70; max-height: min(370px, calc(100vh - 24px)); }
+/* folding side panels (panels.ts) */
+.st-main.no-left { grid-template-columns: 26px minmax(0, 1fr) 290px; }
+.st-main.no-right { grid-template-columns: 230px minmax(0, 1fr) 26px; }
+.st-main.no-left.no-right { grid-template-columns: 26px minmax(0, 1fr) 26px; }
+/* a window under 1200 px: narrower side panels (with both open at 1024 the canvas was about 320 px;
+   panels.ts also shows one at a time there) */
+@media (max-width: 1199px) {
+  .st-main { grid-template-columns: 170px minmax(0, 1fr) 210px; }
+  .st-main.no-left { grid-template-columns: 26px minmax(0, 1fr) 250px; }
+  .st-main.no-right { grid-template-columns: 210px minmax(0, 1fr) 26px; }
+  .st-main.no-left.no-right { grid-template-columns: 26px minmax(0, 1fr) 26px; }
+}
+.st-center { min-width: 320px; }
+.st-panel { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.st-panel > .st-mb, .st-panel > .st-side { flex: 1; min-height: 0; }
+.st-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); }
+.st-panel-fold { width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--panel, #22262b); color: var(--bone-dim, #9aa); cursor: pointer; line-height: 1; }
+.st-panel-fold:hover, .st-rail:hover { color: var(--text); border-color: var(--signal); }
+.st-rail { border: 1px solid var(--line); border-radius: 6px; background: var(--panel, #22262b); color: var(--bone-dim, #9aa); cursor: pointer; padding: 8px 0; font: 600 12px/1 inherit; }
+.st-rail span { writing-mode: vertical-rl; letter-spacing: .04em; }
+.st-menu-head { padding: 8px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); border-top: 1px solid var(--line); margin-top: 4px; }
+.st-menu-note { padding: 4px 10px; margin: 0; font-size: 12.5px; }
+/* the minimap (only when asked for): small and see-through, so it doesn't hide nodes (UX review M1) */
+.st-canvas .react-flow__minimap.st-minimap { width: 150px; height: 100px; opacity: .75; }
+.st-canvas .react-flow__minimap.st-minimap svg { width: 150px; height: 100px; }
+
+/* the toolbar in three groups that wrap as wholes (UX review M6): the mode, editing, running it */
+.st-tgroup { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.st-tgroup.run { margin-left: auto; }
+.st-bots { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--bone-dim, #9aa); white-space: nowrap; }
+
+/* Requirements (Requirements.tsx; UX review H3): compact, no sideways scroll */
+.st-requirements { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.st-requirements h4 { margin: 10px 0 0; font-size: 13px; }
+.st-requirements .st-side-help { margin: 0; }
+.st-requirements select, .st-requirements input { width: 100%; box-sizing: border-box; }
+.st-req-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.st-req-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12.5px; background: rgba(255,255,255,.04); }
+.st-req-chip button { background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; padding: 0 2px; font: inherit; }
+.st-req-chip button:hover { color: var(--text); }
+.st-req-found { list-style: none; margin: 0; padding: 2px; border: 1px solid var(--line); border-radius: 6px; max-height: 220px; overflow-y: auto; }
+.st-req-found button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 4px 6px; border-radius: 4px; cursor: pointer; font: inherit; }
+.st-req-found button:hover, .st-req-found button:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-req-content { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.st-req-content code { overflow-wrap: anywhere; }
+.st-req-content .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.st-req-content input { flex: 1 1 140px; min-width: 0; }
+.st-example-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 6px; font-size: 13px; }
+/* Version history docks on the left, over My mode, so it doesn't cover the nodes it marks (UX review L6) */
+.st-help.st-versions { left: 16px; right: auto; width: min(300px, calc(100vw - 32px)); }
+/* Data table header cells look like headers; the column remove sits apart (UX review L7) */
+.st-table-grid thead th { background: color-mix(in srgb, var(--signal) 10%, var(--panel, #22262b)); font-weight: 600; }
+.st-table-grid thead th .st-field { font-weight: 600; }
+.st-table-colbar { justify-content: space-between; gap: 8px; }
+.st-table-colbar .btn.icon { margin-left: auto; }
+/* (one row at 1440 px: a narrower Find and map list; UX review M6) */
+.st-toolbar .st-find .st-field { width: 130px; }
+.st-tgroup.run > select.st-field { max-width: 130px; }
+.st-tgroup.run .st-field-num { width: 46px; }
+.st-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* rows a CSV import refused, with why (TableEditor.tsx; QA4-B F5) */
+.st-table-refused { border: 1px solid var(--st-bad, #c55); border-radius: 6px; padding: 6px 10px; margin: 0 0 6px; font-size: 13px; background: color-mix(in srgb, var(--st-bad, #c55) 12%, transparent); }
+.st-table-refused ul { margin: 4px 0 0; padding-left: 18px; max-height: 140px; overflow-y: auto; }
+/* "+ Add pin" under a node that counts its pins (Nodes.tsx AddPin; pinCountOps.ts) */
+.st-node-addpin { display: flex; align-items: center; gap: 4px; padding: 2px 8px 6px; flex-wrap: wrap; }
+.st-addpin { background: none; border: 1px dashed var(--line); border-radius: 4px; color: var(--bone-dim, #9aa); font: inherit; font-size: 11.5px; padding: 1px 6px; cursor: pointer; }
+.st-addpin:hover:not(:disabled) { color: var(--text); border-color: var(--signal); }
+.st-addpin:disabled { opacity: .4; cursor: default; }
+.st-addpin-x { padding: 1px 7px; }
+.st-addpin-why { flex-basis: 100%; font-size: 11px; color: var(--st-warn, #e8c35a); }
+
+/* an orphaned pin: wired, but the node doesn't have it any more (StudioCompat.md) */
+.st-pin-orphan .st-pin-label { color: var(--st-bad, #ff5b4f); font-weight: 600; }
+.st-pin-orphan .st-handle { border-color: var(--st-bad, #ff5b4f) !important; background: var(--st-bad, #ff5b4f) !important; }
+/* a whole-number pin (#) and an entity handle's letter (N, C, P, V, M, K) */
+.st-pin-whole, .st-pin-badge { font-size: 9px; line-height: 1; padding: 1px 3px; margin-left: 3px; border-radius: 3px; color: var(--bone-dim, #9aa); border: 1px solid var(--line); }
+.st-pin-badge { color: #4dd0c8; border-color: #4dd0c8; font-weight: 700; }
+/* a setting the node doesn't have any more, greyed until cleared */
+.st-orphan-value { opacity: .65; border: 1px dashed var(--st-bad, #ff5b4f); border-radius: 5px; padding: 4px 6px; font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+
+/* assets (X-fx): file pins (Model, Sprite, Sound, Decal, Model or Sprite) are hollow squares, so they
+   read without color; wired, the square fills with a ring inside */
+.st-handle-file.react-flow__handle { border-radius: 2px; }
+.st-handle-file.react-flow__handle.wired { box-shadow: inset 0 0 0 2px var(--panel, #1d211b); }
+.st-asset-default { display: flex; flex-direction: column; gap: 4px; }
+.st-asset-thumb { max-width: 96px; max-height: 96px; image-rendering: pixelated; background: #2a2f27; border-radius: 4px; }
+/* a Color value (ColorField.tsx) */
+.st-color-field { display: grid; gap: 4px; }
+.st-color-field input[type="color"] { width: 100%; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+.st-color-alpha { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.st-color-alpha input { flex: 1; }
+.st-color-presets { display: flex; gap: 4px; flex-wrap: wrap; }
+.st-color-swatch { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); padding: 0; cursor: pointer; }

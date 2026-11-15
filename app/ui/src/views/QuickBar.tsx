@@ -38,7 +38,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const favourite = async () => {
     const r = await postJson<{ error?: string }>("/api/mapflag", { flag: "fav", map: st.map, on: !here?.fav }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
-    toast(here?.fav ? "Removed from favourites" : "Added to favourites");
+    toast(here?.fav ? "Removed from favorites" : "Added to favorites");
     reloadMaps();
   };
   // the bot count asked for (the saved target, not the bots playing right now)
@@ -105,7 +105,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
     { label: "Change map…", on: () => setPicking(true), show: sharedRole() === "moderator" },
-    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
+    { label: here?.fav ? "Favorite map" : "Favorite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
   ];
   const you: Item[] = me
     ? [
@@ -146,11 +146,27 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
           </div>
         )}
         {!mod && <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />}
-        <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
+        <button ref={announceButton} className="qb qb-full" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
         {/* records your own game: a server has none (its HLTV records it) */}
         {targetKey() === "local" && (
-          <button className="qb" aria-pressed={!!st.recording} title="Records what you see to a demo file in your game folder. To watch it, open the game's console and type viewdemo and the file's name." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+          <button className="qb qb-full" aria-pressed={!!st.recording} title="Records what you see to a demo file in your game folder. To watch it, open the game's console and type viewdemo and the file's name." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
         )}
+        {/* a narrow window: the last ones in a More menu instead of off the edge (QA4-CORE UX 3) */}
+        <span className="qb-more">
+          <Menu
+            label="More"
+            items={[
+              { label: "Announce", on: () => setAnnouncing((x) => !x), pressed: announcing },
+              {
+                label: st.recording ? "Stop recording" : "Record demo",
+                on: () => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…"),
+                show: targetKey() === "local",
+                pressed: !!st.recording,
+              },
+            ]}
+            active={announcing || !!st.recording}
+          />
+        </span>
       </div>
       {picking && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); if (pick) { once(`maps:${targetKey()}:change`, () => run("gm_map", [pick]), `Changing the map to ${pick}…`); setPicking(false); } }} onKeyDown={(e) => e.key === "Escape" && closePicking()}>

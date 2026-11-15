@@ -12,6 +12,15 @@ pub enum RconError {
     Offline,
     /// The game rejected the password (it changes when a map loads for the first time).
     BadPassword,
+    /// The command has characters the game's console can't take as they are (control
+    /// characters, or beyond Latin-1, which used to be cut to one byte and could turn into
+    /// `"` or `;`): never sent.
+    Refused,
+}
+
+/// Whether a command can go to the game byte for byte: Latin-1, no control characters.
+pub fn wire_safe(command: &str) -> bool {
+    command.chars().all(|c| (c as u32) <= 0xFF && !c.is_control())
 }
 
 pub struct Rcon {
@@ -49,6 +58,9 @@ impl Rcon {
     }
 
     pub fn send(&self, command: &str) -> Result<String, RconError> {
+        if !wire_safe(command) {
+            return Err(RconError::Refused);
+        }
         let _guard = self.lock.lock().unwrap();
         if let Some((r, pw_file)) = &self.via {
             return match crate::remote::exec_quick(r, &self.lsrcon(pw_file, command)) {
@@ -65,6 +77,9 @@ impl Rcon {
     /// there it has just written: (reply, the file). On this computer the file is None.
     pub fn send_then_cat(&self, command: &str, file: &str, mark: &str) -> Result<(String, Option<Vec<u8>>), RconError> {
         let Some((r, pw_file)) = &self.via else { return self.send(command).map(|o| (o, None)) };
+        if !wire_safe(command) {
+            return Err(RconError::Refused);
+        }
         let _guard = self.lock.lock().unwrap();
         let printf_mark = mark.replace('\n', "\\n");
         let cmd = format!(
@@ -92,6 +107,8 @@ impl Rcon {
     }
 
     fn send_udp(&self, command: &str) -> Result<String, RconError> {
+        const MAX_REPLY: usize = 4 << 20; // [Caps]
+        const MAX_REPLY_TIME: Duration = Duration::from_secs(20); // [Caps]
         let sock = UdpSocket::bind(local_end(&self.addr)).map_err(|_| RconError::Offline)?;
         sock.set_read_timeout(Some(Duration::from_millis(1500))).ok();
         sock.connect(&self.addr).map_err(|_| RconError::Offline)?;
@@ -115,7 +132,14 @@ impl Rcon {
         // follows right away, so a short quiet spell ends it. Only a split answer still
         // missing parts is waited for longer. (The lock is held all the while.)
         let mut got = Packets::default();
+        // [Caps] a server that never stops sending can't hold the lock or fill memory: the
+        // longest real answer (cvarlist, a full status) is well under 1 MB
+        let (started, mut total) = (std::time::Instant::now(), 0usize);
         while let Ok(n) = sock.recv(&mut buf) {
+            total += n;
+            if total > MAX_REPLY || started.elapsed() > MAX_REPLY_TIME {
+                break;
+            }
             got.add(&buf[..n]);
             let wait = if got.missing_parts() { MISSING_PART_WAIT } else { QUIET_WAIT };
             sock.set_read_timeout(Some(wait)).ok();
@@ -208,6 +232,16 @@ impl Packets {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn refuses_what_the_wire_would_mangle() {
+        use super::*;
+        for bad in ["playdemo \"x\u{122}; quit", "say \u{13B}", "a\u{FF02}b", "say hi\nquit", "say \u{1F600}", "a\0b"] {
+            assert!(!wire_safe(bad), "{bad:?}");
+            assert!(matches!(Rcon::new("pw".into(), 1).send(bad), Err(RconError::Refused)), "{bad:?}");
+        }
+        assert!(wire_safe("say caf\u{e9} \"ok\"; status"));
+    }
+
     use super::*;
 
     fn part(id: u8, num: u8, total: u8, body: &[u8]) -> Vec<u8> {

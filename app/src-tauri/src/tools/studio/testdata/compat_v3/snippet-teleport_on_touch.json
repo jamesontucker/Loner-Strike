@@ -1,0 +1,56 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Teleport on touch",
+ "description": "Walking into the trigger named tele_in takes a player to the entity named tele_out.",
+ "nodes": [
+  {
+   "id": "t",
+   "type": "event.player_touched",
+   "pos": {
+    "x": 20,
+    "y": 20
+   },
+   "params": {
+    "name": "tele_in"
+   }
+  },
+  {
+   "id": "tp",
+   "type": "player.teleport",
+   "pos": {
+    "x": 340,
+    "y": 20
+   },
+   "params": {
+    "name": "tele_out"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "t",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

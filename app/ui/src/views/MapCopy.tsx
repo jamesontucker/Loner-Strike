@@ -12,7 +12,7 @@ import { JobProgress } from "./JobProgress";
 const COPY_NOTE = "Players download each map the first time it plays. Big collections download slowly unless the server has Fast downloads (Website status, Fast downloads).";
 const KIND = "mapcopy";
 export const CATS: [string, string][] = [
-  ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
+  ["all", "All"], ["fav", "Favorites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
   ["hostage", "Hostage rescue"], ["objective", "Objectives"], ["surf", "Surf"], ["arena", "Arena & fun"],
   ["other", "Other"],
 ];

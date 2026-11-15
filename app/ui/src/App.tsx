@@ -1,11 +1,12 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
+import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, postJsonAt, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
 import { gameShort, gameTitle } from "./games";
 import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
-import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
+import { confirmLeave, forgetUnsavedEdits, hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
+import { useToolPage } from "./stores/toolPage";
 import { waitsForRestart, type AppInfo, type GameState, type Online, type ServerInfo } from "./types";
 import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
@@ -15,7 +16,7 @@ import { Bots } from "./views/Bots";
 import { SMARTER_CHAT, SmarterChat } from "./views/SmarterChat";
 import { Radio, RadioButton } from "./views/Radio";
 import { Friends } from "./views/Friends";
-import { Maps } from "./views/Maps";
+import { Maps, NoPicture } from "./views/Maps";
 import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
@@ -25,6 +26,9 @@ import { FUN_NOTE, MatchButtons, RULES_NOTE, SavedSettingsPage, SettingsPage } f
 import { Welcome } from "./views/Welcome";
 import { WhatsNew } from "./views/WhatsNew";
 import { anySetUp, Setup } from "./views/Setup";
+// the list of tools only (each tool's page is its own lazy chunk)
+import { TOOL_GROUPS, TOOLS } from "./views/tools/registry";
+import { CountBadge, useCommunityUpdateNotice, useCommunityUpdates } from "./views/tools/community/chip";
 
 // The bigger pages load the first time they're opened, so the app starts on a smaller bundle
 const Servers = lazyPage(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
@@ -35,10 +39,12 @@ const Admins = lazyPage(() => import("./views/Admins").then((m) => ({ default: m
 const ServerBrowser = lazyPage(() => import("./views/ServerBrowser").then((m) => ({ default: m.ServerBrowser })));
 const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 const MySkins = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.MySkins })));
+// (three.js comes with it, in its own chunks: never imported from here)
+const Tools = lazyPage(() => import("./views/tools/Tools"));
 
 // Your own game's pages, grouped like a server's tabs (Game, People), then the rest.
 // ⌘1-⌘9 follow this order.
-const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
+const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean; beta?: boolean }[] = [
   { id: "play", label: "Play", icon: "play", group: "Game" },
   { id: "bots", label: "Bots", icon: "bots", live: true },
   { id: "match", label: "Rules", icon: "rules", live: true },
@@ -58,6 +64,10 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "sounds", label: "Sounds", icon: "sound" },
   { id: "more", label: "Get more", icon: "more" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
+  // looking inside maps, right after Servers: on the computer only (3D over Wi-Fi on a phone
+  // isn't a goal)
+  // its own group: the sidebar lists every tool under it (ToolsNav)
+  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Tools", beta: true }] : []),
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
@@ -116,7 +126,7 @@ function Shell() {
   const nav = async (s: Section, focus?: string) => {
     // a dialog is open (the app behind it is inert): shortcuts and the menu wait
     if (document.getElementById("root")?.hasAttribute("inert")) return;
-    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+    if (!(await confirmLeave(ask))) return;
     go(s, focus);
   };
 
@@ -172,6 +182,21 @@ function Shell() {
     if (myGame !== g) switchGame(null, g);
   };
 
+  // P5: loner-strike:// links (the website's Open in Loner-Strike): the app keeps a checked link
+  // until the page asks for it, here when the page loads and whenever the app nudges ("ls-open").
+  // Only a Community creation's page ("community:mod:<id>"), checked again here; installing
+  // stays behind Try it and its confirm.
+  useEffect(() => {
+    const take = async () => {
+      const r = await postJsonAt<{ open?: string | null }>("/api/app/deep-link", {}, null).catch(() => null);
+      const to = r?.open;
+      if (typeof to === "string" && /^community:(mod|spray):[1-9][0-9]{0,11}$/.test(to)) useNav.getState().go("tools", to);
+    };
+    void take();
+    window.addEventListener("ls-open", take);
+    return () => window.removeEventListener("ls-open", take);
+  }, []);
+
   // the macOS menu bar: "section:<id>" or "updates"
   useEffect(() => {
     const onMenu = async (e: Event) => {
@@ -224,6 +249,7 @@ function Shell() {
           return;
         }
         history.replaceState({ ls: 1, section: to.section, server: to.server }, "");
+        forgetUnsavedEdits();
       }
       useNav.getState().restore(to.section, to.server);
     };
@@ -364,6 +390,7 @@ function Shell() {
     >
       <Icon name={n.icon} />
       {n.label}
+      {n.beta && <span className="tag nav-beta">Beta</span>}
       {/* the title above doesn't show on touch: the More sheet says it */}
       {sub && n.live && !localOnline && !worksSaved(n.id) && <small className="nav-sub">Needs a game</small>}
       {n.id === "players" && myPlayers > 0 && <span className="count">{myPlayers}</span>}
@@ -405,7 +432,7 @@ function Shell() {
           </div>
           {NAV.slice(hostingAt).filter((n) => n.id !== "settings").map((n) => (
             <div key={n.id}>
-              {n.group && <div className="nav-group">{n.group}</div>}
+              {n.group && n.id !== "tools" && <div className="nav-group">{n.group}</div>}
               {n.id === "servers" ? (
                 <ServersNav
                   servers={servers?.servers ?? []}
@@ -417,11 +444,13 @@ function Shell() {
                   onOpen={async (id) => {
                     // the same checks as the other sections, then straight to that server's page
                     if (document.getElementById("root")?.hasAttribute("inert")) return;
-                    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+                    if (!(await confirmLeave(ask))) return;
                     if (section !== "servers") go("servers");
                     enterServer(id);
                   }}
                 />
+              ) : n.id === "tools" ? (
+                <ToolsNav section={section} onOpen={(focus) => nav("tools", focus)} />
               ) : (
                 navButton(n)
               )}
@@ -453,7 +482,7 @@ function Shell() {
           <HomeScreenHint />
           <WhatsNew version={app?.version} />
           {/* (not on the servers list: it's about your servers, which show their own updates) */}
-          {!setupOpen && !current?.shared && !(section === "servers" && !openServer) && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
+          {!setupOpen && !current?.shared && !(section === "servers" && !openServer) && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} withOthers={!openServer && section !== "servers"} />}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (
@@ -514,6 +543,7 @@ function Shell() {
               {section === "stats" && <Community target="local" part="stats" />}
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
               {section === "skins" && <MySkins />}
+              {section === "tools" && <Tools maps={allMaps} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
             </Suspense>
@@ -656,6 +686,71 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
   );
 }
 
+const TOOLS_FOLD = "ls.toolsOpen";
+
+/**
+ * Tools in the sidebar: its own group after Hosting. The group heading (with the Beta tag)
+ * folds it; under it Overview (the cards page), then the tools grouped Create / Map tools / Personalize / Watch & inspect / Share
+ * (views/tools/registry.tsx), each straight to its page. Opening a tool unfolds it.
+ */
+function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: string) => void }) {
+  const tool = useToolPage((s) => s.tool);
+  const here = section === "tools";
+  // folded until it's been opened once (a first run starts with the core sections: QA4-CORE UX 12)
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLS_FOLD) !== "1";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    if (here) setFolded(false);
+  }, [here, tool]);
+  const open = !folded;
+  const toggle = () => {
+    setFolded(open);
+    try {
+      localStorage.setItem(TOOLS_FOLD, open ? "0" : "1");
+    } catch {
+      // storage off: it just isn't remembered
+    }
+  };
+  // (community: a count of updates for things installed from Community, told once a session)
+  const updates = useCommunityUpdates();
+  useCommunityUpdateNotice(updates);
+  const item = (focus: string, label: string, icon: string, current: boolean, title?: string) => (
+    <button key={focus} className="nav-item" aria-current={current ? "page" : undefined} title={title} onClick={() => onOpen(focus === "community" && updates ? "community:installed:updates" : focus)}>
+      <Icon name={icon} />
+      {label}
+      {focus === "community" && <CountBadge n={updates} title={`${updates} update${updates === 1 ? "" : "s"} ready`} />}
+    </button>
+  );
+  return (
+    <>
+      <button className="nav-group nav-group-fold" aria-expanded={open} aria-controls="side-tools" onClick={toggle}>
+        Tools
+        <span className="tag nav-beta">Beta</span>
+        {folded && <CountBadge n={updates} title={`${updates} community update${updates === 1 ? "" : "s"} ready`} />}
+        <svg className="fold-caret" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d={open ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6"} />
+        </svg>
+      </button>
+      {open && (
+        <div id="side-tools">
+          {item("overview", "Overview", "tool-overview", here && !tool)}
+          {TOOL_GROUPS.map((g) => (
+            <div key={g} role="group" aria-label={g}>
+              <div className="nav-subgroup">{g}</div>
+              {TOOLS.filter((t) => t.group === g).map((t) => item(t.id, t.label, t.icon ?? "tools", here && tool === t.id, t.blurb))}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** The sidebar group a section is listed under ("" for the first, untitled one). */
 function groupOf(id: Section) {
   let g = "";
@@ -683,6 +778,45 @@ function Working({ phone }: { phone?: boolean }) {
         {acts.length > 1 ? ` (+${acts.length - 1} more)` : ""}
       </span>
     </span>
+  );
+}
+
+/** The top strip's map picture (QA4-CORE F1): the map's name tile underneath, the picture
+ *  over it once it has loaded. The radar comes right away (?now=1); while GameBanana is still
+ *  asked for a screenshot the app says so (x-thumb-looking) and the strip asks again, with a
+ *  new ?v= so nothing old is reused. A map with no picture keeps its name tile. */
+export function StripThumb({ map }: { map: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let gone = false;
+    let timer = 0;
+    void (async () => {
+      try {
+        const r = await fetch(withTarget(`/thumb/${encodeURIComponent(map)}.png?now=1&v=${v}`), { credentials: "same-origin", headers: { "X-Panel": "1" } });
+        const more = r.headers.get("x-thumb-looking") === "1";
+        if (r.ok) {
+          const pic = URL.createObjectURL(await r.blob());
+          if (gone) URL.revokeObjectURL(pic);
+          else setUrl(pic);
+        }
+        // every 4 s for a minute at most: lookups take a few seconds each
+        if (more && !gone && v < 15) timer = window.setTimeout(() => setV(v + 1), 4000);
+      } catch {
+        /* the name tile stays */
+      }
+    })();
+    return () => {
+      gone = true;
+      window.clearTimeout(timer);
+    };
+  }, [map, v]);
+  useEffect(() => () => void (url && URL.revokeObjectURL(url)), [url]);
+  return (
+    <div className="thumb strip-thumb" aria-hidden="true">
+      <NoPicture name={map} />
+      {url && <img src={url} alt="" />}
+    </div>
   );
 }
 
@@ -716,7 +850,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
   return (
     <header className="strip" data-tauri-drag-region>
       <div className="strip-map">
-        <div className="thumb" style={{ backgroundImage: `url(${withTarget(`/thumb/${encodeURIComponent(st.map)}.png`)})` }} aria-hidden="true" />
+        <StripThumb key={st.map} map={st.map} />
         <div>
           <button type="button" className="map-name strip-link" title="Maps" onClick={() => openPage("maps")}>{st.map}</button>
           <div className="strip-meta">

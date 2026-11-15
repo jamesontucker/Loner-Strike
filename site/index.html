@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Loner-Strike: CS 1.6 and Condition Zero with bots that play like people</title>
-<meta name="description" content="Free app for Counter-Strike 1.6 and Condition Zero: bots that play like real people, 22 classic mods, and a full control panel for your game and servers.">
+<title>Loner-Strike: Human-like bots, map &amp; mode tools, and servers for CS 1.6 + CZ</title>
+<meta name="description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Human-like bots, map editor, mode builder, servers and community. Free for CS 1.6 + CZ.">
 <link rel="canonical" href="https://lonerstrike.com/">
 <meta name="author" content="nanoshrine">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -17,8 +17,8 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="alternate" type="text/plain" href="https://lonerstrike.com/llms.txt" title="Loner-Strike for AI assistants">
 <meta property="og:site_name" content="Loner-Strike">
-<meta property="og:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
-<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
+<meta property="og:title" content="Loner-Strike: Human-like bots, map &amp; mode tools, and servers for CS 1.6 + CZ">
+<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Human-like bots, a map editor, a game mode builder, your own servers and a community browser, all in one free app for CS 1.6 and Condition Zero.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lonerstrike.com/">
 <meta property="og:locale" content="en_US">
@@ -28,8 +28,8 @@
 <meta property="og:image:alt" content="Loner-Strike: Play Counter-Strike like it's 2004, alone or with the friends you don't have. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@nanoshrine">
-<meta name="twitter:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
-<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
+<meta name="twitter:title" content="Loner-Strike: Human-like bots, map &amp; mode tools, and servers for CS 1.6 + CZ">
+<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Human-like bots, a map editor, a game mode builder, your own servers and a community browser, all in one free app for CS 1.6 and Condition Zero.">
 <meta name="twitter:image" content="https://lonerstrike.com/img/og.jpg">
 <script type="application/ld+json">
 {
@@ -37,8 +37,9 @@
  "@type": "SoftwareApplication",
  "name": "Loner-Strike",
  "alternateName": "Loner Strike",
+ "headline": "Loner-Strike: Human-like bots, map & mode tools, and servers for CS 1.6 + CZ",
  "url": "https://lonerstrike.com/",
- "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app.",
+ "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app. It adds two modes of its own (Last Stand and Battle Royale), creation tools (a map editor that compiles with SDHLT and playtests with bots, Game Mode Studio with node graphs, Plugin Studio for AMX Mod X, Creature Studio, a nav fixer, map doctor, map simulator, radar maker and more), and a moderated Community browser for sharing maps and modes.",
  "applicationCategory": "GameApplication",
  "applicationSubCategory": "Game mod manager and server control panel",
  "operatingSystem": "Windows, macOS (through CrossOver)",
@@ -49,14 +50,17 @@
  },
  "isAccessibleForFree": true,
  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
- "downloadUrl": "https://github.com/jamesontucker/Loner-Strike/releases/latest",
+ "downloadUrl": ["https://dl.lonerstrike.com/download/Loner-Strike-windows-x64-setup.exe", "https://dl.lonerstrike.com/download/Loner-Strike-mac.dmg", "https://github.com/jamesontucker/Loner-Strike/releases/latest"],
  "codeRepository": "https://github.com/jamesontucker/Loner-Strike",
  "image": "https://lonerstrike.com/img/og.jpg",
  "screenshot": [
   "https://lonerstrike.com/img/maps.jpg",
   "https://lonerstrike.com/img/play.jpg",
   "https://lonerstrike.com/img/friends.jpg",
-  "https://lonerstrike.com/img/servers.jpg"
+  "https://lonerstrike.com/img/servers.jpg",
+  "https://lonerstrike.com/img/1.0/editor.png",
+  "https://lonerstrike.com/img/1.0/studio.png",
+  "https://lonerstrike.com/img/1.0/render-valley.png"
  ],
  "author": {
   "@type": "Person",
@@ -69,13 +73,18 @@
   "Bots with human reaction times and aim, from a newbie lobby to bunnyhopping pros",
   "Bot personalities that chat, banter and rage, with regulars and clan tags",
   "Bots that understand team chat and voice commands",
-  "22 classic community modes patched so bots can play them",
+  "22 classic community modes patched so bots can play them, and modes made here, like Last Stand and Battle Royale",
   "27 fun and popular maps installed for you, and thousands more from GameBanana",
   "Seven ways for friends to connect: LAN, router, playit.gg, Tailscale, ZeroTier, Radmin VPN, Hamachi",
   "Admins, VIPs, bans, mutes, swear filter, chat log, stats and ranks",
   "Match mode for 5v5s and HLTV for spectators and demos",
   "Dedicated servers on your computer or a rented Linux machine",
-  "Control from your phone with a QR code"
+  "Control from your phone with a QR code",
+   "Map editor inspired by Unreal Engine's editor: brushes and entities in 3D, a Content Browser, live checks, Hammer, J.A.C.K. and TrenchBroom import, SDHLT compiling and F5 playtests with bots",
+  "Game Mode Studio: game modes from Blueprint-style node graphs, debugged live in the game, with NPCs, dialog and interactables for story and RPG modes",
+  "Plugin Studio for AMX Mod X, and Creature Studio for creatures and waves",
+  "Map tools: map doctor, map simulator, nav fixer, callouts and radar maker",
+  "Community browser for maps and Studio modes, hosted on GameBanana and moderated, with remixes, tracked credits and updates; custom creatures travel with shared maps and modes"
  ],
  "gamePlatform": "PC",
  "about": [
@@ -103,7 +112,7 @@
    "name": "Is it really free?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and gets you the same thing."
+    "text": "Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and just supports the project: the app is the same either way, and supporters get a thank-you, like a Discord role and a VIP tag on our servers."
    }
   },
   {
@@ -180,6 +189,14 @@
   },
   {
    "@type": "Question",
+   "name": "What does Beta mean on the tools?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They're new and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off."
+   }
+  },
+  {
+   "@type": "Question",
    "name": "Who made the mods?",
    "acceptedAnswer": {
     "@type": "Answer",
@@ -190,6 +207,7 @@
 }
 </script>
 <link rel="stylesheet" href="fonts/barlow.css">
+<link rel="stylesheet" href="viewer.css">
 
 <!-- Plausible (self-hosted) -->
 <script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
@@ -244,7 +262,7 @@ p { text-wrap: pretty; }
 .hero { padding: 64px 0 40px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .hero-logo { width: 112px; height: 112px; margin-bottom: 18px; }
-.hero .byline { color: var(--faint); font-size: 14px; letter-spacing: .02em; margin: 6px 0 0; }
+.hero .byline { color: var(--faint); font-size: 14px; letter-spacing: .02em; margin: 0 0 24px; }
 .hero .byline a { color: var(--dim); text-decoration: underline; text-underline-offset: 2px; }
 .hero .byline a:hover, .hero .byline a:focus-visible { color: var(--signal); }
 .hero h1 { font: 400 clamp(38px, 5.2vw, 66px)/1 var(--stencil); letter-spacing: .01em; white-space: nowrap; }
@@ -257,7 +275,9 @@ p { text-wrap: pretty; }
 .loader { margin-top: 30px; max-width: 420px; background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.25); padding: 10px 12px 12px; }
 .loader-title { font-weight: 700; font-size: 15px; }
 .loader-text { color: var(--faint); font-size: 14px; margin: 2px 0 8px; }
-.bar { height: 18px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 3px; overflow: hidden; }
+/* contain: the blocks never widen the bar; the script fits a whole number of them in it */
+.bar { height: 18px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 3px; overflow: hidden; contain: inline-size; }
+.bar.still i { animation: none; }
 .bar i { flex: none; width: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; animation: block .01s both; }
 @keyframes block { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .bar i { animation: none; } }
@@ -280,8 +300,8 @@ p { text-wrap: pretty; }
 .ladder li b { display: block; color: var(--bone); }
 .ladder li span { color: var(--dim); font-size: 15px; line-height: 1.35; }
 .ladder .fine { color: var(--faint); font-size: 14px; margin: 10px 0 0; }
-.meter { height: 16px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 2px; }
-.meter i { width: 6px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+.meter { flex: none; height: 16px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 2px; overflow: hidden; }
+.meter i { flex: none; width: 6px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
 .meter i.off { background: transparent; box-shadow: none; }
 @media (max-width: 860px) { .botplay-grid { grid-template-columns: 1fr; gap: 8px; } }
 .bot-stats { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -315,9 +335,6 @@ html { scroll-padding-top: 72px; }
 
 /* modes */
 .modes { padding: 36px 0 20px; }
-.modes ul { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.modes li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
-.modes li b { color: var(--bone); font-weight: 700; }
 .lead { color: var(--dim); max-width: 58ch; margin: 10px 0 0; text-wrap: pretty; }
 
 /* features */
@@ -346,8 +363,40 @@ html { scroll-padding-top: 72px; }
 .box { background: var(--panel); box-shadow: var(--raised); padding: 24px 26px; border-radius: 3px; }
 .box h3 { font: 400 26px/1.1 var(--stencil); margin-bottom: 8px; }
 .box p { color: var(--dim); margin: 0 0 18px; }
-.price { font: 400 54px/1 var(--stencil); margin: 6px 0 4px; }
-.price small { font: 600 16px var(--text); color: var(--faint); margin-left: 6px; }
+.get .wrap { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+#get { scroll-margin-top: 72px; }
+.dl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 10px; }
+.btn.dl { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 72px; padding: 12px 18px; text-align: left; white-space: normal;
+  background: transparent; color: var(--bone); box-shadow: inset 0 0 0 2px var(--dim); }
+.btn.dl:hover { color: var(--signal); box-shadow: inset 0 0 0 2px var(--signal); }
+.btn.dl .dl-name { font-size: 1.15rem; font-weight: 700; }
+.btn.dl .dl-note { font-size: .85rem; font-weight: 500; color: var(--dim); }
+.btn.dl.yours { background: var(--signal); color: var(--ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.btn.dl.yours .dl-note { color: #4a4419; }
+.btn.dl.yours:hover { background: #d4c55d; color: var(--ink); }
+.dl-fine { font-size: 15px; margin-top: 0; }
+.steps.numbered { counter-reset: step; }
+.steps.numbered li { counter-increment: step; padding-left: 36px; }
+.steps.numbered li::before { content: counter(step); top: 1px; width: 24px; height: 24px; display: grid; place-items: center; font: 700 14px/1 var(--text); color: var(--ink); border-radius: 2px; }
+.get-foot { font-size: 14px; }
+.get-support { background: transparent; box-shadow: inset 0 0 0 1px var(--bevel-hi, rgba(136,145,128,.55)); padding: 22px 26px; }
+.get-support h3 { font-size: 22px; }
+.pack { list-style: none; margin: 4px 0 14px; padding: 0; display: grid; gap: 10px; }
+.pack li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; color: var(--dim); }
+.pack b { color: var(--bone); }
+.pk-ico { width: 20px; height: 20px; margin-top: 2px; fill: none; stroke: var(--signal); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pack-buy { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 0 0 16px; }
+.pack-price { color: var(--bone); font-weight: 700; }
+.btn.pack-monthly { min-height: 40px; padding: 8px 16px; font-size: 16px; background: transparent; box-shadow: inset 0 0 0 2px var(--dim); }
+.btn.pack-monthly:hover { box-shadow: inset 0 0 0 2px var(--signal); }
+.btn[hidden] { display: none; }
+.pack-after { border-top: 1px solid rgba(136,145,128,.35); padding-top: 12px; }
+.pack-after-head { margin: 0 0 6px; color: var(--bone); font-weight: 700; font-size: 15px; }
+.pack-after ol { margin: 0; padding-left: 20px; color: var(--dim); font-size: 15px; }
+.pack-after li { margin: 0 0 4px; }
+.pack-after + .get-foot { margin-top: 16px; }
+@media (max-width: 560px) { .dl-pair { grid-template-columns: 1fr; } .get-support { padding: 20px 18px; } }
+@media (prefers-reduced-motion: reduce) { .btn.dl, .btn.pack-monthly { transition: none; } }
 .steps { list-style: none; margin: 18px 0 0; padding: 0; }
 .steps li { position: relative; padding: 0 0 14px 30px; color: var(--dim); }
 .steps li::before { content: ""; position: absolute; left: 1px; top: 6px; width: 14px; height: 14px; background: var(--signal); box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
@@ -373,6 +422,7 @@ html { scroll-padding-top: 72px; }
 .group h3 { font: 400 20px/1.1 var(--stencil); margin: 0 0 10px; }
 .group ul { list-style: none; margin: 0; padding: 0; }
 .group li { position: relative; padding: 0 0 10px 22px; color: var(--dim); font-size: 16px; line-height: 1.4; text-wrap: pretty; }
+.group p { margin: 0 0 12px; color: var(--dim); font-size: 16px; line-height: 1.45; }
 .group li::before { content: ""; position: absolute; left: 2px; top: 6px; width: 9px; height: 9px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
 @media (max-width: 1060px) { .feature-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .feature-groups { grid-template-columns: 1fr; } }
@@ -419,40 +469,14 @@ html { scroll-padding-top: 72px; }
   .sl-game, .sl-bots, .sl-map { display: none; }
 }
 
-/* gallery */
-.gallery { padding: 64px 0 70px; }
-.shots { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
-.shots button { display: block; width: 100%; padding: 0; border: 0; background: var(--side); box-shadow: var(--raised); border-radius: 3px; cursor: zoom-in; text-align: left; color: inherit; font: inherit; }
-.shots button:hover { outline: 2px solid var(--signal); }
-.shots .frame { aspect-ratio: 16 / 10; overflow: hidden; border-radius: 3px 3px 0 0; background: #23271c; }
-.shots .frame.tall { display: grid; place-items: center; }
-.shots img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.shots .frame.tall img { width: auto; height: 100%; object-fit: contain; }
-.shots span { display: block; padding: 8px 12px 10px; font-weight: 600; color: var(--dim); font-size: 16px; }
-.viewer { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgba(20,22,16,.94); color: var(--bone); }
-.viewer::backdrop { background: rgba(20,22,16,.7); }
-.viewer figure { margin: 0; height: 100%; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 48px 72px 18px; gap: 12px; }
-.viewer img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,.6); border-radius: 3px; }
-.viewer figcaption { color: var(--dim); font-weight: 600; text-align: center; }
-.viewer button { position: absolute; border: 0; background: var(--panel); color: var(--bone); box-shadow: var(--raised); border-radius: 2px; cursor: pointer; font: 700 28px/1 var(--text); }
-.viewer button:hover { color: var(--signal); }
-.viewer .nav { top: 50%; transform: translateY(-50%); width: 48px; height: 64px; }
-.viewer .prev { left: 14px; }
-.viewer .next { right: 14px; }
-.viewer .close { top: 14px; right: 14px; width: 44px; height: 44px; }
-.viewer .count { position: absolute; top: 24px; left: 18px; color: var(--faint); font-weight: 600; font-size: 15px; }
-@media (max-width: 860px) {
-  .shots { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .viewer figure { padding: 60px 12px 90px; }
-  .viewer .nav { top: auto; bottom: 18px; transform: none; }
-  .viewer .prev { left: calc(50% - 58px); }
-  .viewer .next { right: calc(50% - 58px); }
-}
 
 /* the people behind it */
 .thanks { padding: 56px 0 24px; }
 .thanks .lead { color: var(--dim); max-width: 64ch; margin: 6px 0 20px; }
-.thanks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.thanks-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.thanks-grid a { flex: 0 0 calc((100% - 36px) / 4); }
+@media (max-width: 1060px) { .thanks-grid a { flex-basis: calc((100% - 12px) / 2); } }
+@media (max-width: 560px) { .thanks-grid a { flex-basis: 100%; } }
 .thanks-grid a { display: block; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 14px 16px; text-decoration: none; }
 .thanks-grid a:hover { background: var(--panel-2); }
 .thanks-grid b { display: block; color: var(--bone); font-size: 18px; margin-bottom: 4px; }
@@ -482,8 +506,8 @@ footer a { color: var(--dim); }
 
 /* The CS 1.6 crosshair on the hero and the screenshots. Mouse only; anything clickable keeps its own cursor. */
 @media (pointer: fine) {
-  .hero, .gallery { cursor: url("img/crosshair.svg") 16 16, crosshair; }
-  .hero a, .hero button, .gallery a { cursor: pointer; }
+  .hero { cursor: url("img/crosshair.svg") 16 16, crosshair; }
+  .hero a, .hero button { cursor: pointer; }
 }
 
 /* Kill feed, top right of the hero like in the game. Decorative, never takes clicks. */
@@ -577,6 +601,7 @@ footer a { color: var(--dim); }
 .radio-list::-webkit-scrollbar-button:single-button:vertical:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 11L4 6h8z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
 .radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; height: auto; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--dim); font: 600 13px/1.2 var(--text); }
 .radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--faint); }
+.radio .radio-list .radio-tag { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; font: 600 9px/13px var(--text); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: #8fb3a0; vertical-align: 1px; }
 .radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
 .radio .radio-list button:hover { color: var(--signal); }
 .radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
@@ -604,21 +629,130 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   .ctas .btn { flex: 1 1 100%; }
   h2 { font-size: 28px; }
 }
+
+/* ---- 1.0 ------------------------------------------------------------------ */
+.tagline-2 { margin: -12px 0 10px; color: var(--faint); font-size: 18px; max-width: 40ch; }
+.feature .more { margin-top: 18px; }
+
+/* the modes list */
+.modes .chips { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.modes .chips li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
+.modes .chips li b { color: var(--bone); font-weight: 700; }
+/* modes made here: entries like the others, with a small tag and a line, linking to their docs */
+.modes .chips li.ours { padding: 0; }
+.modes .chips li.ours a { display: block; padding: 6px 12px; color: var(--dim); text-decoration: none; }
+.modes .chips li.ours a:hover, .modes .chips li.ours a:focus-visible { color: var(--bone); background: var(--panel-2); }
+.tag, .beta { display: inline-block; vertical-align: 2px; margin: 0 4px; padding: 3px 6px 2px; border-radius: 2px; background: var(--bg); box-shadow: var(--sunken);
+  font: 700 11px/1 var(--text); letter-spacing: .08em; text-transform: uppercase; color: var(--signal); }
+.feature h3 .beta { vertical-align: 6px; margin-left: 8px; }
+
+/* share */
+.share .safe { margin-top: 16px; padding: 12px 14px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 16px; line-height: 1.45; }
+.community { padding: 8px 0 40px; }
+.community h3 { font: 400 28px/1.1 var(--stencil); }
+
+/* screenshots in each section's app window: the picture with its caption and arrows, a strip below */
+.shots { min-width: 0; }
+.shots .tour-strip { margin-top: 6px; }
+.tour-strip[hidden] { display: none; }
+.tour-stage .tour-draft { padding: 16px 64px; }
+.tour-stage, .tour-strip button { font: inherit; color: inherit; }
+.tour-stage { display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 2px; background: #1d2118; box-shadow: var(--sunken); cursor: zoom-in; aspect-ratio: var(--shot-ratio, 16 / 10); overflow: hidden; touch-action: pan-y; }
+.tour-stage picture { display: block; width: 100%; height: 100%; }
+.tour-stage img { width: 100%; height: 100%; object-fit: contain; }
+@media (pointer: fine) { .tour-stage { cursor: zoom-in; } }
+.tour-stage:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+/* the caption over the picture's lower edge, on a dark scrim so it reads on any shot */
+.shots-view { position: relative; margin: 0; }
+.tour-caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 44px 16px 12px; border-radius: 0 0 2px 2px; pointer-events: none;
+  background: linear-gradient(to top, rgba(14,16,11,.92) 0%, rgba(14,16,11,.72) 45%, rgba(14,16,11,0) 100%); }
+.tour-cap { margin: 0; color: #f1f4ee; font-weight: 600; font-size: 17px; line-height: 1.35; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+.tour-count { color: var(--dim); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+/* previous / next, always visible on the picture */
+.tour-arrow { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 44px; height: 56px; padding: 0; border: 0; border-radius: 2px;
+  background: rgba(53,60,47,.88); color: var(--bone); box-shadow: var(--raised), 0 4px 14px rgba(0,0,0,.35); cursor: pointer; }
+.tour-arrow:hover { color: var(--signal); background: var(--panel); }
+.tour-arrow:active { box-shadow: var(--sunken); }
+.tour-arrow:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.tour-arrow.prev { left: 10px; }
+.tour-arrow.next { right: 10px; }
+.tour-arrow[hidden] { display: none; }
+.tour-strip { list-style: none; margin: 0; padding: 4px 2px 6px; display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--panel) transparent; }
+.tour-strip li { flex: none; scroll-snap-align: start; }
+.tour-strip button { display: block; width: 132px; aspect-ratio: 16 / 10; padding: 0; border: 0; border-radius: 2px; overflow: hidden; background: #1d2118; box-shadow: var(--sunken); cursor: pointer; opacity: .72; }
+.tour-strip button:hover { opacity: 1; }
+.tour-strip button[aria-current="true"] { opacity: 1; outline: 2px solid var(--signal); outline-offset: 1px; }
+.tour-strip button:focus-visible { opacity: 1; outline: 2px solid var(--bone); outline-offset: 1px; }
+.tour-strip img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.tour-strip .tall img { object-fit: contain; }
+/* an in-game shot that hasn't been taken yet (only shown with ?drafts) */
+.tour-draft { display: grid; place-items: center; width: 100%; height: 100%; padding: 16px; text-align: center; color: var(--faint); font-weight: 600; font-size: 15px;
+  outline: 2px dashed rgba(196,181,80,.5); outline-offset: -10px; }
+.tour-strip .tour-draft { font-size: 11px; padding: 6px; outline-offset: -4px; }
+@media (max-width: 860px) {
+  .tour-strip button { width: 104px; }
+  .tour-arrow { width: 36px; height: 46px; }
+  .tour-arrow.prev { left: 6px; }
+  .tour-arrow.next { right: 6px; }
+  .tour-caption { padding: 32px 10px 8px; gap: 10px; }
+  .tour-cap { font-size: 15px; }
+  .tour-count { font-size: 13px; }
+}
+
+/* Made by players: a view-only peek at Community (the app's community index) */
+.creations { padding: 56px 0 24px; }
+.creations [hidden] { display: none !important; }
+.cr-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin-top: 18px; }
+.cr-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.cr-seg button { min-height: 36px; padding: 6px 12px; border: 0; border-radius: 2px; background: var(--panel); color: var(--dim); box-shadow: var(--raised); font: 600 16px/1 var(--text); cursor: pointer; }
+.cr-seg button:hover { color: var(--bone); }
+.cr-seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--sunken); }
+.cr-grid { list-style: none; margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cr-card { display: flex; flex-direction: column; background: var(--side); box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.35); border-radius: 3px; padding: 4px; min-width: 0; }
+.cr-pic { aspect-ratio: 16 / 9; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; overflow: hidden; display: grid; place-items: center; color: var(--faint); font: 400 22px/1 var(--stencil); }
+.cr-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cr-body { display: flex; flex-direction: column; gap: 8px; flex: 1; padding: 12px 12px 10px; background: var(--panel); border-radius: 2px; margin-top: 4px; }
+.cr-kind { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--signal); }
+.cr-kind span { color: var(--faint); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.cr-body h3 { margin: 0; font: 400 21px/1.15 var(--stencil); overflow-wrap: anywhere; }
+.cr-by { margin: -4px 0 0; color: var(--dim); font-size: 15px; overflow-wrap: anywhere; }
+.cr-sum { margin: 0; color: var(--dim); font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cr-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.cr-tags li { font-size: 13px; font-weight: 600; line-height: 1.2; padding: 3px 8px; border-radius: 2px; background: var(--bg); color: var(--dim); box-shadow: var(--sunken); }
+.cr-tags li.good { color: var(--bone); }
+.cr-tags li.good::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; background: var(--signal); vertical-align: 1px; }
+.cr-tags li.risk { background: #5a3f2c; color: #f0d9c4; box-shadow: none; }
+.cr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
+.cr-acts .btn { min-height: 38px; padding: 8px 12px; font-size: 15px; flex: 1 1 auto; }
+.cr-msg { margin: 18px 0 0; padding: 18px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; color: var(--dim); }
+.cr-msg a { color: var(--signal); }
+.cr-more { margin-top: 16px; }
+.cr-note { margin: 0; font-size: 14px; color: var(--dim); }
+@media (max-width: 960px) { .cr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cr-grid { grid-template-columns: 1fr; } .cr-bar { justify-content: flex-start; } }
+/* themed scrollbars (thin, dark track, muted thumb), as on the reference pages */
+* { scrollbar-width: thin; scrollbar-color: #5a6a50 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #5a6a50; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #6b7d5e; }
+::-webkit-scrollbar-corner { background: transparent; }
 </style>
 </head>
 <body>
 
-<div class="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 13. <a href="/discord">Join the Discord to hear when it's out</a></div>
+<div class="release-banner" id="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 14. <a href="/discord">Join the Discord to hear when it's out</a></div>
 
 <header class="top">
   <div class="wrap">
     <a class="wordmark" href="#">Loner-Strike</a>
     <nav aria-label="Page">
-      <a href="#features">Features</a>
+      <a href="#features">Play</a>
       <a href="#modes">Modes</a>
-      <a href="#hosting">Hosting</a>
-      <a href="#gallery">Screenshots</a>
-      <a href="#community">Community</a>
+      <a href="#make">Make</a>
+      <a href="#hosting">Host</a>
+      <a href="#share">Share</a>
       <a href="#faq">FAQ</a>
       <a href="docs">Docs</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
@@ -641,12 +775,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div>
         <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
         <h1>Loner-Strike</h1>
-        <p class="byline">A <a href="https://nanoshrine.com" target="_blank" rel="noopener">nanoshrine</a> side project</p>
         <p class="tagline">Play <span class="nobr">Counter-Strike</span> like it's 2004,<br>alone or with the friends you don't have.</p>
+        <p class="tagline-2">Then build your own maps and modes, try them on bots that play like people, host your own servers, and share it all.</p>
+        <p class="byline">A <a href="https://nanoshrine.com" target="_blank" rel="noopener">nanoshrine</a> side project</p>
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
         </div>
-        <p class="fine">For Counter-Strike 1.6 and Condition Zero on Steam. Windows, or Mac through CrossOver or Parallels.</p>
+        <p class="fine">Free, for Counter-Strike 1.6 and Condition Zero on Steam. Windows, or a Mac with CrossOver.</p>
         <div class="loader" aria-hidden="true">
           <div class="loader-title">Loading…</div>
           <div class="loader-text">Establishing network connection to server…</div>
@@ -655,7 +790,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </div>
       <div class="window">
         <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-        <img src="img/maps.jpg" alt="Loner-Strike's map browser during a live game: classic maps with screenshots, filters and search" width="1280" height="950">
+        <img src="img/maps.jpg" alt="Loner-Strike's map browser during a live game: classic maps with screenshots, filters and search" width="1280" height="950" fetchpriority="high">
       </div>
     </div>
   </section>
@@ -668,6 +803,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p>I still play Counter-Strike 1.6 and Condition Zero.<br>Mostly late at night, mostly against bots.</p>
         <p>The problem is the bots. They aren't very fun to play with. And the custom stuff, Zombie Plague, Warcraft 3, Gun Game, means digging through forum threads from 2009, fixing config files, and then finding out half the mods don't even notice bots exist.</p>
         <p>So I fixed it for myself. Bots that feel like the regulars on an old community server. The old mods, patched to work with them. A panel so I never have to open another .cfg file. And on the rare night a friend wants to play, they can join in a click.</p>
+        <p>Then I wanted to make maps and silly game modes again, like we all did back then, so now it has the tools for that too.</p>
         <p>It turned out pretty good, so here it is. It's free, because none of it would exist without the people who made these mods in the first place.</p>
       </div>
       <figure class="why-photo">
@@ -687,7 +823,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>Each bot has its own personality, skill and habits</li>
           <li>They chat, banter and rage, and answer you in chat or on your mic: "rush b", "flash for me", "someone buy me an awp"</li>
           <li>Ts take sites together; CTs hold them and retake</li>
-          <li>Lone wolves in a pub, a team in a match</li>
+          <li>They learn the rules, whatever the mode: the classics, ours and the ones you make</li>
           <li>Regulars with clan tags who remember you</li>
         </ul>
       </div>
@@ -757,11 +893,39 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <h2>Classic community modes</h2>
       <p class="lead">The popular mods from the old community servers, installed and set up for you, and patched so bots can play them. Pick a mode and a map, and bots fill the server.</p>
-      <ul>
+      <ul class="chips">
         <li><b>Zombie Plague</b></li><li><b>Warcraft 3</b></li><li><b>SuperHero</b></li><li><b>Gun Game</b></li><li><b>Deathmatch</b></li>
         <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
         <li><b>Paintball</b></li><li><b>Knife Arena</b></li><li>AWP, Scoutz, Deagle and pistol-only</li><li>Roll the Dice</li><li>Round-end music</li><li>Grappling hook</li>
+        <li class="ours"><a href="docs#last-stand"><b>Last Stand</b> <span class="tag">made here</span> Hold an outpost against waves of creatures</a></li>
+        <li class="ours"><a href="docs#battle-royale"><b>Battle Royale</b> <span class="tag">made here</span> Drop in, loot up, outlast the zone</a></li>
       </ul>
+    </div>
+  </section>
+
+  <section class="feature make" id="make">
+    <div class="wrap">
+      <div class="text">
+        <h3>Make your own <span class="beta" title="New and still settling in">Beta</span></h3>
+        <p>The tools we wished we had in 2004. Make a map, give it a mode, and playtest it with bots in one click.</p>
+        <ul>
+          <li><b>Map editor:</b> Hammer's depth, modern editor feel. Press F5 and you're playing it with bots</li>
+          <li><b>Game Mode Studio:</b> game modes from nodes and wires, debugged live in the game. NPCs, dialog and things to use make story and RPG modes</li>
+          <li><b>Map simulator:</b> bots play a match on your map, drawn on it afterward</li>
+          <li><b>Replay:</b> watch a whole bot match back on your map, in 3D or from above, every move and fight</li>
+          <li><b>Nav fixer:</b> fix where bots can walk, in 3D, top-down or split view</li>
+          <li><b>Callouts:</b> your own place names, used by the bots and the radio</li>
+          <li><b>Spray maker:</b> your spray from pictures, words and stickers, or a template</li>
+        </ul>
+        <p class="more"><a class="btn" href="docs#tools">Every tool</a></p>
+      </div>
+      <div class="window shots" data-set="make" style="--shot-ratio: 16 / 10">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Tools</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="Brushes, entities and textures in one 3D view" width="1440" height="900" loading="lazy"></picture></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Brushes, entities and textures in one 3D view</span> <span class="tour-count"></span></figcaption>
+        </figure>
+      </div>
     </div>
   </section>
 
@@ -777,9 +941,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>A custom welcome page for people who join</li>
         </ul>
       </div>
-      <div class="window">
+      <div class="window shots" data-set="friends" style="--shot-ratio: 1280 / 950">
         <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-        <img src="img/friends.jpg" alt="Play with friends: seven ways to connect, with step-by-step instructions" width="1280" height="950" loading="lazy">
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><img src="img/friends.jpg" alt="Seven ways for friends to join" width="1280" height="950" loading="lazy"></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Seven ways for friends to join</span> <span class="tour-count"></span></figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -804,18 +971,66 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>Admins, moderators and helpers who run it from their own app, each within their role</li>
           <li>Bans, mutes, a swear filter and reports, shared across your servers</li>
           <li>Mode and map votes, or a mode rotation; 5v5 matches, HLTV and demos</li>
-          <li>Updates itself once nobody's playing, and checks its own security and health</li>
-          <li>Backed up daily, and restarts itself after a crash</li>
-          <li>Live player count on your website, and Discord hears if it goes down</li>
+          <li>Fast downloads, so players get your maps in seconds</li>
+          <li>Updates itself once nobody's playing, backs itself up every day, and restarts after a crash</li>
+          <li>Live player count on your website, and a Discord message that keeps up with who's playing</li>
         </ul>
-        <p style="margin-top:18px"><a class="btn" href="docs#servers">How to set one up</a></p>
+        <p class="more"><a class="btn" href="docs#servers">How to set one up</a></p>
       </div>
-      <div class="pair">
-        <div class="window">
-          <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-          <img src="img/servers.jpg" alt="A dedicated server on a rented Linux machine: settings, a live console with player chat, and Deathmatch with 27 bots" width="1280" height="950" loading="lazy">
+      <div class="window shots" data-set="servers" style="--shot-ratio: 1280 / 950">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><img src="img/servers.jpg" alt="Your own server on a rented machine, with a live console" width="1280" height="950" loading="lazy"></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Your own server on a rented machine, with a live console</span> <span class="tour-count"></span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip share" id="share">
+    <div class="wrap">
+      <div class="text">
+        <h3>Share it</h3>
+        <p>Try what others made in a click, and share what you make.</p>
+        <ul>
+          <li><b>Try it:</b> maps, modes, prefabs and sprays from Community, played with bots</li>
+          <li><b>Package it</b> in the app and upload it to GameBanana, with the credits filled in for you</li>
+          <li><b>Remix</b> anything, a map down to its editable source, with credit to the original. Creatures travel with maps and modes</li>
+        </ul>
+        <p class="safe"><b>Nothing that runs code is shared.</b> A Studio mode travels as its graph, and each player's app builds it.</p>
+        <p class="more"><a class="btn" href="docs#community">How Community works</a></p>
+      </div>
+      <div class="window shots" data-set="share" style="--shot-ratio: 16 / 10">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Community</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><picture><source srcset="img/1.0/community.webp" type="image/webp"><img src="img/1.0/community.png" alt="Community: maps, modes, prefabs, sprays, textures and creatures made with Loner-Strike" width="1440" height="900" loading="lazy"></picture></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Community: maps, modes, prefabs, sprays and textures made with Loner-Strike</span> <span class="tour-count"></span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Made by players: a view-only peek at Community. The list is the app's community index
+       (dl.lonerstrike.com/community/index.json), read in the browser; installing happens in the app -->
+  <section class="creations" id="creations" aria-labelledby="creations-title">
+    <div class="wrap">
+      <h2 id="creations-title">Made by players</h2>
+      <p class="lead">Maps, game modes and prefabs that players made in Loner-Strike and shared on GameBanana. Install any of them in a click from the app's Community tab, or browse them on GameBanana.</p>
+      <div class="cr-bar" hidden>
+        <div class="cr-seg" role="group" aria-label="What to show">
+          <button type="button" aria-pressed="true" data-kind="">All</button>
+          <button type="button" aria-pressed="false" data-kind="map">Maps</button>
+          <button type="button" aria-pressed="false" data-kind="mode">Modes</button>
+          <button type="button" aria-pressed="false" data-kind="prefab">Prefabs</button>
+        </div>
+        <div class="cr-seg" role="group" aria-label="Order">
+          <button type="button" aria-pressed="true" data-sort="picks">Popular</button>
+          <button type="button" aria-pressed="false" data-sort="new">Newest</button>
         </div>
       </div>
+      <ul class="cr-grid" id="creations-grid" aria-live="polite"></ul>
+      <p class="cr-msg" id="creations-msg">Loading what players shared…</p>
+      <p class="cr-more"><button type="button" class="btn" id="creations-more" hidden>Show more</button></p>
     </div>
   </section>
 
@@ -824,146 +1039,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <h2>Everything in it</h2>
       <p class="lead">Free, for Counter-Strike 1.6 and Condition Zero. Everything it changes is backed up and can be removed.</p>
       <div class="feature-groups">
-        <div class="group">
-          <h3>Bots</h3>
-          <ul>
-            <li>Our own bot brain, built from the ground up: it studies every map, sees only what you could and decides for itself</li>
-            <li>Talk to them in team chat or on your mic: they answer and take orders</li>
-            <li>Ten lobbies, from newbies to bunnyhopping pros</li>
-            <li>Regulars with personalities and clan tags who remember you</li>
-            <li>The included maps and almost every stock map come ready; new ones they learn by themselves</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Modes and maps</h3>
-          <ul>
-            <li>22 classic community modes, patched so bots play them</li>
-            <li>Mode votes with rtv, or a mode rotation, each mode on maps made for it</li>
-<li>27 fun and popular maps installed for you, from aim_map to de_mirage</li>
-            <li>Thousands of maps from GameBanana, with screenshots and search</li>
-            <li>Skins, models, sprays, round-end music, Quake sounds and sound packs</li>
-            <li>Your own maps, sounds and AMX Mod X plugins from a file</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Friends</h3>
-          <ul>
-            <li>Seven ways to connect, from a LAN party to playit.gg and Hamachi</li>
-            <li>Server name, join password and a ready-to-send invite</li>
-            <li>A notification when someone joins while you're away</li>
-            <li>Find servers: a server browser like Steam's old one</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Servers</h3>
-          <ul>
-            <li>On your computer or a rented Linux machine, set up for you</li>
-            <li>Admins, moderators and VIPs, and helpers with their own app</li>
-            <li>Bans, mutes, a swear filter, reports, stats and votes</li>
-            <li>5v5 match mode, HLTV and demos</li>
-            <li>Updates, security checks and daily backups by themselves, all on one Health tab</li>
-            <li>Live status on your website and in Discord</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>The app</h3>
-          <ul>
-            <li>Guided setup on Windows, or a Mac with CrossOver</li>
-            <li>Set up bots, rules and fun before you start a game</li>
-            <li>The Game Mode Menu in game (F3), and control from your phone</li>
-            <li>Backup, restore and moving to another computer</li>
-            <li>Signed automatic updates, and <a href="docs">docs</a> for everything</li>
-            <li>Open source (GPL), with a built-in radio</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="gallery" id="gallery">
-    <div class="wrap">
-      <h2>Screenshots</h2>
-      <ul class="shots" id="shots"></ul>
-    </div>
-  </section>
-
-  <!-- The Loner-Strike server list, after Steam's old server browser (the app's Find servers) -->
-  <dialog class="window servers-dlg" id="servers" aria-labelledby="servers-title">
-    <div class="window-bar"><span></span><span></span><span></span><b id="servers-title">Servers</b>
-      <button type="button" class="servers-x" id="servers-close" aria-label="Close">×</button></div>
-    <div class="sl">
-      <p class="sl-note">Servers Loner-Strike players share, asked live. The app's Find servers also shows your latency, your favorites and games on your own network.</p>
-      <div class="sl-table" role="table" aria-label="Servers">
-        <div class="sl-row head" role="row">
-          <span role="columnheader" aria-label="Password"><svg width="9" height="11" viewBox="0 0 9 11" aria-hidden="true"><path d="M2 5V3.2a2.5 2.5 0 0 1 5 0V5h1v6H1V5zm1.2 0h2.6V3.2a1.3 1.3 0 0 0-2.6 0z" fill="currentColor"/></svg></span>
-          <span role="columnheader">Servers</span><span role="columnheader" class="sl-game">Game</span><span role="columnheader" class="sl-num">Players</span><span role="columnheader" class="sl-num sl-bots">Bots</span><span role="columnheader" class="sl-map">Map</span>
-        </div>
-        <div class="sl-rows" id="servers-rows" role="rowgroup"></div>
-      </div>
-      <div class="sl-bar">
-        <span class="sl-count" id="servers-count" role="status"></span>
-        <button type="button" class="btn" id="servers-refresh">Refresh</button>
-        <a class="btn primary" id="servers-join" href="#" aria-disabled="true" data-event="Join from server list">Connect</a>
-      </div>
-    </div>
-  </dialog>
-
-  <dialog class="viewer" id="viewer" aria-label="Screenshot">
-    <figure>
-      <img id="viewer-img" alt="">
-      <figcaption id="viewer-cap"></figcaption>
-    </figure>
-    <button class="nav prev" id="prev" aria-label="Previous screenshot">‹</button>
-    <button class="nav next" id="next" aria-label="Next screenshot">›</button>
-    <button class="close" id="close" aria-label="Close">×</button>
-    <span class="count" id="count"></span>
-  </dialog>
-
-  <section class="get" id="get">
-    <div class="wrap">
-      <div class="box">
-        <h3>Name your price</h3>
-        <p>Loner-Strike is free and open source. If it gave you a good night of Counter-Strike and you'd like to say thanks, pay what you like.</p>
-        <div class="price">$0<small>and up</small></div>
-        <p class="fine">You get the same download either way.</p>
-        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Name your price">Name your price</a>
-      </div>
-      <div class="box">
-        <h3>Download free</h3>
-        <p>Every release is also free on GitHub.</p>
-        <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
-        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
-        <ol class="steps">
-          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>, or use the Windows version of Loner-Strike in Parallels.</li>
-          <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
-          <li><b>Press Play.</b> Bots fill the server.</li>
-        </ol>
-        <p class="fine">No account, no sign-up and no ads. The app talks to your game on your own computer, and voice commands never leave the machine running the server.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="thanks" id="thanks">
-    <div class="wrap">
-      <h2>Support the people who made this possible</h2>
-      <p class="lead">Loner-Strike stands on twenty years of community work. If you enjoy it, give some love to them too.</p>
-      <div class="thanks-grid">
-        <a href="https://gamebanana.com" target="_blank" rel="noopener">
-          <b>GameBanana</b>
-          <span>Maps, skins and sounds come from GameBanana's creators. Like and comment on what you play, and follow the people who make it.</span>
-        </a>
-        <a href="https://www.alliedmods.net" target="_blank" rel="noopener">
-          <b>AlliedModders</b>
-          <span>Home of AMX Mod X and most of the classic mods. Its forums and plugin library still keep these games alive.</span>
-        </a>
-        <a href="https://github.com/rehlds" target="_blank" rel="noopener">
-          <b>The ReHLDS team</b>
-          <span>ReGameDLL and ReHLDS are the base of our bot brain and server engine. Star their projects, and report what you find.</span>
-        </a>
-        <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md" target="_blank" rel="noopener">
-          <b>The mod and map makers</b>
-          <span>Zombie Plague, Warcraft 3, SuperHero, Gun Game and the rest. Every author is named in our credits.</span>
-        </a>
+        <div class="group"><h3>Bots</h3><p>Our own bot brain: it studies every map, sees only what you could, and talks back in chat or on your mic.</p></div>
+        <div class="group"><h3>Modes and maps</h3><p>The classic mods and modes made here, all played by bots; 27 maps installed and thousands more from GameBanana.</p></div>
+        <div class="group"><h3>Friends</h3><p>Seven ways to connect, an invite ready to send, and a server browser like Steam's old one.</p></div>
+        <div class="group"><h3>Servers</h3><p>On your computer or a rented Linux machine, with admins, bans, HLTV and daily backups.</p></div>
+        <div class="group"><h3>Make and share</h3><p>A map editor, Game Mode Studio and a dozen more tools, and Community to share what you make.</p></div>
+        <div class="group"><h3>The app</h3><p>Guided setup on Windows or a Mac, control from your phone, signed updates, open source.</p></div>
       </div>
     </div>
   </section>
@@ -971,8 +1052,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <section class="community" id="community" hidden>
     <div class="wrap">
       <div class="community-text">
-        <h2>Community</h2>
-        <p>Jump on our server, or find people to play with on Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
+        <h3>Find people to play with</h3>
+        <p>Jump on our server, or join the Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
       </div>
       <div class="community-cards">
         <div class="window srv" id="play-online" hidden>
@@ -1006,19 +1087,126 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
+  <!-- The Loner-Strike server list, after Steam's old server browser (the app's Find servers) -->
+  <dialog class="window servers-dlg" id="servers" aria-labelledby="servers-title">
+    <div class="window-bar"><span></span><span></span><span></span><b id="servers-title">Servers</b>
+      <button type="button" class="servers-x" id="servers-close" aria-label="Close">×</button></div>
+    <div class="sl">
+      <p class="sl-note">Servers Loner-Strike players share, asked live. The app's Find servers also shows your latency, your favorites and games on your own network.</p>
+      <div class="sl-table" role="table" aria-label="Servers">
+        <div class="sl-row head" role="row">
+          <span role="columnheader" aria-label="Password"><svg width="9" height="11" viewBox="0 0 9 11" aria-hidden="true"><path d="M2 5V3.2a2.5 2.5 0 0 1 5 0V5h1v6H1V5zm1.2 0h2.6V3.2a1.3 1.3 0 0 0-2.6 0z" fill="currentColor"/></svg></span>
+          <span role="columnheader">Servers</span><span role="columnheader" class="sl-game">Game</span><span role="columnheader" class="sl-num">Players</span><span role="columnheader" class="sl-num sl-bots">Bots</span><span role="columnheader" class="sl-map">Map</span>
+        </div>
+        <div class="sl-rows" id="servers-rows" role="rowgroup"></div>
+      </div>
+      <div class="sl-bar">
+        <span class="sl-count" id="servers-count" role="status"></span>
+        <button type="button" class="btn" id="servers-refresh">Refresh</button>
+        <a class="btn primary" id="servers-join" href="#" aria-disabled="true" data-event="Join from server list">Connect</a>
+      </div>
+    </div>
+  </dialog>
+
+
+  <section class="get" id="get">
+    <div class="wrap">
+      <div class="box get-main">
+        <h3>Download Loner-Strike</h3>
+        <p>Free, for Counter-Strike 1.6 and Condition Zero on Steam. No account, no sign-up and no ads.</p>
+        <!-- The fixed-name copies on the download server (the release workflow puts them there);
+             until they're up, both go to the GitHub release (the script below checks) -->
+        <div class="dl-pair">
+          <a class="btn dl" id="dl-win" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Windows">
+            <span class="dl-name">Download for Windows</span><span class="dl-note">Windows 10 and 11, 64-bit</span>
+          </a>
+          <a class="btn dl" id="dl-mac" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Mac">
+            <span class="dl-name">Download for Mac</span><span class="dl-note">Apple silicon and Intel</span>
+          </a>
+        </div>
+        <p class="fine dl-fine">Also on <a href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download from GitHub">GitHub</a> · Windows SmartScreen? <b>More info</b> → <b>Run anyway</b></p>
+        <ol class="steps numbered">
+          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, set it up in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a> (<a href="docs#mac">how</a>), or run the Windows version in Parallels.</li>
+          <li><b>Open Loner-Strike.</b> It finds the game and sets it up. Everything it changes is backed up.</li>
+          <li><b>Press Play.</b> Bots fill the server.</li>
+        </ol>
+        <p class="fine get-foot">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
+      </div>
+      <div class="box get-support">
+        <h3>Loner-Strike Support Pack</h3>
+        <ul class="pack">
+          <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span><b>The Supporter role</b> in our Discord</span></li>
+          <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.6"/></svg><span><b>A [VIP] tag, a reserved slot and a join message</b> on our official servers</span></li>
+          <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></svg><span><b>The apps</b> for Windows and Mac</span></li>
+        </ul>
+        <p>Loner-Strike stays free for everyone.</p>
+        <div class="pack-buy">
+          <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Get the Support Pack">Get the Support Pack</a>
+          <span class="pack-price">from <span class="support-min">$3</span></span>
+          <a class="btn pack-monthly polar-monthly" id="support-monthly" href="#" hidden data-event="Get the Support Pack monthly" title="The same perks, every month">Monthly instead</a>
+        </div>
+        <div class="pack-after">
+          <p class="pack-after-head">After checkout</p>
+          <ol>
+            <li>Connect Discord on the receipt for the role.</li>
+            <li><code>/link</code> in game, then <code>/link</code> with your code in our Discord (any channel; only you see the reply; <a href="docs#link-steam">how</a>).</li>
+          </ol>
+        </div>
+        <p class="fine get-foot">Loner-Strike is a <a href="terms.html#side-project">side project</a>, so there are no promises about updates or how long the servers run. Thank you for the love &lt;3</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="thanks" id="thanks">
+    <div class="wrap">
+      <h2>Support the people who made this possible</h2>
+      <p class="lead">Loner-Strike stands on twenty years of community work. If you enjoy it, give some love to them too.</p>
+      <div class="thanks-grid">
+        <a href="https://gamebanana.com" target="_blank" rel="noopener">
+          <b>GameBanana</b>
+          <span>Maps, skins and sounds come from GameBanana's creators, and Community creations live there. Like and comment on what you play, and follow the people who make it.</span>
+        </a>
+        <a href="https://www.alliedmods.net" target="_blank" rel="noopener">
+          <b>AlliedModders</b>
+          <span>Home of AMX Mod X and most of the classic mods. Its forums and plugin library still keep these games alive.</span>
+        </a>
+        <a href="https://github.com/rehlds" target="_blank" rel="noopener">
+          <b>The ReHLDS team</b>
+          <span>ReGameDLL and ReHLDS are the base of our bot brain and server engine. Star their projects, and report what you find.</span>
+        </a>
+        <a href="https://github.com/seedee/SDHLT" target="_blank" rel="noopener">
+          <b>SDHLT</b>
+          <span>The map compiler the editor uses, carrying on Zoner's Half-Life tools. Free software with its own license.</span>
+        </a>
+        <a href="https://store.steampowered.com/app/10/CounterStrike/" target="_blank" rel="noopener">
+          <b>Valve</b>
+          <span>Counter-Strike and Half-Life themselves. Loner-Strike only adds to the game you own, so buy the games on Steam.</span>
+        </a>
+        <a href="https://github.com/Bots-United/metamod-p" target="_blank" rel="noopener">
+          <b>Bots-United</b>
+          <span>Metamod-P, which every plugin loads through, and two decades of keeping bots alive in these games.</span>
+        </a>
+        <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md" target="_blank" rel="noopener">
+          <b>The mod and map makers</b>
+          <span>Zombie Plague, Warcraft 3, SuperHero, Gun Game and the rest. Every author is named in our credits.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
   <section class="faq" id="faq">
     <div class="wrap">
       <div class="docs-callout">
         <div>
           <b>Docs</b>
-          <p>Setup, the bots, voice commands, servers, and fixes for the usual problems, in one place.</p>
+          <p>Setup, the bots, the new modes, every tool, servers, Community and fixes for the usual problems, in one place.</p>
         </div>
         <a class="btn primary" href="docs">Read the docs</a>
       </div>
       <h2>Questions</h2>
       <details>
         <summary>Is it really free?</summary>
-        <p>Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and gets you the same thing.</p>
+        <p>Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and just supports the project: the app is the same either way, and supporters get a thank-you, like a Discord role and a VIP tag on our servers.</p>
       </details>
       <details>
         <summary>Do I need to own Counter-Strike?</summary>
@@ -1026,7 +1214,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </details>
       <details>
         <summary>Does it work on a Mac?</summary>
-        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
+        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. The map editor compiles through CrossOver too. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
       </details>
       <details>
         <summary>Windows says it protected my PC</summary>
@@ -1057,6 +1245,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p>Counter-Strike 1.6 never came with bots, so its maps have nothing telling bots where they can walk. The maps Loner-Strike installs and almost every stock map come with that already, so bots play them straight away. Any other map they learn the first time you play it, which takes a few minutes, or 15 minutes or more on a big one. It's once per map, and <a href="docs#teach-bots">Teach bots maps</a> can do it ahead of time.</p>
       </details>
       <details>
+        <summary>What does Beta mean on the tools?</summary>
+        <p>They're new and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off.</p>
+      </details>
+      <details>
         <summary>Who made the mods?</summary>
         <p>Their original authors: the AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub.</p>
       </details>
@@ -1075,7 +1267,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 <!-- Internet radio, bottom right. Hidden without the script. Nothing streams until you press play. -->
 <section class="radio" id="radio" aria-label="Radio" hidden>
   <div class="radio-bar"><span>Loner-Strike radio</span>
-    <button type="button" id="radio-min" aria-label="Minimise radio"><svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M0 6h8v2H0z"/></svg></button>
+    <button type="button" id="radio-min" aria-label="Minimize radio"><svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M0 6h8v2H0z"/></svg></button>
   </div>
   <div class="radio-lcd">
     <span class="radio-time off" id="radio-time" aria-hidden="true">00:00</span>
@@ -1098,6 +1290,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 </section>
 <button type="button" class="radio-tab" id="radio-tab" aria-label="Open radio" hidden><i></i>Radio</button>
 
+<script src="viewer.js"></script>
 <script>
   // ---- settings -------------------------------------------------------------
   // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
@@ -1105,7 +1298,9 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   // the block just has the Join button).
   const OUR_SERVER = { address: "play.lonerstrike.com", status: "https://status.lonerstrike.com/status" };
   // Your Polar checkout link (in Polar: Products, your product, Checkout Links).
-  const POLAR_CHECKOUT = "https://buy.polar.sh/polar_cl_Z1Ps6X1fYyIsMLnpunW5IkbF5rQTA2klPjfiZ1Dq8yn";
+  // the monthly option (same Supporter level); empty until the user sends the link, and the line stays hidden
+  const POLAR_CHECKOUT_MONTHLY = "https://buy.polar.sh/polar_cl_9rZkPVVIEoqbhvtwsBwabcBOHvIhqgZR7n7Bz3rzl8E";
+  const POLAR_CHECKOUT = "https://buy.polar.sh/polar_cl_Qz6fyLqUIylFCuXcQStZh8Xt9RII1wnEjAWtz1YPZYX";
   // Visitor counter in the footer. An https URL that adds one to the count on each request
   // and answers {"count": n} with the new total. It must allow this site in CORS
   // (Access-Control-Allow-Origin) and shouldn't set cookies or keep IP addresses. The page asks
@@ -1142,6 +1337,179 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     };
     show();
     setInterval(show, 30000);
+  }
+
+  // Made by players: Community's index (what the app lists), read-only. Asked once, when the
+  // section comes near the screen. Only listed maps, Studio modes and prefabs; every text goes
+  // in as text, pictures only from https, links built from GameBanana's numbers.
+  {
+    let INDEX_URL = "https://dl.lonerstrike.com/community/index.json";
+    // (a local preview can point it at a sample file: ?community=/sample.json, never on the real site)
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+      const q = new URLSearchParams(location.search).get("community");
+      if (q) INDEX_URL = q;
+    }
+    const KINDS = { map: "Map", mode: "Studio mode", prefab: "Prefab" };
+    const GAMES = { cstrike: "CS 1.6", czero: "Condition Zero" };
+    const BOTS = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" }; // (the app's words, games.ts BOT_NOTE)
+    const RISK = { server_commands: "Runs server commands", amx_commands: "Runs AMX Mod X commands", plugin_calls: "Calls other plugins", kicks_players: "Can kick players" };
+    const PAGE = 9;
+    const section = document.getElementById("creations");
+    const grid = document.getElementById("creations-grid");
+    const msg = document.getElementById("creations-msg");
+    const more = document.getElementById("creations-more");
+    const bar = section.querySelector(".cr-bar");
+    let items = [], kind = "", sort = "picks", shown = PAGE;
+    const words = (id) => String(id).replace(/_/g, " ");
+    const say = (text, withLink) => {
+      msg.textContent = text;
+      if (withLink) {
+        msg.append(" ");
+        const a = document.createElement("a");
+        a.href = "docs#community";
+        a.textContent = "How sharing works";
+        msg.append(a);
+      }
+      msg.hidden = false;
+    };
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const card = (it) => {
+      const li = el("li", "cr-card");
+      const pic = el("div", "cr-pic");
+      const shot = (it.screenshots || []).find((u) => typeof u === "string" && /^https:\/\//.test(u));
+      if (shot) {
+        const img = document.createElement("img");
+        img.src = shot;
+        img.alt = `${it.name}: a screenshot`;
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.referrerPolicy = "no-referrer";
+        img.addEventListener("error", () => { img.remove(); pic.textContent = KINDS[it.kind] || ""; });
+        pic.append(img);
+      } else {
+        pic.textContent = KINDS[it.kind] || "";
+      }
+      const body = el("div", "cr-body");
+      const k = el("p", "cr-kind", KINDS[it.kind] || "");
+      const games = (it.games || []).map((g) => GAMES[g]).filter(Boolean).join(", ");
+      if (games) k.append(" ", el("span", "", `· ${games}`));
+      k.style.margin = "0";
+      body.append(k, el("h3", "", it.name || "Untitled"));
+      if (it.author) body.append(el("p", "cr-by", `by ${it.author}`));
+      if (it.summary) body.append(el("p", "cr-sum", it.summary));
+      const tags = el("ul", "cr-tags");
+      const tag = (text, cls) => tags.append(el("li", cls || "", text));
+      if (it.featured) tag("Popular pick", "good");
+      if (it.kind === "map" && it.map) {
+        if (it.map.nav) tag(it.map.lsv ? "Bots know it" : "Has a nav", "good");
+        const named = (it.map.modeRefs || []).map((r) => r && r.name).filter(Boolean);
+        for (const m of (named.length ? named : it.map.modes || []).slice(0, 3)) tag(words(m));
+      }
+      if (it.kind === "mode" && it.mode) {
+        for (const c of it.mode.capabilities || []) if (RISK[c]) tag(RISK[c], "risk");
+        for (const m of (it.mode.maps || []).slice(0, 3)) tag(m);
+      }
+      if (it.kind === "mode" && BOTS[it.bots]) tag(BOTS[it.bots], it.bots === "great" ? "good" : "");
+      if (tags.childElementCount) body.append(tags);
+      const acts = el("div", "cr-acts");
+      const gb = Number(it.gb);
+      if (Number.isInteger(gb) && gb > 0) {
+        const a = el("a", "btn", "View on GameBanana");
+        a.href = `https://gamebanana.com/${it.model === "spray" ? "sprays" : "mods"}/${gb}`;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.dataset.event = "Community: GameBanana";
+        acts.append(a);
+      }
+      // Open in Loner-Strike: the app's loner-strike:// link opens the creation's page in Community
+      // (never an install). A browser can't tell whether the app is there, so if the page still
+      // has focus a moment later, the card says how to get it. Not on phones (no app there).
+      const get = el("a", "btn", "Get Loner-Strike");
+      get.href = "#get";
+      get.dataset.event = "Community: Get Loner-Strike";
+      const model = it.model === "spray" ? "spray" : "mod";
+      if (Number.isInteger(gb) && gb > 0 && !window.matchMedia("(pointer: coarse)").matches) {
+        const open = el("a", "btn primary", "Open in Loner-Strike");
+        open.href = `loner-strike://community/${model}/${gb}`;
+        open.dataset.event = "Community: Open in Loner-Strike";
+        const note = el("p", "cr-note");
+        note.hidden = true;
+        note.setAttribute("role", "status");
+        open.addEventListener("click", () => {
+          let left = false;
+          const away = () => { left = true; };
+          window.addEventListener("blur", away, { once: true });
+          document.addEventListener("visibilitychange", away, { once: true });
+          setTimeout(() => {
+            window.removeEventListener("blur", away);
+            document.removeEventListener("visibilitychange", away);
+            if (left || document.hidden) return;
+            note.replaceChildren("Didn't open? ");
+            const a = el("a", "", "Get Loner-Strike");
+            a.href = "#get";
+            note.append(a, " (free), then try again.");
+            note.hidden = false;
+          }, 1500);
+        });
+        acts.append(open, get);
+        body.append(acts, note);
+      } else {
+        get.className = "btn primary";
+        acts.append(get);
+        body.append(acts);
+      }
+      li.append(pic, body);
+      return li;
+    };
+    const draw = () => {
+      let list = items.filter((it) => !kind || it.kind === kind);
+      list = list.slice().sort(sort === "new" ? (a, b) => (b.added || 0) - (a.added || 0) : (a, b) => (b.featured - a.featured) || (b.updated || 0) - (a.updated || 0));
+      grid.replaceChildren(...list.slice(0, shown).map(card));
+      more.hidden = list.length <= shown;
+      if (!list.length) say(items.length ? `No ${KINDS[kind].toLowerCase()}s yet.` : "Nothing shared yet. Make a map or a game mode in Loner-Strike, share it from the Community tab, and it shows up here.", !items.length);
+      else msg.hidden = true;
+    };
+    const load = async () => {
+      try {
+        const r = await fetch(INDEX_URL, { cache: "no-cache" });
+        if (!r.ok) throw new Error(String(r.status));
+        const doc = await r.json();
+        // only what's explicitly listed: unlisted, withdrawn, hidden, pending, revoked and any
+        // state added later stay out, and so does anything on the revoked list ("mod:123")
+        const gone = new Set(Array.isArray(doc.revoked) ? doc.revoked.map(String) : []);
+        items = (Array.isArray(doc.items) ? doc.items : []).filter((it) => it && it.status === "listed" && KINDS[it.kind] && typeof it.name === "string"
+          && !gone.has(`${String(it.model || "mod").toLowerCase()}:${it.gb}`));
+      } catch {
+        items = [];
+      }
+      bar.hidden = !items.length;
+      draw();
+    };
+    for (const b of section.querySelectorAll("[data-kind]")) b.addEventListener("click", () => {
+      kind = b.dataset.kind;
+      shown = PAGE;
+      for (const o of section.querySelectorAll("[data-kind]")) o.setAttribute("aria-pressed", String(o === b));
+      draw();
+    });
+    for (const b of section.querySelectorAll("[data-sort]")) b.addEventListener("click", () => {
+      sort = b.dataset.sort;
+      for (const o of section.querySelectorAll("[data-sort]")) o.setAttribute("aria-pressed", String(o === b));
+      draw();
+    });
+    more.addEventListener("click", () => { shown += PAGE; draw(); });
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((es) => {
+        if (es.some((e) => e.isIntersecting)) { io.disconnect(); load(); }
+      }, { rootMargin: "600px 0px" });
+      io.observe(section);
+    } else {
+      load();
+    }
   }
 
   // The server list: every server Loner-Strike players share (services/serverlist), in a window
@@ -1213,7 +1581,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   }
 
-  // Name your price: Polar's checkout opens over the page. Without a link yet, it goes to the download.
+  // The Support Pack: Polar's checkout opens over the page. Without a link yet, it goes to the download.
   for (const a of document.querySelectorAll("a.polar")) {
     if (POLAR_CHECKOUT) {
       a.href = POLAR_CHECKOUT;
@@ -1222,6 +1590,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     } else if (a.id === "polar") {
       a.href = "https://github.com/jamesontucker/Loner-Strike/releases/latest";
     }
+  }
+  if (POLAR_CHECKOUT_MONTHLY) {
+    for (const a of document.querySelectorAll("a.polar-monthly")) {
+      a.href = POLAR_CHECKOUT_MONTHLY;
+      a.setAttribute("data-polar-checkout", "");
+      a.setAttribute("data-polar-checkout-theme", "dark");
+    }
+    document.getElementById("support-monthly").hidden = false;
   }
   if (POLAR_CHECKOUT) {
     const s = document.createElement("script");
@@ -1238,75 +1614,245 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     if (a) window.plausible(a.dataset.event);
   });
 
-  // ---- screenshots ------------------------------------------------------------
-  // Add one: put the image in img/gallery/ and add a line here. tall: true for phone shots.
-  const GALLERY = [
-    { src: "img/gallery/play.jpg", caption: "Pick a preset or a mode, mid-game" },
-    { src: "img/gallery/players.jpg", caption: "Bots with names, clan tags and their own playstyles" },
-    { src: "img/gallery/maps.jpg", caption: "Maps with screenshots, filters and favourites" },
-    { src: "img/gallery/bots.jpg", caption: "Bot skill, style and personality" },
-    { src: "img/gallery/friends.jpg", caption: "Seven ways for friends to join" },
-    { src: "img/gallery/servers.jpg", caption: "Your own server on a rented machine, with a live console" },
-    { src: "img/gallery/server-maps.jpg", caption: "Send your own maps to a server" },
-    { src: "img/gallery/website-status.jpg", caption: "Live player count for your website" },
-    { src: "img/gallery/radio.jpg", caption: "And a radio, obviously" },
-    { src: "img/gallery/phone-server.jpg", caption: "Run the game or a server from your phone", tall: true },
-  ];
+  // ---- release banner ----------------------------------------------------------
+  // Before release day it says when; from November 14 it says it's out.
+  {
+    const banner = document.getElementById("release-banner");
+    if (Date.now() >= Date.parse("2026-11-14T00:00:00-08:00")) {
+      const a = Object.assign(document.createElement("a"), { href: "#get", textContent: "Get it" });
+      a.dataset.event = "Get it (banner)";
+      banner.replaceChildren("Loner-Strike 1.0.0 is out: build maps and modes, play them with bots, host them and share them. ", a);
+    }
+  }
 
-  const list = document.getElementById("shots");
-  const viewer = document.getElementById("viewer");
-  const big = document.getElementById("viewer-img");
-  let at = 0;
-  GALLERY.forEach((g, i) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<button type="button"><div class="frame${g.tall ? " tall" : ""}"><img loading="lazy" alt=""></div><span></span></button>`;
-    li.querySelector("img").src = g.src;
-    li.querySelector("img").alt = g.caption;
-    li.querySelector("span").textContent = g.caption;
-    li.querySelector("button").addEventListener("click", () => open(i));
-    list.appendChild(li);
-  });
-  const show = (i) => {
-    at = (i + GALLERY.length) % GALLERY.length;
-    big.src = GALLERY[at].src;
-    big.alt = GALLERY[at].caption;
-    document.getElementById("viewer-cap").textContent = GALLERY[at].caption;
-    document.getElementById("count").textContent = `${at + 1} / ${GALLERY.length}`;
+  // Downloads: the fixed-name copies on the download server (mirror-release.yml puts them there
+  // with each release), checked first; until they're there, both buttons go to the GitHub release.
+  // This computer's button is the bright one; both stay.
+  {
+    const DL = "https://dl.lonerstrike.com/download/";
+    const files = { "dl-win": "Loner-Strike-windows-x64-setup.exe", "dl-mac": "Loner-Strike-mac.dmg" };
+    for (const [id, name] of Object.entries(files)) {
+      fetch(DL + name, { method: "HEAD", cache: "no-store" })
+        .then((r) => { if (r.ok) document.getElementById(id).href = DL + name; })
+        .catch(() => {});
+    }
+    const ua = navigator.userAgent;
+    // a Mac gets the Mac button bright; everyone else Windows (the main audience); the other stays a clear button
+    const mine = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua) ? "dl-mac" : "dl-win";
+    document.getElementById(mine).classList.add("yours");
+  }
+
+  // The supporter minimum, in one place (set in Polar; keep this in step with it)
+  const SUPPORT_MIN = "$3";
+  for (const el of document.querySelectorAll(".support-min")) el.textContent = SUPPORT_MIN;
+
+  // ---- screenshots: inline, in each section's app window ---------------------------
+  // Each section's window flips through its own shots: arrows on the picture, a thumbnail strip,
+  // the arrow keys, and a swipe on phones. A click opens the big viewer on that section's shots.
+  // A shot named "x" is img/1.0/x.webp, with img/1.0/x.png for old browsers and img/1.0/thumb/x.webp
+  // for the strip. app-* shots fall back to the older jpgs in img/gallery/.
+  // draft: an in-game shot still to take, at img/1.0/ingame/<draft>.jpg. Put the file there and its name in
+  // INGAME, and it shows; until then it's left out. ?drafts on the page shows each one as a marked placeholder.
+  // See docs/notes/Site.md for the list and how to frame them.
+  const INGAME = new Set([]);
+  const shot = (name, cap, more) => Object.assign({
+    webp: `img/1.0/${name}.webp`, src: `img/1.0/${name}.png`, thumb: `img/1.0/thumb/${name}.webp`, cap,
+  }, more);
+  const app = (name, cap, more) => shot(`app-${name}`, cap, Object.assign({ src: `img/gallery/${name}.jpg` }, more));
+  const draft = (name, cap) => ({ draft: name, have: INGAME.has(name), src: `img/1.0/ingame/${name}.jpg`, thumb: `img/1.0/ingame/${name}.jpg`, cap });
+  const SETS = {
+    make: [
+      shot("editor", "Brushes, entities and textures in one 3D view"),
+      draft("replay", "Replay: a map simulator match played back, every move and fight"),
+      shot("editor-quad", "Or four views, like Hammer"),
+      shot("editor-compile", "Compile with SDHLT, then playtest with bots"),
+      shot("editor-checks", "Your map is checked as you go"),
+      shot("editor-budget", "Budget: how close the map is to the engine's limits"),
+      shot("studio", "Game Mode Studio: a game mode from nodes and wires"),
+      shot("studio-timeline", "Timelines: values and events over time, like Unreal's"),
+      shot("creatures", "Creature Studio: the creatures modes throw at you, and their waves"),
+      shot("plugins", "Plugin Studio: AMX Mod X with suggestions and docs"),
+      shot("tools", "Every tool, on one page in the app"),
+      shot("navfix", "Nav fixer: where bots can walk, and where they can't get back from"),
+      shot("doctor", "Map doctor: what a map is missing, and the fix"),
+      shot("callouts", "Callouts: name places so bots say where they are"),
+      shot("viewer-nav", "The map viewer with the bots' nav and named places"),
+      shot("radar", "Radar maker: the overview, drawn from the map"),
+      shot("spray", "Spray maker"),
+      shot("playercfg", "Crosshair & config, with the crosshair drawn live"),
+      shot("people", "Bot people: who the bots are"),
+      shot("models-game", "Every texture and model in your game"),
+      shot("render-dust2", "Any map, lit like the game"),
+    ],
+    friends: [
+      app("friends", "Seven ways for friends to join"),
+      app("phone-server", "Run the game or a server from your phone", { tall: true }),
+    ],
+    servers: [
+      app("servers", "Your own server on a rented machine, with a live console"),
+      app("server-maps", "Send your own maps to a server"),
+      app("website-status", "Live player count for your website"),
+    ],
+    share: [
+      shot("community", "Community: maps, modes, prefabs, sprays and textures made with Loner-Strike"),
+      draft("community-browse", "Trying a community map with bots"),
+    ],
   };
-  const open = (i) => {
-    show(i);
-    viewer.showModal();
-    window.plausible("Screenshot", { props: { image: GALLERY[i].src.split("/").pop() } });
+  const showDrafts = /[?&]drafts\b/.test(location.search);
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const pictureOf = (s, thumb) => {
+    if (s.draft && !s.have) {
+      const d = document.createElement("span");
+      d.className = "tour-draft";
+      d.textContent = thumb ? "Shot to take" : `Placeholder: in-game shot to take: ${s.cap} (img/1.0/ingame/${s.draft}.jpg)`;
+      return d;
+    }
+    const img = document.createElement("img");
+    img.alt = thumb ? "" : s.cap;
+    img.loading = "lazy";
+    img.src = thumb ? s.thumb : s.src;
+    if (!s.webp) return img;
+    const pic = document.createElement("picture");
+    pic.append(Object.assign(document.createElement("source"), { srcset: thumb ? s.thumb : s.webp, type: "image/webp" }), img);
+    if (thumb) img.src = s.src;
+    return pic;
   };
-  document.getElementById("prev").addEventListener("click", () => show(at - 1));
-  document.getElementById("next").addEventListener("click", () => show(at + 1));
-  document.getElementById("close").addEventListener("click", () => viewer.close());
-  viewer.addEventListener("click", (e) => { if (e.target === viewer || e.target.tagName === "FIGURE") viewer.close(); });
-  viewer.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") show(at - 1);
-    if (e.key === "ArrowRight") show(at + 1);
+  const arrow = (dir) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `tour-arrow ${dir}`;
+    b.setAttribute("aria-label", dir === "prev" ? "Previous screenshot" : "Next screenshot");
+    b.innerHTML = dir === "prev"
+      ? '<svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>'
+      : '<svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="m2 2 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
+    return b;
+  };
+
+  const widgets = [...document.querySelectorAll(".shots[data-set]")].map((root) => {
+    const all = SETS[root.dataset.set] || [];
+    const view = root.querySelector(".shots-view");
+    const stage = root.querySelector(".tour-stage");
+    const capEl = root.querySelector(".tour-cap");
+    const countEl = root.querySelector(".tour-count");
+    const prev = arrow("prev"), next = arrow("next");
+    view.append(prev, next);
+    const strip = document.createElement("ul");
+    strip.className = "tour-strip";
+    strip.setAttribute("aria-label", `${root.querySelector(".window-bar").textContent.trim()} screenshots`);
+    root.append(strip);
+    const w = { at: 0, list: () => all.filter((s) => !s.draft || s.have || showDrafts) };
+    if (showDrafts) for (const s of all) if (s.draft && !s.have) {
+      const probe = new Image();
+      probe.onload = () => { s.have = true; w.render(); };
+      probe.src = s.src;
+    }
+    w.render = () => {
+      const list = w.list();
+      if (!list.length) return;
+      if (w.at >= list.length) w.at = 0;
+      const s = list[w.at];
+      stage.replaceChildren(pictureOf(s));
+      stage.classList.toggle("tall", !!s.tall);
+      capEl.textContent = s.cap;
+      countEl.textContent = list.length > 1 ? `${w.at + 1} of ${list.length}` : "";
+      prev.hidden = next.hidden = list.length < 2;
+      strip.hidden = list.length < 3;
+      strip.replaceChildren(...list.map((x, i) => {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", x.cap);
+        if (x.tall) b.className = "tall";
+        if (i === w.at) b.setAttribute("aria-current", "true");
+        b.tabIndex = i === w.at ? 0 : -1;
+        b.append(pictureOf(x, true));
+        b.addEventListener("click", () => w.go(i));
+        li.append(b);
+        return li;
+      }));
+      // keep the current thumbnail in sight by scrolling the strip only, never the page
+      const cur = strip.querySelector('[aria-current="true"]');
+      if (cur && !strip.hidden) {
+        const li = cur.parentElement, l = li.offsetLeft - strip.offsetLeft, r = l + li.offsetWidth;
+        const to = l < strip.scrollLeft ? l - 4 : r > strip.scrollLeft + strip.clientWidth ? r - strip.clientWidth + 4 : null;
+        if (to !== null) strip.scrollTo({ left: to, behavior: reduceMotion ? "auto" : "smooth" });
+      }
+      const nx = list[(w.at + 1) % list.length];
+      if (nx && !nx.draft) new Image().src = nx.webp || nx.src;
+    };
+    w.go = (i, focusStrip = true) => {
+      const n = w.list().length;
+      w.at = (i + n) % n;
+      w.render();
+      if (focusStrip && !strip.hidden) strip.querySelector('[aria-current="true"]')?.focus({ preventScroll: true });
+    };
+    prev.addEventListener("click", () => w.go(w.at - 1, false));
+    next.addEventListener("click", () => w.go(w.at + 1, false));
+    strip.addEventListener("keydown", (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (e.key === "Home") { e.preventDefault(); w.go(0); }
+      else if (e.key === "End") { e.preventDefault(); w.go(w.list().length - 1); }
+      else if (d) { e.preventDefault(); w.go(w.at + d); }
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (d) { e.preventDefault(); w.go(w.at + d, false); }
+    });
+    let sx = null, sy = null;
+    stage.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    stage.addEventListener("touchend", (e) => {
+      if (sx === null) return;
+      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      sx = null;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        // a swipe isn't a tap: ignore the click some browsers send right after it, but only briefly
+        stage.dataset.swiped = "1";
+        setTimeout(() => delete stage.dataset.swiped, 400);
+        w.go(w.at + (dx < 0 ? 1 : -1), false);
+      }
+    });
+    stage.addEventListener("click", () => {
+      if (stage.dataset.swiped) { delete stage.dataset.swiped; return; }
+      const s = w.list()[w.at];
+      if (!s || (s.draft && !s.have)) return;
+      // the big viewer (viewer.js, shared with the docs): this section's shots, kept in step with it
+      const shown = w.list().filter((x) => !x.draft || x.have);
+      LSViewer.open(shown, Math.max(0, shown.indexOf(s)), {
+        returnTo: stage,
+        onStep: (i) => { w.at = w.list().indexOf(shown[i]); w.render(); },
+      });
+      window.plausible("Screenshot", { props: { image: (s.webp || s.src).split("/").pop() } });
+    });
+    w.render();
+    return w;
   });
-  // swipe on phones
-  let x0 = null;
-  viewer.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
-  viewer.addEventListener("touchend", (e) => {
-    if (x0 === null) return;
-    const dx = e.changedTouches[0].clientX - x0;
-    if (Math.abs(dx) > 50) show(at + (dx < 0 ? 1 : -1));
-    x0 = null;
-  });
+
 
   // The loader fills up once, like Steam connecting in 2004
+  // Only whole blocks: the count follows the bar's width (a block is 7 px plus a 3 px gap, inside
+  // 3 px of padding each side), so resizing or rotating never leaves a half block at the end.
   const bar = document.getElementById("bar");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const slots = Math.max(8, Math.floor((bar.clientWidth - 3) / 10));
-  let n = reduce ? slots : 0;
+  const fits = () => Math.max(1, Math.floor((bar.clientWidth - 6 + 3) / 10));
+  let slots = fits(), n = reduce ? slots : 0, done = false;
+  const draw = () => {
+    while (bar.children.length > Math.min(n, slots)) bar.lastChild.remove();
+    while (bar.children.length < Math.min(n, slots)) bar.appendChild(document.createElement("i"));
+  };
   const add = () => {
-    while (bar.children.length < n) bar.appendChild(document.createElement("i"));
+    draw();
     if (n < slots) { n++; setTimeout(add, n < slots * 0.7 ? 70 : 260); }
-    else bar.previousElementSibling.textContent = "Connected.";
+    else { done = true; bar.previousElementSibling.textContent = "Connected."; }
   };
   add();
+  if ("ResizeObserver" in window) new ResizeObserver(() => {
+    slots = fits();
+    if (done) n = slots;
+    bar.classList.add("still");
+    draw();
+  }).observe(bar);
 
   // ---- 2004 bits ----------------------------------------------------------------
   const store = {
@@ -1454,7 +2000,16 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
       { name: "0N 2000s", desc: "Hits from the 2000s", stream: "https://0n-2000s.radionetz.de/0n-2000s.mp3", site: "https://www.0nlineradio.com/", credit: "0nlineradio: 2000s", now: "https://0n-2000s.radionetz.de/status-json.xsl", mount: "/0n-2000s.mp3" },
       { name: "Radio Bob Nu Metal", desc: "Nu metal, from Korn to Linkin Park", stream: "https://streams.radiobob.de/numetal/mp3-192/", site: "https://www.radiobob.de/", credit: "Radio Bob" },
-      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
+      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, chill: true, now: "https://somafm.com/songs/groovesalad.json" },
+      { name: "SomaFM Drone Zone", desc: "Ambient textures with no beat", stream: "https://ice1.somafm.com/dronezone-128-mp3", site: "https://somafm.com/dronezone/", credit: "SomaFM: Drone Zone", soma: true, chill: true, now: "https://somafm.com/songs/dronezone.json" },
+      { name: "SomaFM Fluid", desc: "Instrumental hip-hop and future soul", stream: "https://ice1.somafm.com/fluid-128-mp3", site: "https://somafm.com/fluid/", credit: "SomaFM: Fluid", soma: true, chill: true, now: "https://somafm.com/songs/fluid.json" },
+      { name: "SomaFM Deep Space One", desc: "Deep ambient and space music", stream: "https://ice1.somafm.com/deepspaceone-128-mp3", site: "https://somafm.com/deepspaceone/", credit: "SomaFM: Deep Space One", soma: true, chill: true, now: "https://somafm.com/songs/deepspaceone.json" },
+      { name: "SomaFM Vaporwaves", desc: "Vaporwave, slowed and dreamy", stream: "https://ice1.somafm.com/vaporwaves-128-mp3", site: "https://somafm.com/vaporwaves/", credit: "SomaFM: Vaporwaves", soma: true, chill: true, now: "https://somafm.com/songs/vaporwaves.json" },
+      { name: "Nightride FM Chillsynth", desc: "Chill synthwave", stream: "https://stream.nightride.fm/chillsynth.mp3", site: "https://nightride.fm/", credit: "Nightride FM: Chillsynth", chill: true, nightride: "chillsynth", now: "https://nightride.fm/meta" },
+      { name: "Radio Paradise Mellow Mix", desc: "Mellow rock, folk and world music, mixed by hand", stream: "https://stream.radioparadise.com/mellow-192", site: "https://radioparadise.com/", credit: "Radio Paradise: Mellow Mix", chill: true },
+      { name: "Rainwave OC ReMix", desc: "Fan remixes of video game music", stream: "https://relay.rainwave.cc/ocremix.mp3", site: "https://rainwave.cc/ocremix/", credit: "Rainwave: OC ReMix", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=2" },
+      { name: "Rainwave Chiptune", desc: "Chiptunes from old consoles and computers", stream: "https://relay.rainwave.cc/chiptune.mp3", site: "https://rainwave.cc/chiptune/", credit: "Rainwave: Chiptune", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=4" },
+      { name: "Rainwave Chill", desc: "Calm video game music", stream: "https://relay.rainwave.cc/chill.mp3", site: "https://rainwave.cc/chill/", credit: "Rainwave: Chill", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=6" },
     ];
     const keep = {
       get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1499,9 +2054,31 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       if (!s.now) return;
       nowAbort = new AbortController();
       try {
-        const j = await (await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" })).json();
+        const r = await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" });
         let t = "";
-        if (s.soma) {
+        // Nightride FM's /meta is a live event stream that opens with every station's track:
+        // read until ours shows up, then hang up
+        if (s.nightride) {
+          const reader = r.body.getReader();
+          const dec = new TextDecoder();
+          let buf = "";
+          try {
+            for (let n = 0; n < 50 && !t; n++) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              for (const line of buf.split("\n")) {
+                if (!line.startsWith("data:")) continue;
+                try {
+                  const hit = [JSON.parse(line.slice(5))].flat().find((x) => x?.station === s.nightride);
+                  if (hit) { t = [hit.artist, hit.title].filter(Boolean).join(" - "); break; }
+                } catch {}
+              }
+            }
+          } finally { reader.cancel().catch(() => {}); }
+        }
+        const j = s.nightride ? null : await r.json();
+        if (s.nightride) { /* read above */ } else if (s.soma) {
           const song = j?.songs?.[0];
           t = song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
         } else if (s.rainwave) {
@@ -1646,6 +2223,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         if (i === at) b.setAttribute("aria-current", "true");
         const name = document.createElement("span");
         name.textContent = `${i + 1}. ${s.name}`;
+        if (s.chill) {
+          const tag = document.createElement("em");
+          tag.className = "radio-tag";
+          tag.textContent = "Chill";
+          name.append(tag);
+        }
         const desc = document.createElement("small");
         desc.textContent = s.desc;
         b.append(name, desc);

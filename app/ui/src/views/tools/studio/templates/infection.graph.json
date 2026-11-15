@@ -1,0 +1,1288 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "infection",
+  "uid": "6d1f0f3e-4c1b-4a7e-9a51-2b7e3c9d0a11",
+  "name": "Infection",
+  "description": "One zombie; its victims turn; humans must outlast the clock",
+  "settings": [
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   },
+   {
+    "cvar": "mp_autoteambalance",
+    "value": 0
+   },
+   {
+    "cvar": "mp_limitteams",
+    "value": 0
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "started",
+   "name": "Infection Started",
+   "type": "bool",
+   "scope": "mode",
+   "default": false,
+   "reset": "round"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 172
+   },
+   "params": {}
+  },
+  {
+   "id": "all",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 137
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "human",
+   "type": "player.set_team",
+   "pos": {
+    "x": 1065,
+    "y": 50
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "look",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1565,
+    "y": 110
+   },
+   "params": {
+    "color": "off"
+   }
+  },
+  {
+   "id": "cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 1065,
+    "y": 272
+   },
+   "params": {
+    "secs": 15,
+    "text": "The infection starts in",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "clock",
+   "type": "clock.set",
+   "pos": {
+    "x": 1565,
+    "y": 283
+   },
+   "params": {
+    "secs": 180
+   }
+  },
+  {
+   "id": "pick",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2065,
+    "y": 272
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "first",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 294
+   },
+   "params": {
+    "func": "infect"
+   }
+  },
+  {
+   "id": "on",
+   "type": "var.set",
+   "pos": {
+    "x": 3065,
+    "y": 261
+   },
+   "params": {
+    "var": "started",
+    "value": true
+   }
+  },
+  {
+   "id": "tell",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 3565,
+    "y": 283
+   },
+   "params": {
+    "text": "Run! The infection has started.",
+    "seconds": 4
+   }
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 2381
+   },
+   "params": {}
+  },
+  {
+   "id": "gate",
+   "type": "flow.branch",
+   "pos": {
+    "x": 565,
+    "y": 2160
+   },
+   "params": {}
+  },
+  {
+   "id": "getstarted",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 2063
+   },
+   "params": {
+    "var": "started"
+   }
+  },
+  {
+   "id": "was_human",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 1065,
+    "y": 2192
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "turn",
+   "type": "player.set_team",
+   "pos": {
+    "x": 1565,
+    "y": 2047
+   },
+   "params": {
+    "team": "t"
+   }
+  },
+  {
+   "id": "say",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 2203
+   },
+   "params": {
+    "text": "Infected:"
+   }
+  },
+  {
+   "id": "wait1",
+   "type": "timer.delay",
+   "pos": {
+    "x": 2565,
+    "y": 2214
+   },
+   "params": {
+    "secs": 1
+   }
+  },
+  {
+   "id": "back1",
+   "type": "player.respawn",
+   "pos": {
+    "x": 3065,
+    "y": 2421
+   },
+   "params": {}
+  },
+  {
+   "id": "inf",
+   "type": "fn.call",
+   "pos": {
+    "x": 3565,
+    "y": 2455
+   },
+   "params": {
+    "func": "infect"
+   }
+  },
+  {
+   "id": "wait5",
+   "type": "timer.delay",
+   "pos": {
+    "x": 1565,
+    "y": 2445
+   },
+   "params": {
+    "secs": 5
+   }
+  },
+  {
+   "id": "back5",
+   "type": "player.respawn",
+   "pos": {
+    "x": 2065,
+    "y": 2501
+   },
+   "params": {}
+  },
+  {
+   "id": "inf2",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 2536
+   },
+   "params": {
+    "func": "infect"
+   }
+  },
+  {
+   "id": "pk2",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 1065,
+    "y": 1155
+   },
+   "params": {}
+  },
+  {
+   "id": "left",
+   "type": "game.count_alive",
+   "pos": {
+    "x": 65,
+    "y": 938
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "none",
+   "type": "math.compare",
+   "pos": {
+    "x": 565,
+    "y": 927
+   },
+   "params": {
+    "op": "eq",
+    "b": 0
+   }
+  },
+  {
+   "id": "going",
+   "type": "var.get",
+   "pos": {
+    "x": 565,
+    "y": 1143
+   },
+   "params": {
+    "var": "started"
+   }
+  },
+  {
+   "id": "both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1065,
+    "y": 1003
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
+   "id": "check",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1111
+   },
+   "params": {}
+  },
+  {
+   "id": "off1",
+   "type": "var.set",
+   "pos": {
+    "x": 2065,
+    "y": 1089
+   },
+   "params": {
+    "var": "started",
+    "value": false
+   }
+  },
+  {
+   "id": "zwin",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 2565,
+    "y": 1111
+   },
+   "params": {
+    "text": "The zombies took everyone!",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "zend",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3065,
+    "y": 1111
+   },
+   "params": {
+    "winner": "t"
+   }
+  },
+  {
+   "id": "up",
+   "type": "event.time_up",
+   "pos": {
+    "x": 1565,
+    "y": 1362
+   },
+   "params": {}
+  },
+  {
+   "id": "off2",
+   "type": "var.set",
+   "pos": {
+    "x": 2065,
+    "y": 1316
+   },
+   "params": {
+    "var": "started",
+    "value": false
+   }
+  },
+  {
+   "id": "hwin",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 2565,
+    "y": 1338
+   },
+   "params": {
+    "text": "The humans survived!",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "hend",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3065,
+    "y": 1338
+   },
+   "params": {
+    "winner": "ct"
+   }
+  },
+  {
+   "id": "fired",
+   "type": "event.weapon_fired",
+   "pos": {
+    "x": 65,
+    "y": 553
+   },
+   "params": {}
+  },
+  {
+   "id": "zombie",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 565,
+    "y": 702
+   },
+   "params": {
+    "team": "t"
+   }
+  },
+  {
+   "id": "knife",
+   "type": "text.equals",
+   "pos": {
+    "x": 565,
+    "y": 550
+   },
+   "params": {
+    "b": "knife"
+   }
+  },
+  {
+   "id": "isknife",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 631
+   },
+   "params": {}
+  },
+  {
+   "id": "strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 1565,
+    "y": 588
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "fe",
+   "type": "fn.entry",
+   "pos": {
+    "x": 65,
+    "y": 1781
+   },
+   "params": {},
+   "graph": "infect"
+  },
+  {
+   "id": "zt",
+   "type": "player.set_team",
+   "pos": {
+    "x": 565,
+    "y": 1552
+   },
+   "params": {
+    "team": "t"
+   },
+   "graph": "infect"
+  },
+  {
+   "id": "zs",
+   "type": "player.strip",
+   "pos": {
+    "x": 1065,
+    "y": 1611
+   },
+   "params": {
+    "knife": true
+   },
+   "graph": "infect"
+  },
+  {
+   "id": "zh",
+   "type": "player.set_health",
+   "pos": {
+    "x": 1565,
+    "y": 1643
+   },
+   "params": {
+    "amount": 1500
+   },
+   "graph": "infect"
+  },
+  {
+   "id": "zv",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2065,
+    "y": 1692
+   },
+   "params": {
+    "speed": 290
+   },
+   "graph": "infect"
+  },
+  {
+   "id": "zg",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2565,
+    "y": 1751
+   },
+   "params": {
+    "color": "green"
+   },
+   "graph": "infect"
+  },
+  {
+   "id": "zm",
+   "type": "msg.hud",
+   "pos": {
+    "x": 3065,
+    "y": 1783
+   },
+   "params": {
+    "text": "You're a zombie. Infect the humans!",
+    "slot": "center",
+    "seconds": 4
+   },
+   "graph": "infect"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "all",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "all",
+    "pin": "each"
+   },
+   "to": {
+    "node": "human",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "human",
+    "pin": "then"
+   },
+   "to": {
+    "node": "look",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "all",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "clock",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "clock",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "first",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "first",
+    "pin": "then"
+   },
+   "to": {
+    "node": "on",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "on",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tell",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "human",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "look",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "pick",
+    "pin": "player"
+   },
+   "to": {
+    "node": "first",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "getstarted",
+    "pin": "out"
+   },
+   "to": {
+    "node": "gate",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gate",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "gate",
+    "pin": "true"
+   },
+   "to": {
+    "node": "was_human",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "was_human",
+    "pin": "true"
+   },
+   "to": {
+    "node": "turn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "turn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "say",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "say",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "wait1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "back1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "back1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "inf",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "was_human",
+    "pin": "false"
+   },
+   "to": {
+    "node": "wait5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "wait5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "back5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "back5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "inf2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "was_human",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "turn",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "say",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "back1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "inf",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "back5",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "inf2",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "none",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "none",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "going",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "check",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "pk2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "check",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "check",
+    "pin": "true"
+   },
+   "to": {
+    "node": "off1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "off1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zwin",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "zwin",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zend",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "off2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "off2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hwin",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "hwin",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hend",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "fired",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zombie",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "fired",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "knife",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "knife",
+    "pin": "out"
+   },
+   "to": {
+    "node": "isknife",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "fired",
+    "pin": "player"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "fired",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zombie",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "zombie",
+    "pin": "true"
+   },
+   "to": {
+    "node": "isknife",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "isknife",
+    "pin": "false"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "fe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "zt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "zs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zh",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "zh",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zv",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "zv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "zg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zt",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zs",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zh",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zg",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "zm",
+    "pin": "player"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "Each round everyone starts human (Counter-Terrorist). After a 15 second countdown one random player turns. The humans have 3 minutes on the mode's own round clock.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 3778,
+    "h": 435
+   }
+  },
+  {
+   "id": "c2",
+   "text": "A human killed by a zombie turns: they come back a second later on the zombie team. A zombie killed by a human comes back after 5 seconds. Once the infection has started, nobody stays dead.",
+   "pos": {
+    "x": 41,
+    "y": 2001
+   },
+   "size": {
+    "w": 3778,
+    "h": 647
+   }
+  },
+  {
+   "id": "c3",
+   "text": "The round ends when no human is left (the zombies win) or when the clock runs out (the humans win). Checked after every death. Infection Started goes off as the round ends, so it can only end once.",
+   "pos": {
+    "x": 41,
+    "y": 881
+   },
+   "size": {
+    "w": 3278,
+    "h": 613
+   }
+  },
+  {
+   "id": "c4",
+   "text": "Zombies keep to their claws: one that picks up a gun and fires it loses it again. Weapon Fired runs often, so it does as little as it can.",
+   "pos": {
+    "x": 41,
+    "y": 504
+   },
+   "size": {
+    "w": 1778,
+    "h": 354
+   }
+  },
+  {
+   "id": "c5",
+   "text": "Infect: what makes a zombie. Called for the first zombie and for everyone who turns. Strong and quick, knife only, glowing green.",
+   "pos": {
+    "x": 41,
+    "y": 1506
+   },
+   "size": {
+    "w": 3278,
+    "h": 433
+   },
+   "graph": "infect"
+  }
+ ],
+ "functions": [
+  {
+   "id": "infect",
+   "name": "Infect",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  }
+ ]
+}

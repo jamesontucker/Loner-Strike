@@ -517,7 +517,7 @@ public cmd_notready(id)
 	if (task_exists(TASK_START))
 	{
 		remove_task(TASK_START)
-		msg(0, "Start cancelled.")
+		msg(0, "Start canceled.")
 	}
 	return PLUGIN_HANDLED
 }

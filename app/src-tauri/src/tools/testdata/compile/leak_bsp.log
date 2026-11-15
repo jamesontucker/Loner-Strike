@@ -1,0 +1,79 @@
+sdHLBSP v1.3.1 64-bit (Oct 16 2026)
+seedee's Half-Life Compilation Tools
+Based on code modifications by Sean 'Zoner' Cavanaugh and Vluzacn
+Based on Valve's version, modified with permission.
+Submit detailed bug reports to (github.com/seedee/SDHLT/issues)
+-----  BEGIN  sdHLBSP -----
+Command line: C:\Loner-Strike\CompileTest\sdhlt\Win64\sdHLBSP_x64.exe C:\Loner-Strike\CompileTest\leaky 
+Arguments: C:\Loner-Strike\CompileTest\leaky -low 
+
+-= Current sdHLBSP Settings =-
+Name               |  Setting  |  Default
+-------------------|-----------|-------------------------
+
+
+
+SolidBSP [hull 0] 20 (0.00 seconds)
+Warning: === LEAK in hull 0 ===
+Entity light_environment at (   0    0  128)
+Error: 
+  A LEAK is a hole in the map, where the inside of it is exposed to the
+(unwanted) outside region.  The entity listed in the error is just a helpful
+indication of where the beginning of the leak pointfile starts, so the
+beginning of the line can be quickly found and traced to until reaching the
+outside. Unless this entity is accidentally on the outside of the map, it
+probably should not be deleted.  Some complex rotating objects entities need
+their origins outside the map.  To deal with these, just enclose the origin
+brush with a solid world brush
+
+Leak pointfile generated
+
+SolidBSP [hull 1] 13 (0.00 seconds)
+Warning: === LEAK in hull 1 ===
+Entity light_environment at (   0    0  128)
+SolidBSP [hull 2] 13 (0.00 seconds)
+Warning: === LEAK in hull 2 ===
+Entity light_environment at (   0    0  128)
+SolidBSP [hull 3] 13 (0.00 seconds)
+Warning: === LEAK in hull 3 ===
+Entity light_environment at (   0    0  128)
+Reduced 36 clipnodes to 36
+Reduced 9 texinfos to 8
+Reduced 3 texdatas to 3 (2268 bytes to 2268)
+Reduced 88 planes to 38
+FixBrinks:
+Increased 36 clipnodes to 36.
+
+Object names  Objects/Maxobjs  Memory / Maxmem  Fullness
+------------  ---------------  ---------------  --------
+models              1/512           64/32768    ( 0.2%)
+planes             38/32768        760/655360   ( 0.1%)
+vertexes          104/65535       1248/786420   ( 0.2%)
+nodes              19/32767        456/786408   ( 0.1%)
+texinfos            8/32767        320/1310680  ( 0.0%)
+faces              87/65535       1740/1310700  ( 0.1%)
+* worldfaces       87/32768          0/0        ( 0.3%)
+clipnodes          36/32767        288/262136   ( 0.1%)
+leaves             17/32760        476/917280   ( 0.1%)
+* worldleaves      16/8192           0/0        ( 0.2%)
+marksurfaces       87/65535        174/131070   ( 0.1%)
+surfedges         410/512000      1640/2048000  ( 0.1%)
+edges             217/256000       868/1024000  ( 0.1%)
+texdata          [variable]       2268/33554432 ( 0.0%)
+lightdata        [variable]          0/50331648 ( 0.0%)
+visdata          [variable]          0/8388608  ( 0.0%)
+entdata          [variable]        296/2097152  ( 0.0%)
+* AllocBlock        1/64             0/0        ( 1.6%)
+3 textures referenced
+=== Total BSP file data space used: 10598 bytes ===
+
+1 wad file required to run the map
+----------------------------------
+  halflife.wad
+----------------------------------
+0.02 seconds elapsed
+
+-----   END   sdHLBSP -----
+
+
+

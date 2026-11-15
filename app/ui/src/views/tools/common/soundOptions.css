@@ -1,0 +1,6 @@
+/* "Sound options": how imported sounds are converted (SoundOptions.tsx) */
+.ai-sound-opts { flex-basis: 100%; font-size: 12px; }
+.ai-sound-opts > summary { cursor: pointer; color: var(--bone-dim); }
+.ai-sound-opts[open] { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.ai-sound-opts[open] > summary { flex-basis: 100%; }
+.ai-sound-opts p { flex-basis: 100%; margin: 0; }

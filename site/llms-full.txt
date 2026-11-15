@@ -1,4 +1,4 @@
-# Loner-Strike: full details
+# Loner-Strike: Human-like bots, map & mode tools, and servers for CS 1.6 + CZ (full details)
 
 Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. Tagline: "Play Counter-Strike like it's 2004, alone or with the friends you don't have."
 
@@ -32,16 +32,38 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes.
 - The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball, Roll the Dice bots roll.
-- Thousands of maps from GameBanana with screenshots, favourites and search; weapon skins, player models, sprays, effects and HUD; round-end music, Quake sounds (off on a new setup) and classic sound packs. Every Get button opens the GameBanana browser (Get more) on that kind.
+- Thousands of maps from GameBanana with screenshots, favorites and search; weapon skins, player models, sprays, effects and HUD; round-end music, Quake sounds (off on a new setup) and classic sound packs. Every Get button opens the GameBanana browser (Get more) on that kind.
 - Maps for the game you play: Counter-Strike 1.6 leaves Condition Zero only maps out of its lists, rotations and votes; Condition Zero shows everything.
 - Mode voting: players type rtv, vote for the next mode, then for a map that suits it. The host picks which modes are in the vote.
 - Add your own maps, sounds and AMX Mod X plugins from a file.
 - Mods are downloaded from their original sources and checked against pinned checksums.
 
+## New in 1.0: game modes
+
+- Last Stand (map ls_outpost, best for 4 to 16 players, playable up to 32): co-op; everyone plays Counter-Terrorist and holds a walled desert outpost against waves of creatures (zombies, runners, brutes, spitters, a boss every few waves). Barricades to repair, revives, an armory shop and supply drops. Endless by default, or 5, 10 or 15 waves. Bots defend alongside you. Also set up on de_dust2, de_inferno, de_nuke, de_aztec and cs_office.
+- Battle Royale (map br_valley): drop in from high over a river valley with only a knife, loot crates and floor weapons, and be the last one or last squad standing while a six-stage zone closes. Solo, duos or squads of 4. Bots land, loot, hunt or camp by playstyle. Also set up on de_aztec, cs_italy, de_dust2, de_inferno and de_train.
+- Bots run deathrun courses (and a bot activator springs the traps) and surf.
+
+## New in 1.0: Tools (Beta)
+
+A Tools section in the app for making things:
+- Map editor: brushes, entities and textures in one 3D view (or four, like Hammer), with Unreal, Blender or Hammer camera controls, live checks, prefabs, Hammer .rmf / J.A.C.K. .jmf / .map import (TrenchBroom's too, with its groups and layers) and .map export. Compiles with SDHLT (downloaded on first use; through CrossOver on a Mac) and playtests with bots in one click.
+- Game Mode Studio: game modes from Blueprint-style node graphs (over 450 nodes, functions, macros, variables, structs, enums, snippets), compiled to an AMX Mod X plugin; playtest with bots while nodes light up, with breakpoints and live values. NPCs, dialog (Say, Say and Choose, Run Dialog from a table) and interactables for story and RPG modes; the example The Quest Giver shows how. HUD nodes: Status Icon, Objective Marker, Kill Feed Line.
+- Plugin Studio: an AMX Mod X editor with suggestions, docs, plain-language compile errors, "Try it in my game", and Export and Import of plugins; loner.inc gives short natives for modes, HUD, players, timers and bots.
+- Creature Studio: creature types (zombies, aliens, animals, turrets, bosses) and the waves they come in. Custom creatures go with the maps, modes and prefabs that use them, and can be shared on their own.
+- Map tools: Map doctor, Map simulator (bots play a match on a map and a report says where they fight, fall or get stuck), Nav fixer, Callouts and Radar maker.
+- Personalize: Crosshair & config, Bot people, Spray maker.
+- Watch & inspect: Map viewer (with the bots' nav and what they learned), Replay, Demos, Textures & models.
+
+## New in 1.0: Community and AI agents
+
+- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (on GameBanana's Technical tab, under Tags, a Custom Tag with the value "LonerStrike"; the title can stay empty; press + and save) and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview, fills in the GameBanana credits and asks whether AI helped make it. Remix a creation with credit to the original; a shared map can carry its editable source. Docs: https://lonerstrike.com/docs#community
+- AI agents (Settings): an MCP connector so coding agents such as Claude Code, Codex, OpenCode, Cursor, Claude Desktop and VS Code can use the tools. Off by default, local only, read-only until "Allow changes", and it asks before anything destructive. Setup: https://lonerstrike.com/docs#mcp
+
 ## Playing with friends
 
 - Seven ways to connect: LAN, your router (port forwarding), playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi.
-- Server name, join password and a ready-to-send invite. Friends only need Counter-Strike, not Loner-Strike.
+- Server name (up to 63 characters, any language), join password and a ready-to-send invite. Friends only need Counter-Strike, not Loner-Strike.
 - A custom welcome page for people who join, and a notification when someone joins while you're away.
 
 ## Running a server
@@ -72,13 +94,13 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 ## The app
 
 - Guided setup that finds your game, on Windows or a Mac with CrossOver.
-- The sidebar for your own game is grouped like a server's tabs: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library (Maps, Mods, Skins & models, Sounds, Get more) and Hosting (Servers). A bar on every page says whether you're changing your own game or a server, with Back to my game.
+- The sidebar for your own game is grouped like a server's tabs: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library (Maps, Mods, Skins & models, Sounds, Get more) and Hosting (Servers), plus Tools (Beta). A bar on every page says whether you're changing your own game or a server, with Back to my game.
 - Bots, Rules, Fun and Add-ons can be changed before a game starts; changes apply when you start one.
 - An in-game menu on F3, and quick actions in the app while you play: pause, round (including Start a mode vote), map, bot count with difficulty and style, god mode, noclip, announce and more.
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
 - Backup and restore in Settings: everything to one file, or just your game, and daily backups of Linux servers. Signed automatic updates.
 - Settings, Help: the docs, Report a problem, Copy diagnostics, and the usual problems with a button to the page that fixes each.
-- A built-in radio with eleven stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal (Bassdrive, Kniteforce, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob), with shuffle and a station list.
+- A built-in radio with twenty-one stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal, plus a group of chill stations tagged Chill (ambient, downtempo, space music, vaporwave, chill synthwave, mellow mixes, game remixes and chiptunes) (Bassdrive, Kniteforce, PsyMusic UK, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob, Nightride FM, Radio Paradise), with shuffle and a station list.
 - Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
 
 ## FAQ
@@ -109,3 +131,872 @@ Their original authors: the AMX Mod X, Metamod and ReGameDLL teams and the commu
 
 Is it affiliated with Valve?
 No. Counter-Strike and Condition Zero are Valve's trademarks. No game files are included.
+
+<!-- REFERENCE:BEGIN (made by scripts/gen-reference.mjs) -->
+## Game Mode Studio nodes (compact)
+
+One line each: Title (type, category): what it does. In: inputs. Out: outputs.
+
+- Round Started (event.round_started, Events): Runs when a round begins: freeze time is over and everyone can move.
+- Round Ended (event.round_ended, Events): Runs when a round ends. Winner is no team for a draw. Out: Winner Team, Round number Number.
+- Player Killed (event.player_killed, Events): Runs when a player dies. Attacker is nobody when the world killed them (a fall, the bomb). Out: Victim Player, Attacker Player, Headshot Yes/No, Weapon Text, Distance Number, Team kill Yes/No, Suicide Yes/No, Killed by the world Yes/No, Weapon kind Weapon.
+- Player Spawned (event.player_spawned, Events): Runs when a player comes alive (each round, or a respawn). Out: Player Player.
+- Player Joined (event.player_joined, Events): Runs when a player (or bot) has joined the server. Out: Player Player.
+- Player Left (event.player_left, Events): Runs when a player leaves the server. Out: Player Player.
+- Bomb Planted (event.bomb_planted, Events): Runs when the bomb is planted. Out: Planter Player.
+- Bomb Defused (event.bomb_defused, Events): Runs when the bomb is defused. Out: Defuser Player.
+- Bomb Exploded (event.bomb_exploded, Events): Runs when the bomb goes off.
+- Player Used (event.player_used, Events): Runs when a player presses a button (func_button) with this name. Leave the name empty for any button. Out: Player Player, Button Entity.
+- Player Touched (event.player_touched, Events): Runs when a player walks into a trigger (trigger_multiple) with this name, at most once a second each. Empty name: any. Out: Player Player, Trigger Entity.
+- Point Captured (comp.on_capture, Components): A capture point was taken. Out: Point Entity, Team Team, Capturer Player.
+- Point Lost (comp.on_capture_lost, Components): A team lost a capture point. Out: Point Entity, Team Team.
+- Zone Stage (comp.on_zone_stage, Components): A shrinking zone started a new stage. Out: Zone Entity, Stage Number.
+- Zone Hurt Player (comp.on_zone_tick, Components): A player outside the zone took damage. Out: Zone Entity, Player Player, Damage Number.
+- Player Extracted (comp.on_extract, Components): A player got out at an extraction point. Out: Point Entity, Player Player.
+- Wave Started (comp.on_wave_start, Components): A wave of enemies started. Out: Wave Number.
+- Wave Spawned One (comp.on_wave_spawn, Components): A wave's spawner is about to bring in one enemy. Spawner is the wave spawner, not the enemy (it isn't made yet): to act on its enemies, use For Each Creature (a moment later) or Creature Killed. Out: Spawner Entity, Wave Number.
+- Wave Cleared (comp.on_wave_cleared, Components): Every enemy of a wave is dead. Out: Wave Number.
+- Crate Opened (comp.on_loot, Components): A player opened a loot container. Out: Container Entity, Player Player.
+- Checkpoint Reached (comp.on_checkpoint, Components): A player reached a checkpoint. Out: Checkpoint Entity, Player Player, Order Number.
+- Barricade Damaged (comp.on_barricade_damaged, Components): A barricade was hit (Health is what it has left). Out: Barricade Entity, Attacker Entity, Health Number.
+- Barricade Repaired (comp.on_barricade_repaired, Components): A barricade was mended a step (by Player; nobody when the mode did it). Out: Barricade Entity, Player Player, Health Number.
+- Supply Drop Landed (comp.on_drop_landed, Components): A supply drop came down (it can be opened now). Out: Drop Entity.
+- Barricade Broken (comp.on_barricade_broken, Components): A barricade was broken. Out: Barricade Entity, Attacker Player.
+- Meeting Ended (comp.on_meeting_end, Components): A meeting ended; Ejected is nobody when no one was voted out. Out: Meeting Entity, Ejected Player.
+- Creature Killed (creature.on_killed, Creatures): A creature died. Needs the Loner-Strike bot brain with creatures. Out: Creature Entity, Killer Player, Type Text.
+- Is Team (cond.is_team, Conditions): Checks which team a player is on. Nobody (an empty attacker) is on no team, so that goes to False. In: Player Player, Team Team.
+- Branch (flow.branch, Conditions): Goes to True or False. In: Condition Yes/No.
+- Compare (math.compare, Conditions): Compares two numbers. In: A Number, B Number. Out: Result Yes/No.
+- And / Or (logic.and_or, Conditions): Both (And), or either one (Or). In: A Yes/No, B Yes/No. Out: Result Yes/No.
+- Not (logic.not, Conditions): True becomes False and False becomes True. In: In Yes/No. Out: Result Yes/No.
+- Math (math.op, Numbers): Adds, takes away, multiplies, divides, or picks the smaller or bigger number. In: A Number, B Number. Out: Result Number.
+- Random Number (math.random, Numbers): A random number from Min to Max (whole numbers unless Fractions is on). In: Min Number, Max Number. Out: Number Number.
+- Health Of (player.get_health, Players): A player's health (0 if dead or nobody). In: Player Player. Out: Health Number.
+- Team Of (player.get_team, Players): Which team a player is on. In: Player Player. Out: Team Team.
+- Is Alive (player.is_alive, Players): Is the player alive? In: Player Player. Out: Alive Yes/No.
+- Is Bot (player.is_bot, Players): Is the player a bot? In: Player Player. Out: Bot Yes/No.
+- Name Of (player.get_name, Players): A player's name, as text. In: Player Player. Out: Name Text.
+- Count Alive (game.count_alive, Players): How many players of a team are alive (or everyone). In: Team Team. Out: Alive Number.
+- Get Variable (var.get, Variables): Reads one of this mode's variables (a per-player one needs a Player, a per-team one a Team). In: Player Player, Team Team. Out: Value Variable.
+- Set Variable (var.set, Variables): Sets one of this mode's variables. In: Player Player, Team Team, Value Variable.
+- Add To Variable (var.add, Variables): Adds to a number variable (a negative amount takes away). In: Player Player, Team Team, Amount Number.
+- Delay (timer.delay, Timers): Waits, then carries on. Paused with the world while debugging. In: Seconds Number. Out: Timer Timer.
+- Repeat (timer.repeat, Timers): Runs Each every few seconds, a number of times (0: until the round ends). Then runs at once. In: Every (s) Number. Out: Timer Timer.
+- Countdown (timer.countdown, Timers): Counts down on everyone's screen, then runs Done. Out: Timer Timer.
+- Stop Timers (timer.stop_all, Timers): Stops every Delay, Repeat and Countdown of this mode.
+- Give Weapon (player.give_weapon, Players): Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that). A weapon's name can be wired in (from a data table, say): ak47, deagle, knife... In: Player Player, Weapon Text, Spare bullets Number.
+- Strip Weapons (player.strip, Players): Takes a player's weapons away (keeping the knife if you like). In: Player Player.
+- Set Health (player.set_health, Players): Sets a living player's health. In: Player Player, Health Number.
+- Set Armor (player.set_armor, Players): Sets a living player's armor: kevlar and a helmet, or kevlar only. In: Player Player, Armor Number.
+- Set Team (player.set_team, Players): Moves a player to a team (it shows from their next spawn). In: Player Player, Team Team.
+- Set Speed (player.set_speed, Players): Sets how fast a player runs (250 is normal) until they switch weapons. In: Player Player, Speed Number.
+- Teleport (player.teleport, Players): Moves a living player to an entity: the one wired into To, or the one with this name. In: Player Player, To Entity.
+- Show Message (msg.broadcast, Messages): Shows a big message in the middle of the screen, to one player or everyone (no Player). In: Player Player.
+- Show HUD Text (msg.hud, Messages): Shows text in a HUD slot, to one player or everyone (no Player). A Value wired in goes after the text. In: Player Player, Value Anything.
+- End Round (score.end_round, Scoring): Ends the round now with a winner (no team: a draw). The next round starts after the usual short wait. In: Winner Team.
+- Find Component (comp.find, Components): The component (or any entity) with this name. Out: Entity Entity.
+- Create Component (comp.create, Components): Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright (no Velocity or Scale: a component is a zone). In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector. Out: Entity Component, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Set Zone (comp.zone_set, Components): Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its center to an entity wired into Center or the one with this name (no name: it stays where it is). In: Zone Entity, Center Entity, Radius Number.
+- Shrink Zone (comp.zone_shrink, Components): Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Center or the one with this name (no name: its center stays). In: Zone Entity, Center Entity, Radius Number.
+- Open Crate (comp.crate_open, Components): Opens a loot container for a player. In: Container Entity, Player Player.
+- Start Wave (comp.wave_start, Components): Starts a wave (0: the next one). In: Wave Number.
+- Stop Waves (comp.wave_stop, Components): Stops the waves.
+- Open Extraction (comp.extract_open, Components): Opens or closes an extraction point. In: Point Entity, Open Yes/No.
+- Door (comp.door, Components): Opens or closes a timed door. In: Door Entity.
+- Set Barricade Health (comp.barricade_set_hp, Components): Sets a barricade's health (0 breaks it; above 0 stands it back up). In: Barricade Entity, Health Number.
+- Repair Barricade (comp.barricade_repair, Components): Mends a barricade fully, or one step as if the wired Player held USE on it. In: Barricade Entity, Player Player.
+- Roll Loot (comp.loot_roll, Components): Rolls one item from a loot table (configs/gamemodes/loot.ini), only items of this tier or lower (0: any). In: Tier Number. Out: Item Text, Rolled Yes/No.
+- Next Zone Stage Now (comp.zone_skip, Components): A Shrinking zone goes to its next stage now. In: Zone Entity.
+- Fire Trap (comp.trap_fire, Components): Sets off a trap. In: Trap Entity.
+- Lock Point (comp.capture_lock, Components): Locks a capture point for some seconds. In: Point Entity, Seconds Number.
+- Reset Components (comp.reset, Components): Puts every component back as it was at the start of the map.
+- Creature Health (creature.health, Creatures): A creature's health now (0 when it's gone). In: Creature Entity. Out: Health Number.
+- Spawn Creature (creature.spawn, Creatures): Makes a creature of this type at an entity (wired into At, or the one with this name). Needs the Loner-Strike bot brain with creatures (the debugger says so if not). If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. In: At entity Entity, Health Number, Pay Number, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number. Out: Entity Creature, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Player Hurt (event.player_hurt, Events): Runs when a player takes damage, with the health it took (blocked damage doesn't count). Hit Position: where a bullet or the knife struck (else the middle of the victim); Direction: which way the hit was going (from the attacker). Use Get Transform on Victim/Attacker for where they were. Out: Victim Player, Attacker Player, Damage Number, Headshot Yes/No, Health left Number, Hit where Text, Weapon Text, Hit Position Vector, Direction Vector, Hit zone Hit Zone.
+- Team Changed (event.team_changed, Events): Runs once when a player joins a team or changes team (Spectator is No team). Out: Player Player, Team Team.
+- Map Started (event.map_started, Events): Runs once when the map has loaded (before the first round): load map packs, set things up.
+- New Round (event.new_round, Events): Runs when a new round is set up (freeze time starts), before Round Started.
+- Chat Command (event.chat_command, Events): Runs when a player says /command or !command in chat (shop for /shop and !shop); Arguments is the rest of the line ("/give 5": 5). Out: Player Player, Arguments Text.
+- Function (func.define, Functions): A piece of graph you can run from anywhere with Call Function. It gets a Player and a Number from the call. Out: Player Player, Number Number.
+- Call Function (func.call, Functions): Runs a Function, giving it a Player and a Number, then carries on. In: Player Player, Number Number.
+- For Each Player (flow.for_each_player, Flow): Runs Each once for every player who fits, then Then. Who and Team can be wired (a variable, a Select); Only these goes through a list of players instead (Players In Radius...). Break stops early. For any list of your own, use Arrays > For Each. In: Who Who, Team (overrides Who) Team, Only these Array of Player. Out: Player Player, Index Number.
+- For Each Entity (flow.for_each_entity, Flow): Runs Each once for every entity of a kind or with a name (at most 512), then Then. The kind or name can be wired; Only these goes through a list of entities instead. Break stops early. For any list of your own, use Arrays > For Each. In: Kind or name Text, Only these Array of Entity. Out: Entity Entity, Index Number.
+- Pick Random Player (flow.pick_player, Flow): Picks one player who fits at random (Found), or runs None. Who and Team can be wired; Only these picks from a list of players instead. In: Who Who, Team (overrides Who) Team, Only these Array of Player. Out: Player Player.
+- Pick Random Entity (flow.pick_entity, Flow): Picks one entity of a kind or with a name at random (Found), or runs None. The kind or name can be wired; Only these picks from a list of entities instead. In: Kind or name Text, Only these Array of Entity. Out: Entity Entity.
+- Text Is (text.equals, Conditions): Is the text the same as this (capitals don't matter)? In: Text Text, Same as Text. Out: Same Yes/No.
+- Stop Timer (timer.stop, Timers): Stops one Delay, Repeat or Countdown.
+- Give Money (player.add_money, Players): Gives (or takes, with a minus) money; it stays between 0 and 16000. In: Player Player, Amount Number.
+- Money Of (player.get_money, Players): How much money a player has. In: Player Player. Out: Money Number.
+- Add Score (player.add_frags, Players): Adds to a player's score (frags) on the scoreboard (a minus takes away). In: Player Player, Amount Number.
+- Score Of (player.get_frags, Players): A player's score (frags). In: Player Player. Out: Score Number.
+- Deaths Of (player.get_deaths, Players): How many times a player has died. In: Player Player. Out: Deaths Number.
+- Give Item (player.give_item, Players): Gives a living player armor, a defuse kit or night vision. In: Player Player.
+- Drop Weapon (player.drop_weapon, Players): Makes a living player drop the weapon in their hands. In: Player Player.
+- Set Gravity (player.set_gravity, Players): How strongly a player falls (1 is normal, 0.5 half). In: Player Player, Gravity Number.
+- Set Glow (player.set_glow, Players): Makes a player glow in a color (or not). In: Player Player, Color (wins over the setting) Color.
+- Set Model (player.set_model, Players): Dresses a player as one of the game's characters (or back to their own). In: Player Player.
+- Respawn (player.respawn, Players): Brings a dead player back at a spawn point. In: Player Player.
+- Kill (player.kill, Players): Kills a living player. In: Player Player.
+- Freeze (player.freeze, Players): Freezes a player in place (or lets them move again). In: Player Player, Frozen Yes/No.
+- Set Role (player.set_role, Players): Gives a player a role in this mode (traitor, medic...). In: Player Player.
+- Is Role (player.is_role, Players): Does the player have this role? In: Player Player. Out: Has it Yes/No.
+- Count Role (game.count_role, Players): How many living players have this role. Out: Count Number.
+- Chat Message (msg.chat, Messages): A chat line, to one player or everyone (no Player). A Value wired in goes after the text. In: Player Player, Value Anything.
+- Progress Bar (msg.bar, Messages): Shows the game's progress bar filling up over some seconds. In: Player Player.
+- Menu (msg.menu, Messages): Shows a player a menu; the choice they pick runs its output (later, when they pick). In: Player Player.
+- Set Setting (game.set_cvar, Game): Changes one of the game's settings now. In: Value Number.
+- Use Entity (entity.use, Game): Presses (uses) every entity with this name: a door, a button, a trigger.
+- Set Player Modifier (up.mod, Upgrades): Multiplies something about a player until they die: max health, speed, reload or swap time (0.6 = 40 % faster), damage, revive time, fire rate (1.25 = 25 % faster). Perks multiply on top. In: Player Player, Times Number.
+- Player Modifier (up.mod_get, Upgrades): What a player's modifier is now (the mode's times the perks'). In: Player Player. Out: Times Number.
+- Give Perk (up.perk_give, Upgrades): Gives a player a perk (lost when downed or dead). In: Player Player.
+- Buy Perk (up.perk_buy, Upgrades): A player buys a perk for its price (1500 + 1000 per perk they have, 4 at most); Bought says if it worked. In: Player Player. Out: Bought Yes/No.
+- Has Perk (up.perk_has, Upgrades): Does the player have this perk? In: Player Player. Out: Has it Yes/No.
+- Perk Count (up.perk_count, Upgrades): How many perks a player has. In: Player Player. Out: Perks Number.
+- Weapon Level (up.weapon_level, Upgrades): The level of the gun in the player's hand (1, 2 Mk II, 3 Mk III). In: Player Player. Out: Level Number.
+- Upgrade Gun (up.bench, Upgrades): Upgrades the gun in the player's hand at the bench's prices (or 5000 / 9000). In: Player Player.
+- Roll Mystery Box (up.box, Upgrades): The player rolls the mystery box (the one that's out, or the wired one) for its price. In: Player Player, Box Entity.
+- Drop Pickup (up.pickup, Upgrades): Drops a pickup at an entity; whoever walks over it takes it (Pickup Taken says what it was). A kind like resupply, doublepay, onehit, airstrike, or anything you handle yourself. In: At Entity. Out: Pickup Entity.
+- Perk Bought (up.on_perk, Upgrades): A player bought a perk (at a machine, a shop or Buy Perk). Out: Player Player, Perk Text, Price Number.
+- Gun Upgraded (up.on_upgraded, Upgrades): A player's gun went up a level. Out: Player Player, Level Number, Price Number.
+- Mystery Box Gave (up.on_box, Upgrades): The mystery box gave a player a gun. Out: Player Player, Gun Text.
+- Pickup Taken (up.on_pickup, Upgrades): A player took a pickup. Out: Pickup Entity, Player Player, Kind Text.
+- Creature Hurt (up.on_creature_hurt, Creatures): A creature took damage (Headshot when the hit was a head). Hit Position: where a bullet or the knife struck (else its middle); Direction: which way the hit was going. Use Get Entity Transform on Creature, or Get Transform on Attacker, for where they were. Out: Creature Entity, Attacker Player, Damage Number, Headshot Yes/No, Hit Position Vector, Direction Vector.
+- Knocked Down On (kd.enable, Downed): On: a hit that would kill a player (of a team, or anyone) knocks them down instead: they crawl and bleed out over some seconds; a teammate (a squad mate, with squads) holding USE for 4 s gets them up with 50 health. Off: nobody new goes down.
+- Is Knocked Down (kd.is, Downed): Is the player knocked down? In: Player Player. Out: Down Yes/No.
+- Bleed Out In (kd.left, Downed): Seconds a knocked-down player has left (0 when they're not down). In: Player Player. Out: Seconds Number.
+- Knock Down (kd.down, Downed): Knocks a player down now. In: Player Player.
+- Get Up (kd.revive, Downed): Gets a knocked-down player up (by the wired player, or nobody). In: Player Player, By Player.
+- Knocked Down (kd.on_down, Downed): A player was knocked down. Out: Player Player, By Entity.
+- Got Up (kd.on_up, Downed): A knocked-down player is back up (By: who helped; themselves for Quick revive; nobody when the mode did it). Out: Player Player, By Player.
+- Bled Out (kd.on_bled_out, Downed): A knocked-down player bled out (they die right after). Out: Player Player.
+- Open Shop Menu (shop.menu, Shop): Shows a player the shop's menu. In: Shop Entity, Player Player.
+- Open or Close Shop (shop.open, Shop): Opens the shop for business, or closes it. In: Shop Entity, Open Yes/No.
+- Shop Price (shop.price, Shop): An item's price now (by its name or what it gives); -1 if the shop doesn't sell it. In: Shop Entity. Out: Price Number.
+- Shop Purchase (shop.on_buy, Shop): A player bought something at a shop (an @item is the mode's to give here). Out: Shop Entity, Player Player, Item Text, Price Number.
+- Talked To NPC (npc.on_talk, NPCs): Runs when a player presses USE on an NPC (after its greeting). Leave the name empty for any NPC. Out: Player Player, NPC Entity.
+- Used Interactable (npc.on_use, NPCs): Runs when a player uses an interactable (a lever, a note, a terminal); its map targets fire too. Leave the name empty for any. Out: Player Player, Interactable Entity.
+- Say and Choose (npc.choose, NPCs): The NPC (or a narrator, with none wired) says a line and the player picks a reply; each reply runs its output (later, when they pick), and Picked says which (1-6; 0 for none). Timed out: no pick in time. Walked away: they went off, died, left or closed it. Every text can be wired (a variable, a table cell), so one node can run a whole conversation from a data table; Replies sets how many are offered (empty ones are left out). One conversation per player: a new one ends the old (as Walked away). In: Player Player, NPC Entity, Speaker Text, Line Text, Reply 1 Text, Reply 2 Text, Reply 3 Text, Reply 4 Text, Reply 5 Text, Reply 6 Text, Replies Number, Time to answer Number. Out: Picked Number.
+- Say (npc.say, NPCs): The NPC (or a narrator, with none wired) says a line to a player, or to everyone with no Player. In: Player Player, NPC Entity, Speaker Text, Line Text.
+- Set NPC Behavior (npc.behave, NPCs): What an NPC does by itself: stands, wanders near its spot, patrols its targets, or follows a player (wired into Follow) for a while. In: NPC Entity, Follow Player.
+- NPC Look At (npc.look_at, NPCs): Turns an NPC to face a player or an entity. In: NPC Entity, Target Entity.
+- Spawn NPC (npc.spawn, NPCs): Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl). If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number, Model Model. Out: Entity NPC, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Spawn Interactable (npc.spawn_use, NPCs): Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number, Model Model. Out: Entity Component, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Spawn Projectile (proj.spawn, Projectiles): Fires a model or sprite (loaded with the map). Where from: At position, else At entity (a player's eyes) moved by Local offset along its own forward, right and up (16 forward when nothing is wired there), else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces when Face the way At entity faces is on, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. In: Owner Player, At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Direction Vector, Speed Number, Damage Number, Scale Number, Model or sprite Model or Sprite. Out: Entity Projectile, Hit Position Vector, Hit Normal Vector, Hit Player Player, Hit Entity Entity, Hit World Yes/No, Hit Zone Number, Owner Player, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Projectile Hit (proj.on_hit, Projectiles): Runs when a projectile hits something: where, the surface's normal there, what it hit (World: a wall or the floor), and a player's hitgroup (1 head, 2 chest, 3 stomach, 4-5 arms, 6-7 legs; 0 unknown). Out: Projectile Projectile, Owner Player, Hit position Vector, Normal Vector, Hit Entity, World Yes/No, Hitgroup Number, Hit zone Hit Zone.
+- Remove Projectile (proj.remove, Projectiles): Takes a projectile away at once (no hit, no damage). In: Projectile Entity.
+- Projectile Velocity (proj.velocity, Projectiles): How fast and which way a projectile flies (units a second). In: Projectile Entity. Out: Velocity Vector.
+- Set Projectile Velocity (proj.set_velocity, Projectiles): Sends a projectile off at a new velocity (its facing follows). In: Projectile Entity, Velocity Vector.
+- Give Healing Item (br.heal_give, Battle Royale): Gives a player bandages (+15 up to 75), medkits (full health) or drinks (+40 over 10 s), up to the carry limit. In: Player Player, How many Number.
+- Healing Items (br.heal_count, Battle Royale): How many healing items a player carries. In: Player Player. Out: How many Number.
+- Set Armor Levels (br.armor, Battle Royale): Sets a player's vest and helmet levels (1-3; 0 none; keep: as they are). In: Player Player.
+- Make Crate (br.crate, Battle Royale): Makes a crate at an entity with these items (loot items: ak47@30@60 bandage:2 vest2). In: At Entity. Out: Crate Entity.
+- Rarity Glow (br.glow, Battle Royale): Makes an entity glow in a rarity's color (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold). In: Entity Entity, Rarity Number.
+- Match HUD (br.hud, Battle Royale): Turns the match HUD on or off (players left, kills, the zone's timer, armor, healing items, the kill feed and the squad).
+- Match HUD Words (br.hud_text, Battle Royale): The mode's words in the match HUD in place of the zone's timer (empty: the zone again). In: Text Text.
+- Match Feed Line (br.feed, Battle Royale): Adds a text line to Battle Royale's match HUD feed (eliminations, zone news). Not the top-right kill notice: that's Kill Feed Line (Messages). In: Text Text.
+- Match Kills (br.kills, Battle Royale): A player's kills this round (counted while the match HUD is on). In: Player Player. Out: Kills Number.
+- Drop In (br.drop_in, Battle Royale): Drops a player in from high over a spot (an entity wired into At, else a spread-out landing spot: the map's br_drop markers); they fall slowly and take no damage until they land. In: Player Player, At Entity.
+- Landed (br.on_landed, Battle Royale): A player who dropped in is down on the ground. Out: Player Player.
+- Squad Lobby (br.lobby, Battle Royale): A lobby of some seconds where people team up (say /squad); then the squads are filled (Lobby Ended). 0: fill them now. In: Seconds Number.
+- Squad Size (br.squad_size, Battle Royale): Sets the squad size: 1 solo, 2 duos, 4 squads... In: Size Number.
+- Lobby Ended (br.on_lobby_end, Battle Royale): The squad lobby is over and the squads are filled. Out: Squads Number.
+- Sides Alive (br.squads_alive, Battle Royale): How many sides have someone alive (squads, and players in none). Out: Sides Number.
+- Round Table On (wave.table, Waves): Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix.
+- Round Table Off (wave.table_off, Waves): Waves go back to the spawners' own settings.
+- Round Difficulty (wave.scale, Waves): Times the round table's counts and health (the mode's difficulty). In: Count times Number, Health times Number.
+- Alive Cap (wave.cap, Waves): How many creatures at once (0: 16 + 2 a defender, 20-48; never over the game's own cap). In: At once Number.
+- Creature Tiers (wave.tiers, Waves): Tiers on (yellow from round 15, red-orange from 20) or off.
+- This Round (wave.info, Waves): This round's plan: how many, how many made so far, the health times, whether it's a boss or a pack round (and the type). Out: Planned Number, Made so far Number, Health times Number, Boss round Yes/No, Pack round Yes/No, Boss or pack type Text.
+- Kill Pay (wave.type_pay, Waves): What the round table pays for killing this creature type. In: Type Text. Out: Pay Number.
+- Creatures Working (wave.creatures_ok, Waves): False once creatures can't spawn on this server (the table fell back to dead players). Out: Working Yes/No.
+- Turrets (turret.setup, Upgrades): Turrets: friendly creatures that shoot the horde. A kit (Give Turret Kit, or a shop line with give=turret) is placed with USE where the player looks; bots are offered turret spots at this price. Price 0: off.
+- Give Turret Kit (turret.give, Upgrades): Gives a player turret kits to place. In: Player Player, How many Number.
+- Place Turret (turret.place, Upgrades): Places a turret where the player looks: from a kit, or paid at the turrets' price. In: Player Player. Out: Turret Entity.
+- Turret Kits (turret.kits, Upgrades): How many turret kits a player has. In: Player Player. Out: Kits Number.
+- Turrets Out (turret.count, Upgrades): How many turrets a player has out. In: Player Player. Out: Turrets Number.
+- Turret Placed (turret.on_placed, Upgrades): A turret was placed. Out: Turret Entity, Owner Player.
+- Current Map Name (game.map_name, Game): The map being played (de_dust2). Out: Map Text.
+- Next Map (game.next_map, Game): The map the server goes to next (from the map cycle or vote); empty if it doesn't know. Out: Map Text.
+- Server Name (game.server_name, Game): The server's name (hostname). Out: Name Text.
+- Max Players (game.max_players, Game): How many players the server takes. Out: Max Number.
+- Player Count (game.player_count, Game): How many players there are: everyone, people, bots, a team, or spectators. Out: Players Number.
+- Game Time (game.time, Game): Seconds since the map started (for timing things: keep it in a variable, compare later). Out: Seconds Number.
+- Real Date and Time (game.clock, Game): The server computer's date and time, as text (2026-11-13, 21:30, Friday) and as seconds since 1970. Out: Text Text, Seconds since 1970 Number.
+- Current Mode (game.mode_id, Game): This mode's id (as the Game Mode Menu and modes.ini know it). Out: Mode id Text.
+- Round Number (game.round_number, Game): Which round this is on this map (1 for the first). Out: Round Number.
+- Team Score (game.team_score, Game): A team's rounds won on this map (as the scoreboard shows). Out: Score Number.
+- Is Freeze Time (game.freeze_time, Game): Is it the freeze time at a round's start (nobody can move)? Out: Freeze time Yes/No.
+- Get Setting (game.get_setting, Game): Reads a server setting (a cvar), as a number and as text: the counterpart of Set Setting. Passwords and the like can't be read. Out: Number Number, Text Text.
+- Change Map (game.change_map, Game): Changes the map (if the server has it). The mode changes too only if the next map's preset says so. Asks first when an agent does it.
+- Restart Round (game.restart_round, Game): Restarts the round now (scores stay).
+- Run Server Command (game.run_command, Advanced): Runs a server console command, like sv_gravity 400 or mp_restartgame 1. Commands that touch passwords, files, plugins or quit the server are refused, and only one command at a time (no ; ). Community modes that use it show "runs server commands". In: Command Text. Out: Ran Yes/No.
+- Run AMX Command (game.amx_command, Advanced): Runs an AMX Mod X admin command (amx_slay, amx_slap...). amx_rcon, amx_cvar on passwords, plugin loading, bans and admin edits are refused. In: Command Text. Out: Ran Yes/No.
+- Gravity (world.gravity, World): How strongly everyone falls (800 normal). (sv_gravity) Out: Gravity Number.
+- Set Gravity (world.set_gravity, World): How strongly everyone falls (800 normal). (sv_gravity) In: Gravity Number.
+- Friction (world.friction, World): How quickly players stop sliding (4 normal). (sv_friction) Out: Friction Number.
+- Set Friction (world.set_friction, World): How quickly players stop sliding (4 normal). (sv_friction) In: Friction Number.
+- Max Speed (world.max_speed, World): The fastest anyone can run (320 normal). (sv_maxspeed) Out: Max Speed Number.
+- Set Max Speed (world.set_max_speed, World): The fastest anyone can run (320 normal). (sv_maxspeed) In: Max Speed Number.
+- Round Time (world.round_time, World): Minutes a round lasts. (mp_roundtime) Out: Round Time Number.
+- Set Round Time (world.set_round_time, World): Minutes a round lasts. (mp_roundtime) In: Round Time Number.
+- Freeze Time (world.freeze_time, World): Seconds frozen at a round's start. (mp_freezetime) Out: Freeze Time Number.
+- Set Freeze Time (world.set_freeze_time, World): Seconds frozen at a round's start. (mp_freezetime) In: Freeze Time Number.
+- Buy Time (world.buy_time, World): Minutes players can buy after the round starts. (mp_buytime) Out: Buy Time Number.
+- Set Buy Time (world.set_buy_time, World): Minutes players can buy after the round starts. (mp_buytime) In: Buy Time Number.
+- Friendly Fire (world.friendly_fire, World): Can teammates hurt each other? (mp_friendlyfire) Out: Friendly Fire Yes/No.
+- Set Friendly Fire (world.set_friendly_fire, World): Can teammates hurt each other? (mp_friendlyfire) In: Friendly Fire Yes/No.
+- Team Balance (world.team_balance, World): Does the game move players to even the teams? (mp_autoteambalance) Out: Team Balance Yes/No.
+- Set Team Balance (world.set_team_balance, World): Does the game move players to even the teams? (mp_autoteambalance) In: Team Balance Yes/No.
+- Team Limit (world.team_limit, World): How many more players one team may have (0: no limit). (mp_limitteams) Out: Team Limit Number.
+- Set Team Limit (world.set_team_limit, World): How many more players one team may have (0: no limit). (mp_limitteams) In: Team Limit Number.
+- Start Money (world.start_money, World): Money at the start. (mp_startmoney) Out: Start Money Number.
+- Set Start Money (world.set_start_money, World): Money at the start. (mp_startmoney) In: Start Money Number.
+- C4 Timer (world.c4_timer, World): Seconds until a planted bomb explodes. (mp_c4timer) Out: C4 Timer Number.
+- Set C4 Timer (world.set_c4_timer, World): Seconds until a planted bomb explodes. (mp_c4timer) In: C4 Timer Number.
+- Fall Damage (world.fall_damage, World): Falls hurt (realistic) or not. (mp_falldamage) Out: Fall Damage Yes/No.
+- Set Fall Damage (world.set_fall_damage, World): Falls hurt (realistic) or not. (mp_falldamage) In: Fall Damage Yes/No.
+- Footsteps (world.footsteps, World): Can footsteps be heard? (mp_footsteps) Out: Footsteps Yes/No.
+- Set Footsteps (world.set_footsteps, World): Can footsteps be heard? (mp_footsteps) In: Footsteps Yes/No.
+- All Talk (world.alltalk, World): Can everyone hear everyone's voice? (sv_alltalk) Out: All Talk Yes/No.
+- Set All Talk (world.set_alltalk, World): Can everyone hear everyone's voice? (sv_alltalk) In: All Talk Yes/No.
+- Time Limit (world.time_limit, World): Minutes before the map changes (0: none). (mp_timelimit) Out: Time Limit Number.
+- Set Time Limit (world.set_time_limit, World): Minutes before the map changes (0: none). (mp_timelimit) In: Time Limit Number.
+- Win Limit (world.win_limit, World): Rounds won before the map changes (0: none). (mp_winlimit) Out: Win Limit Number.
+- Set Win Limit (world.set_win_limit, World): Rounds won before the map changes (0: none). (mp_winlimit) In: Win Limit Number.
+- Frag Limit (world.frag_limit, World): Kills before the map changes (0: none). (mp_fraglimit) Out: Frag Limit Number.
+- Set Frag Limit (world.set_frag_limit, World): Kills before the map changes (0: none). (mp_fraglimit) In: Frag Limit Number.
+- Armor Of (player.armor, Players): A player's armor points. In: Player Player. Out: Armor Number.
+- Has Helmet (player.has_helmet, Players): Does the player have a helmet? In: Player Player. Out: Helmet Yes/No.
+- Weapon Held (player.weapon_held, Players): The gun in the player's hands (ak47, knife...). In: Player Player. Out: Weapon Text, Weapon kind Weapon.
+- Ammo Of (player.ammo, Players): Bullets in the held gun's magazine, and spare ones. In: Player Player. Out: In the magazine Number, Spare Number.
+- Has Weapon (player.has_weapon, Players): Does the player carry this weapon? In: Player Player. Out: Has it Yes/No.
+- Is Admin (player.is_admin, Players): Is the player an admin (the app's admins: AMX Mod X kick rights)? In: Player Player. Out: Admin Yes/No.
+- Is VIP (player.is_vip, Players): Is the player a VIP (a reserved slot)? In: Player Player. Out: VIP Yes/No.
+- Ping (player.ping, Players): The player's ping in milliseconds. In: Player Player. Out: Ping Number.
+- Steam ID (player.steam_id, Players): The player's Steam ID (STEAM_0:1:2345): the same each visit, for keeping things per player. Bots and LAN players have none (empty). In: Player Player. Out: Steam ID Text.
+- Is Spectator (player.is_spectator, Players): Is the player watching (not on a team)? In: Player Player. Out: Spectator Yes/No.
+- Time Connected (player.time_connected, Players): Seconds since the player joined. In: Player Player. Out: Seconds Number.
+- Player By Steam ID (player.by_steam, Players): The connected player with this Steam ID (STEAM_0:1:2345, as Steam ID gives it), or none; Found says which. Case and the STEAM_0 / STEAM_1 digit don't matter (the same player either way). Bots and LAN players have no Steam ID. In: Steam ID Text. Out: Player Player, Found Yes/No.
+- Is Supporter (player.is_supporter, Players): Has the player the Loner-Strike supporter role (from the Loner-Strike Discord, kept in sync by the app: access flag s)? Not the same as Is VIP (a reserved slot on this server). Bots: no. In: Player Player. Out: Supporter Yes/No.
+- Player By Name (player.by_name, Players): The player whose name has this text (none: no player). In: Name Text. Out: Player Player.
+- Player By Index (player.by_index, Players): The player in this slot (1 to Max Players; none if empty). In: Slot Number. Out: Player Player.
+- Gravity Of (player.gravity, Players): A player's own gravity (1 normal; Set Gravity changes it). In: Player Player. Out: Gravity Number.
+- Speed Of (player.speed, Players): A player's top speed now (Set Speed changes it). In: Player Player. Out: Speed Number.
+- Model Of (player.model, Players): A player's model (Set Model changes it). In: Player Player. Out: Model Text.
+- Get Transform (player.transform, Players): Where a player is, where they look (pitch, yaw), how fast they move, and whether they're on the ground or ducking. In: Player Player. Out: Position Vector, Rotation Vector, Velocity Vector, On ground Yes/No, Ducking Yes/No, Transform Transform.
+- Set Transform (player.set_transform, Players): Moves a player, turns their view (pitch, yaw) and sets their velocity at once (unwired parts stay). In: Player Player, Position Vector, Rotation Vector, Velocity Vector, Transform (separate pins win) Transform.
+- Set Rotation (player.set_rotation, Players): Turns a player's view (pitch, yaw). In: Player Player, Rotation Vector.
+- Look At (player.look_at, Players): Turns a player's view toward an entity or a position. In: Player Player, At Entity, Position Vector.
+- Slap (player.slap, Players): Slaps a player: some damage and a push. In: Player Player, Damage Number.
+- Screen Fade (player.fade, Players): Fills the player's screen with a color for some seconds (white: blinded). In: Player Player, Color (wins over the setting) Color.
+- Screen Shake (player.shake, Players): Shakes the player's screen. In: Player Player.
+- God Mode (player.godmode, Players): Nothing hurts the player (or back to normal). In: Player Player.
+- No Clip (player.noclip, Players): The player flies through walls (or back to normal). In: Player Player.
+- Set Visibility (player.render, Players): How a player is drawn: normal, see-through (an amount), or invisible. In: Player Player.
+- Set Ammo (player.set_ammo, Players): Sets the held gun's magazine and spare bullets. In: Player Player, Magazine Number, Spare Number.
+- Give Ammo (player.give_ammo, Players): Adds spare bullets for the held gun (a minus takes them). In: Player Player, Bullets Number.
+- Remove Weapon (player.take_weapon, Players): Takes one weapon from a player (the others stay). In: Player Player.
+- Switch To Weapon (player.switch_weapon, Players): Makes the player take out this weapon (if they have it). In: Player Player.
+- Set Kills (player.set_frags, Players): Sets a player's kills on the scoreboard. In: Player Player, Kills Number.
+- Set Deaths (player.set_deaths, Players): Sets a player's deaths on the scoreboard. In: Player Player, Deaths Number.
+- Move To Spectators (player.to_spectators, Players): Moves a player out of the game to watch. In: Player Player.
+- Kick (player.kick, Players): Kicks a player from the server with a reason. Asks first when an agent does it; community modes that use it show "kicks players". (Bans stay with the app's admins: use Notify Admins.) In: Player Player.
+- Mute Voice (player.mute, Players): The player's voice isn't heard for some seconds (0: until the map ends). In: Player Player.
+- Gag Chat (player.gag, Players): The player's chat isn't shown for some seconds (0: until the map ends). In: Player Player.
+- Chat To Team (msg.team_chat, Messages): A chat line only one team sees. In: Value Anything.
+- Notify Admins (msg.notify_admins, Messages): A chat line only admins see (for things a mode can't do itself, like a ban). In: Value Anything.
+- Entity Class Of (ent.class, Entities): An entity's class (func_door, ls_creature...). In: Entity Entity. Out: Class Text.
+- Entity Name Of (ent.name, Entities): An entity's name (targetname) as the map gives it. In: Entity Entity. Out: Name Text.
+- Find Entities (ent.find_all, Entities): Every entity of a class or with a name, as an array (at most 512). Looks through the whole map: keep it in a variable instead of in a loop. Out: Entities Array of Entity.
+- Spawn Prop (ent.spawn_prop, Entities): A model (models/...mdl, loaded with the map) at an entity's place; solid or not. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number, Model Model. Out: Entity Entity, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Remove Entity (ent.remove, Entities): Removes an entity (never a player). In: Entity Entity.
+- Set Entity Position (ent.set_position, Entities): Moves an entity. In: Entity Entity, Position Vector.
+- Set Entity Rotation (ent.set_angles, Entities): Turns an entity (pitch, yaw, roll). In: Entity Entity, Rotation Vector.
+- Set Entity Visibility (ent.set_visible, Entities): Shows or hides an entity. In: Entity Entity.
+- Explosion (fx.explosion, Effects): An explosion at a position: the look and sound, and damage to players within the radius (0: none). In: Position Vector, Damage Number.
+- Beam (fx.beam, Effects): A beam of light from one position to another for some seconds. In: From Vector, To Vector, Color (wins over the setting) Color.
+- Set Light Style (fx.lights, Effects): How bright the whole map is: normal, dark, darkest, bright, or flickering.
+- Status Icon (msg.status_icon, Messages): Shows, flashes or hides one of the game's own HUD status icons (the buy zone cart, C4, the defuser, the rescue zone...) for a player or everyone (no Player), in a color. Only the icons every player's game has (its hud.txt): for your own pictures use Objective Marker or Show HUD Text. Until death: it goes when they die or leave. In: Player Player, Color (wins over the setting) Color.
+- Objective Marker (fx.marker, Effects): A sprite that floats over an entity (wired into Follow: a player, an NPC, an interactable, a component; it follows it) or at a position, for everyone, one team or one player. The sprite is one of the game's (sprites/arrow1.spr) or your own (sprites/...spr: it goes with the mode, like its other files). Remove it with Remove Marker; it goes by itself when what it follows is gone. In: Follow Entity, Position Vector, Player (for one player) Player, Color (wins over the setting) Color, Sprite Sprite. Out: Marker Objective Marker.
+- Remove Marker (fx.marker_remove, Effects): Takes away an Objective Marker (the one wired in, or all of them with none). In: Marker Entity.
+- Kill Feed Line (msg.killfeed, Messages): A line in the top-right kill feed for everyone: Killer (or none: the world), the weapon's icon, Victim, and the headshot mark. Only the feed: nobody dies, nothing is counted (Player Killed doesn't run). In: Killer Player, Victim Player, Headshot Yes/No.
+- Set On Fire (fun.burn, Players): Sets a living player on fire for some seconds: damage each second (Lit by gets the kill), flames on them. Water or the time running out puts it out; so does Put Out Fire, death or a new round. In: Player Player, Lit by Player.
+- Put Out Fire (fun.extinguish, Players): Puts out a player Set On Fire. In: Player Player.
+- Trail (fun.trail, Effects): A colored trail behind a player or an entity as it moves (on), or none (off). It comes back after a respawn and when they start moving again. In: On Entity, Color (wins over the setting) Color.
+- Effect Burst (fun.burst, Effects): A burst at a position or an entity: sparks, smoke, blood, a firework, an implosion, a tar explosion, a teleport flash, a lava splash or a colored flash. Count repeats it (up to 10); Color is for the firework and the flash. In: At Entity, Position Vector, Color (wins over the setting) Color.
+- Swap Places (fun.swap, Players): Two living players trade places, the way they face and their speed. Not when either would end up stuck in a wall (Swapped is No then). In: Player A Player, Player B Player. Out: Swapped Yes/No.
+- Bury (fun.bury, Players): Sinks a living player into the floor up to the chest; they can't walk, but can look round and shoot. Unbury gets them out (also death and a new round). In: Player Player.
+- Unbury (fun.unbury, Players): Gets a buried player out of the floor, onto it (never into a wall). In: Player Player.
+- Set Camera (fun.camera, Players): A player's view: third person (from behind), back to first person, or the other of the two. Back to first person on death/respawn: on, death ends it; off, they stay in third person through deaths and respawns. Leaving always ends it. In: Player Player.
+- Is Third Person (fun.is_third, Players): Is the player's view third person (Set Camera)? In: Player Player. Out: Third person Yes/No.
+- View From (fun.view_from, Players): A cinematic view: the chosen players (the wired one, a team or everyone; each gets a camera of their own) see from a position and angles, or from an entity (following it, Offset above it), for some seconds (0: until Return View). Look at: an entity or position it keeps pointing at (its angles worked out, over Angles). Move to: it glides there over Move time. Frame a conversation: with the wired player and an NPC in Look at, the camera stands to the side of both, looking at the NPC (for Say and Choose); Until the conversation ends gives the view back when it does. Death, leaving and a new round give the view back by themselves. Freeze: they can't move or shoot meanwhile. A map's own trigger_camera still works. In: Player Player, From entity Entity, Position Vector, Angles Vector, Move to Vector, Move to angles Vector, Look at Entity, Look at position Vector.
+- Return View (fun.view_return, Players): Gives back the normal view (first or third person, as Set Camera left it) after View From: to the wired player, or everyone viewing. In: Player Player.
+- Drunk View (fun.drunk, Players): Wobbles a player's view for some seconds, gently (1) to wildly (10); it stops cleanly (also on death). In: Player Player.
+- As Player (cast.player, Players): Casting: is this entity a player (a slot 1-32 that's connected, bots too)? Success with it as a Player, else Failed. Use it where an Entity wire should go into a Player pin. In: Entity Entity. Out: Player Player.
+- As Creature (cast.creature, Creatures): Casting: is this entity one of the bot brain's creatures? Success with it as a Creature (and its type), else Failed. In: Entity Entity. Out: Creature Creature, Type Text.
+- Is NPC (ent.is_npc, Entities): Casting: is the entity an NPC (ls_npc)? In: Entity Entity. Out: NPC Yes/No.
+- Is Interactable (ent.is_interactable, Entities): Casting: is the entity an interactable (ls_interactable, a point or a brush)? In: Entity Entity. Out: Interactable Yes/No.
+- Kind Of (ent.kind_of, Entities): Casting: what the entity is, as the built-in Entity Kind enum: Player, Bot, Creature, NPC, Interactable, Component, Prop (Spawn Prop's), Map entity or None. Wire it into Switch on Enum: one output per kind, nothing to type. In: Entity Entity. Out: Kind Entity Kind.
+- Component Kind Of (ent.comp_kind, Entities): Casting: which kind of game mode component the entity is, as the built-in Component Kind enum (capture point, shop, barricade, timed door...), or None. Wire it into Switch on Enum for one output per kind. In: Entity Entity. Out: Component kind Component Kind.
+- Is Component (ent.is_component, Entities): Casting: is the entity a game mode component (any, or of one kind: a capture point, a shop, a barricade...)? In: Entity Entity. Out: Component Yes/No.
+- Call Plugin Function (amx.call, Advanced): Calls a public function in another AMX Mod X plugin (by its file, like gm_components.amxx) with up to two numbers; Result is what it returns. Community modes that use it show "calls other plugins". In: Argument 1 Number, Argument 2 Number. Out: Result Number, Called Yes/No.
+- Plugin Is Running (amx.plugin_running, Advanced): Is this AMX Mod X plugin loaded and running? Out: Running Yes/No.
+- Fire Custom Event (amx.fire, Advanced): Sends an event with a name and two numbers that other plugins (and other Studio modes, with On Custom Event) can listen to (forward ls_studio_event(name[], a, b)). In: A Number, B Number.
+- On Custom Event (amx.on_event, Advanced): Runs when this mode or another plugin fires a custom event with this name. Out: A Number, B Number.
+- Player Said (event.player_said, Events): Runs when a player chats (anything; Team Only for team chat). Out: Player Player, Text Text, Team only Yes/No.
+- Freeze Time Ended (event.freeze_ended, Events): Runs when the freeze time ends and players can move.
+- Map Ending (event.map_ending, Events): Runs when the map ends (the scoreboard shows), just before the next map.
+- Weapon Fired (event.weapon_fired, Events): Runs when a player shoots (at most 10 times a second per player). Frequent: keep the flow short. Out: Player Player, Weapon Text.
+- Reloaded (event.reloaded, Events): Runs when a player starts reloading. Out: Player Player, Weapon Text.
+- Hostage Rescued (event.hostage_rescued, Events): Runs when a player rescues a hostage. Out: Player Player.
+- VIP Escaped (event.vip_escaped, Events): Runs when the VIP escapes. Out: Player Player.
+- Bots: Phase (bots.phase, Bots): Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later). In: Personality influence Number.
+- Bots: Don't Buy (bots.no_buy, Bots): Bots skip buying (they leave the buy time at once and get on with the mode), or buy again. In: Don't buy Yes/No.
+- Bots: Friends (bots.friends, Bots): Makes two groups friends for the bots (they won't attack each other and may stick together), or not. A tag is set with Bots: Tag. In: Player A Player, Player B Player, Friends Yes/No.
+- Bots: Tag (bots.tag, Bots): Gives a player a tag (a squad, a job) so other Bots nodes can name them all at once. In: Player Player.
+- Bots: Prefer Layer (bots.layer, Bots): Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later). In: Bot Player, Personality influence Number.
+- Bots: Fight Creatures (bots.creature_enemies, Bots): Bots treat the mode's creatures as enemies (on by default where creatures attack), or not. In: Fight them Yes/No.
+- Bots: Goal (bots.goal, Bots): Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later). In: Bot Player, At Entity, Priority Number, For (seconds) Number, Personality influence Number.
+- Bots: Clear Goals (bots.goal_clear, Bots): Takes back goals given with Bots: Goal (all of them, or one kind). In: Bot Player.
+- Bots: Offer (bots.offer, Bots): Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later). In: Bot Player, At Entity, Price Number, Personality influence Number.
+- Bots: Clear Offer (bots.offer_clear, Bots): Takes back an offer (it's bought or used up), or all of them. In: Bot Player, At Entity.
+- Bot Go To (bot.goto, Bots): Sends a bot to the entity with this name (it still fights on the way), for some seconds (0: until freed). In: Bot Player.
+- Bot Hold (bot.hold, Bots): Makes a bot hold where it is for some seconds. In: Bot Player, Seconds Number.
+- Bot Follow (bot.follow, Bots): Makes a bot follow a player for some seconds. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later). In: Bot Player, Follow Player, Personality influence Number.
+- Bot Nature (bot.skill, Bots): A bot's nature, as the bot brain plays it: Skill, Aggression, Teamwork and Greed (0-100) and its playstyle (rusher, lurker, careful, camper...). People read 0 and empty. In: Bot Player. Out: Skill Number, Aggression Number, Teamwork Number, Greed Number, Playstyle Text.
+- Bot Trait (bot.trait, Bots): Is the bot bold, cautious, a team player, a loner, greedy, skilled or a novice (as the bot brain sees it)? False for people. In: Bot Player. Out: Has it Yes/No.
+- Bot Free (bot.release, Bots): Lets a bot do as it likes again. In: Bot Player.
+- Load Map Pack (comp.load_pack, Components): Loads another mode's map pack for this map (configs/gamemodes/components/<map>.<pack>.ini): br, laststand...
+- Start Component (comp.start, Components): Starts a component that waits to be started (a zone shrinker with start_delay -1). In: Component Entity.
+- Stop Component (comp.stop, Components): Stops a component. In: Component Entity.
+- Barricade Health (comp.barricade_hp, Components): A barricade's health now. In: Barricade Entity. Out: Health Number.
+- Zone Stage (comp.zone_stage, Components): The Shrinking zone's stage (the zone or its shrinker); 0 before the first. In: Zone Entity. Out: Stage Number.
+- Zone Next (comp.zone_next, Components): When the zone next moves: seconds until it starts (or, while it's closing, until it stops), its next radius, whether it's closing now. Seconds is -1 when nothing is planned. In: Zone Entity. Out: Seconds Number, Next radius Number, Closing Yes/No.
+- Is In Zone (comp.in_zone, Components): Is the player inside the zone? In: Zone Entity, Player Player. Out: Inside Yes/No.
+- Respawn At Point (comp.respawn_at, Components): Brings a dead player back at a respawn point (ls_respawn_point), or moves a living one there. In: Player Player.
+- Call Supply Drop (comp.drop_call, Components): Calls a supply drop onto an entity (wired into At, or the one with this name). In: At Entity.
+- Creatures Alive (creature.count, Creatures): How many creatures are alive. Out: Alive Number.
+- Player About To Be Hurt (event.player_about_hurt, Events): Runs just before a player takes damage. Block, scale or set the damage here (it happens straight after this flow). Out: Victim Player, Attacker Player, Damage Number, Kind Text, Headshot Yes/No, Hit where Text, Hit zone Hit Zone, Damage kind Damage Kind.
+- Block Damage (dmg.block, Damage): The damage doesn't happen. Only in a Player About To Be Hurt flow.
+- Scale Damage (dmg.scale, Damage): Multiplies the damage (0.5 halves it). Only in a Player About To Be Hurt flow. In: Times Number.
+- Set Damage (dmg.set, Damage): Sets the damage to this. Only in a Player About To Be Hurt flow. In: Damage Number.
+- No Fall Damage (player.no_fall, Players): Stops a player taking fall damage: always, or just for their next landing (a drop-in). In: Player Player.
+- Make Downed (player.down, Players): A player who just died lies downed where they fell: a teammate (or squad mate) holding USE on them for a few seconds brings them back; if nobody does in time they're out. Bots come to help. In: Player Player.
+- Revive Pay (comp.revive_pay, Upgrades): Money for getting a teammate up (the components' downed players: Last Stand, Battle Royale), once a downing, never for getting yourself up; bots get it too. 0: off. In: Amount ($) Number.
+- Is Downed (player.is_downed, Players): Is the player downed (waiting for a revive)? In: Player Player. Out: Downed Yes/No.
+- Player Revived (event.player_revived, Events): Runs when a downed player is brought back. Out: Player Player, Revived by Player.
+- Downed Player Out (event.down_timeout, Events): Runs when nobody revived a downed player in time. Out: Player Player.
+- Set Squad (squad.set, Squads): Puts a player in a squad (1 to 32; 0 none). Squad mates are on one side for the bots, and can't hurt each other unless squad friendly fire is on. In: Player Player, Squad Number.
+- Squad Of (squad.get, Squads): The squad a player is in (0 none). In: Player Player. Out: Squad Number.
+- Squads Left (squad.alive, Squads): How many squads still have someone alive (a living player in no squad counts as one). Out: Squads Number.
+- Squad Friendly Fire (squad.friendly_fire, Squads): Whether squad mates can hurt each other. In: On Yes/No.
+- Buying (buy.where, Buying): Where players can buy: anywhere, only in buy zones, or nowhere.
+- Allow Buying (buy.allow, Buying): Lets players buy only some things (or everything again).
+- Saved Value (save.get, Saved): A number kept for this player across maps, restarts and crashes (0 until set). Each mode has its own file. In: Player Player. Out: Value Number.
+- Save Value (save.set, Saved): Keeps a number for this player across maps and restarts. In: Player Player, Value Number.
+- Add To Saved (save.add, Saved): Adds to a saved number (a minus takes away). In: Player Player, Amount Number.
+- Set Round Clock (clock.set, Round clock): Runs the mode's own round clock: this many seconds, shown on everyone's round timer. When it reaches 0, Round Time Up runs (the game's own time limit is switched off while it runs). In: Seconds Number.
+- Add Round Time (clock.add, Round clock): Adds seconds to the mode's round clock (a minus takes away). In: Seconds Number.
+- Pause Round Clock (clock.pause, Round clock): Stops or restarts the mode's round clock.
+- Round Time Left (clock.left, Round clock): Seconds left on the mode's round clock (0 when it isn't running). Out: Seconds Number.
+- Launch Up (player.launch, Players): Throws a living player straight up (with low gravity and No Fall Damage, a drop-in from the sky). In: Player Player, Speed Number.
+- Round Time Up (event.time_up, Events): Runs when the mode's round clock reaches 0.
+- Function Entry (fn.entry, Functions): Where a Function starts. Its outputs are the Function's inputs (add them in Details).
+- Return Node (fn.return, Functions): Ends the Function and hands back its outputs (add them in Details).
+- Call (fn.call, Functions): Runs a Function (with its own graph), then carries on with its outputs.
+- Call Pure (fn.call_pure, Functions): Works out a pure Function's outputs where they're used (no flow pins).
+- Macro Entry (macro.entry, Macros): Where a Macro starts: its inputs (flow and values).
+- Macro Exit (macro.exit, Macros): Where a Macro ends: its outputs (flow and values).
+- Macro (macro.use, Macros): A Macro's graph, copied in here when the mode is made.
+- Sequence (flow.sequence, Flow): Runs each output in turn, top to bottom.
+- Do Once (flow.do_once, Flow): Lets the flow through the first time only, until Reset.
+- Do N (flow.do_n, Flow): Lets the flow through N times, until Reset. In: N Number. Out: Counter Number.
+- Gate (flow.gate, Flow): Flow coming into Enter goes through only while the gate is open.
+- Flip Flop (flow.flipflop, Flow): Goes to A, then B, then A again... Is A says which it just did. Out: Is A Yes/No.
+- For Loop (flow.for_loop, Flow): Runs Loop Body once for each number from First to Last (at most 10000 times), then Completed. In: First Number, Last Number. Out: Index Number.
+- For Loop with Break (flow.for_loop_break, Flow): A For Loop that stops early when flow comes into Break. In: First Number, Last Number. Out: Index Number.
+- While Loop (flow.while, Flow): Runs Loop Body while the condition is true (checked each time; at most Limit times), then Completed. In: Condition Yes/No.
+- For Each (flow.for_each_array, Arrays): Runs Loop Body once for each item of an array (Break stops early), then Completed. In: Array Array of the node's type. Out: Item The node's type, Index Number.
+- Switch on Number (flow.switch_num, Flow): Goes to the output whose case is the number (cases split by commas), or Default. In: Selection Number.
+- Switch on Text (flow.switch_text, Flow): Goes to the output whose case is the text (capitals don't matter; cases split by commas), or Default. In: Selection Text.
+- Switch on Enum (flow.switch_enum, Enums): Goes to the output for the enum's value. In: Selection The picked enum.
+- Is Valid? (flow.if_valid, Conditions): Goes to Is Valid when the entity is there, else Is Not Valid. Any entity handle works: a player or bot, a prop, creature, NPC, interactable, component, spawned entity or weapon (a spawn node's Entity), a map entity. A removed one isn't valid. In: Object Entity.
+- Retriggerable Delay (timer.retrigger, Timers): Waits, then carries on; flow coming in again while waiting starts the wait again. In: Seconds Number. Out: Timer Timer.
+- Set Timer by Function (timer.by_function, Timers): Runs a Function (with its own graph) after some seconds, again and again if Looping. Its inputs get nothing (0, empty). In: Seconds Number. Out: Timer Timer.
+- Set Timer by Event (timer.by_event, Timers): Runs a Custom Event (with no inputs) after some seconds, again and again if Looping. In: Seconds Number. Out: Timer Timer.
+- Custom Event (event.custom, Events): Runs when something calls this Custom Event (Call Custom Event, Set Timer by Event, or the map: an ls_event entity, or an info_target named lsev_<its map name>, when triggered). Its inputs are its own (My mode, Custom events).
+- Call Custom Event (event.call, Flow): Runs a Custom Event now, with these values (every Custom Event node for it, in the graphs' order).
+- For Each Creature (creature.for_each, Creatures): Runs Each once for every creature alive (of a type, or any), then Then. Friendly ones (turrets) are left out. Every creature each time it runs: keep it out of per-frame flows. Out: Creature Entity.
+- Creatures of Type (creature.of_type, Creatures): Every creature alive of a type (empty: any), as an array. Looks through them all each time: keep it in a variable instead of in a loop. Out: Creatures Array of Entity.
+- Nearest Creature (creature.nearest, Creatures): The creature alive nearest to a point or an entity (a player, a gate), of a type or any; nobody if there are none. In: To point Vector, To entity Entity. Out: Creature Entity.
+- Creature Type (creature.type, Creatures): A creature's type (zombie, runner...); empty for anything else. In: Creature Entity. Out: Type Text.
+- Idle For (creature.idle_for, Creatures): Seconds a creature has stood still (moved less than 32 units). Counted once a second. In: Creature Entity. Out: Seconds Number.
+- Can See (creature.can_see, Creatures): Is there a clear line from the creature's eyes to a player or entity? In: Creature Entity, Player or entity Entity. Out: Sees Yes/No.
+- Creature Go To (creature.go_to, Creatures): Sends a creature to a place: an entity wired in (a player, a marker's entity), a point, or the entity with this name. Guard there: it stays and fights there. Then resume: it goes back to hunting once there. In: Creature Entity, To entity Entity, To point Vector.
+- Creature Attack (creature.attack, Creatures): Makes a creature go after a player or an entity (a gate, a turret) until it's gone. In: Creature Entity, Target Entity.
+- Creature Hold (creature.hold, Creatures): Makes a creature stay where it is (it guards the spot: it still fights what comes close, then comes back) until Resume AI or Go To. In: Creature Entity.
+- Creature Resume AI (creature.resume, Creatures): Gives a creature back to its own AI: what its type does by itself (wander, patrol, guard or hunt), its spawn spot as home, no target forced. With an older bot brain it hunts instead. In: Creature Entity.
+- Creature State (creature.state, Creatures): What a creature is doing now: 1 idle, 2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead (0: not a creature). Name gives the word (idle ... dead). Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older. In: Creature Entity. Out: State Number, Name Text.
+- Creature Target (creature.target, Creatures): Who a creature is after now: a player or another creature; nobody when none. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older. In: Creature Entity. Out: Target Entity.
+- Set Creature Speed (creature.set_speed, Creatures): Times a creature's normal walk and run speed (0.2 to 3; 1 is its own) until it dies. Enraged comes on top. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older. In: Creature Entity, Times Number.
+- Set Creature Tier (creature.set_tier, Creatures): Makes a creature tier 0 to 3 (2: a yellow shell, 3: red-orange and a bit bigger), as the spawn key tier does; its health keeps its share. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older. In: Creature Entity, Tier Number.
+- Creature Flee To (creature.flee_to, Creatures): Makes a creature run away to a place (an entity wired in, a point, or the entity with this name). In: Creature Entity, To entity Entity, To point Vector.
+- Set Creature Health (creature.set_health, Creatures): Sets a creature's health (and its full health, so it isn't over). In: Creature Entity, Health Number.
+- Remove Creature (creature.remove, Creatures): Takes a creature away. Kill: it dies (Creature Killed runs, waves count it; nobody is paid). Remove quietly: it's gone, nothing runs. In: Creature Entity.
+- Creature Idle (creature.on_idle, Creatures): Runs when a creature has stood still this many seconds (and, if asked, can't see any player): send it somewhere with Creature Go To. Runs again after as many seconds if it's still stuck. Out: Creature Entity, Idle for Number.
+- Get Row (table.get_row, Data tables): Finds the row whose key is this (the table's key column) and gives each of its cells. Found is No when no row has that key (the cells are then 0, No or empty). In: Key Anything. Out: Found Yes/No, Row Number.
+- Get Cell (table.get_cell, Data tables): One cell: a column of a row (rows count from 0). Past the end: 0, No or empty. In: Row Number. Out: Value Anything.
+- For Each Row (table.for_each, Data tables): Runs Each once for every row of the table, in order, with that row's cells; then Then. Out: Row Number, Key Anything.
+- Find Rows (table.find, Data tables): The rows (as row numbers) where a column has this value, in order. Use Get Cell on each. In: Value Anything. Out: Rows Anything.
+- Row Count (table.count, Data tables): How many rows the table has. Out: Rows Number.
+- Row Keys (table.keys, Data tables): The table's keys (its key column), in row order. Out: Keys Anything.
+- Timeline (timeline.play, Timers): Plays a Timeline (My mode, Timelines): values that change over time (a number, a position, a color) and events at set moments. Update runs every tick while it plays; Finished at the end. In a Function with a Player input, each player has their own. Double-click to edit its tracks. In: New Time Number. Out: Forward Yes/No, Time Number.
+- Clear Timer (timer.clear, Timers): Stops a timer (a Delay, Repeat, Countdown or Set Timer's handle). In: Timer Timer.
+- Is Timer Active (timer.is_active, Timers): Is the timer waiting to run? In: Timer Timer. Out: Active Yes/No.
+- Print String (debug.print, Messages): Prints text (and a value wired in) to the server console and the Studio's output, and to chat if you like. In: Value Anything.
+- Equal (logic.equal, Conditions): Are the two values the same (or different)? In: A The node's type, B The node's type. Out: Result Yes/No.
+- Select (logic.select, Conditions): Picks A when the condition is true, else B. In: Pick A Yes/No, A The node's type, B The node's type. Out: Result The node's type.
+- Is Valid (cond.is_valid, Conditions): Is the entity there? Any entity handle works: a player or bot, a prop, creature, NPC, interactable, component, spawned entity or weapon (a spawn node's Entity), a map entity. A removed one isn't valid. In: Object Entity. Out: Valid Yes/No.
+- Is Player (player.is_player, Players): Is the entity a player (or bot) in the game? In: Entity Entity. Out: Player Yes/No.
+- Is Creature (creature.is, Creatures): Is the entity one of the bot brain's creatures? In: Entity Entity. Out: Creature Yes/No.
+- Math Function (math.fn, Numbers): Absolute value, rounding, square root and more; Truncate drops the fraction toward zero (-2.7 becomes -2, where Round down gives -3). In: In Number. Out: Result Number.
+- Clamp (math.clamp, Numbers): Keeps a number between Min and Max. In: Value Number, Min Number, Max Number. Out: Result Number.
+- Lerp (math.lerp, Numbers): A number between A and B: Alpha 0 is A, 1 is B, 0.5 halfway. In: A Number, B Number, Alpha Number. Out: Result Number.
+- In Range (math.in_range, Numbers): Is the number from Min to Max? In: Value Number, Min Number, Max Number. Out: In range Yes/No.
+- Number (math.number, Numbers): A number. Out: Number Number.
+- Text (text.literal, Text): Some text. Out: Text Text.
+- Append (text.append, Text): B straight after A (add a space in B if you want one). In: A Text, B Text. Out: Text Text.
+- Format Text (text.format, Text): Text with [0] [1] [2] [3] replaced by the values wired in. In: [0] Anything, [1] Anything, [2] Anything, [3] Anything. Out: Text Text.
+- Contains Text (text.contains, Text): Is B somewhere in A (capitals don't matter)? In: Text Text, Find Text. Out: Contains Yes/No.
+- Text Length (text.length, Text): How many characters the text has. In: Text Text. Out: Length Number.
+- Text To Number (text.to_number, Text): The number written in the text (0 if none). In: Text Text. Out: Number Number.
+- To Text (text.from, Text): A value as text: a number, a player's name, a vector, an enum's name... In: Value The node's type. Out: Text Text.
+- Find Marker (marker.find, Map markers): The map's marker of this kind (1st, 2nd... in the map's order; a path's spots in their order), where it is, and whether the map has it. In: Which Number. Out: Marker Entity, Position Vector, Found Yes/No.
+- Marker Count (marker.count, Map markers): How many markers of this kind the map has. Out: Count Number.
+- Marker Key (marker.get, Map markers): A key the map set on a marker (the kit's default when the map left it out), as text and as a number. In: Marker Entity. Out: Text Text, Number Number.
+- For Each Marker (marker.for_each, Map markers): Runs Each once for every marker of this kind (a path's spots in order), then Then. Out: Marker Entity, Number (from 1) Number.
+- Make Vector (vec.make, Vectors): A position or direction from X, Y and Z. In: X Number, Y Number, Z Number. Out: Vector Vector.
+- Break Vector (vec.break, Vectors): A vector's X, Y and Z. In: Vector Vector. Out: X Number, Y Number, Z Number.
+- Vector Math (vec.op, Vectors): Adds or takes away two vectors. In: A Vector, B Vector. Out: Result Vector.
+- Scale Vector (vec.scale, Vectors): Multiplies a vector by a number (makes it longer or shorter). In: Vector Vector, Times Number. Out: Result Vector.
+- Vector Length (vec.length, Vectors): How long a vector is. In: Vector Vector. Out: Length Number.
+- Distance (vec.distance, Vectors): How far apart two positions are. In: A Vector, B Vector. Out: Distance Number.
+- Direction (vec.direction, Vectors): The direction (length 1) from one position to another. In: From Vector, To Vector. Out: Direction Vector.
+- Normalize (vec.normalize, Vectors): The same direction, length 1. In: Vector Vector. Out: Result Vector.
+- Position Of Player (vec.player, Vectors): Where a player is: their feet, their eyes, which way they're aiming, what they're aiming at, or how fast they're moving. In: Player Player. Out: Vector Vector.
+- Get Entity Transform (ent.transform, Entities): Any entity's place and motion: a player, a creature, a prop, a map entity. Position (a brush entity's middle when it has no origin), Rotation (pitch, yaw, roll; a player's view), Velocity, its box (Mins, Maxs, Center) and whether it stands on the ground. In: Entity Entity. Out: Position Vector, Rotation Vector, Velocity Vector, Mins Vector, Maxs Vector, Center Vector, On Ground Yes/No, Transform Transform.
+- Get Entity Position (ent.position, Entities): Where an entity is (a player, a creature, a prop; a brush entity's middle). In: Entity Entity. Out: Position Vector.
+- Get Entity Rotation (ent.rotation, Entities): Which way an entity faces: pitch, yaw, roll (a player's view). In: Entity Entity. Out: Rotation Vector.
+- Distance Between (ent.distance, Entities): How far apart two things are: each an entity (a player, a creature...) or a point. In: A Entity, Or point A Vector, B Entity, Or point B Vector. Out: Distance Number.
+- Direction To (ent.direction, Entities): The direction (length 1) from one thing to another: each an entity or a point. In: From Entity, Or from point Vector, To Entity, Or to point Vector. Out: Direction Vector.
+- Position Of Entity (vec.entity, Vectors): Where an entity is (the middle of a brush entity). In: Entity Entity. Out: Position Vector.
+- Set Position (player.set_position, Players): Moves a living player to a position (pick one where they fit). In: Player Player, Position Vector.
+- Set Velocity (player.set_velocity, Players): Throws a living player: their speed and direction as a vector. In: Player Player, Velocity Vector.
+- Make Struct (struct.make, Structs): A struct from its fields. Out: Struct The picked struct.
+- Break Struct (struct.break, Structs): A struct's fields. In: Struct The picked struct.
+- Set Field (struct.set_field, Structs): Sets one field of a struct variable. In: Value The picked field's type.
+- Enum Value (enum.value, Enums): One of an enum's values. Out: Value The picked enum.
+- Enum To Number (enum.to_number, Enums): An enum value's number (the first is 0). In: Value The picked enum. Out: Number Number.
+- Make Array (array.make, Arrays): An array of the items wired in (a new one each time it's worked out). In: Item The node's type. Out: Array Array of the node's type.
+- Players Array (array.players, Arrays): An array of every player who fits. Out: Players Array of Player.
+- Add (array.add, Arrays): Adds an item at the end (an array holds at most 10000). In: Array Array of the node's type, Item The node's type. Out: Index Number.
+- Insert (array.insert, Arrays): Puts an item in at an index (the rest move up). In: Array Array of the node's type, Item The node's type, Index Number.
+- Remove Item (array.remove, Arrays): Takes out every item equal to this one. In: Array Array of the node's type, Item The node's type. Out: Removed Yes/No.
+- Remove Index (array.remove_index, Arrays): Takes out the item at an index. In: Array Array of the node's type, Index Number.
+- Set Array Item (array.set, Arrays): Changes the item at an index (nothing happens past the end). In: Array Array of the node's type, Index Number, Item The node's type.
+- Clear (array.clear, Arrays): Empties an array. In: Array Array of the node's type.
+- Shuffle (array.shuffle, Arrays): Puts an array's items in a random order. In: Array Array of the node's type.
+- Sort (array.sort, Arrays): Sorts an array (numbers by size, text A to Z, the rest by their number). In: Array Array of the node's type.
+- Get (array.get, Arrays): The item at an index (nothing, 0 or empty past the end). In: Array Array of the node's type, Index Number. Out: Item The node's type.
+- Length (array.length, Arrays): How many items an array has. In: Array Array of the node's type. Out: Length Number.
+- Contains (array.contains, Arrays): Is the item in the array? In: Array Array of the node's type, Item The node's type. Out: Contains Yes/No.
+- Find (array.find, Arrays): The index of the first item equal to this one (-1 if none). In: Array Array of the node's type, Item The node's type. Out: Index Number.
+- Random Item (array.random, Arrays): An item picked at random (a new pick each time it's worked out). In: Array Array of the node's type. Out: Item The node's type.
+- Map Add (map.add, Maps): Puts a value in a map under a key (replacing what was there). In: Map Map of the node's key type to the node's type, Key The node's key type, Value The node's type.
+- Map Remove (map.remove, Maps): Takes a key (and its value) out of a map. In: Map Map of the node's key type to the node's type, Key The node's key type.
+- Map Clear (map.clear, Maps): Empties a map. In: Map Map of the node's key type to the node's type.
+- Map Find (map.find, Maps): The value under a key, and whether it was there. In: Map Map of the node's key type to the node's type, Key The node's key type. Out: Value The node's type, Found Yes/No.
+- Map Contains (map.contains, Maps): Is the key in the map? In: Map Map of the node's key type to the node's type, Key The node's key type. Out: Contains Yes/No.
+- Map Length (map.length, Maps): How many keys a map has. In: Map Map of the node's key type to the node's type. Out: Length Number.
+- Map Keys (map.keys, Maps): An array of a map's keys (a player who left is left out). In: Map Map of the node's key type to the node's type. Out: Keys Array of the node's key type.
+- Map Values (map.values, Maps): An array of a map's values. In: Map Map of the node's key type to the node's type. Out: Values Array of the node's type.
+- Reroute (flow.reroute, Flow): A bend in a wire, to keep the graph tidy. Passes on whatever comes in. In: in Anything. Out: out Anything.
+- Hide HUD Parts (eng.hide_hud, HUD & View): Hides parts of a player's HUD (or everyone's): the crosshair, money, the round timer, the radar with health and armor (one switch in the game), the weapon and ammo panel, the flashlight icon. Nothing ticked shows it all again. It stays through the game redrawing the HUD; Back to normal on death/respawn ends it there. In: Player (empty: everyone) Player.
+- Set Field of View (eng.fov, HUD & View): How wide a player sees (or everyone): 90 is normal, less zooms in, more is a fish-eye. A sniper scope still zooms and comes back to this. Back to normal on death/respawn puts 90 back there. In: Player (empty: everyone) Player, Degrees Number.
+- Set Weapon View Model (eng.view_model, HUD & View): The model a player sees in their own hands (models/v_...mdl) for the weapon in hand or a chosen weapon, kept whenever they take it out again; also, if set, the model others see them hold (models/p_...mdl). Back to normal model puts the game's own back. Your own models are loaded with the map and go with the mode when you publish it. In: Player Player.
+- Flashlight (eng.flashlight, HUD & View): Turns a player's flashlight on or off, lets them use it or not (F), and sets its battery (0 to 100; -1 leaves it). In: Player Player.
+- Night Vision (eng.nightvision, HUD & View): Gives a player night vision goggles or takes them, or turns them on or off (giving them first if needed). The same in Counter-Strike and Condition Zero. In: Player Player.
+- Silent Footsteps (eng.footsteps, HUD & View): A player's footsteps make no sound (on) or sound again (off). It lasts until turned off or they leave. In: Player Player.
+- Scoreboard Tag (eng.score_tag, HUD & View): Shows VIP, Bomb or Dead next to a player's name on everyone's scoreboard (or none: the game's own again). Only the tag: they aren't really the VIP, carrying the bomb or dead. Clear on death/respawn ends it there. In: Player Player.
+- Scoreboard Team Color (eng.score_color, HUD & View): Shows a player as a Terrorist, Counter-Terrorist or spectator in everyone's game (name color, scoreboard section) without moving them: their real team, spawns and rules stay. Real team undoes it. Side effects: the radar and name tags follow what's shown, and the player's own buy menu and team HUD do too. In: Player Player.
+- Force Spectate (eng.spectate, HUD & View): Makes a dead player or a spectator watch Target through their eyes, and keeps them on Target until Release (or Target leaves). A living player is refused. In: Watcher Player, Target Player.
+- Play Soundtrack (eng.soundtrack, HUD & View): Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do). In: Player (empty: everyone) Player.
+- Player Pressed Button (in.pressed, Events): Runs when a player presses (or lets go of) a button the game knows: fire, right click, use, jump, duck, reload, walk or a move key. It arrives with the player's ping, like everything they do. Only: wire a player (from a variable) to listen to one player only. Include bots: bots press buttons too. In: Only this player Player. Out: Player Player, Button Text.
+- Is Holding Button (in.holding, Input): Is the player holding this button down right now? (What reached the server: it trails their screen by their ping.) In: Player Player. Out: Holding Yes/No.
+- Player Command (in.command, Events): Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f "ls_dash"). Arguments is the rest of the line, as text only: it's never run. Each player can use it at most a few times a second (Player Command uses a second, in the mode's Limits settings). Out: Player Player, Arguments Text.
+- Tell Player To Bind (in.tell_bind, Input): Shows how to bind a key to a Player Command: the line to type in the console (bind f "ls_dash"). Nothing is bound for them: the game never lets a server change a player's keys. In: Player (empty: everyone) Player.
+- Start Cooldown (cd.start, Cooldowns): Starts a cooldown by name (like dash) for Seconds: for each player, each team or everyone. Is Ready says no until it's over. In: Player Player, Team Team, Seconds Number.
+- Is Ready (cd.ready, Cooldowns): Is this ability's cooldown over (or never started)? In: Player Player, Team Team. Out: Ready Yes/No.
+- Cooldown Time Left (cd.left, Cooldowns): Seconds until this ability's cooldown is over (0 when ready). In: Player Player, Team Team. Out: Seconds Number.
+- Reset Cooldown (cd.reset, Cooldowns): Ends a cooldown now (the ability is ready again). In: Player Player, Team Team.
+- Picked Up (item.picked_up, Events): Runs when a player picks a weapon or an item up from the ground (not when they buy one or the mode gives it). Item is its short name: ak47, kevlar, hegrenade... Out: Player Player, Item Text.
+- Dropped (item.dropped, Events): Runs when a player drops a weapon (G, or the mode makes them). On death: also when a dying player's weapon falls. Out: Player Player, Weapon Text.
+- Infinite Ammo (wpn.infinite_ammo, Weapons): Keeps a player's ammo full: the clip (no reloading), the spare ammo, or both. Reset on death: back to normal when they die. In: Player Player.
+- Fire Rate (wpn.fire_rate, Weapons): Makes a player's guns fire faster (2 = twice as fast) or slower (0.5 = half). 1 is normal. Reset on death: back to 1 when they die. In: Player Player, Multiplier Number.
+- Recoil (wpn.recoil, Weapons): Scales how much a player's view kicks when they fire: 0 none, 0.5 half, 1 normal, 2 double. Reset on death: back to 1 when they die. In: Player Player, Multiplier Number.
+- Saved Text (save.text_get, Saved): Text kept for this player across maps, restarts and crashes (empty until set). Each mode has its own file. In: Player Player. Out: Text Text.
+- Save Text (save.text_set, Saved): Keeps text for this player across maps and restarts (up to 63 letters). In: Player Player, Text Text.
+- Server Value (save.server_get, Saved): A value kept for the whole server (not per player) across maps and restarts: a number and a text (each 0 or empty until set). Out: Number Number, Text Text.
+- Set Server Value (save.server_set, Saved): Keeps a number or a text for the whole server across maps and restarts. In: Number Number, Text Text.
+- Top Players (save.top, Saved): The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. How many places: Top Players places, in the mode's Limits settings (10 to start). Out: Rank Number, Name Text, Value Number.
+- Get Bone Position (ent.bone_pos, Entities): Where a bone of a player's or any model entity's skeleton is now (like Bip01 R Hand or Bip01 Head), and which way it points. Model is only for the list of bones; the bone is looked up by name in the model the entity really has, and Found is No when it has no such bone. Positions follow the server's animation: close, not pixel-exact. In: Entity Entity. Out: Position Vector, Angles Vector, Found Yes/No.
+- Get Attachment Position (ent.attachment_pos, Entities): Where an attachment point of an entity's model is now (a gun's muzzle, a hand; models number them 0 to 3), and its angles. Model is only for the list; Found is No when the entity's real model has no such attachment. Positions follow the server's animation: close, not pixel-exact. In: Entity Entity. Out: Position Vector, Angles Vector, Found Yes/No.
+- Players Pass Through Each Other (col.semiclip, Collision): Lets players walk through each other (semiclip): nobody, everyone, teammates only, or chosen players (each wired player set on or off; a chosen player passes through everyone). Bullets still hit. Turning it off nudges anyone left inside someone else free. Bots path as usual. In: Player (chosen players) Player.
+- Set Entity Collision (col.set_solid, Collision): How a prop, an NPC or a spawned thing collides: solid (blocks and gets hit), trigger (things pass through, it still feels touches) or pass-through (nothing). Not for players (Players Pass Through Each Other is for them). In: Entity Entity. Out: Done Yes/No.
+- Set Entity Size (col.set_size, Collision): The box an entity takes up, as mins and maxs from its origin (each min below its max). Not for players: their box is the game's. In: Entity Entity. Out: Done Yes/No.
+- Entity Takes Damage (col.takes_damage, Collision): Whether a prop or an NPC can be hurt (on) or not (off). Not for players (Set God Mode is theirs). In: Entity Entity. Out: Done Yes/No.
+- Entity Health (col.health, Collision): An entity's health (a prop, an NPC, a creature, a player). In: Entity Entity. Out: Health Number.
+- Set Entity Health (col.set_health, Collision): Sets a prop's or an NPC's health (at least 1; to destroy it use its own damage or removal). Not for players (Set Health is theirs). In: Entity Entity, Health Number. Out: Done Yes/No.
+- Spawn Trigger Volume (vol.spawn, Collision): An invisible box or sphere that tells you who goes in and out (Begin Overlap, End Overlap). Where: a Position, or At entity plus a Local offset (X forward, Y right, Z up by its facing) - attached, it follows the entity and turns with it. Rotation (pitch, yaw, roll) turns a box; a sphere ignores it. Size is its own setting; Velocity and Scale don't apply (a volume doesn't move by itself). Who counts: players, creatures or anything. Checked ten times a second (one search round each volume). A name lets Player Touched and the overlap events pick it out. Then runs right away whatever happened; Spawned or Failed says which, and Failure reason why (Out of entity slots, Limit reached: Trigger volumes at once in Limits, or Bad input: At entity is gone and there's no Position). It isn't solid, so it never checks the spot. In: Position Vector, Rotation Vector, At entity Entity, Local offset Vector. Out: Entity Trigger Volume, Success Yes/No, Failure reason Spawn Failure.
+- Remove Trigger Volume (vol.remove, Collision): Removes a trigger volume (whoever was inside gets End Overlap). In: Volume Entity.
+- Is Overlapping (vol.is_overlapping, Collision): Is this entity (a player, a creature...) inside the trigger volume right now (and one its filter counts)? In: Volume Entity, Entity Entity. Out: Overlapping Yes/No.
+- Begin Overlap (vol.on_begin, Events): Runs when something its filter counts goes into a trigger volume (Spawn Trigger Volume). Name: only volumes with this name (empty: any). Out: Volume Entity, Who Entity.
+- End Overlap (vol.on_end, Events): Runs when something leaves a trigger volume (or the volume is removed, or it died or left the server inside). Name: only volumes with this name (empty: any). Out: Volume Entity, Who Entity.
+- Entity Touched (col.on_touch, Events): Runs when an entity touches another (props, projectiles, NPCs, creatures, players; not the world's walls and floors). Name: only an entity with this name (empty: any). The first touch per N seconds for each entity (players standing on a prop would touch it every frame). Out: Entity Entity, Other Entity.
+- Bullet Hit (col.on_bullet, Events): Runs where a shot lands: the shooter, the hit position, the surface's normal, what it hit (an entity, or World), the weapon and, on a player, where (head, chest...). At most once per shooter every N seconds (automatic weapons and shotguns would flood it). Out: Shooter Player, Hit Position Vector, Normal Vector, Hit Entity Entity, Hit World Yes/No, Weapon Text, Hit where Text.
+- Bots Avoid Area (bots.avoid, Bots): Marks a place bots keep away from: a Position with a radius, or At entity (it rides along: a carrier, a burning player, a trigger volume; it ends when that's gone). Strength 1-10: 5 and up they won't stand in it, below they only path round it. Seconds: 0 till Bots Stop Avoiding. Which bots: every bot, or one team's (the carrier's own team can be left out). The same tag again moves or changes it. The bot brain keeps 32 at once. In: Position Vector, At entity Entity.
+- Bots Stop Avoiding (bots.avoid_stop, Bots): Bots stop avoiding the place with this tag (Bots Avoid Area).
+- Player Landed (col.on_landed, Events): Runs when a player lands after a fall: how fast they were falling (units a second; over 580 hurts) and the fall damage the game gives for it (0 if Fall Damage Off). Small hops don't count. Out: Player Player, Fall speed Number, Damage Number.
+- Deal Damage (damage.deal, Damage): Hurts a player or any entity that can be hurt (a breakable, an NPC, a creature) by Amount, as if Attacker did it: kills, the kill feed, scores and Player Hurt / Player Killed count as usual. No Attacker: the world did it. Kind is what it counts as (a burn, a fall...); Hit zone is where (a head hit shows as a headshot in the kill feed; the amount isn't multiplied). Armor takes its share unless Ignore armor. In: Target Entity, Attacker Player, Amount Number.
+- Get Entity Property (ent.prop_get, Entities): Reads a property of any entity (a prop, an NPC, a map entity, a player): its render mode, effect, color, amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is the number the game keeps (render modes and the like are numbered as in the map editor); Color is red, green, blue. In: Entity Entity. Out: Value Number, Color Vector.
+- Set Entity Property (ent.prop_set, Entities): Changes a property of any entity: render mode, effect and color (so props and NPCs can glow or fade), amount, skin, body, scale, gravity, movement, collision, health or animation speed. Value is for the number properties; Pick is for the named ones (render mode, effect, movement, collision); Color for color. Players: render, color, skin, body, gravity and health work here; movement and collision are theirs to keep (use No Clip, Freeze). In: Entity Entity, Value Number, Color Vector.
+- Big HUD Text (msg.big_hud, Messages): Big text on the screen (the director HUD: larger than HUD Text, its own slots), to one player or everyone, at a position (X and Y from 0 to 1; -1 centers), in a color, with an effect, for some seconds. A Value wired in goes after the text. In: Player (empty: everyone) Player, Value Anything.
+- Colored Chat (msg.color_chat, Messages): A chat line in color, to one player or everyone: a green Tag first (empty: none), then the text in a team color (red, blue, gray, or the color of the player wired into Color of), green, or the usual yellow. A Value wired in goes after the text; color codes in a player's name or text never get through. In: Player (empty: everyone) Player, Value Anything, Color of Player.
+- Player Movement State (player.move_state, Players): What a player is doing with their feet: on the ground, ducking, in water (and how deep: 0 dry, 1 feet, 2 waist, 3 under), on a ladder, and how fast (across the ground, and up or down: falling is negative). In: Player Player. Out: On ground Yes/No, Ducking Yes/No, In water Yes/No, Water level Number, On ladder Yes/No, Speed Number, Vertical speed Number.
+- Push (player.push, Players): Pushes a player or an entity: along where they aim, where they face (flat), the Direction wired in, away from a Point, or straight up, by Strength (units a second). Add keeps their speed and adds to it; Replace sets it. Lift adds a little upward push so people on the ground aren't held by friction. Jump pads, dashes, knockback. In: Player or entity Entity, Direction Vector, Away from point Vector, Strength Number.
+- Jump Rules (player.jump_rules, Players): Jumping rules for a player (or everyone): block jumping or ducking, extra jumps in the air (double jump and more), and automatic bunny hopping (hold jump to hop with no slowdown). Their own game predicts the stock moves, so a blocked jump can look like a small hop on their screen. In: Player (empty: everyone) Player.
+- Grenade Thrown (event.grenade_thrown, Events): Runs when a player throws a grenade: who, the grenade (an entity: Set Grenade Fuse, Push, Remove Entity work on it), which kind and where. Type: only that kind. Out: Thrower Player, Grenade Entity, Kind Text, Position Vector.
+- Grenade Exploded (event.grenade_exploded, Events): Runs when a thrown grenade goes off (a smoke grenade when it starts smoking): who threw it, the grenade, which kind and where. Type: only that kind. Out: Thrower Player, Grenade Entity, Kind Text, Position Vector.
+- Set Grenade Fuse (ent.grenade_fuse, Entities): How many seconds until a thrown grenade goes off, from now (0: at once). Anything that isn't a thrown grenade is left alone. In: Grenade Entity, Seconds Number.
+- Play Animation (ent.play_anim, Entities): Plays an animation (a sequence of its model, by name or number) on a prop, an NPC or any model entity, at a speed (1 normal), from the start or not; Loop plays a one-time animation again every Length seconds (looping ones loop by themselves). Players, creatures and NPCs that are walking are animated by the game and will switch back. In: Entity Entity, Sequence number Number.
+- Attach To (ent.attach, Entities): Makes an entity (a prop, a sprite, an NPC) follow a player or another entity, keeping an offset (X forward is along the world, not their facing) or, at an attachment point of their model (0 to 3), following that point. It's let go when Detach runs, the parent is removed or dies (if asked), or the attached one is removed. In: Entity Entity, Parent Entity, Offset Vector.
+- Detach (ent.detach, Entities): Lets go of an entity attached with Attach To; it stays where it is (or falls, if Fall is on). In: Entity Entity.
+- On Map Entity Fired (event.map_fired, Events): Runs when a named entity of the map is triggered (by a button, a trigger, a timer or another entity) or used: its name, the entity, who set it off (a player, or nobody) and the entity that fired it. Name: only that entity (empty: any named one). Map logic drives the mode without an ls_event. Out: Entity name Text, Entity Entity, Activator Player, Caller Entity.
+- Remove Map Objectives (game.remove_objectives, Game): Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones. The game notices at the next round (the bomb isn't given, no hostages to save); removed buy zones don't fall back to buying at spawn. Best at Map Started.
+- Map Type (game.map_type, Game): What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no. Out: Type Text, Has bomb sites Yes/No, Has hostages Yes/No, Has VIP zone Yes/No, Has escape zone Yes/No.
+- Weapon Switched (event.weapon_switched, Events): Runs when a player takes out a weapon (a switch, a pick-up that goes to hand, a spawn): the player, the new weapon and the one before (short names: ak47, knife; empty when there was none), and the weapon entity. Out: Player Player, New weapon Text, Old weapon Text, Weapon entity Entity.
+- Voice Rules (game.voice_rules, Game): Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules). Spectators hear spectators. Voice Override changes it for one player; Mute Voice still mutes.
+- Voice Override (player.voice_override, Players): Changes the Voice Rules for one player: everyone hears them, nobody does, they hear everyone, or back to the rules. In: Player Player.
+- Play Radio (msg.radio, Messages): Plays one of the game's radio lines or announcer words to a player, a team or everyone, with the radio text in chat (as From, if a player is wired in). Only the game's own sounds: nothing to load. In: Player Player, From Player.
+- In Map Zone (player.in_zone, Players): Is a player in one of the map's zones now: a buy zone, a bomb site, a hostage rescue zone, an escape zone or a VIP safety zone (the map's own, as the game sees them). In: Player Player. Out: In it Yes/No.
+- Entered Map Zone (event.zone_enter, Events): Runs when a living player walks into one of the map's zones (checked four times a second). Out: Player Player.
+- Left Map Zone (event.zone_leave, Events): Runs when a living player walks out of one of the map's zones (checked four times a second). Out: Player Player.
+- Show Info Window (msg.info_window, Messages): Opens the game's info window (the one the server's message of the day uses) for a player, with a title and text: Text from here, then any Text wired in (from a data table or Format Text). [br] starts a new line, [b]...[b] makes words bold. Plain text only: never a web page or a link. In: Player Player, Text Text.
+- NPC Move To (npc.move_to, NPCs): Sends an NPC walking (or running) to an entity or a point now, along the map's bot navigation (straight when the map has none), facing where it goes. Arrived runs when it gets there, Failed when it can't (no way, stuck, or too long). Then it goes back to what it did, or stays there. In: NPC Entity, To entity Entity, Or point Vector.
+- NPC Follow Path (npc.follow_path, NPCs): Sends an NPC along points in order: an array of positions, or a map's path_track chain by its first name. At point runs at each one, Finished at the end (never with Loop), Failed when it can't get on. Then it goes back to what it did, or stays there. In: NPC Entity, Points Array of Vector.
+- NPC Stop (npc.stop, NPCs): Stops an NPC's Move To or Follow Path where it is (neither Arrived nor Failed runs); it goes back to what it did, or stays. In: NPC Entity.
+- Round End Rules (game.round_end_rules, Game): Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.
+- Has Admin Flag (player.has_flag, Players): Does a player have this admin flag (from the server's admin list): kick, ban, change map, a custom level and so on. In: Player Player. Out: Has it Yes/No.
+- Start Vote (game.start_vote, Game): Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.
+- Vote Count (game.vote_count, Game): How many votes an answer got in the last Start Vote (0: all the votes). In: Answer Number. Out: Votes Number.
+- Hostage Follow (hostage.follow, NPCs): Makes a hostage follow a player (as if they pressed USE on it), any team. In: Hostage Entity, Leader Player.
+- Hostage Stop (hostage.stop, NPCs): Makes a hostage stop following and wait where it is. In: Hostage Entity.
+- Is Following (hostage.is_following, NPCs): Is a hostage following someone, and whom. In: Hostage Entity. Out: Following Yes/No, Leader Player.
+- Add Bots (botctl.add, Bots): Adds bots through the bot brain's own commands: how many, to which team, how good (new bots only). Never more than the free slots (one is kept open for a person). The host's bot count comes back at the next map. In: How many Number.
+- Remove Bots (botctl.remove, Bots): Takes bots off the server (of a team, or any), lowering the bot count so they don't come back this map. The host's bot count comes back at the next map. In: How many Number.
+- Beam Between Entities (fx.beam_ents, Effects): A beam from one player or entity to another that follows both as they move, for some seconds. Effects are skipped (and the debugger says so) past 24 in one server frame, so many at once can't flood players' games. In: From Entity, To Entity.
+- Icon Over Player (fx.icon_over, Effects): A sprite floating over a player's head (the game's own, like sprites/iplayervip.spr, or your own), for some seconds or until removed (0), seen by everyone, a team or only Viewer. Remove takes the icons off that player. In: Player Player, Viewer Player.
+- Sprite At (fx.sprite_at, Effects): Shows a sprite once at a position or an entity (the game's own or your own), at a size and brightness. In: At Entity, Position Vector.
+- Tracer (fx.tracer, Effects): A bullet tracer streak from one position to another. In: From Vector, To Vector.
+- Radar Blip (hud.radar_blip, HUD & View): A dot on players' radar at a position or an entity (everyone's, a team's or only Viewer's), or takes it off. Hostage dots: four slots, each one dot (a hostage map's own hostages share the game's dots). Bomb dot: one, the dropped-bomb dot (the game moves it when the real bomb drops or is picked up). In: At Entity, Position Vector, Viewer Player.
+- Show Team Score (hud.team_score, HUD & View): Shows a team's score on everyone's scoreboard (the number only: the game's own count of rounds won is unchanged and is shown again when the next round ends). In: Score Number.
+- Set Weather (world.weather, World): Rain, snow or clear weather for everyone or one player, kept through respawns (Counter-Strike 1.6 and Condition Zero draw it; how much depends on the player's settings). In: Player (empty: everyone) Player.
+- Set Fog (world.fog, World): Fog of a color and thickness for everyone or one player (0 thickness: none), kept through respawns. It depends on the player's renderer: OpenGL draws it, software mode doesn't. In: Player (empty: everyone) Player.
+- Dynamic Light (fx.dlight, Effects): A light that brightens what's around it for a moment: at a position, or following an entity (a player, a projectile) for the seconds given. Fade dims it over time (units a second; 0 stays bright until the end). Players see it in their own game. In: Follow (optional) Entity, At position Vector, Radius Number, Seconds Number, Fade (units a second) Number.
+- Decal (fx.decal, Effects): Puts a decal (a scorch, blood, a bullet hole...) on the surface nearest a position: it looks six ways from the point within Reach and paints the closest wall, floor or ceiling, or a door it hits. The game's own decals; they fade like any decal. In: Near position Vector, Reach Number, Decal Decal.
+- Break Into Gibs (fx.gibs, Effects): Pieces fly out from a position or an entity's middle, as when something breaks: wood, glass, metal, rocks, flesh, or your own model's parts (Custom model). Material is the sound they make. Size is how big the space they fly from is. In: At entity Entity, At position Vector, Pieces Number, Speed Number, Seconds Number, Size Number, Custom model (empty: the one above) Model.
+- Beam Ring (fx.ring, Effects): A ring that grows out from a point, like a shockwave: radius, color, how long and how thick. In: At entity Entity, At position Vector, Radius Number, Seconds Number, Width Number.
+- Play Sound 2D (snd.play_2d, Effects): A sound heard as is, not from a place: by one player, a team or everyone. Any sound: the game's own or yours. Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it. In: Player Player, Volume Number, Pitch Number, Sound Sound.
+- Play Sound at Location (snd.play_at, Effects): A sound from a place (a position, or where an entity is now), heard louder close by. Heard is how far it carries. Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it. In: At entity Entity, At position Vector, Volume Number, Pitch Number, Sound Sound.
+- Play Sound on Entity (snd.play_on, Effects): A sound that comes from an entity or a player and moves with it, on a channel (a new sound on the same channel replaces the last one). Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it. In: Entity or player Entity, Volume Number, Pitch Number, Sound Sound.
+- Loop Sound (snd.loop, Effects): A sound that keeps playing at a spot, or riding on an entity, until Stop Sound gets its Handle (or the round ends with the entity). A .wav with loop points loops by itself; for one without, set Play again every (seconds). How many play at once is a mode setting (Limits: Loop sounds at once, 16 to start). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it. In: On entity Entity, At position Vector, Volume Number, Pitch Number, Play again every (seconds) Number, Sound Sound. Out: Handle Sound Loop.
+- Stop Sound (snd.stop, Effects): Stops a Loop Sound (its Handle), whatever plays on an entity's channel, or every sound a player hears now. In: Loop handle Entity, Entity Entity, Player Player.
+- Spawn Entity (ent.spawn_entity, Entities): Makes one of the game's entities with your keys (key=value pairs as in a map, | between them: model=sprites/glow01.spr|rendercolor=255 0 0|targetname=door_fx). Only classes that are safe to make while the game runs are listed: effects, sounds, markers, relays, pickups. Never players, worldspawn, game_* server controls or anything that runs commands. Files its keys name are loaded with the map; if one isn't on the server it's skipped, never a crash. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number. Out: Entity Entity, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Spawn Weapon On Ground (ent.spawn_weapon, Entities): A weapon or item lying on the ground, picked up like a map's own: any Counter-Strike gun, grenade, armor or the shield (the shield and the guns after the M249 in the list need Loner-Strike's game DLL). Reserve ammo is given with it on pickup (-1: the game's usual). Back after brings it back that many seconds after it's taken (0: at the next round, as the game does). Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. In: At entity Entity, At position Vector, Local offset (forward, right, up) Vector, Rotation (pitch, yaw, roll) Vector, Rotation offset Vector, Velocity Vector, Scale Number, Reserve ammo Number, Back after (seconds) Number. Out: Entity Entity, Success Yes/No, Moved Yes/No, Failure reason Spawn Failure.
+- Players In Radius (spatial.players_in_radius, Spatial): Every player within Radius of a point or an entity, as an array (an entity wired in isn't counted itself). In: Around point Vector, Around entity Entity, Radius Number. Out: Players Array of Player.
+- Nearest Player (spatial.nearest_player, Spatial): The player nearest to a point or an entity (not the entity itself), within Max distance; nobody if none. In: Around point Vector, Around entity Entity. Out: Player Player, Distance Number.
+- Entities In Radius (spatial.entities_in_radius, Spatial): Entities within Radius of a point or an entity, of a class or any, as an array (up to the mode's Limits setting, 64 at first). Players aren't listed (use Players In Radius). In: Around point Vector, Around entity Entity, Radius Number. Out: Entities Array of Entity.
+- Nearest Entity (spatial.nearest_entity, Spatial): The entity of a class nearest to a point or an entity, within Max distance; nothing if none. Players aren't counted. In: Around point Vector, Around entity Entity. Out: Entity Entity, Distance Number.
+- Line of Sight (spatial.line_of_sight, Spatial): Is there a clear line between A and B (each an entity or a point)? Entities wired in don't block it (a player's eyes are used). Hit Position is where something got in the way. In: A Entity, Or point A Vector, B Entity, Or point B Vector. Out: Clear Yes/No, Hit position Vector.
+- Random Chance (random.chance, Numbers): Yes Percent % of the time (a new roll each time it's worked out). In: Percent Number. Out: Yes Yes/No.
+- Random Bool (random.bool, Numbers): Yes or no, half the time each. Out: Yes Yes/No.
+- Weighted Random Pick (random.weighted, Numbers): Picks an index from an array of weights (a weight of 3 is picked three times as often as 1); with Items wired, the item at that index too. -1 when every weight is 0. In: Weights Array of Number, Items Array of the node's type. Out: Index Number, Item The node's type.
+- Map Range (math.map_range, Numbers): A value from one range moved into another: In Min..In Max becomes Out Min..Out Max (Clamp keeps it inside). In: Value Number, In Min Number, In Max Number, Out Min Number, Out Max Number. Out: Result Number.
+- Sin / Cos / Tan (math.trig, Numbers): The sine, cosine or tangent of an angle (degrees, or radians). In: Angle Number. Out: Result Number.
+- Atan2 (math.atan2, Numbers): The angle of the direction X, Y (from the X axis, -180..180 degrees, or radians). In: Y Number, X Number. Out: Angle Number.
+- Degrees / Radians (math.angle_convert, Numbers): Degrees to radians or radians to degrees. In: Angle Number. Out: Result Number.
+- Nearly Equal (flow.nearly_equal, Conditions): Are A and B within Tolerance of each other (for numbers that came out of math, which are seldom exactly equal)? In: A Number, B Number, Tolerance Number. Out: Nearly equal Yes/No.
+- Split Text (text.split, Text): Text cut at each Separator, as an array of texts (at most 64 pieces; empty pieces kept). In: Text Text, Separator Text. Out: Pieces Array of Text.
+- Replace Text (text.replace, Text): The text with every Find replaced by With (capitals matter). In: Text Text, Find Text, With Text. Out: Text Text.
+- Substring (text.substring, Text): Part of the text: Length characters from Start (the first is 0). In: Text Text, Start Number, Length Number. Out: Text Text.
+- Upper Case (text.upper, Text): THE TEXT IN CAPITALS. In: Text Text. Out: Text Text.
+- Lower Case (text.lower, Text): the text in small letters. In: Text Text. Out: Text Text.
+- Trim Text (text.trim, Text): The text without spaces at the start and end. In: Text Text. Out: Text Text.
+- Starts With (text.starts_with, Text): Does the text start with this (capitals don't matter)? In: Text Text, Start Text. Out: Starts with Yes/No.
+- Ends With (text.ends_with, Text): Does the text end with this (capitals don't matter)? In: Text Text, End Text. Out: Ends with Yes/No.
+- Join Array (text.join, Text): An array's texts in one, with Separator between them (as much as fits in 127 characters). In: Texts Array of Text, Separator Text. Out: Text Text.
+- Format Time (text.format_time, Text): Seconds as a clock: 1:05, or 1:02:05 (Auto: hours only when there are any). In: Seconds Number. Out: Text Text.
+- Format Number (text.format_number, Text): A number as text with a set number of decimals, and thousands separated by commas if you like (12,345.6). In: Number Number. Out: Text Text.
+- Sum (array.sum, Arrays): All the numbers added up (0 for an empty array). In: Numbers Array of Number. Out: Sum Number.
+- Array Min (array.min, Arrays): The smallest number, and its index (-1 for an empty array). In: Numbers Array of Number. Out: Min Number, Index Number.
+- Array Max (array.max, Arrays): The biggest number, and its index (-1 for an empty array). In: Numbers Array of Number. Out: Max Number, Index Number.
+- Average (array.average, Arrays): The numbers' average (0 for an empty array). In: Numbers Array of Number. Out: Average Number.
+- Reverse (array.reverse, Arrays): Turns an array round: the last item first. In: Array Array of the node's type.
+- Slice (array.slice, Arrays): A new array with Count items from Start (the first is 0). In: Array Array of the node's type, Start Number, Count Number. Out: Array Array of the node's type.
+- Dot Product (vec.dot, Vectors): A·B: how much two directions point the same way (with both length 1: 1 same, 0 square, -1 opposite). In: A Vector, B Vector. Out: Dot Number.
+- Cross Product (vec.cross, Vectors): A×B: the direction square to both (its length is how far apart they point). In: A Vector, B Vector. Out: Cross Vector.
+- Random Point In Radius (vec.random_in_radius, Vectors): A random point within Radius of Center: on a flat circle (2D, Z kept) or in a ball (3D). In: Center Vector, Radius Number. Out: Point Vector.
+- Rotate Vector (vec.rotate, Vectors): Turns a vector round the vertical by Yaw degrees (and up or down by Pitch). In: Vector Vector, Yaw Number, Pitch Number. Out: Result Vector.
+- Lerp Vector (vec.lerp, Vectors): A point between A and B: Alpha 0 is A, 1 is B, 0.5 halfway. In: A Vector, B Vector, Alpha Number. Out: Result Vector.
+- Direction To Angles (vec.to_angles, Vectors): A direction as angles (pitch, yaw, 0), for aiming and Look At math. In: Direction Vector. Out: Angles Vector.
+- Angles To Forward Vector (vec.forward, Vectors): Angles (pitch, yaw, roll) as the direction they face, length 1. In: Angles Vector. Out: Direction Vector.
+- To Local Space (rel.to_local, Vectors): A world position as seen from a player or entity: X forward, Y right, Z up (by its facing; a player's view yaw). In: Player or entity Entity, World position Vector. Out: Local offset Vector.
+- To World Space (rel.to_world, Vectors): An offset from a player or entity (X forward, Y right, Z up, by its facing) as a world position. In: Player or entity Entity, Local offset Vector. Out: World position Vector.
+- Relative Position Of (rel.position_of, Vectors): How far B is in front of, to the right of and above A (by A's facing; behind and left are negative). In: A Entity, B Entity. Out: Forward Number, Right Number, Up Number.
+- Angle To (rel.angle_to, Vectors): How far A would turn to face B: the yaw difference, -180..180 degrees (positive: to the left). In: A Entity, B Entity. Out: Angle Number.
+- Is In Front (rel.is_in_front, Vectors): Is B in front of A, inside a cone of this many degrees round A's facing? In: A Entity, B Entity. Out: In front Yes/No.
+- Is Behind (rel.is_behind, Vectors): Is B behind A, inside a cone of this many degrees round A's back (backstabs, sneaking)? In: A Entity, B Entity. Out: Behind Yes/No.
+- Eye Position (aim.eye_pos, Players): Where a player's eyes are (their position plus view height). In: Player Player. Out: Eyes Vector.
+- Aim Direction (aim.dir, Players): Which way a player is aiming, length 1 (from their view angles). In: Player Player. Out: Direction Vector.
+- Aim Point (aim.point, Players): What a player is aiming at, up to Max distance: where the line from their eyes hits, the entity hit, the surface's normal, and whether it hit anything (the player is ignored). In: Player Player. Out: Hit position Vector, Hit entity Entity, Hit normal Vector, Hit Yes/No.
+- Multi Gate (flow.multi_gate, Flow): Each time flow comes in, goes out the next output (in order, or random); after the last it stops, or starts over with Loop. Reset starts again from Start index.
+- Do Once Per Player (flow.do_once_per_player, Flow): Lets the flow through once for each player, until Reset (everyone) or Reset Player (the player wired in then). In: Player Player.
+- Toggle Variable (var.toggle, Variables): Flips a yes/no variable (yes becomes no, no becomes yes); New Value is what it is now. A per-player one needs a Player, a per-team one a Team. In: Player Player, Team Team. Out: New value Yes/No.
+- On Tick (event.on_tick, Events): Runs again and again, every Interval seconds (0.1: ten times a second; 0: as often as the mode's Limits setting lets it, 100 a second at first), all through the map. Delta is the seconds since the last time. Out: Delta Number.
+- Draw Debug Line (debug.draw_line, Advanced): Draws a line from A to B for some seconds, to see where things are. Shown only while testing (Playtest and Test run); a finished mode draws nothing. In: From Vector, To Vector.
+- Draw Debug Box (debug.draw_box, Advanced): Draws a box between two opposite corners for some seconds. Shown only while testing (Playtest and Test run); a finished mode draws nothing. In: Corner Vector, Opposite corner Vector.
+- Draw Debug Point (debug.draw_point, Advanced): Draws a small box round a point for some seconds. Shown only while testing (Playtest and Test run); a finished mode draws nothing. In: Position Vector.
+- Log Line (debug.log_line, Messages): Writes a line to the AMX Mod X log (addons/amxmodx/logs), up to Most a second (that setting's number of lines) from this node; the rest are counted in the next line. In: Text Text.
+- Bitwise (math.bitwise, Numbers): Bits of whole numbers (the fractions are dropped): And, Or, Xor, Not (of A), or A shifted left or right by B bits. Exact up to 16,777,216. In: A Number, B Number. Out: Result Number.
+- Find Free Spot Near (spatial.free_spot, Spatial): A spot near a point where a player (or the hull you pick) fits: the point itself if it's free, else the nearest free one in rings round it, up to Max distance (at most the mode's Limits setting of tries, 64 at first). Found is no when there's none (Position is then the point). In: Near Vector. Out: Found Yes/No, Position Vector.
+- Player Language (player.language, Players): A player's language: AMX Mod X's for them (their lang setting, else the server's, like en), or their game's (cl_language, like english: empty for bots, and for a moment until their game answers). In: Player Player. Out: Language Text.
+- As NPC (cast.npc, NPCs): Casting: is this entity an NPC (ls_npc, gm_components)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind. In: Entity Entity. Out: NPC NPC.
+- As Projectile (cast.projectile, Projectiles): Casting: is this entity a projectile (Spawn Projectile's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind. In: Entity Entity. Out: Projectile Projectile.
+- As Trigger Volume (cast.volume, Collision): Casting: is this entity a trigger volume (Spawn Trigger Volume's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind. In: Entity Entity. Out: Trigger Volume Trigger Volume.
+- As Objective Marker (cast.objmarker, Effects): Casting: is this entity an objective marker? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind. In: Entity Entity. Out: Objective Marker Objective Marker.
+- As Component (cast.component, Components): Casting: is this entity one of gm_components' components (any kind)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind. In: Entity Entity. Out: Component Component.
+- Set Entity Transform (ent.set_transform, Entities): Puts an entity where a Transform says: its Position, Rotation, Scale (props and sprites; players can't be resized) and Velocity. In: Entity Entity, Transform Transform.
+- Color (color.literal, Colors): A color picked with the color picker (and how opaque: alpha). Out: Color Color.
+- Make Color (color.make, Colors): A color from red, green, blue and alpha (0 to 255 each). In: Red Number, Green Number, Blue Number, Alpha Number. Out: Color Color.
+- Break Color (color.break, Colors): A color's red, green, blue and alpha (0 to 255 each). In: Color Color. Out: Red Number, Green Number, Blue Number, Alpha Number.
+- Blend Colors (color.lerp, Colors): Between color A (Amount 0) and color B (Amount 1): 0.5 is halfway. In: A Color, B Color, Amount Number. Out: Color Color.
+- Color From Hue (color.hsv, Colors): A color from hue (0 to 360: red, yellow, green, cyan, blue, magenta), saturation and brightness (0 to 1). In: Hue Number, Saturation Number, Brightness Number. Out: Color Color.
+- Model (asset.model, Files): A model file (models/....mdl), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value. Out: Model Model.
+- Sprite (asset.sprite, Files): A sprite file (sprites/....spr), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value. Out: Sprite Sprite.
+- Sound (asset.sound, Files): A sound file (a .wav from inside sound/), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value. Out: Sound Sound.
+- File Name Of (asset.file_name, Files): A Model's, Sprite's or Sound's file name as text (models/....mdl; a sound from inside sound/), to show or log it. Empty when it's none. In: File Anything. Out: Name Text.
+- Decal (asset.decal, Files): A kind of decal from the game's decals.wad (bullet hole, scorch, blood...): keep it in a variable or an array, and wire it into Place Decal, which picks one of that kind. Out: Decal Decal.
+
+## Game Mode Studio pin types (compact)
+
+A wire joins the same type, or a narrower into a wider one (Goes into); the other way takes a cast node.
+
+- Flow (exec): The white arrows: the order things run in. It carries no value. Cast: As Player, As Creature, As NPC, As Projectile, As Trigger Volume, As Objective Marker, As Component.
+- Number (number): A number, with or without a fraction. A pin marked # takes a whole number: a fraction is rounded (and Problems says so for one you typed in).
+- Yes/No (bool): Yes or no. Branch, the conditions and the gates use it.
+- Text (text): Words: names, messages, map names. It doesn't last through a Delay unless it's kept in a variable. Cast: As Creature.
+- Vector (vector): Three numbers, X, Y and Z: a place in the map, a direction or a speed. It doesn't last through a Delay unless it's kept in a variable.
+- Team (team): A team: Terrorists or Counter-Terrorists (no team for a draw).
+- Timer (timer): A timer a Delay, Repeat or Countdown started, to stop or check later.
+- Color (color): A color, picked with the color picker (red, green and blue).
+- Anything (any): A pin that takes a value of any type, like the value shown by Show HUD Text.
+- Player (player): A player in the game: a person or a bot. Goes into: Entity. Cast: As Player.
+- Entity (entity): Anything in the world: a player, a prop, a creature, an NPC, a component, a map entity. The handles below are entities known to be one kind.
+- NPC (npc): An NPC from Spawn NPC: a person who talks, walks paths and follows. Goes into: Entity. Cast: As NPC.
+- Creature (creature): A creature from Spawn Creature: it moves, attacks and can be hurt. Goes into: Entity. Cast: As Creature.
+- Projectile (projectile): A projectile from Spawn Projectile, flying until it hits or expires. Goes into: Entity. Cast: As Projectile.
+- Trigger Volume (volume): A trigger volume from Spawn Trigger Volume: an invisible box that notices who goes in and out. Goes into: Entity. Cast: As Trigger Volume.
+- Objective Marker (objmarker): An objective marker: a sprite floating over an entity or a spot, until Remove Marker. Goes into: Entity. Cast: As Objective Marker.
+- Component (component): A component the mode made or the map placed: a capture point, a shop, a barricade, a door… Goes into: Entity. Cast: As Component.
+- Sound Loop (soundloop): A sound that keeps playing (Loop Sound) until Stop Sound gets it. Goes into: Entity.
+- Model (model): A model file (.mdl) the mode loads: props, creatures, attachments. Your own go with the mode. Goes into: Model or Sprite.
+- Sprite (sprite): A sprite file (.spr): effects, glows, markers. Your own go with the mode. Goes into: Model or Sprite.
+- Sound (sound): A sound file (.wav) the mode plays. Your own go with the mode.
+- Decal (decal): A kind of decal from the game's decals.wad (a bullet hole, a scorch, blood).
+- Model or Sprite (visual): A pin that takes a Model or a Sprite.
+- Enum (enum): A value from a fixed list of named choices: the app's own lists below, or your mode's own enums.
+- Struct (struct): A bundle of named values kept together: Transform, or your mode's own structs. It doesn't last through a Delay unless it's kept in a variable.
+- Array (array): A list of values of one type, in order. An array doesn't go into an array of a wider type (an Array of Creatures isn't an Array of Entities): a value written through the wider type could be the wrong kind.
+- Map (map): Values looked up by a key: text, a number or a player.
+- Variable (var): A variable node's pin: it takes the type of the variable picked.
+- Generic pins (generic): A pin whose type the node takes from a setting or from the first wire: an array node set to Players has Player pins.
+- Entity Kind (enum:ls_kind): What an entity is. Values: Player, Bot, Creature, NPC, Interactable, Component, Prop, Map entity, None.
+- Component Kind (enum:ls_comp_kind): Which kind of component it is. Values: Capture point, Extraction zone, Checkpoint, Shop, Barricade, Trap, Loot container, Supply drop, Supply crate, Perk machine, Upgrade bench, Mystery box, Meeting point, Moving platform, Timed door, Wave spawner, Safe zone, Shrinking zone, Damage zone, Weapon spawner, Respawn point, Player class, Pickup, NPC, Interactable, None.
+- Spawn Failure (enum:ls_spawn_fail): Why a spawn failed: a spawn node's Failure reason. Values: None, Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input.
+- Who (enum:ls_who): Which players a For Each Player or Pick Random Player goes through. Values: Everyone in the game, Everyone alive, Everyone dead, Terrorists, Counter-Terrorists, Living Terrorists, Living Counter-Terrorists, Bots, People (not bots).
+- Weapon (enum:ls_weapon): A weapon, by its game name. Goes into: Text. Values: none, ak47, m4a1, awp, scout, famas, galil, aug, sg552, mp5navy, p90, ump45, mac10, tmp, m3, xm1014, m249, deagle, usp, glock18, p228, fiveseven, elite, hegrenade, flashbang, smokegrenade, knife, c4, g3sg1, sg550.
+- Hit Zone (enum:ls_hitzone): Where a hit landed on the body. Values: generic, head, chest, stomach, left arm, right arm, left leg, right leg.
+- Damage Kind (enum:ls_dmgkind): What kind of damage it was. Values: other, shot, slash, blast, burn, fall, shock, drown, poison.
+- Transform (struct:ls_transform): Where something is and how it moves, in one value. Fields: Position, Rotation, Scale, Velocity.
+
+## Map editor entities (compact)
+
+- button_target: A target to shoot: each hit switches it on or off, sets off its target as On or Off, and flips its texture (use a +0 / +a texture pair). Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, spawnflags.
+- env_bubbles: Bubbles rising from inside the brush. Keys: targetname, density, current.
+- func_bomb_target: A bomb site: Terrorists plant the bomb inside. Keys: targetname, target.
+- func_breakable: Breaks when shot or set off (glass, crates, vents). Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, health, explosion, gibmodel, explodemagnitude, spawnflags.
+- func_button: A button players press (or shoot) to set something off. Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, master, killtarget, delay, angle, speed, lip, sounds, spawnflags.
+- func_buyzone: Where a team can buy. If a map has none, spawns get buy zones. Keys: target, team.
+- func_conveyor: A conveyor belt: moves what stands on it and scrolls its texture. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, speed, spawnflags.
+- func_door: A door that slides along its facing when touched or set off. Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, killtarget, delay, speed, lip, movesnd, stopsnd, health, spawnflags, angle.
+- func_door_rotating: A door that swings round an origin brush. Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, killtarget, delay, speed, lip, movesnd, stopsnd, health, distance, spawnflags.
+- func_escapezone: Where Terrorists escape to on an es_ map. Keys: none.
+- func_friction: Changes how slippery the floor is. Keys: modifier.
+- func_grencatch: Sets something off when a grenade lands inside. Keys: targetname, target, triggerongrenade.
+- func_guntarget: A target that slides along path_corners when set off; shoot it enough and it stops and sets off its target. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, target, health, spawnflags.
+- func_healthcharger: A wall unit players hold use on to heal. Give it a charger texture. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, health.
+- func_hostage_rescue: Where Counter-Terrorists bring hostages. Keys: targetname, target.
+- func_illusionary: Looks solid but you walk through it (leaves, fences, light shafts). Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, skin.
+- func_ladder: A ladder players climb. Usually covered in the AAATRIGGER texture behind a ladder-looking brush. Keys: none.
+- func_pendulum: Swings back and forth. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, speed, damp, spawnflags.
+- func_plat: A lift that goes up and down. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, height, spawnflags.
+- func_platrot: A lift that turns as it goes up and down. Needs an origin brush. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, movesnd, stopsnd, volume, height, speed.
+- func_pushable: A crate players can push. Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, health, explosion, gibmodel, explodemagnitude, friction, size, spawnflags.
+- func_recharge: A wall unit players hold use on for armor. Give it a charger texture. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, armorvalue.
+- func_rot_button: A button that turns (a valve or wheel). Keys: targetname, target, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, master, delay, speed, distance.
+- func_rotating: Spins all the time (fans, wheels). Needs an origin brush. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, angles, speed, spawnflags.
+- func_tank: A gun turret: on its own it shoots at any player it sees (any team), or players take control from a func_tankcontrols. Build it facing east with an origin brush at the pivot. Bots don't use turrets. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, angles, yawrange, pitchrate, pitchtolerance, persistence, maxRange, barrel, barrelz, spritesmoke, rotatesound, spawnflags, bullet, bullet_damage.
+- func_tankcontrols: Where players take control of a turret: press use inside, aim with the mouse, fire with attack, use again to let go. Keys: target.
+- func_tanklaser: A laser turret: fires an env_laser (named below) where it aims. Build it facing east with an origin brush at the pivot. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, angles, yawrange, pitchrate, pitchtolerance, persistence, maxRange, barrel, barrelz, spritesmoke, rotatesound, spawnflags, laserentity.
+- func_tankmortar: A mortar turret: each shot is an explosion where it aims. Build it facing east with an origin brush at the pivot. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, angles, yawrange, pitchrate, pitchtolerance, persistence, maxRange, barrel, barrelz, spritesmoke, rotatesound, spawnflags, iMagnitude.
+- func_trackautochange: Like func_trackchange, but it moves by itself when the train arrives on it. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, movesnd, stopsnd, volume, train, bottomtrack, rotation, spawnflags.
+- func_trackchange: A piece of track that moves or turns, with the train on it, to join another track (a turntable, a train lift). Set it off to move it. Needs an origin brush. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, movesnd, stopsnd, volume, train, bottomtrack, rotation, spawnflags.
+- func_tracktrain: A train, cart or gondola that rides a track of path_tracks; players drive it from a func_traincontrols. Build it facing west, with an origin brush where it sits on the track. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, target, startspeed, wheels, dmg, volume.
+- func_train: Moves along path_corners. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, target, dmg.
+- func_traincontrols: Where players stand to drive a func_tracktrain: inside it, press use to take control, then forward and back to speed up and slow down. Put it on the train. Keys: target.
+- func_vehicle: A drivable vehicle. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, target, length, height.
+- func_vehiclecontrols: Where players stand to drive a func_vehicle: like func_traincontrols, for a vehicle. Keys: target.
+- func_vip_safetyzone: Where the VIP escapes to on an as_ map. Keys: none.
+- func_wall: A wall that isn't part of the world: can be see-through or switched by draw mode. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin.
+- func_wall_toggle: A wall that appears and disappears when set off. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, spawnflags.
+- func_water: Water players can swim in. Use a water texture (starting with !). Keys: targetname, rendermode, renderamt, renderfx, WaveHeight.
+- func_weaponcheck: Sets something off when a player inside doesn't carry certain weapons. Keys: targetname, target.
+- game_zone_player: When set off, looks at who is inside: sets off In for each player inside and Out for each player outside, and sends both counts to game_counters. Keys: targetname, master, intarget, incount, spawnflags.
+- light_surface: Brushes that give off light (newer compilers). Keys: targetname, targetname, _light, pattern, _falloff, spawnflags.
+- momentary_door: A door that moves only as far as a momentary_rot_button is turned (a wheel that opens a gate). Point the wheel's target at it. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, angle, lip, spawnflags.
+- momentary_rot_button: A wheel or valve players turn while holding use; its target (a momentary_door) moves as far as it's turned. Needs an origin brush. Keys: targetname, rendermode, renderamt, renderfx, zhlt_lightflags, light_origin, target, distance, sounds, spawnflags.
+- trigger_cdaudio: Plays a CD track (game music) when a player walks in; goes once. Keys: targetname, health.
+- trigger_counter: Sets off its target after being set off a number of times. Keys: targetname, target, master, killtarget, delay, message, count.
+- trigger_gravity: Changes gravity for whoever walks in. Keys: targetname, gravity.
+- trigger_hurt: Hurts (or heals, with negative damage) whoever is inside. Keys: targetname, target, master, dmg, spawnflags.
+- trigger_multiple: Sets off its target whenever someone walks in. Keys: targetname, target, master, killtarget, delay, message, wait.
+- trigger_once: Sets off its target the first time someone walks in, then is gone. Keys: targetname, target, master, killtarget, delay, message.
+- trigger_push: Pushes whoever is inside (jump pads, wind, currents). Keys: targetname, angles, speed.
+- trigger_teleport: Sends whoever walks in to its target (an info_teleport_destination). Keys: targetname, target, master, killtarget, delay, message.
+- worldspawn: The world: every brush that isn't part of an entity, and the map's settings. Keys: message, wad, MaxRange, sounds, mapteams.
+- ambient_generic: Plays a sound, looping or once. Keys: targetname, message, pitch.
+- ammo_338magnum: .338 Magnum ammo (AWP). Keys: angle, spawnflags.
+- ammo_357sig: .357 SIG ammo (P228). Keys: angle, spawnflags.
+- ammo_45acp: .45 ammo (USP, MAC-10, UMP45). Keys: angle, spawnflags.
+- ammo_50ae: .50 AE ammo (Desert Eagle). Keys: angle, spawnflags.
+- ammo_556nato: 5.56mm ammo (FAMAS, Galil, M4A1, SG 552, AUG, SG 550). Keys: angle, spawnflags.
+- ammo_556natobox: 5.56mm box (M249). Keys: angle, spawnflags.
+- ammo_57mm: 5.7mm ammo (P90, Five-SeveN). Keys: angle, spawnflags.
+- ammo_762nato: 7.62mm ammo (AK-47, Scout, G3SG1). Keys: angle, spawnflags.
+- ammo_9mm: 9mm ammo (Glock, Dual Elites, MP5, TMP). Keys: angle, spawnflags.
+- ammo_buckshot: Shotgun shells (M3, XM1014). Keys: angle, spawnflags.
+- armoury_entity: A weapon or item lying on the floor for players to pick up. Keys: angle, item, count.
+- cycler: A model that plays its animation. Keys: targetname, angles, rendermode, renderamt, renderfx, model.
+- cycler_sprite: A sprite or model that animates. Keys: targetname, angles, rendermode, renderamt, renderfx, model.
+- env_beam: A beam (electric arc, rope of light) between two named entities, or from here to a random spot within its radius. Keys: targetname, LightningStart, texture, rendercolor, life, NoiseAmplitude, framestart, damage.
+- env_beverage: A drinks machine's chute: drops a soda can each time it's set off (a can gives a little health). Keys: targetname, angle, health.
+- env_blood: Sprays blood the way it faces when set off. Keys: targetname, angles, amount.
+- env_explosion: An explosion when set off. Keys: targetname, iMagnitude.
+- env_fade: Fades players' screens to a color. Keys: targetname, duration, renderamt, spawnflags.
+- env_fog: Fog for the whole map. Keys: targetname, startdist, density.
+- env_funnel: A funnel of glowing particles pulled in to this spot (or pushed out) when set off; goes once. Keys: targetname, spawnflags.
+- env_global: Sets a named global switch when set off. A multisource with the same Global state only works while the switch is on. Keys: targetname, globalstate, initialstate, spawnflags.
+- env_glow: A glow sprite that fades out when you can't see its middle. Keys: targetname, rendermode, renderamt, renderfx, model, scale.
+- env_laser: A straight laser from here to a named entity, with an optional sprite where it hits. Keys: targetname, LaserTarget, EndSprite, rendercolor, NoiseAmplitude, framestart, spawnflags.
+- env_message: Shows a message from the map's titles.txt when set off, with an optional sound. Keys: targetname, target, message, messagevolume, spawnflags.
+- env_rain: Rain on the whole map (players see it outdoors). Keys: none.
+- env_render: Changes the draw settings of its target when set off. Keys: targetname, target, rendermode, renderamt.
+- env_shake: Shakes players' screens when set off. Keys: targetname, amplitude, duration, spawnflags.
+- env_shooter: Throws pieces of any model (or sprite) the way it faces when set off: rubble, glass, cans, shells. Keys: targetname, angles, rendermode, renderamt, renderfx, shootmodel, m_iGibs, m_flVelocity, m_flGibLife, skin.
+- env_snow: Snow on the whole map (players see it outdoors). Keys: none.
+- env_sound: Changes how sounds echo for players near it. Keys: radius.
+- env_spark: Sparks, now and then or when set off. Keys: targetname, MaxDelay.
+- env_sprite: Shows a sprite (a flat picture, often glowing). Keys: targetname, rendermode, renderamt, renderfx, angles, model, scale, spawnflags.
+- game_counter: Counts: up each time it's set off (down when set off as Off). At the limit it sets off its target. game_counter_set and game_zone_player can set its count. Keys: targetname, target, master, frags, spawnflags.
+- game_counter_set: Sets a game_counter (its target) to a number when set off. Keys: targetname, target, master, frags.
+- game_end: Warning: ends the map for everyone when set off: the scoreboard shows, then the server changes to the next map. Give it a master to limit who can. Keys: targetname, master.
+- game_player_equip: Gives every player these items when they spawn (or when set off, if it has a name). Keys: targetname, master, weapon_knife, weapon_glock18, weapon_ak47, weapon_awp, item_kevlar, spawnflags.
+- game_player_hurt: Hurts (or heals, with negative damage) the player who sets it off, then sets off its target. Keys: targetname, target, master, dmg.
+- game_player_team: Warning: moves the player who sets it off to another team (the team of its target game_team_master), and can kill them. Changes the teams for the rest of the map. Keys: targetname, master, target.
+- game_score: Gives points (kills on the scoreboard) to the player who sets it off, or to their team. Keys: targetname, master, points.
+- game_team_master: Passes a signal on only if the player who set it off is on its team. Also a master: name it as the Master of a button, door or game_ entity so only that team can use it. Keys: targetname, target, master, teamindex, triggerstate, spawnflags.
+- game_team_set: Sets its target game_team_master to the team of the player who set this off (or clears it): capture points, team-owned buttons. Keys: targetname, target, master, spawnflags.
+- game_text: Shows text on screen when set off. Keys: targetname, target, master, message, y, color, fadein, holdtime, channel, spawnflags.
+- gibshooter: Throws gibs (body pieces) the way it faces when set off. Keys: targetname, angles, m_iGibs, m_flVelocity, m_flGibLife.
+- hostage_entity: A hostage for the Counter-Terrorists to rescue (cs_ maps). Keys: angle, model.
+- info_bomb_target: A bomb site point (instead of a func_bomb_target brush). Keys: none.
+- info_hostage_rescue: A point hostages can be rescued at (instead of a func_hostage_rescue brush). Keys: none.
+- info_map_parameters: Map rules: who may buy, how big the bomb blast is. Keys: buying, bombradius.
+- info_null: A point used only while compiling; gone in the game. Keys: targetname.
+- info_player_deathmatch: Terrorist spawn point. Add at least as many as the team can have players. Keys: targetname, target, angle.
+- info_player_start: Counter-Terrorist spawn point. Add at least as many as the team can have players. Keys: targetname, target, angle.
+- info_target: A point other entities aim at (spotlights, beams, cameras). Keys: targetname.
+- info_teleport_destination: Where a trigger_teleport sends players. Keys: targetname, angle.
+- info_vip_start: Where the VIP starts on an assassination (as_) map. Keys: targetname, target, angle.
+- infodecal: A decal (a painted-on picture like a crack or blood) on the nearest wall. Keys: targetname, angles, texture.
+- item_assaultsuit: Kevlar and helmet: armor up to 100 with a helmet. Keys: angle, target.
+- item_battery: A battery: adds 15 armor (or Armor), up to 100. Keys: angle, target, armorvalue.
+- item_healthkit: A health kit: heals 15 (or Health). Comes back after mp_item_respawn_time (30 s) unless told not to. Keys: angle, target, health.
+- item_kevlar: Kevlar: armor up to 100. Keys: angle, target.
+- item_longjump: The long jump module: crouch and jump to leap far, until the player dies. Keys: angle, target.
+- item_thighpack: A defuse kit (Counter-Terrorists only). Keys: angle, target.
+- light: A light that shines in every direction. Keys: targetname, _light, pattern, _falloff, spawnflags.
+- light_environment: The sun: lights everything that can see the sky. Use one per map. Keys: angle, pitch, _diffuse_light.
+- light_spot: A spotlight: a cone of light pointing at its target or along its angles. Keys: targetname, _light, pattern, _falloff, spawnflags, target, angles, _cone, _sky.
+- multi_manager: Sets off several things, each after its own delay. Add keys: the name to set off, and the seconds to wait. Keys: targetname, spawnflags.
+- multisource: On only while everything that targets it is on (an AND gate). Use as a master. Keys: targetname, target, globalstate.
+- path_corner: A stop on a path for trains and cameras. Keys: targetname, target, wait, message.
+- path_track: A stop on a func_tracktrain's track. Link them in order with Next stop; the train rides them in that order. Keys: targetname, target, message, spawnflags.
+- player_weaponstrip: Takes away all of a player's weapons when set off. Keys: targetname.
+- target_cdaudio: Plays a CD track (game music) when a player comes within its radius, or when set off; goes once. Keys: targetname, health.
+- trigger_auto: Sets off its target when the round starts. Keys: target, delay, triggerstate, spawnflags.
+- trigger_camera: Shows players the view from here for a while when set off. Keys: targetname, target, wait, speed.
+- trigger_changetarget: Changes what another entity sets off. Keys: targetname, target, m_iszNewTarget.
+- trigger_random: Sets off one of its targets at random each time it's set off. Timed: picks on its own after a random wait, until set off again. Unique: never the same target twice until all have gone. Keys: targetname, target_count, target1, target3, target5, target7, target9, target11, target13, target15, min_delay, spawnflags.
+- trigger_random_time: The old name for trigger_random with Timed on: after a random wait it sets off one of its targets, again and again until set off. Setting it off starts and stops it. Keys: targetname, target_count, target1, target3, target5, target7, target9, target11, target13, target15, min_delay, spawnflags.
+- trigger_random_unique: The old name for trigger_random with Unique on: each time it's set off it picks a target that hasn't gone yet; when all have gone it stops (or starts over). Keys: targetname, target_count, target1, target3, target5, target7, target9, target11, target13, target15, spawnflags.
+- trigger_relay: Passes a signal on: sets off its target, maybe later, maybe as on or off. Keys: targetname, target, killtarget, delay, triggerstate, spawnflags.
+- trigger_setorigin: Moves entities to another entity when set off (or keeps them following it): a lift that carries a sprite, a light that follows a train. Keys: targetname, target, offset, invert_x, invert_y, invert_z, spawnflags.
+- ls_barnacle (Barnacle): A barnacle on the ceiling (needs Loner-Strike's game DLL). Put it right under the ceiling: its tongue hangs to the floor, and a player who walks into it is hauled up and chewed until someone shoots it. It comes back every round. Keys: health, length, hates.
+- ls_creature (Creature): A creature placed in the map (needs Loner-Strike's game DLL; types from creatures.ini). It comes back every round. Keys: type, behaviour, path, respawn, speed, aggression, hates, persist, flee_hp, tier, angles.
+- ls_barricade (Barricade): A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands. Keys: targetname, enabled, target, hp, team, repair_secs, blocks_bots, friendly_damage, fit, size, adopt.
+- ls_wave_spawner (Wave spawner): Where waves of enemies come from (Last Stand). Waves are shared by every spawner on the map. Keys: targetname, enabled, target, team, wave_min, waves, radius, auto, prepare, humans.
+- ls_moving_platform (Moving platform): Tells bots about a func_train / func_plat (they wait for it and ride it) and reports when it stops and starts. Keys: targetname, enabled, platform.
+- ls_timed_door (Timed door): Opens, closes and locks func_doors on a timetable. Players may lock it for a while. Bots go round a locked door. Keys: targetname, enabled, target, team, door, close_at, locked_until, lock_time.
+- ls_trigger_trap (Trap): A trap: sets off its targets (and hurts players inside) when someone walks in, or when a button or mode fires it. Keys: targetname, enabled, target, radius, size, fire_on, team_only, delay, rearm_secs, danger, trap_kind, active_secs, creature_dps_pct, bots_auto.
+- ls_loot_container (Loot crate): A crate players hold USE on to open; it gives a few items from a loot table. Keys: targetname, enabled, target, friendly, tier, table, open_secs, respawn_secs, model.
+- ls_supply_drop (Supply drop): Where a supply crate can fall from the sky, with a beacon. Players hold USE on it to open it. Keys: targetname, enabled, target, friendly, tier, at, fall_secs, items, beacon.
+- ls_weapon_spawner (Weapon spawner): A weapon or item lying on the floor that comes back after it's taken. Walk over it to pick it up. Keys: targetname, enabled, friendly, tier, item, once.
+- ls_capture_point (Capture point): A point teams take by standing on it, and hold. Bots attack and defend it. Keys: targetname, enabled, target, radius, size, capture_secs, decay, start_owner, ffa.
+- ls_checkpoint (Checkpoint): A gate in a race. Players pass them in order; passing the last one finishes a lap. Keys: targetname, enabled, target, radius, size, team, order.
+- ls_extraction_zone (Extraction): Players who stay inside long enough while it's open get out (and are done for the round). Keys: targetname, enabled, target, radius, size, team, hold_secs, close_at, shared, once, action.
+- ls_interactable (Interactable): Anything players use with E: a lever, a terminal, a note, a pickup. Shows its prompt when looked at, then sets off its targets. Keys: targetname, enabled, team, prompt, cooldown, hide, bots, model, target.
+- ls_interactable_brush (Interactable brush): A brush players use with E (a lever, a console, a hatch). Shows its prompt when looked at, then sets off its targets. In the game it is an ls_interactable. Keys: targetname, enabled, prompt, cooldown, hide, bots, team, target.
+- ls_npc (NPC): A character players talk to: press E to start a conversation (a game mode can add lines and replies). It can stand, wander, patrol or follow, and faces whoever talks to it. Bots never shoot it while it's unkillable and walk round it. Keys: targetname, enabled, model, targets, follow_secs, health, greet, team, target.
+- ls_event: Loner-Strike: fires a Studio custom event when triggered Keys: targetname, a.
+- ls_meeting_point (Meeting point): Players hold USE here to call a meeting: everyone gathers, talks and votes someone out. Keys: targetname, enabled, target, size, radius, cooldown, callers, freeze, gather.
+- ls_player_class (Player class): A player class: health, speed, weapons, model. Players pick one with say /class, or a mode gives it. Keys: team, name, hp, helmet, speed, weapons, model, menu, default, bot_profile.
+- ls_respawn_point (Respawn point): Where players of a team (re)spawn in a mode. When a map has any for a team, that team spawns only at these, at a free one. Keys: targetname, enabled, team, angle, role.
+- ls_mystery_box (Mystery box): A random gun for a price. Of the boxes in one group, one is out at a time; after a few uses it moves to another. Keys: targetname, enabled, team, price, super, super_name, group, bots.
+- ls_perk_machine (Perk machine): Sells one perk for as long as the player lives (lost when downed). Hold USE at it to buy. Keys: targetname, enabled, team, perk, price, max_perks, bots.
+- ls_shop (Shop): A shop counter: players inside press USE for a menu of priced items. Can have a shopkeeper (Barney or the G-Man) who greets and thanks them. Keys: targetname, enabled, team, radius, size, items, scale, buy_menu, keeper, greet, title.
+- ls_upgrade_bench (Upgrade bench): Upgrades the gun in hand: Mk II (+40% damage, a magazine and a half), then Mk III (+90%). The level stays with the gun. Keys: targetname, enabled, team, price2, level3_from, dmg3, bots.
+- ls_damage_zone (Damage zone): Hurts players inside: fire, poison, shock. Bots route around it. Keys: targetname, enabled, size, radius, interval, team, hud_warning, show.
+- ls_safe_zone (Safe zone): The safe circle (battle royale). Players outside it take damage. Put one in the middle of the play area. Keys: targetname, enabled, radius, interval.
+- ls_zone_shrinker (Zone shrinker): Shrinks a safe zone in stages: warn (next circle shown), then close in, with more damage each stage. Keys: targetname, enabled, zone, start_delay, final_r.
+<!-- REFERENCE:END -->

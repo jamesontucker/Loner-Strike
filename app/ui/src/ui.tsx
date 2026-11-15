@@ -14,10 +14,39 @@ let openSheets = 0;
 type OpenSheet = { id: number; close: () => void };
 const sheetStack: OpenSheet[] = [];
 let nextSheet = 1;
+/** Backs a sheet started itself (taking its entry off) that haven't landed yet: they close
+ *  nothing. History moves later than the code runs, so a sheet opened meanwhile (React's
+ *  dev double mount, or one sheet closing as another opens) would otherwise close at once. */
+let ownBacks = 0;
 /** History moved to an entry over sheet `landed` (0: no sheet): every sheet opened after
  *  it closes (true), or there was none (false). Works from the entry alone, so a Back we
  *  caused ourselves (a sheet taking its entry off again) closes nothing extra. */
+/** Waits until a dialog that just closed has taken its history entry off (its Back has
+ *  landed), or a moment: open a new tab or page after that, or the late Back (WebKit) is
+ *  taken for a Back from it to the page under the dialog. */
+export function afterSheetBack(): Promise<void> {
+  return new Promise((done) => {
+    let t = 0;
+    const end = () => {
+      window.removeEventListener("popstate", end);
+      clearTimeout(t);
+      setTimeout(done, 0);
+    };
+    window.addEventListener("popstate", end);
+    t = window.setTimeout(end, 300);
+  });
+}
+/** Whether a sheet (dialog) is open: keys meant for the page behind it are left alone (the map
+ *  editor's Esc, Delete and the rest; EditorCoverage F-1). */
+export function sheetOpen() {
+  return sheetStack.length > 0;
+}
+
 export function closeSheetsAbove(landed: number) {
+  if (ownBacks > 0) {
+    ownBacks--;
+    return true;
+  }
   const above = sheetStack.filter((s) => s.id > landed);
   above.reverse().forEach((s) => s.close());
   return above.length > 0;
@@ -105,7 +134,19 @@ export function Sheet({
       }
     };
     el?.addEventListener("keydown", key);
+    // Esc closes the top sheet wherever focus is: a button that had it can grey out (Apply while it
+    // works) or go away (a removed row), and focus falls to the page. The page behind never sees
+    // that Esc (EditorCoverage F-1: it dropped the editor's selection and left the sheet open).
+    const anywhere = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || sheetStack[sheetStack.length - 1] !== entry) return;
+      if (el && e.target instanceof Node && el.contains(e.target)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close.current?.();
+    };
+    window.addEventListener("keydown", anywhere, true);
     return () => {
+      window.removeEventListener("keydown", anywhere, true);
       el?.removeEventListener("keydown", key);
       if (!keepApp && --openSheets === 0) root?.removeAttribute("inert");
       if (back?.isConnected) back.focus();
@@ -113,7 +154,10 @@ export function Sheet({
       if (at >= 0) sheetStack.splice(at, 1);
       // closed by its own button (its entry is still the current one): take the entry off
       // again, so Back afterwards goes where it should
-      if ((history.state as { sheet?: number } | null)?.sheet === id) history.back();
+      if ((history.state as { sheet?: number } | null)?.sheet === id) {
+        ownBacks++;
+        history.back();
+      }
     };
   }, []);
   return createPortal(
@@ -131,12 +175,18 @@ export function Sheet({
 }
 
 /** A load that failed: what went wrong and a way to try again. */
-export function LoadError({ text, onRetry, title }: { text: string; onRetry?: () => void; title?: string }) {
+/** `action`: the way on when trying again can't help (shown first, as the main button). */
+export function LoadError({ text, onRetry, title, action }: { text: string; onRetry?: () => void; title?: string; action?: { label: string; run: () => void } }) {
   return (
     <div className="load-error" role="alert">
       {title && <h3>{title}</h3>}
       <p>{text}</p>
-      {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
+      {(action || onRetry) && (
+        <div className="row">
+          {action && <button className="btn primary" onClick={action.run}>{action.label}</button>}
+          {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -185,10 +235,13 @@ export class PageBoundary extends Component<{ children: ReactNode }, { failed: b
 }
 
 // ---- asking before something can't be undone --------------------------------------
-type AskOpts = { ok?: string; danger?: boolean };
+/** `check` (with a text box): runs on OK with what was typed; a sentence back keeps the dialog
+ *  open with that error under the field and the text kept (`busy` is the button's label meanwhile,
+ *  e.g. "Renaming…"). */
+type AskOpts = { ok?: string; danger?: boolean; check?: (answer: string) => Promise<string | null | undefined> | string | null | undefined; busy?: string };
 /** A text box under the question (optional unless `required`). */
-type AskInput = { label: string; placeholder?: string; max?: number };
-type Ask = { text: string; ok: string; danger: boolean; input?: AskInput; done: (answer: string | null) => void };
+type AskInput = { label: string; placeholder?: string; max?: number; value?: string };
+type Ask = { text: string; ok: string; danger: boolean; input?: AskInput; check?: AskOpts["check"]; busy?: string; done: (answer: string | null) => void };
 type AskFns = {
   ask: (text: string, opts?: AskOpts) => Promise<boolean>;
   askText: (text: string, input: AskInput, opts?: AskOpts) => Promise<string | null>;
@@ -202,13 +255,17 @@ export const useAskText = () => useContext(AskCtx).askText;
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [q, setQ] = useState<Ask | null>(null);
   const [typed, setTyped] = useState("");
+  const [askError, setAskError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const open = useCallback(
     (text: string, opts: AskOpts | undefined, input?: AskInput) =>
       new Promise<string | null>((resolve) => {
-        setTyped("");
+        setTyped(input?.value ?? "");
+        setAskError(null);
+        setChecking(false);
         setQ((old) => {
           old?.done(null);
-          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, input, done: resolve };
+          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, input, check: opts?.check, busy: opts?.busy, done: resolve };
         });
       }),
     [],
@@ -241,8 +298,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {q && (
         <Sheet className="sheet ask" role="alertdialog" label={q.ok} describedBy="ask-text" onClose={() => close(false)}>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
+              if (checking) return;
+              if (q.check && q.input) {
+                setChecking(true);
+                let why: string | null | undefined;
+                try {
+                  why = await q.check(typed.trim());
+                } catch {
+                  why = "Something went wrong. Try again.";
+                }
+                setChecking(false);
+                if (why) return setAskError(why);
+              }
               close(true);
             }}
           >
@@ -250,12 +319,37 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             {q.input && (
               <label className="field ask-field">
                 <span>{q.input.label}</span>
-                <input className="search" autoFocus placeholder={q.input.placeholder} maxLength={q.input.max ?? 64} value={typed} onChange={(e) => setTyped(e.target.value)} />
+                <input
+                  className="search"
+                  autoFocus
+                  placeholder={q.input.placeholder}
+                  maxLength={q.input.max ?? 64}
+                  value={typed}
+                  aria-invalid={askError ? true : undefined}
+                  aria-describedby={askError ? "ask-error" : undefined}
+                  onChange={(e) => {
+                    setTyped(e.target.value);
+                    setAskError(null);
+                  }}
+                />
+                {askError && (
+                  <small id="ask-error" className="ask-error" role="alert">
+                    {askError}
+                  </small>
+                )}
               </label>
             )}
             <div className="row ask-buttons">
               <button type="button" className="btn" autoFocus={q.danger && !q.input} onClick={() => close(false)}>Cancel</button>
-              <button type="submit" className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger && !q.input}>{q.ok}</button>
+              <button type="submit" className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger && !q.input} disabled={checking} aria-busy={checking || undefined}>
+                {checking ? (
+                  <>
+                    <span className="spinner" aria-hidden="true" /> {q.busy ?? "Working…"}
+                  </>
+                ) : (
+                  q.ok
+                )}
+              </button>
             </div>
           </form>
         </Sheet>
@@ -266,9 +360,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
 // ---- toasts --------------------------------------------------------------
 type ToastAction = { label: string; run: () => void };
-type Toast = { id: number; text: string; error?: boolean; action?: ToastAction };
-type Push = (text: string, error?: boolean, action?: ToastAction) => void;
+/** `undoAt`: when an "Undo that save?" toast came (the save's own message joins it) */
+type Toast = { id: number; text: string; error?: boolean; action?: ToastAction; undoAt?: number };
+/** `ms`: how long a toast with a button stays (without: until dismissed) */
+type Push = (text: string, error?: boolean, action?: ToastAction, ms?: number) => void;
 const ToastCtx = createContext<Push>(() => {});
+const UNDO_SAVE = "Undo that save?";
 /** `toast("Saved")`, `toast("Couldn't save", true)`, or with a button:
  *  `toast("Couldn't load the maps.", true, { label: "Try again", run: reload })`. */
 export const useToast = () => useContext(ToastCtx);
@@ -277,14 +374,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback<Push>(
-    (text, error, action) => {
+    (text, error, action, ms) => {
       // nothing to say (an empty reply from the game): no empty toast
       if (!String(text ?? "").trim()) return;
       const id = Date.now() + Math.random();
-      // the same message twice in a row shows once
-      setToasts((t) => [...t.filter((x) => x.text !== text), { id, text, error, action }]);
+      setToasts((t) => {
+        // a save's message right after its "Undo that save?": one toast with the message and
+        // Undo (two stacked ones covered the tool's Save bar)
+        const undo = !error && !action ? t.find((x) => x.undoAt && Date.now() - x.undoAt < 3000) : undefined;
+        if (undo) return t.map((x) => (x === undo ? { ...x, text, undoAt: undefined } : x));
+        // the same message twice in a row shows once
+        return [...t.filter((x) => x.text !== text), { id, text, error, action, undoAt: action && text === UNDO_SAVE ? Date.now() : undefined }];
+      });
       // errors stay long enough to read (and until dismissed when there's something to do)
-      if (!action) setTimeout(() => dismiss(id), error ? 9000 : 2600);
+      if (!action || ms) setTimeout(() => dismiss(id), ms ?? (error ? 9000 : 2600));
     },
     [dismiss],
   );
@@ -293,6 +396,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const on = (e: Event) => push(String((e as CustomEvent).detail), true);
     window.addEventListener("ls-error", on);
     return () => window.removeEventListener("ls-error", on);
+  }, [push]);
+  // a save that kept backups (tools/common/api.ts offerUndo): "Undo" for 8 seconds
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ text: string; run: () => Promise<{ error?: string; message?: string }> }>).detail;
+      push(d.text, false, { label: "Undo", run: () => void d.run().then((r) => push(r.error ?? r.message ?? "Undone.", !!r.error)) }, 8000);
+    };
+    window.addEventListener("ls-undoable", on);
+    return () => window.removeEventListener("ls-undoable", on);
   }, [push]);
   return (
     <ToastCtx.Provider value={push}>
@@ -341,25 +453,40 @@ export function useCommand(after?: () => void) {
 }
 
 // ---- controls ------------------------------------------------------------
+/** The choices of a Segmented: "a b c" (labels "A|B|C" or "A B C"), "a,b,c" (labels "A,B,C" or
+ *  "A|B|C"; empty values kept: ",map" = All, Maps) or arrays. Never one pill for the whole list. */
+function choices(values: string | string[], labels?: string | string[]): [string, string][] {
+  const commas = typeof values === "string" && values.includes(",") && !/\s/.test(values);
+  if (!Array.isArray(values) && !commas) return options(values, Array.isArray(labels) ? labels.join("|") : (labels ?? values));
+  const v = Array.isArray(values) ? values.map(String) : values.split(",");
+  const l = Array.isArray(labels) ? labels.map(String) : labels ? (labels.includes("|") ? labels.split("|") : labels.split(",")) : [];
+  return v.map((x, i) => [x, l[i]?.trim() || x || "All"]);
+}
+
+/** A choice of a few words, one pill each. `values`/`labels` take a string ("a b c" with labels
+ *  "A|B|C") or arrays; `options` takes [value, label] pairs. */
 export function Segmented({
   values,
   labels,
+  options: pairs,
   current,
   onPick,
   label,
   disabled,
 }: {
-  values: string;
-  labels: string;
+  values?: string | string[];
+  labels?: string | string[];
+  options?: readonly (readonly [string, ReactNode])[];
   current: string;
   onPick: (v: string) => void;
   label: string;
   disabled?: boolean;
 }) {
+  const list: (readonly [string, ReactNode])[] = pairs ? [...pairs] : choices(values ?? "", labels);
   return (
     <div className="seg" role="group" aria-label={label} aria-busy={disabled || undefined}>
-      {options(values, labels).map(([v, l]) => (
-        <button key={v} type="button" aria-pressed={sameValue(current, v)} disabled={disabled} onClick={() => onPick(v)}>
+      {list.map(([v, l]) => (
+        <button key={v} type="button" aria-pressed={v === "" ? current === "" : sameValue(current, v)} disabled={disabled} onClick={() => onPick(v)}>
           {l}
         </button>
       ))}
@@ -371,8 +498,29 @@ export function Switch({ on, onChange, label, disabled }: { on: boolean; onChang
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" disabled={disabled} aria-busy={disabled || undefined} onClick={() => onChange(!on)} />;
 }
 
+/** Places a popup (position: fixed, in document.body) next to `anchor`, on screen: on the side
+ *  asked for if it fits, else the other side; shifted along so it never leaves the window.
+ *  Works in the page's own units (the text size setting zooms the page). */
+export function placePopup(anchor: DOMRect, pop: HTMLElement, side: "top" | "bottom" = "top", align: "center" | "start" | "end" = "center", gap = 8) {
+  const z = zoom();
+  const r = { left: anchor.left / z, right: anchor.right / z, top: anchor.top / z, bottom: anchor.bottom / z };
+  const vw = window.innerWidth / z, vh = window.innerHeight / z, m = 8;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const want = align === "start" ? r.left : align === "end" ? r.right - w : (r.left + r.right) / 2 - w / 2;
+  const left = Math.min(Math.max(want, m), Math.max(m, vw - w - m));
+  const above = r.top - h - gap, below = r.bottom + gap;
+  const fitsAbove = above >= m, fitsBelow = below + h <= vh - m;
+  let top = side === "top" ? (fitsAbove || !fitsBelow ? above : below) : fitsBelow || !fitsAbove ? below : above;
+  top = Math.min(Math.max(top, m), Math.max(m, vh - h - m));
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+  pop.dataset.side = top < r.top ? "top" : "bottom";
+  pop.style.visibility = "visible";
+}
+
 /** A small "?" that explains a field: shown on hover, or on click/tap (phones). Safe
- *  inside a <label>: clicking it doesn't open the field. */
+ *  inside a <label>: clicking it doesn't open the field. The tip goes in document.body, above
+ *  everything (menu bars, panels, sheets), and flips/shifts to stay on screen. */
 export function Info({ text }: { text: ReactNode }) {
   // shown while hovered, or pinned open by a click/tap
   const [hover, setHover] = useState(false);
@@ -380,21 +528,10 @@ export function Info({ text }: { text: ReactNode }) {
   const open = hover || pinned;
   const box = useRef<HTMLSpanElement>(null);
   const pop = useRef<HTMLSpanElement>(null);
-  // placed against the window, so it's never cut off and never makes the page scroll sideways
   useLayoutEffect(() => {
     const r = box.current?.querySelector("button")?.getBoundingClientRect();
-    const p = pop.current;
-    if (!open || !r || !p) return;
-    // measured on screen, placed in the page's own (text size) units
-    const z = zoom();
-    const b = { left: r.left / z, top: r.top / z, width: r.width / z, bottom: r.bottom / z };
-    const w = p.offsetWidth, h = p.offsetHeight, m = 8;
-    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, m), window.innerWidth / z - w - m);
-    const above = b.top - h - m;
-    p.style.left = `${left}px`;
-    p.style.top = `${above >= m ? above : b.bottom + m}px`;
-    p.style.visibility = "visible";
-  }, [open]);
+    if (open && r && pop.current) placePopup(r, pop.current, "top");
+  }, [open, text]);
   useEffect(() => {
     if (!open) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -407,10 +544,12 @@ export function Info({ text }: { text: ReactNode }) {
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     document.addEventListener("scroll", scrolled, true);
+    window.addEventListener("resize", scrolled);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
       document.removeEventListener("scroll", scrolled, true);
+      window.removeEventListener("resize", scrolled);
     };
   }, [open]);
   // hover is for a mouse: a tap fires enter (and no leave) on touch screens
@@ -431,15 +570,15 @@ export function Info({ text }: { text: ReactNode }) {
       >
         ?
       </button>
-      {open && <span className="info-pop" role="tooltip" ref={pop}>{text}</span>}
+      {open && createPortal(<span className="info-pop" role="tooltip" ref={pop}>{text}</span>, document.body)}
     </span>
   );
 }
 
 /** A button that shows a spinner and another label while its action runs. */
-export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick, type = "button" }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
+export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick, type = "button", title }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick?: () => void; type?: "button" | "submit"; title?: string }) {
   return (
-    <button type={type} className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick}>
+    <button type={type} className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick} title={title}>
       {busy ? (
         <>
           <span className="spinner" aria-hidden="true" />

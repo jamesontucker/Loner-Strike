@@ -10,12 +10,12 @@ use std::process::{Child, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// <app folder>/smarter-chat (LONER_STRIKE_AI_DIR picks another, for testing).
+/// <app folder>/smarter-chat, in Local AppData on Windows (LONER_STRIKE_AI_DIR picks another, for testing).
 pub fn dir() -> PathBuf {
     if let Some(p) = std::env::var_os("LONER_STRIKE_AI_DIR") {
         return PathBuf::from(p);
     }
-    crate::sys::app_dir().join("smarter-chat")
+    crate::localdata::dir("smarter-chat")
 }
 
 pub fn model_path(m: &Model) -> PathBuf {

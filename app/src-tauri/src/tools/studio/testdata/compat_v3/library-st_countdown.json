@@ -1,0 +1,606 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Countdown HUD",
+ "description": "Counts down Seconds (0: 60) on everyone's HUD as minutes:seconds, then Done.",
+ "category": "Starter: rounds and scoring",
+ "kind": "macro",
+ "root": "cd_run",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "cd_run",
+   "name": "Countdown HUD",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "label",
+     "name": "Label",
+     "type": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "exec"
+    },
+    {
+     "id": "done",
+     "name": "Done",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "cd_left",
+   "name": "Countdown left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "cd_label",
+   "name": "Countdown label",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  }
+ ],
+ "nodes": [
+  {
+   "id": "cd_run_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_setl",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "every": 1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_g",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 540
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_ft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 2340,
+    "y": 540
+   },
+   "params": {
+    "style": "ms"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_gl",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 720
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dlabel",
+   "type": "text.literal",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "value": "Time left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_lab",
+   "type": "logic.select",
+   "pos": {
+    "x": 3380,
+    "y": 720
+   },
+   "params": {
+    "of": "text"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "text": "[0]: [1]"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_hud",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": -1,
+    "y": 0
+   },
+   "params": {
+    "text": "",
+    "y": 0.12,
+    "seconds": 1.1,
+    "effect": "fade"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left",
+    "amount": -1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_over",
+   "type": "math.compare",
+   "pos": {
+    "x": 4160,
+    "y": 720
+   },
+   "params": {
+    "op": "lt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_stop",
+   "type": "timer.clear",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "cd_run_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "cd_run_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "label"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "cd_run_setl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "cd_run_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "cd_run_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_ft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "cd_run_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "cd_run_dlabel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "cd_run_lab",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "cd_run_ft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "cd_run_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "cd_run_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_over",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "cd_run_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "cd_run_over",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "cd_run_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "handle"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "handle"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "cd_run_stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "done"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "cd_run",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Countdown HUD: Wire Round Started (or Freeze Time Ended) in. Label goes before the time (empty: Time left); it stops at 0 and runs Done. Bots don't read it."
+  }
+ ]
+}

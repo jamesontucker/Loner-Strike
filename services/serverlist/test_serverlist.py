@@ -92,6 +92,22 @@ class Tests(unittest.TestCase):
         for bad in ["", "127.0.0.1:27015", "10.0.0.5", "192.168.1.2:27015", "169.254.1.1", "0.0.0.0", "8.8.8.8:0", "8.8.8.8:99999", "8.8.8.8:x", "a b:1", "x" * 101, "localhost:27015"]:
             self.assertIsNone(sl.clean_address(bad), bad)
 
+    def test_names_of_63_bytes(self):
+        """Steam's server name limit is 64 bytes with the NUL: a 63-byte UTF-8 name (the app's
+        cap) comes through the A2S reply, the list and a claim's name whole."""
+        name = "Café " + "x" * 57
+        self.assertEqual(len(name.encode()), 63)
+        body = b"I\x30" + name.encode() + b"\x00de_dust2\x00cstrike\x00Counter-Strike\x00\x0a\x00\x05\x20\x03dl\x01\x01\x01"
+        info = sl.parse_info(body)
+        self.assertEqual(info["name"], name)
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1000))
+        self.assertEqual(r.public(1000)[0]["name"], name)
+        import community as cm
+        self.assertEqual(cm.one_line(name, 64), name, "a claim keeps it (roles.py: one_line(name, 64))")
+        emoji = "a" * 59 + "\U0001F642"
+        self.assertEqual(cm.one_line(emoji, 64), emoji)
+
     def test_the_list(self):
         r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
         info = sl.parse_info(INFO_BODY)
@@ -103,11 +119,31 @@ class Tests(unittest.TestCase):
         self.assertEqual(len(r.public(1200)), 2, "a missed answer isn't the end")
         self.assertEqual([s["address"] for s in r.public(1000 + sl.FRESH_SECS + 1)], [], "quiet too long: hidden")
         self.assertFalse(r.update("b:1", info, {"ls_list": "0"}, 1300))
-        self.assertEqual(r.addresses(), ["a:1"], "the host turned it off")
-        r.update("a:1", None, None, 1000 + sl.GONE_SECS + 1)
-        self.assertEqual(r.addresses(), [], "gone for hours: off the list")
+        self.assertEqual(sorted(r.addresses()), ["a:1", "b:1"], "one poll saying off isn't enough (a server just started says 0)")
+        self.assertFalse(r.update("b:1", info, {"ls_list": "0"}, 1400))
+        self.assertEqual(r.addresses(), ["a:1"], "the host turned it off: two polls in a row")
+        r.update("a:1", None, None, 1000 + 2 * 24 * 3600)
+        self.assertEqual(r.addresses(), ["a:1"], "down for two days (a machine restarted): still known")
+        self.assertEqual(r.public(1000 + 2 * 24 * 3600), [], "but not shown while it doesn't answer")
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1000 + 2 * 24 * 3600 + 5))
+        self.assertEqual([s["address"] for s in r.public(1000 + 2 * 24 * 3600 + 5)], ["a:1"], "back on its own when it answers")
+        r.update("a:1", None, None, 1000 + 2 * 24 * 3600 + 5 + sl.GONE_SECS + 1)
+        self.assertEqual(r.addresses(), [], "gone for a week: off the list")
         again = sl.Registry(r.path)
         self.assertEqual(again.addresses(), [], "kept on disk")
+
+    def test_a_restart_doesnt_drop_a_listed_server(self):
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        info = sl.parse_info(INFO_BODY)
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1000))
+        # it restarts: one poll lands before friends.cfg has set ls_list 1 again
+        self.assertFalse(r.update("a:1", info, {"ls_list": "0"}, 1120))
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1240))
+        # the count starts again after a poll that says on
+        self.assertFalse(r.update("a:1", info, {"ls_list": "0"}, 1360))
+        self.assertEqual(r.addresses(), ["a:1"])
+        again = sl.Registry(r.path)
+        self.assertEqual(again.servers["a:1"]["off"], 1, "the count is kept over a restart of the list")
 
     def test_rate_limit(self):
         lim = sl.RateLimit(2)

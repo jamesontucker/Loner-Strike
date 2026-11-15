@@ -1,0 +1,19 @@
+/* Keys sheet (?), the viewer's Go to panel and bookmarks (common/Shortcuts.tsx, ViewerTools.tsx) */
+.tools-keysheet { padding: 20px; }
+.tools-keysheet h2 { margin: 0 0 10px; }
+.tools-keysheet h3 { margin: 14px 0 6px; font-size: 15px; }
+.tools-keysheet-list { display: grid; gap: 4px; margin: 0; }
+.tools-keysheet-list > div { display: grid; grid-template-columns: minmax(90px, 28%) 1fr; gap: 12px; align-items: baseline; }
+.tools-keysheet-list dt { white-space: nowrap; }
+.tools-keysheet-list dd { margin: 0; color: var(--bone-dim); }
+.tools-keysheet kbd { font: 600 13px/1 var(--text); padding: 3px 6px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); white-space: nowrap; }
+.tools-keysheet-foot { margin-top: 16px; gap: 8px; }
+
+.tools-goto-row { gap: 6px; flex-wrap: nowrap; }
+.tools-goto-row input { flex: 1; min-width: 0; max-width: none; }
+.tools-goto-row input.bad { outline: 2px solid var(--weak); }
+.tools-goto .bad-text { color: var(--weak); margin: 0; }
+.tools-goto-actions { gap: 6px; flex-wrap: wrap; }
+.tools-bookmarks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.tools-bookmarks li { gap: 8px; flex-wrap: nowrap; min-width: 0; }
+.tools-bookmarks li > .link:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

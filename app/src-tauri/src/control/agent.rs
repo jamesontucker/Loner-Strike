@@ -94,7 +94,7 @@ fn config(e: &Entry) -> Value {
 
 /// A line in the service's unit naming how it's written: a unit without this one is set up
 /// again (raise it whenever the unit's text changes)
-const UNIT_REV: &str = "loner-strike unit 3";
+const UNIT_REV: &str = "loner-strike unit 5";
 
 /// The service's unit, and turning it on (or restarting it with a new program or port).
 pub fn install_sh(id: &str, game: &str, port: u16) -> String {
@@ -148,9 +148,52 @@ MemoryMax=128M
 [Install]
 WantedBy=multi-user.target
 EOF
+# the folder gm_extras and the roles unit talk through (/link requests and answers, who's here)
+install -d -m 755 "$HOME/{dir}/{game}/addons/amxmodx/data/gamemodes/lslink"
+# MCP: community roles (ls-control roles): the /link relay and supporters. It needs the internet
+# (Loner-Strike's list service, through curl), which the service above doesn't get; it may write
+# only its own folder and users.ini (in place)
+sudo tee /etc/systemd/system/{u}-roles.service >/dev/null <<EOF
+[Unit]
+# {rev}
+Description=Loner-Strike community roles {id}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$(whoami)
+ExecStart=$HOME/{bin} roles --server {id}
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=$HOME/{data} -$HOME/{dir}/{game}/addons/amxmodx/configs/users.ini $HOME/{dir}/{game}/addons/amxmodx/data/gamemodes/lslink
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=077
+TasksMax=32
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target
+EOF
 sudo systemctl daemon-reload
-sudo systemctl enable {u} >/dev/null 2>&1
-sudo systemctl restart {u}
+sudo systemctl enable {u} {u}-roles >/dev/null 2>&1
+sudo systemctl restart {u} {u}-roles
 sleep 1
 systemctl is-active --quiet {u} || fail "Shared control didn't start ($(sudo journalctl -u {u} -n 1 --no-pager -o cat 2>/dev/null))."
 echo "@@STEP ready"
@@ -165,7 +208,7 @@ echo "@@STEP ready"
 /// people and log only when the server goes for good (a rebuild keeps who helps run it).
 pub fn remove_sh(id: &str, for_good: bool) -> String {
     let u = unit(id);
-    let mut sh = format!("sudo systemctl disable --now {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service; ");
+    let mut sh = format!("sudo systemctl disable --now {u} {u}-roles >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-roles.service; ");
     if for_good {
         sh.push_str(&format!("rm -rf \"$HOME/{}\"; ", data_dir(id)));
     }
@@ -251,6 +294,36 @@ pub fn ensure(e: &Entry, res: &Path) -> Result<(), String> {
     install(e, res)
 }
 
+/// MCP: the server's community roles claim (roles.rs), beside its ls-control: only the game
+/// server's user can read it; ls-control relays /link and keeps supporters with it.
+pub fn put_roles_token(e: &Entry, token: &str) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server isn't on a Linux machine.")?;
+    if !token.starts_with("lsr1_") || !token[5..].chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("That isn't a claim token.".into());
+    }
+    let (code, out) = remote::exec(r, &format!("install -d -m 700 \"$HOME/loner-strike/control\" \"$HOME/{}\"", data_dir(&e.id)))?;
+    if code != 0 {
+        return Err(format!("Couldn't make shared control's folder on the server ({}).", out.trim()));
+    }
+    let file = format!("{}/roles-token", data_dir(&e.id));
+    remote::write_file(r, &format!("{file}.new"), token.as_bytes())?;
+    let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && chmod 600 {n} && mv -f {n} {f}", n = shell_quote(&format!("{file}.new")), f = shell_quote(&file)))?;
+    if code != 0 {
+        return Err(format!("Couldn't save the claim on the server ({}).", out.trim()));
+    }
+    Ok(())
+}
+
+/// MCP: the claim ended: the server's copy goes too (its relay and supporters check stop).
+pub fn forget_roles_token(e: &Entry) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server isn't on a Linux machine.")?;
+    let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && rm -f {}", shell_quote(&format!("{}/roles-token", data_dir(&e.id)))))?;
+    if code != 0 {
+        return Err(format!("Couldn't remove the claim on the server ({}).", out.trim()));
+    }
+    Ok(())
+}
+
 /// One of ls-control's commands for this server, over SSH: its JSON answer, or its error.
 pub fn cli(e: &Entry, args: &[&str]) -> Result<Value, String> {
     let r = e.remote.as_ref().ok_or("Shared control on the server is for servers on a Linux machine.")?;
@@ -283,7 +356,8 @@ pub fn reachable(url: &str, tunnel: bool) -> Result<String, String> {
         502..=504 | 530 => return Err(format!("the front couldn't reach shared control on the server (HTTP {status})")),
         _ => {}
     }
-    let v: Value = r.json().map_err(|_| format!("it answered with something else (HTTP {status})"))?;
+    // [Caps] a ping answer is a few bytes
+    let v: Value = crate::caps::read_up_to(r, "answer", 64 << 10).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or_else(|| format!("it answered with something else (HTTP {status})"))?;
     v["version"].as_str().map(String::from).ok_or_else(|| format!("it answered with something else (HTTP {status})"))
 }
 

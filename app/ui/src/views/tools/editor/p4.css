@@ -1,0 +1,69 @@
+/* P4: prefab library, box select, cordon, asset previews */
+.p4-prefabs { display: grid; gap: 8px; align-content: start; }
+.p4-search { width: 100%; }
+.p4-head { margin: 6px 0 0; font-size: 13px; color: var(--bone-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.p4-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.p4-card { display: grid; gap: 3px; padding: 6px; border: 1px solid var(--line, rgba(255,255,255,0.12)); border-radius: 6px; background: rgba(255,255,255,0.03); cursor: grab; min-width: 0; }
+.p4-card:hover { border-color: var(--accent, #c9a44a); }
+.p4-card:active { cursor: grabbing; }
+.p4-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #1d211b; border-radius: 4px; display: block; }
+.p4-nothumb { display: grid; place-items: center; font-size: 12px; color: var(--bone-dim); text-align: center; padding: 6px; }
+.p4-card-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p4-card-meta { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p4-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.p4-tags .tag { font-size: 11px; padding: 0 5px; }
+.p4-card-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.p4-card-actions .btn { padding-left: 6px; padding-right: 6px; }
+.p4-form { display: grid; gap: 6px; padding: 8px; }
+.p4-save-top { display: grid; grid-template-columns: 128px 1fr; gap: 8px; align-items: start; }
+.p4-placing { margin: 0; }
+
+/* the box select rectangle (drawn over the views, in window space) */
+.editor-screen-rect { position: fixed; z-index: 50; pointer-events: none; border: 1.5px solid #5fc8ff; background: rgba(95, 200, 255, 0.12); border-radius: 1px; }
+.editor-screen-rect.touching { border-style: dashed; background: rgba(95, 200, 255, 0.07); }
+.editor-screen-rect.adding { border-color: #7ee08a; background: rgba(126, 224, 138, 0.1); }
+.editor-screen-rect.removing { border-color: #ff7b6b; background: rgba(255, 123, 107, 0.1); }
+
+/* the cordon in the Compile tab */
+.p4-cordon { display: grid; gap: 6px; border: 1px solid var(--line, rgba(255,255,255,0.12)); border-radius: 6px; padding: 6px 8px 8px; }
+.p4-cordon legend { font-size: 13px; padding: 0 4px; }
+.p4-cordon-boxes { display: grid; gap: 2px; font-size: 12px; }
+.p4-cordon-box { display: flex; gap: 6px; align-items: center; }
+.p4-cordon-box .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* sound and model previews in the entity form */
+.p4-asset { display: inline-flex; gap: 4px; align-items: center; }
+.p4-model { margin-top: 4px; width: 100%; height: 180px; border-radius: 4px; overflow: hidden; background: #2a2f27; position: relative; }
+.p4-model .muted { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; text-align: center; padding: 8px; }
+.p4-cordon .editor-check { font-size: 13px; }
+.p4-badge { display: inline-block; min-width: 16px; padding: 0 4px; border: 1.5px solid; border-radius: 8px; background: rgba(0,0,0,0.7); color: #fff; font: 600 11px/16px system-ui, sans-serif; text-align: center; }
+.p4-comp-list { display: grid; gap: 4px; }
+.p4-comp { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; padding: 5px 6px; border: 1px solid var(--line, rgba(255,255,255,0.12)); border-radius: 6px; background: rgba(255,255,255,0.03); cursor: grab; }
+.p4-comp:hover { border-color: var(--accent, #c9a44a); }
+.p4-comp-dot { width: 12px; height: 12px; border-radius: 50%; }
+.p4-comp-text { display: grid; min-width: 0; font-size: 13px; }
+.p4-comp-text .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* library rows (never clip: thumbnail, text that shortens, actions that keep their size) */
+.p4-prefabs { gap: 8px; min-width: 0; }
+.p4-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.p4-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.p4-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px 4px 4px; border: 1px solid var(--line, rgba(255,255,255,0.12)); border-radius: 6px; background: rgba(255,255,255,0.03); cursor: grab; min-width: 0; }
+.p4-row:hover, .p4-row:focus-within { border-color: var(--accent, #c9a44a); }
+.p4-row-thumb { width: 56px; height: 42px; object-fit: contain; background: #1d211b; border-radius: 3px; display: block; }
+.p4-row-text { display: grid; min-width: 0; }
+.p4-row-name { font-weight: 600; font-size: 13px; }
+.p4-row-meta { font-size: 12px; }
+.p4-row-actions { display: flex; gap: 4px; align-items: center; flex: none; }
+.p4-menu { position: relative; display: inline-flex; }
+.p4-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 180px; padding: 4px; background: var(--panel); border-radius: 4px; box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,0.5); }
+.p4-menu-list button { text-align: left; background: none; border: 0; color: inherit; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.p4-menu-list button:hover, .p4-menu-list button:focus-visible { background: rgba(255,255,255,0.08); }
+.p4-comp { grid-template-columns: 12px minmax(0, 1fr) auto; }
+.p4-comp-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p4-pack { display: grid; gap: 8px; min-width: 0; }
+.p4-pack .editor-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr); gap: 6px; }
+.p4-pack .editor-field { min-width: 0; }
+.p4-pack .editor-field input { width: 100%; box-sizing: border-box; }
+.p4-pack .p4-actions .btn { flex: 1 1 auto; }
+.p4-mono-path { font-family: var(--mono, monospace); font-size: 12px; overflow-wrap: anywhere; }

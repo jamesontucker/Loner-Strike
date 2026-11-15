@@ -58,6 +58,18 @@ pub struct Settings {
     /// the Smarter chat model to use (catalog id)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub smart_chat_model: Option<String>,
+    /// AI agents (MCP, mcp/): coding agents may use Tools over 127.0.0.1 with this run's token
+    #[serde(default)]
+    pub mcp: bool,
+    /// and may change things (edit maps and navs, start and stop servers), not just look
+    #[serde(default)]
+    pub mcp_changes: bool,
+    /// the same AI agents token across restarts (kept in its own owner-only file, mcp/conn.rs)
+    #[serde(default)]
+    pub mcp_keep_token: bool,
+    /// the port AI agents connect to (None: 8029)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_port: Option<u16>,
 }
 
 /// A new phone access key.
@@ -68,8 +80,9 @@ pub fn new_token() -> String {
     (0..20).map(|_| C[r.gen_range(0..C.len())] as char).collect()
 }
 
-fn settings_path() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike").join("settings.json")
+/// settings.json, in the app's folder (a test build's scratch folder under test: QA4-CORE F6).
+pub fn settings_path() -> PathBuf {
+    crate::sys::app_dir().join("settings.json")
 }
 
 // one change to settings.json at a time (read, change, write)
@@ -252,7 +265,27 @@ async fn api_app(State(st): State<Shared>) -> Json<Value> {
             };
             // installed, but a plugin of theirs didn't build (setup marks them)
             let unbuilt: Vec<String> = rec.data.components.iter().filter(|(_, v)| v["unbuilt"] == Value::Bool(true)).map(|(k, _)| k.clone()).collect();
-            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs, "unbuilt": unbuilt})
+            // Parity A: the other game in the same Half-Life folder, when it's set up and has parts
+            // waiting: updates follow the game picked, so a CZ set up once and played rarely kept
+            // an old bot brain (its record said so, but nothing offered the update)
+            let others: Vec<Value> = if g.dedicated {
+                vec![]
+            } else {
+                crate::setup::GAMES
+                    .iter()
+                    .filter(|(id, _)| *id != g.name)
+                    .filter_map(|(id, _)| {
+                        let dir = g.hl.join(id);
+                        let r = crate::setup::record::Record::open(&dir);
+                        if !r.data.components.contains_key("core") {
+                            return None;
+                        }
+                        let out = res.as_ref().map(|x| crate::setup::outdated(x, &r)).unwrap_or_default();
+                        (!out.is_empty()).then(|| json!({"id": id, "dir": dir, "hl": g.hl, "outdated": out}))
+                    })
+                    .collect()
+            };
+            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs, "unbuilt": unbuilt, "others": others})
         })
         .await
         .ok(),
@@ -497,7 +530,12 @@ fn cfg_pairs(text: &str) -> Vec<(String, String)> {
 /// Sets `cvar "value"` lines in a config file, keeping the rest.
 pub(crate) fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::io::Result<()> {
     let old = crate::sys::read_latin1(path).unwrap_or_default();
-    crate::sys::write_atomic(path, with_cfg_values(&old, values).as_bytes())
+    let new = with_cfg_values(&old, values);
+    if new != old {
+        let names: Vec<&str> = values.iter().map(|(k, _)| k.as_str()).take(3).collect();
+        crate::safety::before("Settings", &format!("Changed {}", names.join(", ")), path);
+    }
+    crate::sys::write_atomic(path, new.as_bytes())
 }
 
 /// A config's text with these `cvar "value"` lines set, the rest kept.
@@ -778,8 +816,13 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
     if !start.is_empty() {
         game_args.extend(["+exec".into(), START_CFG.into()]);
     }
+    // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
+    let restored = {
+        let dir = g.dir.clone();
+        tokio::task::spawn_blocking(move || crate::hamguard::before_start(&dir, "Play")).await.ok().flatten()
+    };
     match crate::steam::launch(&g.hl, appid, &game_args) {
-        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true, "note": restored}))),
         Err(e) => (StatusCode::OK, Json(json!({"error": e}))),
     }
 }
@@ -815,23 +858,15 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
         }
         // the app's own data, and the window's saved size (a Tauri plugin's folder)
         let mut dirs_to_go = vec![crate::sys::app_dir()];
-        if let Some(d) = dirs::data_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
-        if let Some(d) = dirs::config_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
         // the cache (never the system cache folder's Loner-Strike on Windows: the app is
         // installed there), and the window's own data
         dirs_to_go.push(crate::sys::cache_root());
-        if let Some(d) = dirs::cache_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
+        dirs_to_go.extend(crate::sys::window_data_dirs());
         for d in dirs_to_go {
             if d.is_dir() {
-                if let Err(err) = std::fs::remove_dir_all(&d) {
-                    failed.push(format!("{} ({err})", d.display()));
-                }
+                // (Windows: the open window's WebView2 data is in use until the app quits; the
+                // uninstaller removes it)
+                failed.extend(remove_dir_except(&d, if cfg!(windows) { &["EBWebView"] } else { &[] }));
             }
         }
         json!({"ok": true, "servers": servers, "failed": failed})
@@ -910,6 +945,41 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/lan", get(api_lan))
         .route("/api/app/direct", get(api_direct).post(api_direct_set))
         .route("/api/app/vlans", get(api_vlans))
+}
+
+/// Removes a folder and everything in it, except entries named in `keep` at its top (those and
+/// the folder stay). What couldn't be removed, in words.
+fn remove_dir_except(d: &std::path::Path, keep: &[&str]) -> Vec<String> {
+    if keep.is_empty() {
+        return std::fs::remove_dir_all(d).err().map(|e| format!("{} ({e})", d.display())).into_iter().collect();
+    }
+    let mut failed = vec![];
+    for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+        if keep.iter().any(|k| e.file_name().to_string_lossy().eq_ignore_ascii_case(k)) {
+            continue;
+        }
+        let p = e.path();
+        let r = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+        if let Err(err) = r {
+            failed.push(format!("{} ({err})", p.display()));
+        }
+    }
+    failed
+}
+
+#[cfg(test)]
+mod remove_tests {
+    #[test]
+    fn the_windows_webview_folder_is_left_for_the_uninstaller() {
+        let d = std::env::temp_dir().join(format!("ls-remove-{}", std::process::id()));
+        std::fs::create_dir_all(d.join("EBWebView/Default")).unwrap();
+        std::fs::create_dir_all(d.join("logs")).unwrap();
+        std::fs::write(d.join("settings.json"), "{}").unwrap();
+        assert!(super::remove_dir_except(&d, &["EBWebView"]).is_empty());
+        assert!(d.join("EBWebView/Default").is_dir() && !d.join("logs").exists() && !d.join("settings.json").exists());
+        assert!(super::remove_dir_except(&d, &[]).is_empty());
+        assert!(!d.exists());
+    }
 }
 
 #[cfg(test)]

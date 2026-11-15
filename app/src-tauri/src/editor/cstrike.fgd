@@ -1,0 +1,1509 @@
+// Counter-Strike 1.6 entity definitions for the Loner-Strike map editor.
+// Written for Loner-Strike from how the game behaves; not copied from Valve's or anyone
+// else's FGD. Same licence as the rest of Loner-Strike. Standard FGD syntax, so other
+// editors can read it too.
+
+// ---- shared pieces ----------------------------------------------------------------------
+
+@BaseClass = Targetname [ targetname(target_source) : "Name" : : "What other entities call this one when they set it off." ]
+@BaseClass = Target [ target(target_destination) : "Sets off" : : "The name of what this sets off." ]
+@BaseClass = Angle [ angle(angle) : "Facing" : 0 : "Which way it faces, seen from above (0 east, 90 north, 180 west, 270 south)." ]
+@BaseClass = Angles [ angles(string) : "Turn (pitch yaw roll)" : "0 0 0" : "Pitch, yaw and roll in degrees." ]
+@BaseClass = Master [ master(target_destination) : "Master" : : "A multisource that must be on before this works." ]
+@BaseClass = Delay [ delay(float) : "Delay before setting off" : 0 : "Seconds to wait before setting off its target." ]
+@BaseClass = KillTarget [ killtarget(target_destination) : "Removes" : : "The name of something to remove from the map when this is set off." ]
+
+@BaseClass = RenderFields
+[
+	rendermode(choices) : "Draw mode" : 0 : "How it's drawn: Normal is solid; Texture and Additive let you see through it." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid (cut-out blue)"
+		5 : "Additive"
+	]
+	renderamt(integer) : "See-through amount" : 255 : "0 is invisible, 255 is fully drawn (for modes other than Normal)."
+	rendercolor(color255) : "Tint color" : "0 0 0" : "Color used by the Color and Glow modes."
+	renderfx(choices) : "Effect" : 0 : "A moving effect on top of the draw mode." =
+	[
+		0 : "None"
+		1 : "Slow pulse"
+		2 : "Fast pulse"
+		3 : "Slow wide pulse"
+		4 : "Fast wide pulse"
+		9 : "Slow strobe"
+		10 : "Fast strobe"
+		11 : "Faster strobe"
+		12 : "Slow flicker"
+		13 : "Fast flicker"
+		14 : "Constant glow"
+		15 : "Distort"
+		16 : "Hologram"
+	]
+]
+
+@BaseClass = ZHLT
+[
+	zhlt_lightflags(choices) : "Light and shadow" : 0 : "How the compiler lights it and whether it casts shadows." =
+	[
+		0 : "Normal"
+		1 : "Embedded fix"
+		2 : "Casts shadows (opaque)"
+		3 : "Opaque and embedded fix"
+		6 : "Opaque, no light through"
+	]
+	light_origin(target_destination) : "Light from" : : "An info_target to light this brush as if it were there (for moving parts)."
+]
+
+@BaseClass base(Targetname, Target, RenderFields, ZHLT, KillTarget, Delay) = Door
+[
+	speed(integer) : "Speed" : 100 : "How fast it moves (units per second)."
+	wait(float) : "Wait before closing" : 4 : "Seconds before it goes back; -1 stays open."
+	lip(integer) : "Lip" : 0 : "How much of it stays showing when fully open."
+	dmg(integer) : "Crush damage" : 0 : "Damage to someone blocking it."
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
+	[
+		0 : "None"
+		1 : "Servo (pneumatic)"
+		2 : "Pneumatic"
+		3 : "Squeaky"
+		4 : "Pistons"
+		5 : "Large rollers"
+		6 : "Quick swing"
+		7 : "Squeaky 2"
+		8 : "Squeaky 3"
+		9 : "Metal rattle"
+		10 : "Squeaky pneumatic"
+	]
+	stopsnd(choices) : "Stopping sound" : 0 : "The sound it makes when it stops." =
+	[
+		0 : "None"
+		1 : "Clang with brake"
+		2 : "Clang reverb"
+		3 : "Ratchet stop"
+		4 : "Chunk"
+		5 : "Light airbrake"
+		6 : "Metal slide stop"
+		7 : "Metal lock stop"
+		8 : "Snap shut"
+	]
+	health(integer) : "Health" : 0 : "If more than 0, shooting it opens it."
+	netname(target_destination) : "Sets off when closed" : : "The name of what to set off when it has closed."
+	spawnflags(flags) =
+	[
+		1 : "Starts open" : 0
+		4 : "Doesn't link with doors of the same name" : 0
+		8 : "Passable (not solid)" : 0
+		32 : "Toggle (stays until set off again)" : 0
+		256 : "Only opens when set off (not on touch)" : 0
+		512 : "Monsters can't open" : 0
+	]
+]
+
+@BaseClass base(Targetname, Target, RenderFields, ZHLT) = Breakable
+[
+	health(integer) : "Health" : 1 : "Damage it takes to break."
+	material(choices) : "Made of" : 0 : "Sets its break sound and pieces." =
+	[
+		0 : "Glass"
+		1 : "Wood"
+		2 : "Metal"
+		3 : "Flesh"
+		4 : "Cinder block"
+		5 : "Ceiling tile"
+		6 : "Computer"
+		7 : "Unbreakable glass"
+		8 : "Rocks"
+	]
+	explosion(choices) : "Pieces fly" : 0 : "Which way the pieces fly when it breaks: random, or away from the attack." =
+	[
+		0 : "Away from the hit"
+		1 : "Randomly"
+	]
+	gibmodel(studio) : "Piece model" : : "A model to use for the pieces instead of the material's."
+	spawnobject(choices) : "Leaves behind" : 0 =
+	[
+		0 : "Nothing"
+		1 : "Battery"
+		2 : "Health kit"
+	]
+	explodemagnitude(integer) : "Explosion size" : 0 : "If more than 0, it explodes when it breaks."
+]
+
+@BaseClass base(Targetname, Target, Angle) size(-16 -16 -36, 16 16 36) color(0 255 0) = PlayerSpawn []
+
+@BaseClass = Appearflags
+[
+	spawnflags(flags) =
+	[
+		2048 : "Not in deathmatch" : 0
+	]
+]
+
+// ---- the world --------------------------------------------------------------------------
+
+@SolidClass = worldspawn : "The world: every brush that isn't part of an entity, and the map's settings."
+[
+	message(string) : "Map title" : : "Shown while the map loads."
+	skyname(string) : "Sky" : "desert" : "The sky box name from gfx/env (desert, night, city, cliff, ...)."
+	wad(string) : "Texture files" : : "The WAD files the map's textures come from (the editor fills this in)."
+	light(integer) : "Base light" : 0 : "A little light everywhere so nothing is pitch black (0 is off)."
+	MaxRange(integer) : "Draw distance" : 4096 : "How far players can see (units)."
+	WaveHeight(integer) : "Water wave height" : 0 : "How much water surfaces move."
+	sounds(integer) : "CD track" : 0 : "An old CD music track to play (0 is none)."
+	newunit(choices) : "New level" : 0 =
+	[
+		0 : "No"
+		1 : "Yes (forget the last level)"
+	]
+	mapteams(string) : "Teams" : : "Leave empty for Counter-Strike."
+]
+
+// ---- spawns and game rules --------------------------------------------------------------
+
+@PointClass base(PlayerSpawn) studio("models/player/gign/gign.mdl") = info_player_start : "Counter-Terrorist spawn point. Add at least as many as the team can have players."
+[
+]
+@PointClass base(PlayerSpawn) studio("models/player/terror/terror.mdl") = info_player_deathmatch : "Terrorist spawn point. Add at least as many as the team can have players."
+[
+]
+@PointClass base(PlayerSpawn) = info_vip_start : "Where the VIP starts on an assassination (as_) map."
+[
+]
+@PointClass base(Angle) size(-16 -16 0, 16 16 72) color(0 200 120) studio("models/scientist.mdl") = hostage_entity : "A hostage for the Counter-Terrorists to rescue (cs_ maps)."
+[
+	model(studio) : "Model" : "models/scientist.mdl" : "The hostage's model."
+	skin(integer) : "Skin" : 0 : "Which of the model's skins to use."
+]
+@PointClass size(-8 -8 -8, 8 8 8) color(0 255 255) = info_hostage_rescue : "A point hostages can be rescued at (instead of a func_hostage_rescue brush)."
+[
+]
+@PointClass size(-8 -8 -8, 8 8 8) color(255 0 0) = info_bomb_target : "A bomb site point (instead of a func_bomb_target brush)."
+[
+]
+@PointClass size(-16 -16 -16, 16 16 16) color(220 180 80) = info_map_parameters : "Map rules: who may buy, how big the bomb blast is."
+[
+	buying(choices) : "Buying" : 0 : "Who can buy on this map." =
+	[
+		0 : "Both teams can buy"
+		1 : "Only Counter-Terrorists can buy"
+		2 : "Only Terrorists can buy"
+		3 : "Nobody can buy"
+	]
+	bombradius(integer) : "Bomb blast radius" : 500 : "How far the bomb's blast reaches."
+]
+@PointClass base(Targetname, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_player_equip : "Gives every player these items when they spawn (or when set off, if it has a name)."
+[
+	weapon_knife(integer) : "Knife" : 0 : "How many knives to give (1 for one)."
+	weapon_usp(integer) : "USP" : 0
+	weapon_glock18(integer) : "Glock" : 0 : "How many Glocks to give."
+	weapon_deagle(integer) : "Desert Eagle" : 0
+	weapon_ak47(integer) : "AK-47" : 0 : "How many AK-47s to give."
+	weapon_m4a1(integer) : "M4A1" : 0
+	weapon_awp(integer) : "AWP" : 0 : "How many AWPs to give."
+	weapon_hegrenade(integer) : "HE grenade" : 0
+	item_kevlar(integer) : "Kevlar" : 0 : "How many vests to give."
+	item_assaultsuit(integer) : "Kevlar and helmet" : 0
+	spawnflags(flags) =
+	[
+		1 : "Only when set off" : 0
+		2 : "Take their weapons first" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(200 0 0) = player_weaponstrip : "Takes away all of a player's weapons when set off."
+[
+]
+
+// ---- items ------------------------------------------------------------------------------
+
+@PointClass base(Angle) size(-16 -16 0, 16 16 16) color(255 200 0) = armoury_entity : "A weapon or item lying on the floor for players to pick up."
+[
+	item(choices) : "Item" : 0 : "Which weapon or item lies here." =
+	[
+		0 : "MP5"
+		1 : "TMP"
+		2 : "P90"
+		3 : "MAC-10"
+		4 : "AK-47"
+		5 : "SG 552"
+		6 : "M4A1"
+		7 : "AUG"
+		8 : "Scout"
+		9 : "G3SG1"
+		10 : "AWP"
+		11 : "M3 shotgun"
+		12 : "XM1014 shotgun"
+		13 : "M249"
+		14 : "Flashbang"
+		15 : "HE grenade"
+		16 : "Kevlar"
+		17 : "Kevlar and helmet"
+		18 : "Smoke grenade"
+		19 : "Defuse kit"
+	]
+	count(integer) : "How many" : 1 : "Picked up this many times before it's gone."
+]
+
+// ---- light ------------------------------------------------------------------------------
+
+@BaseClass base(Targetname) = LightBase
+[
+	_light(color255) : "Color and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
+	style(choices) : "Flicker style" : 0 : "A pattern the light follows." =
+	[
+		0 : "Steady"
+		10 : "Fluorescent flicker"
+		2 : "Slow, strong pulse"
+		11 : "Slow pulse, no black"
+		5 : "Gentle pulse"
+		1 : "Flicker A"
+		6 : "Flicker B"
+		3 : "Candle A"
+		7 : "Candle B"
+		8 : "Candle C"
+		4 : "Fast strobe"
+		9 : "Slow strobe"
+	]
+	pattern(string) : "Custom pattern" : : "Letters a (dark) to z (bright), played 10 a second. Overrides the style."
+	_fade(string) : "Fade" : "1.0" : "How quickly the light fades with distance (bigger is faster)."
+	_falloff(choices) : "Falloff" : 0 : "How its light fades with distance, for the light compiler: 0 the compiler's default, 1 inverse, 2 inverse square." =
+	[
+		0 : "Compiler default"
+		1 : "Straight line"
+		2 : "Inverse square"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Starts dark (needs a name)" : 0
+	]
+]
+@PointClass base(LightBase) size(-8 -8 -8, 8 8 8) color(255 255 128) iconsprite("sprites/lightbulb.spr") = light : "A light that shines in every direction."
+[
+]
+@PointClass base(LightBase, Target) size(-8 -8 -8, 8 8 8) color(255 255 128) = light_spot : "A spotlight: a cone of light pointing at its target or along its angles."
+[
+	angles(string) : "Points (pitch yaw roll)" : "0 0 0"
+	pitch(integer) : "Pitch" : -90 : "How far down it points (-90 is straight down)."
+	_cone(integer) : "Inner cone" : 30 : "Degrees of full brightness."
+	_cone2(integer) : "Outer cone" : 45 : "Degrees where the light fades to nothing."
+	_sky(choices) : "Is the sky" : 0 : "1 lights the map like sunlight coming through sky brushes (the light compiler's sun)." =
+	[
+		0 : "No"
+		1 : "Yes"
+	]
+]
+@PointClass base(Angle) size(-8 -8 -8, 8 8 8) color(255 255 0) = light_environment : "The sun: lights everything that can see the sky. Use one per map."
+[
+	pitch(integer) : "Sun height" : -90 : "Negative numbers shine down (-90 straight down, -30 a low sun)."
+	_light(color255) : "Sunlight color and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
+	_diffuse_light(color255) : "Sky light color and brightness" : : "Soft light from the whole sky (newer compilers)."
+]
+@SolidClass base(Targetname, LightBase) = light_surface : "Brushes that give off light (newer compilers)." []
+
+// ---- sound and effects ------------------------------------------------------------------
+
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(150 100 255) iconsprite("sprites/speaker.spr") = ambient_generic : "Plays a sound, looping or once."
+[
+	message(sound) : "Sound file" : : "A .wav under sound/, e.g. ambience/wind1.wav."
+	health(integer) : "Volume" : 10 : "0 to 10."
+	pitch(integer) : "Pitch" : 100 : "100 is normal, higher is faster and squeakier."
+	spawnflags(flags) =
+	[
+		1 : "Heard everywhere" : 0
+		2 : "Small radius" : 0
+		4 : "Medium radius" : 1
+		8 : "Large radius" : 0
+		16 : "Starts silent" : 0
+		32 : "Plays once (not looping)" : 0
+	]
+]
+@PointClass size(-8 -8 -8, 8 8 8) color(150 100 255) = env_sound : "Changes how sounds echo for players near it."
+[
+	radius(integer) : "Radius" : 128 : "How close a player must be for its echo to apply (units)."
+	roomtype(choices) : "Room type" : 0 =
+	[
+		0 : "Normal (off)"
+		1 : "Generic"
+		2 : "Metal, small"
+		5 : "Tunnel, small"
+		8 : "Chamber, small"
+		11 : "Bright, small"
+		14 : "Water"
+		17 : "Concrete, small"
+		20 : "Outside"
+		23 : "Cavern, small"
+		26 : "Weird"
+	]
+]
+@PointClass base(Targetname, RenderFields, Angles) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_sprite : "Shows a sprite (a flat picture, often glowing)."
+[
+	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The sprite it shows."
+	rendermode(choices) : "Draw mode" : 5 : "Additive for a glow or light sprite (Normal shows its black background as a box); Solid for a cut-out picture; Normal only for an opaque one." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid (cut-out blue)"
+		5 : "Additive"
+	]
+	scale(float) : "Size" : 1 : "How big it's drawn (1 is the sprite's own size)."
+	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		2 : "Plays once" : 0
+	]
+]
+@PointClass base(Targetname, RenderFields) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_glow : "A glow sprite that fades out when you can't see its middle."
+[
+	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The glow sprite."
+	rendermode(choices) : "Draw mode" : 3 : "Glow (fades when you can't see its middle) or Additive; Normal shows the sprite's black background as a box." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid (cut-out blue)"
+		5 : "Additive"
+	]
+	scale(float) : "Size" : 1 : "How big it's drawn (1 is the sprite's own size)."
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_explosion : "An explosion when set off."
+[
+	iMagnitude(integer) : "Size" : 100 : "How big and how much damage."
+	spawnflags(flags) =
+	[
+		1 : "No damage" : 0
+		2 : "Can be set off again" : 0
+		4 : "No fireball" : 0
+		8 : "No smoke" : 0
+		16 : "No scorch mark" : 0
+		32 : "No sparks" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 255 0) = env_spark : "Sparks, now and then or when set off."
+[
+	MaxDelay(float) : "Most seconds between sparks" : 0 : "The most seconds between sparks."
+	spawnflags(flags) =
+	[
+		32 : "Can be switched" : 0
+		64 : "Starts on" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 100 0) = env_shake : "Shakes players' screens when set off."
+[
+	amplitude(float) : "Strength" : 4 : "0 to 16."
+	radius(integer) : "Radius" : 500 : "How far from it the effect reaches (units)."
+	duration(float) : "Seconds" : 1 : "How long it shakes (seconds)."
+	frequency(float) : "Shakiness" : 2.5
+	spawnflags(flags) =
+	[
+		1 : "Everyone on the map" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(0 200 255) = env_fade : "Fades players' screens to a color."
+[
+	duration(float) : "Fade seconds" : 2 : "How long the fade takes (seconds)."
+	holdtime(float) : "Hold seconds" : 0 : "Seconds the text stays."
+	renderamt(integer) : "Strength" : 255 : "How dark the fade gets: 255 fully."
+	rendercolor(color255) : "Color" : "0 0 0" : "The color (red green blue, 0 to 255 each)."
+	spawnflags(flags) =
+	[
+		1 : "Fade in (from the color)" : 0
+		4 : "Only the player who set it off" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(180 180 255) = env_fog : "Fog for the whole map."
+[
+	startdist(integer) : "Starts at" : 0 : "How far from the player the fog starts (units)."
+	enddist(integer) : "Thick at" : 1000
+	density(string) : "Density" : "0.001" : "How thick the fog is (0.0005 light to 0.003 thick)."
+	rendercolor(color255) : "Color" : "128 128 128" : "The color (red green blue, 0 to 255 each)."
+]
+@PointClass size(-8 -8 -8, 8 8 8) color(160 200 255) = env_rain : "Rain on the whole map (players see it outdoors)." []
+@PointClass size(-8 -8 -8, 8 8 8) color(255 255 255) = env_snow : "Snow on the whole map (players see it outdoors)." []
+// ---- beams, gibs and other engine effects (all in our game DLL) ---------------------------
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(120 160 255) = env_beam : "A beam (electric arc, rope of light) between two named entities, or from here to a random spot within its radius."
+[
+	LightningStart(target_destination) : "Starts at" : : "The entity the beam starts at (blank: this one)."
+	LightningEnd(target_destination) : "Ends at" : : "The entity the beam ends at (blank: a random spot within the radius)."
+	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the beam removes itself."
+	renderamt(integer) : "Brightness" : 100 : "0 to 255."
+	rendercolor(color255) : "Color" : "255 255 255" : "The color (red green blue, 0 to 255 each)."
+	Radius(integer) : "Radius" : 256 : "How far a random end can be (no Ends at)."
+	life(float) : "Seconds each strike lasts" : 1 : "0: always on."
+	BoltWidth(integer) : "Width" : 20 : "1 to 255."
+	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
+	TextureScroll(integer) : "Scroll speed" : 35
+	framestart(integer) : "First frame" : 0 : "The frame of the beam's texture it starts on."
+	StrikeTime(string) : "Seconds between strikes" : "1" : "A negative number picks a random time up to that."
+	damage(float) : "Damage a second" : 0 : "To anything the beam touches."
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		2 : "Can be switched" : 0
+		4 : "Random end" : 0
+		8 : "Ring between the two ends" : 0
+		16 : "Sparks at the start" : 0
+		32 : "Sparks at the end" : 0
+		64 : "Scorch marks where it hits" : 0
+		128 : "Fades in from the start" : 0
+		256 : "Fades out to the end" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 60 60) = env_laser : "A straight laser from here to a named entity, with an optional sprite where it hits."
+[
+	LaserTarget(target_destination) : "Points at" : : "The entity the laser goes to (a random one of them if several share the name)."
+	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the laser removes itself."
+	EndSprite(sprite) : "Sprite where it hits" : "" : "A sprite drawn where the beam ends."
+	renderamt(integer) : "Brightness" : 100 : "0 to 255."
+	rendercolor(color255) : "Color" : "255 0 0" : "The color (red green blue, 0 to 255 each)."
+	width(integer) : "Width" : 20 : "1 to 255."
+	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
+	TextureScroll(integer) : "Scroll speed" : 35
+	framestart(integer) : "First frame" : 0 : "The frame of the beam's texture it starts on."
+	damage(float) : "Damage a second" : 0 : "To anything the laser touches."
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		16 : "Sparks at the start" : 0
+		32 : "Sparks at the end" : 0
+		64 : "Scorch marks where it hits" : 0
+	]
+]
+@PointClass base(Targetname, Angles) size(-8 -8 -8, 8 8 8) color(200 120 60) = gibshooter : "Throws gibs (body pieces) the way it faces when set off."
+[
+	m_iGibs(integer) : "How many" : 3 : "How many pieces it throws."
+	delay(float) : "Seconds between gibs" : "0" : "0: a tenth of a second."
+	m_flVelocity(integer) : "Speed" : 200 : "How fast the pieces fly (units a second)."
+	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
+	m_flGibLife(float) : "Seconds a gib stays" : 4 : "0: 25 seconds."
+	spawnflags(flags) =
+	[
+		1 : "Can be set off again" : 0
+	]
+]
+@PointClass base(Targetname, Angles, RenderFields) size(-8 -8 -8, 8 8 8) color(200 120 60) = env_shooter : "Throws pieces of any model (or sprite) the way it faces when set off: rubble, glass, cans, shells."
+[
+	shootmodel(studio) : "Model or sprite thrown" : "models/woodgibs.mdl" : "A model's body parts are picked at random."
+	shootsounds(choices) : "Material sound" : -1 : "The sound the pieces make when they land." =
+	[
+		-1 : "None"
+		0 : "Glass"
+		1 : "Wood"
+		2 : "Metal"
+		3 : "Flesh"
+		4 : "Concrete"
+	]
+	m_iGibs(integer) : "How many" : 3 : "How many pieces it throws."
+	delay(float) : "Seconds between pieces" : "0" : "0: a tenth of a second."
+	m_flVelocity(integer) : "Speed" : 200 : "How fast the pieces fly (units a second)."
+	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
+	m_flGibLife(float) : "Seconds a piece stays" : 4 : "0: 25 seconds."
+	scale(float) : "Size" : 1 : "For a sprite."
+	skin(integer) : "Skin" : 0 : "The model's skin number."
+	spawnflags(flags) =
+	[
+		1 : "Can be set off again" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_blood : "Sprays blood the way it faces when set off."
+[
+	angles(string) : "Spray direction (pitch yaw roll)" : "0 0 0"
+	color(choices) : "Blood color" : 0 : "The text's color (red green blue)." =
+	[
+		0 : "Red (people)"
+		1 : "Yellow (creatures)"
+	]
+	amount(integer) : "Amount" : 100 : "How much blood (1 to 255)."
+	spawnflags(flags) =
+	[
+		1 : "Random direction" : 0
+		2 : "A stream, not drops" : 0
+		4 : "At the player who set it off" : 0
+		8 : "Leaves a blood decal" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 128 0) iconsprite("sprites/flare6.spr") = env_funnel : "A funnel of glowing particles pulled in to this spot (or pushed out) when set off; goes once."
+[
+	spawnflags(flags) =
+	[
+		1 : "Pushed out instead of pulled in" : 0
+	]
+]
+@PointClass base(Targetname, Angle) size(-8 -8 -8, 8 8 8) color(0 160 255) = env_beverage : "A drinks machine's chute: drops a soda can each time it's set off (a can gives a little health)."
+[
+	health(integer) : "Cans" : 10 : "How many it can give."
+	skin(choices) : "Can" : 0 : "The skin number (for a func_illusionary: -3 water, -4 slime, -5 lava)." =
+	[
+		0 : "Coca-Cola"
+		1 : "Sprite"
+		2 : "Diet Coke"
+		3 : "Orange"
+		4 : "Surge"
+		5 : "Moxie"
+		6 : "Random"
+	]
+]
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 255 128) = env_message : "Shows a message from the map's titles.txt when set off, with an optional sound."
+[
+	message(string) : "Message name" : : "A name from titles.txt."
+	messagesound(sound) : "Sound" : ""
+	messagevolume(string) : "Volume" : "10" : "0 to 10."
+	messageattenuation(choices) : "Heard" : 0 =
+	[
+		0 : "Small radius"
+		1 : "Medium radius"
+		2 : "Large radius"
+		3 : "Everywhere"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Only once" : 0
+		2 : "Everyone (not just who set it off)" : 0
+	]
+]
+@SolidClass base(Targetname) = trigger_cdaudio : "Plays a CD track (game music) when a player walks in; goes once."
+[
+	health(choices) : "Track" : 0 : "The game's music tracks (Half-Life's soundtrack in the game folder)." =
+	[
+		-1 : "Stop"
+		1 : "Track 1"
+		2 : "Track 2"
+		3 : "Track 3"
+		4 : "Track 4"
+		5 : "Track 5"
+		6 : "Track 6"
+		7 : "Track 7"
+		8 : "Track 8"
+		9 : "Track 9"
+		10 : "Track 10"
+		11 : "Track 11"
+		12 : "Track 12"
+		13 : "Track 13"
+		14 : "Track 14"
+		15 : "Track 15"
+		16 : "Track 16"
+		17 : "Track 17"
+		18 : "Track 18"
+		19 : "Track 19"
+		20 : "Track 20"
+		21 : "Track 21"
+		22 : "Track 22"
+		23 : "Track 23"
+		24 : "Track 24"
+		25 : "Track 25"
+		26 : "Track 26"
+		27 : "Track 27"
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(128 255 128) iconsprite("sprites/speaker.spr") = target_cdaudio : "Plays a CD track (game music) when a player comes within its radius, or when set off; goes once."
+[
+	health(integer) : "Track" : 1 : "-1 stops the music."
+	radius(integer) : "Radius" : 128 : "How far from it the effect reaches (units)."
+]
+@SolidClass base(Targetname) = env_bubbles : "Bubbles rising from inside the brush."
+[
+	density(integer) : "How many" : 2 : "How many bubbles at once."
+	frequency(integer) : "How often" : 2
+	current(integer) : "Drift speed" : 0 : "How fast the bubbles drift (units a second)."
+	spawnflags(flags) =
+	[
+		1 : "Starts off" : 0
+	]
+]
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 0 255) = env_render : "Changes the draw settings of its target when set off."
+[
+	rendermode(choices) : "Draw mode" : 0 : "How it's drawn: normal, color, texture, glow, solid or additive." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid"
+		5 : "Additive"
+	]
+	renderamt(integer) : "See-through amount" : 255 : "How see-through the targets become: 0 invisible, 255 solid."
+	rendercolor(color255) : "Tint color" : "0 0 0" : "The color (red green blue, 0 to 255 each)."
+]
+@PointClass base(Targetname, Angles) size(-4 -4 -4, 4 4 4) decal() = infodecal : "A decal (a painted-on picture like a crack or blood) on the nearest wall."
+[
+	texture(decal) : "Decal" : : "A decal name from decals.wad."
+]
+@PointClass base(Targetname, Angles, RenderFields) size(-16 -16 -16, 16 16 16) studio() = cycler : "A model that plays its animation."
+[
+	model(studio) : "Model" : : "A .mdl under models/."
+]
+@PointClass base(Targetname, Angles, RenderFields) size(-8 -8 -8, 8 8 8) = cycler_sprite : "A sprite or model that animates."
+[
+	model(sprite) : "Sprite or model" : : "The model or sprite it shows."
+	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
+]
+
+// ---- logic ------------------------------------------------------------------------------
+
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 128 0) = multi_manager : "Sets off several things, each after its own delay. Add keys: the name to set off, and the seconds to wait."
+[
+	spawnflags(flags) =
+	[
+		1 : "Can run more than once at a time" : 0
+	]
+]
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 128 0) = multisource : "On only while everything that targets it is on (an AND gate). Use as a master."
+[
+	globalstate(string) : "Global state" : "" : "A global state name that must be on before it lets things through."
+]
+@PointClass base(Targetname, Target, KillTarget, Delay) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_relay : "Passes a signal on: sets off its target, maybe later, maybe as on or off."
+[
+	triggerstate(choices) : "Sends" : 0 : "What it sends to its target: off, on or toggle." =
+	[
+		0 : "Off"
+		1 : "On"
+		2 : "Toggle"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+	]
+]
+@PointClass base(Target, Delay) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_auto : "Sets off its target when the round starts."
+[
+	triggerstate(choices) : "Sends" : 0 : "What it sends to its target: off, on or toggle." =
+	[
+		0 : "Off"
+		1 : "On"
+		2 : "Toggle"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 1
+	]
+]
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_changetarget : "Changes what another entity sets off."
+[
+	m_iszNewTarget(target_destination) : "New target" : : "The new target name to give the entity it changes."
+]
+@PointClass base(Targetname, Target) size(-16 -16 -16, 16 16 16) color(255 0 255) = trigger_camera : "Shows players the view from here for a while when set off."
+[
+	wait(integer) : "Seconds" : 10 : "How long the view stays on the camera (seconds)."
+	moveto(target_destination) : "First path corner"
+	speed(integer) : "Speed" : 0 : "How fast the camera moves along its path (units a second)."
+	spawnflags(flags) =
+	[
+		1 : "Starts at the player" : 0
+		2 : "Follows the player" : 0
+		4 : "Freezes the player" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(128 255 128) = game_text : "Shows text on screen when set off."
+[
+	message(string) : "Text" : : "Up to 512 letters; \n starts a new line."
+	x(string) : "Across (0-1, -1 center)" : "-1"
+	y(string) : "Down (0-1, -1 center)" : "-1" : "Where on the screen, top to bottom (0 top, 1 bottom, -1 centered)."
+	effect(choices) : "Effect" : 0 =
+	[
+		0 : "Fade in and out"
+		1 : "Credits (flicker)"
+		2 : "Typed out"
+	]
+	color(color255) : "Color" : "100 100 100" : "The text's color (red green blue)."
+	color2(color255) : "Highlight color" : "240 110 0"
+	fadein(string) : "Fade in seconds" : "1.5" : "Seconds to fade in."
+	fadeout(string) : "Fade out seconds" : "0.5"
+	holdtime(string) : "Seconds on screen" : "1.2" : "Seconds the text stays."
+	fxtime(string) : "Highlight seconds" : "0.25" : "Typed out: how long each letter shows in the highlight color."
+	channel(choices) : "Text line" : 1 : "The text channel (1 to 4): a new message on the same channel replaces the old one." =
+	[
+		1 : "1"
+		2 : "2"
+		3 : "3"
+		4 : "4"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Everyone (not only who set it off)" : 1
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_end : "Warning: ends the map for everyone when set off: the scoreboard shows, then the server changes to the next map. Give it a master to limit who can."
+[
+	master(target_destination) : "Master" : : "A multisource or game_team_master: while it's off, this does nothing."
+]
+@PointClass base(Targetname) size(-4 -4 -4, 4 4 4) color(128 128 128) = info_target : "A point other entities aim at (spotlights, beams, cameras)." []
+@PointClass base(Targetname) size(-4 -4 -4, 4 4 4) color(128 128 128) = info_null : "A point used only while compiling; gone in the game." []
+@PointClass base(Targetname, Angle) size(-16 -16 0, 16 16 72) color(0 255 255) = info_teleport_destination : "Where a trigger_teleport sends players." []
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 0 0) = path_corner : "A stop on a path for trains and cameras."
+[
+	wait(integer) : "Wait here (seconds)" : 0 : "Seconds a train waits here (-1: until set off again)."
+	speed(integer) : "New speed from here" : 0
+	message(target_destination) : "Fires when passed" : : "What to set off when a func_train or func_guntarget reaches this stop."
+	spawnflags(flags) =
+	[
+		1 : "Wait to be set off" : 0
+		2 : "Teleport to here" : 0
+		4 : "Fires only once" : 0
+	]
+]
+
+// ---- brush entities ---------------------------------------------------------------------
+
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_wall : "A wall that isn't part of the world: can be see-through or switched by draw mode." []
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_wall_toggle : "A wall that appears and disappears when set off."
+[
+	spawnflags(flags) =
+	[
+		1 : "Starts invisible" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_illusionary : "Looks solid but you walk through it (leaves, fences, light shafts)."
+[
+	skin(choices) : "Contents" : -1 : "What it is for the player: -3 water, -4 slime, -5 lava; 0 nothing." =
+	[
+		-1 : "Empty"
+		-3 : "Water"
+		-4 : "Slime"
+		-5 : "Lava"
+		-16 : "Ladder"
+	]
+]
+@SolidClass base(Breakable) = func_breakable : "Breaks when shot or set off (glass, crates, vents)."
+[
+	spawnflags(flags) =
+	[
+		1 : "Only breaks when set off" : 0
+		2 : "Breaks on touch" : 0
+		4 : "Breaks when stood on" : 0
+		256 : "Knife breaks it at once" : 0
+	]
+]
+@SolidClass base(Breakable) = func_pushable : "A crate players can push."
+[
+	friction(integer) : "Friction" : 50 : "0 to 400; higher is harder to push."
+	buoyancy(integer) : "Floats" : 20
+	size(choices) : "Collision size" : 0 : "How big a push it needs to move." =
+	[
+		0 : "Point"
+		1 : "Player"
+		2 : "Big"
+		3 : "Player crouching"
+	]
+	spawnflags(flags) =
+	[
+		128 : "Breakable" : 0
+	]
+]
+@SolidClass base(Door) = func_door : "A door that slides along its facing when touched or set off."
+[
+	angle(angle) : "Opens toward" : 0 : "Which way it slides. -1 is up, -2 is down."
+]
+@SolidClass base(Door) = func_door_rotating : "A door that swings round an origin brush."
+[
+	distance(integer) : "Turns (degrees)" : 90 : "How far it swings open (degrees)."
+	angles(string) : "Turn (pitch yaw roll)" : "0 0 0"
+	spawnflags(flags) =
+	[
+		1 : "Starts open" : 0
+		2 : "Turns the other way" : 0
+		16 : "Opens one way only" : 0
+		32 : "Toggle" : 0
+		64 : "Turns round X" : 0
+		128 : "Turns round Y" : 0
+		256 : "Only opens when set off" : 0
+	]
+]
+@SolidClass base(Targetname, Target, RenderFields, ZHLT, Master, KillTarget, Delay, Angle) = func_button : "A button players press (or shoot) to set something off."
+[
+	speed(integer) : "Speed" : 5 : "How fast it moves in when pressed (units a second)."
+	health(integer) : "Health (shoot to press)" : 0
+	lip(integer) : "Lip" : 0 : "How much of it stays showing when it's pressed in (units)."
+	wait(integer) : "Seconds before it pops back" : 3 : "-1 stays pressed."
+	sounds(choices) : "Sound" : 0 : "The sound it makes when pressed." =
+	[
+		0 : "None"
+		1 : "Big zap and warm up"
+		2 : "Access denied"
+		3 : "Access granted"
+		9 : "Buzz"
+		10 : "Buzz off"
+		14 : "Lightswitch"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Doesn't move" : 0
+		32 : "Toggle" : 0
+		256 : "Pressed by touch" : 0
+	]
+]
+@SolidClass base(Targetname, Target, RenderFields, ZHLT, Master, Delay) = func_rot_button : "A button that turns (a valve or wheel)."
+[
+	speed(integer) : "Speed" : 50 : "How fast it turns (degrees a second)."
+	wait(integer) : "Seconds before it turns back" : 3
+	distance(integer) : "Turns (degrees)" : 90 : "How far it turns when pressed (degrees)."
+	spawnflags(flags) =
+	[
+		1 : "Not solid" : 0
+		2 : "Turns the other way" : 0
+		32 : "Toggle" : 0
+		64 : "Turns round X" : 0
+		128 : "Turns round Y" : 0
+		256 : "Pressed by touch" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT, Angles) = func_rotating : "Spins all the time (fans, wheels). Needs an origin brush."
+[
+	speed(integer) : "Speed" : 100 : "How fast it turns (degrees a second)."
+	dmg(integer) : "Damage when blocked" : 0
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		2 : "Spins the other way" : 0
+		4 : "Spins round X" : 0
+		8 : "Spins round Y" : 0
+		64 : "Not solid" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_train : "Moves along path_corners."
+[
+	target(target_destination) : "First stop" : : "The path_corner it starts at."
+	speed(integer) : "Speed" : 100
+	dmg(integer) : "Crush damage" : 2 : "Damage to a player it runs into."
+	spawnflags(flags) =
+	[
+		8 : "Not solid" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_plat : "A lift that goes up and down."
+[
+	height(integer) : "Travel" : 0 : "How far it moves (0 = its own height)."
+	speed(integer) : "Speed" : 50
+	spawnflags(flags) =
+	[
+		1 : "Only when set off" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_conveyor : "A conveyor belt: moves what stands on it and scrolls its texture."
+[
+	speed(integer) : "Speed" : 100 : "How fast it carries things (units a second)."
+	angle(angle) : "Moves toward" : 0
+	spawnflags(flags) =
+	[
+		1 : "Doesn't push" : 0
+		2 : "Not solid" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields) = func_water : "Water players can swim in. Use a water texture (starting with !)."
+[
+	WaveHeight(integer) : "Wave height" : 0 : "How high its surface ripples (0: flat)."
+	skin(choices) : "Contents" : -3 : "The skin number (for a func_illusionary: -3 water, -4 slime, -5 lava)." =
+	[
+		-3 : "Water"
+		-4 : "Slime"
+		-5 : "Lava"
+	]
+]
+@SolidClass = func_ladder : "A ladder players climb. Usually covered in the AAATRIGGER texture behind a ladder-looking brush." []
+@SolidClass = func_friction : "Changes how slippery the floor is."
+[
+	modifier(integer) : "Grip (percent)" : 100 : "Lower is more slippery (ice)."
+]
+@SolidClass base(Target) = func_buyzone : "Where a team can buy. If a map has none, spawns get buy zones."
+[
+	team(choices) : "Team" : 0 : "Which team can buy here." =
+	[
+		0 : "Both"
+		1 : "Terrorists"
+		2 : "Counter-Terrorists"
+	]
+]
+@SolidClass base(Targetname, Target) = func_bomb_target : "A bomb site: Terrorists plant the bomb inside." []
+@SolidClass base(Targetname, Target) = func_hostage_rescue : "Where Counter-Terrorists bring hostages." []
+@SolidClass = func_vip_safetyzone : "Where the VIP escapes to on an as_ map." []
+@SolidClass = func_escapezone : "Where Terrorists escape to on an es_ map." []
+@SolidClass base(Targetname, Target) = func_grencatch : "Sets something off when a grenade lands inside."
+[
+	triggerongrenade(target_destination) : "Sets off" : : "Fires its target when a grenade lands in it."
+	grenadetype(choices) : "Grenade" : "flash" =
+	[
+		"flash" : "Flashbang"
+		"smoke" : "Smoke grenade"
+	]
+]
+@SolidClass base(Targetname, Target) = func_weaponcheck : "Sets something off when a player inside doesn't carry certain weapons." []
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_vehicle : "A drivable vehicle."
+[
+	target(target_destination) : "First stop"
+	speed(integer) : "Top speed" : 0
+	length(integer) : "Length" : 256 : "How long the vehicle is, front to back (units)."
+	width(integer) : "Width" : 128
+	height(integer) : "Height" : 4 : "How tall the vehicle is (units)."
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_pendulum : "Swings back and forth."
+[
+	speed(integer) : "Speed" : 100 : "How fast it swings (degrees a second)."
+	distance(integer) : "Swing (degrees)" : 90
+	damp(integer) : "Slowing" : 0 : "How much it slows each swing (0: never)."
+	dmg(integer) : "Damage when blocked" : 0
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		8 : "Not solid" : 0
+		64 : "Swings round X" : 0
+		128 : "Swings round Y" : 0
+	]
+]
+
+// ---- triggers ---------------------------------------------------------------------------
+
+@BaseClass base(Targetname, Target, Master, KillTarget, Delay) = Trigger
+[
+	message(string) : "Message" : : "Text shown to whoever sets it off."
+	spawnflags(flags) =
+	[
+		1 : "Monsters set it off" : 0
+		2 : "Players don't set it off" : 0
+		4 : "Only pushables" : 0
+	]
+]
+@SolidClass base(Trigger) = trigger_multiple : "Sets off its target whenever someone walks in."
+[
+	wait(integer) : "Seconds before it works again" : 1 : "Seconds before it can fire again."
+]
+@SolidClass base(Trigger) = trigger_once : "Sets off its target the first time someone walks in, then is gone." []
+@SolidClass base(Targetname, Target, Master) = trigger_hurt : "Hurts (or heals, with negative damage) whoever is inside."
+[
+	dmg(integer) : "Damage a second" : 10 : "Damage a second while someone is inside (negative heals)."
+	damagetype(choices) : "Kind of damage" : 0 =
+	[
+		0 : "Generic"
+		1 : "Crush"
+		8 : "Burn"
+		16 : "Freeze"
+		32 : "Fall"
+		256 : "Shock"
+		16384 : "Drown"
+		131072 : "Nerve gas"
+		262144 : "Poison"
+		1048576 : "Radiation"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Hurts once" : 0
+		2 : "Starts off" : 0
+		8 : "Not for players" : 0
+		16 : "Only for players" : 0
+		32 : "Toggle" : 0
+	]
+]
+@SolidClass base(Targetname, Angles) = trigger_push : "Pushes whoever is inside (jump pads, wind, currents)."
+[
+	speed(integer) : "Push speed" : 100 : "How hard it pushes (units a second)."
+	spawnflags(flags) =
+	[
+		1 : "Only once" : 0
+		2 : "Starts off" : 0
+	]
+]
+@SolidClass base(Trigger) = trigger_teleport : "Sends whoever walks in to its target (an info_teleport_destination)." []
+@SolidClass base(Targetname) = trigger_gravity : "Changes gravity for whoever walks in."
+[
+	gravity(float) : "Gravity" : 1 : "1 is normal, 0.5 half, 2 double."
+]
+@SolidClass base(Trigger) = trigger_counter : "Sets off its target after being set off a number of times."
+[
+	count(integer) : "Times needed" : 2 : "How many times it must be set off before it fires its target."
+]
+
+// ---- more stock entities: random logic, game rules, trains, turrets, chargers, pickups ------
+// Each one checked against the game DLL Loner-Strike ships (its key handling and flags).
+// A key left empty is what the game uses when the key isn't there, so the defaults here are
+// the game's own (some are 0 and do nothing: the help and the checks say which).
+
+@BaseClass = RandomTargets
+[
+	target_count(integer) : "How many targets" : 0 : "Picks among the first this many targets (at most 16). With 3 it picks Target 1, 2 or 3."
+	target0(target_destination) : "Target 1"
+	target1(target_destination) : "Target 2" : : "The first name it can pick from (the even keys hold the others, up to 16)."
+	target2(target_destination) : "Target 3"
+	target3(target_destination) : "Target 4" : : "Another name it can pick from."
+	target4(target_destination) : "Target 5"
+	target5(target_destination) : "Target 6" : : "Another name it can pick from."
+	target6(target_destination) : "Target 7"
+	target7(target_destination) : "Target 8" : : "Another name it can pick from."
+	target8(target_destination) : "Target 9"
+	target9(target_destination) : "Target 10" : : "Another name it can pick from."
+	target10(target_destination) : "Target 11"
+	target11(target_destination) : "Target 12" : : "Another name it can pick from."
+	target12(target_destination) : "Target 13"
+	target13(target_destination) : "Target 14" : : "Another name it can pick from."
+	target14(target_destination) : "Target 15"
+	target15(target_destination) : "Target 16" : : "Another name it can pick from."
+]
+@BaseClass = RandomWait
+[
+	min_delay(float) : "Shortest wait (seconds)" : 0 : "Timed: the shortest random wait before each pick. Both waits must be above 0 or it picks once and stops."
+	max_delay(float) : "Longest wait (seconds)" : 0 : "Timed: the longest random wait before each pick."
+]
+@PointClass base(Targetname, RandomTargets, RandomWait) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_random : "Sets off one of its targets at random each time it's set off. Timed: picks on its own after a random wait, until set off again. Unique: never the same target twice until all have gone."
+[
+	spawnflags(flags) =
+	[
+		1 : "Timed: starts on" : 0
+		2 : "Timed: picks only once" : 0
+		4 : "Unique: starts over when all have gone" : 0
+		8 : "Timed (random waits)" : 0
+		16 : "Unique (no repeats)" : 0
+	]
+]
+@PointClass base(Targetname, RandomTargets, RandomWait) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_random_time : "The old name for trigger_random with Timed on: after a random wait it sets off one of its targets, again and again until set off. Setting it off starts and stops it."
+[
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		2 : "Picks only once" : 0
+	]
+]
+@PointClass base(Targetname, RandomTargets) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_random_unique : "The old name for trigger_random with Unique on: each time it's set off it picks a target that hasn't gone yet; when all have gone it stops (or starts over)."
+[
+	spawnflags(flags) =
+	[
+		1 : "Starts over when all have gone" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 128 0) = trigger_setorigin : "Moves entities to another entity when set off (or keeps them following it): a lift that carries a sprite, a light that follows a train."
+[
+	target(target_destination) : "Moves" : : "The name of the entities to move (up to 64)."
+	copypointer(target_destination) : "Moves them to" : : "The entity whose position (and turn, if asked) they copy."
+	offset(string) : "Offset (x y z)" : "0 0 0" : "Added to the copied position."
+	angleoffset(string) : "Turn offset (pitch yaw roll)" : "0 0 0" : "Added to the copied turn."
+	invert_x(choices) : "Flip pitch" : 0 : "Mirror the movement on X." = [ 0 : "No" 1 : "Yes" ]
+	invert_y(choices) : "Flip yaw" : 0 : "Mirror the movement on Y." = [ 0 : "No" 1 : "Yes" ]
+	invert_z(choices) : "Flip roll" : 0 : "Mirror the movement on Z." = [ 0 : "No" 1 : "Yes" ]
+	spawnflags(flags) =
+	[
+		1 : "Keep following (set off again to stop)" : 0
+		4 : "Remove after use" : 0
+		8 : "Keep their distance (needs Keep following)" : 0
+		16 : "Copy pitch" : 0
+		32 : "Copy yaw" : 0
+		64 : "Copy roll" : 0
+		128 : "Copy X only" : 0
+		256 : "Copy Y only" : 0
+		512 : "Copy Z only" : 0
+		1024 : "Don't jump there first (needs Keep following)" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 255 128) = env_global : "Sets a named global switch when set off. A multisource with the same Global state only works while the switch is on."
+[
+	globalstate(string) : "Global state" : : "The switch's name (any word; match it in a multisource)."
+	triggermode(choices) : "Sets it to" : 0 =
+	[
+		0 : "Off"
+		1 : "On"
+		2 : "Dead"
+		3 : "Toggle"
+	]
+	initialstate(choices) : "Starts" : 0 : "Whether the global state starts on or off." =
+	[
+		0 : "Off"
+		1 : "On"
+		2 : "Dead"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Set the starting state when the map loads" : 0
+	]
+]
+
+// ---- game rules (the game_ entities) -----------------------------------------------------
+
+@BaseClass = TeamMaster [ master(target_destination) : "Master" : : "A multisource, or a game_team_master for one team only: while it's off, this does nothing." ]
+@PointClass base(Targetname, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_score : "Gives points (kills on the scoreboard) to the player who sets it off, or to their team."
+[
+	points(integer) : "Points" : 0 : "Negative takes points away."
+	spawnflags(flags) =
+	[
+		1 : "Scores can go below 0" : 0
+		2 : "Points go to the team" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_counter : "Counts: up each time it's set off (down when set off as Off). At the limit it sets off its target. game_counter_set and game_zone_player can set its count."
+[
+	frags(integer) : "Starting count" : 0 : "The number to count to."
+	health(integer) : "Limit" : 0 : "Sets off its target when the count reaches this."
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+		2 : "Back to the start after the limit" : 0
+		4 : "Also at or over the limit" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_counter_set : "Sets a game_counter (its target) to a number when set off."
+[
+	frags(integer) : "Set it to" : 0 : "The number to count to."
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_team_master : "Passes a signal on only if the player who set it off is on its team. Also a master: name it as the Master of a button, door or game_ entity so only that team can use it."
+[
+	teamindex(choices) : "Team" : -1 : "A game_team_set can change it while the map runs." =
+	[
+		-1 : "No team yet"
+		1 : "Terrorists"
+		2 : "Counter-Terrorists"
+	]
+	triggerstate(choices) : "Sends" : 0 : "Off unless you pick another: most uses want On or Toggle." =
+	[
+		0 : "Off"
+		1 : "On"
+		2 : "Toggle"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+		2 : "Any team until a team is set" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 200 0) = game_team_set : "Sets its target game_team_master to the team of the player who set this off (or clears it): capture points, team-owned buttons."
+[
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+		2 : "Clear the team instead" : 0
+	]
+]
+@PointClass base(Targetname, TeamMaster) size(-8 -8 -8, 8 8 8) color(220 120 0) = game_player_team : "Warning: moves the player who sets it off to another team (the team of its target game_team_master), and can kill them. Changes the teams for the rest of the map."
+[
+	target(target_destination) : "Team from" : : "A game_team_master whose team the player joins."
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+		2 : "Kill the player" : 0
+		4 : "Gib the player" : 0
+	]
+]
+@PointClass base(Targetname, Target, TeamMaster) size(-8 -8 -8, 8 8 8) color(200 0 0) = game_player_hurt : "Hurts (or heals, with negative damage) the player who sets it off, then sets off its target."
+[
+	dmg(integer) : "Damage" : 0 : "Negative heals."
+	spawnflags(flags) =
+	[
+		1 : "Remove after use" : 0
+	]
+]
+@SolidClass base(Targetname, TeamMaster) = game_zone_player : "When set off, looks at who is inside: sets off In for each player inside and Out for each player outside, and sends both counts to game_counters."
+[
+	intarget(target_destination) : "In" : : "Set off once for each player inside."
+	outtarget(target_destination) : "Out" : : "Set off once for each player outside."
+	incount(target_destination) : "Count inside to" : : "A game_counter set to how many are inside."
+	outcount(target_destination) : "Count outside to" : : "A game_counter set to how many are outside."
+	spawnflags(flags) =
+	[
+		1 : "Only living players" : 0
+	]
+]
+
+// ---- moving parts: momentary doors and wheels, target buttons --------------------------------
+
+@SolidClass base(Targetname, RenderFields, ZHLT) = momentary_door : "A door that moves only as far as a momentary_rot_button is turned (a wheel that opens a gate). Point the wheel's target at it."
+[
+	angle(angle) : "Opens toward" : 0 : "Seen from above (0 east, 90 north); -1 up, -2 down."
+	speed(integer) : "Speed" : 100
+	lip(integer) : "Lip" : 0 : "How much of it stays in view when fully open."
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
+	[
+		0 : "None"
+		1 : "Servo"
+		2 : "Pneumatic"
+		3 : "Pneumatic 2"
+		4 : "Electric"
+		5 : "Electric 2"
+		6 : "Squeaky"
+		7 : "Rumble"
+		8 : "Heavy"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Starts open" : 0
+	]
+]
+@SolidClass base(Targetname, Target, RenderFields, ZHLT) = momentary_rot_button : "A wheel or valve players turn while holding use; its target (a momentary_door) moves as far as it's turned. Needs an origin brush."
+[
+	target(target_destination) : "Moves" : : "The momentary_door (or other entity) it drives."
+	speed(integer) : "Turn speed" : 100
+	distance(integer) : "Turns (degrees)" : 0 : "How far it turns from start to end. Negative turns the other way."
+	returnspeed(integer) : "Turn back speed" : 0 : "With Turns back when let go."
+	sounds(choices) : "Sound" : 0 : "The sound it makes while it turns." =
+	[
+		0 : "None"
+		1 : "Big zap and warm up"
+		2 : "Access denied"
+		3 : "Access granted"
+		9 : "Buzz"
+		10 : "Buzz off"
+		14 : "Lightswitch"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Solid, not usable (moves like a door)" : 0
+		16 : "Turns back when let go" : 0
+		64 : "Turns round X" : 0
+		128 : "Turns round Y" : 0
+	]
+]
+@SolidClass base(Targetname, Target, RenderFields, ZHLT) = button_target : "A target to shoot: each hit switches it on or off, sets off its target as On or Off, and flips its texture (use a +0 / +a texture pair)."
+[
+	spawnflags(flags) =
+	[
+		1 : "Players can also press it" : 0
+		2 : "Starts on" : 0
+	]
+]
+
+// ---- trains on tracks ------------------------------------------------------------------------
+
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 120 0) = path_track : "A stop on a func_tracktrain's track. Link them in order with Next stop; the train rides them in that order."
+[
+	target(target_destination) : "Next stop" : : "The next path_track on the track."
+	altpath(target_destination) : "Branch" : : "Another path_track: setting this one off switches the train onto the branch (and back)."
+	message(target_destination) : "Fires when passed" : : "What to set off when the train passes this stop."
+	speed(integer) : "New speed from here" : 0 : "Only for trains players can't drive. 0 keeps the speed."
+	spawnflags(flags) =
+	[
+		1 : "Starts off (the track ends here)" : 0
+		2 : "Fires only once" : 0
+		4 : "Branch going backward" : 0
+		8 : "Takes control away from players" : 0
+	]
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_tracktrain : "A train, cart or gondola that rides a track of path_tracks; players drive it from a func_traincontrols. Build it facing west, with an origin brush where it sits on the track."
+[
+	target(target_destination) : "First stop" : : "The path_track it starts at."
+	speed(integer) : "Top speed" : 0 : "0 means 165."
+	startspeed(integer) : "Starting speed" : 0 : "Above 0: it moves as soon as the round starts."
+	height(integer) : "Height above the track" : 0 : "How far its origin brush rides above each path_track."
+	wheels(integer) : "Wheel distance" : 0 : "How far ahead it looks along the track to turn (about its length)."
+	bank(integer) : "Lean on turns (degrees)" : 0
+	dmg(integer) : "Crush damage" : 0 : "Damage to whoever blocks it (0: just pushes)."
+	sounds(choices) : "Sound" : 0 : "The sound it makes when used." =
+	[
+		0 : "None"
+		1 : "Rail 1"
+		2 : "Rail 2"
+		3 : "Rail 3"
+		4 : "Rail 4"
+		5 : "Rail 6"
+		6 : "Rail 7"
+	]
+	volume(integer) : "Volume (0-10)" : 0 : "0 means full."
+	spawnflags(flags) =
+	[
+		1 : "Stays level (no pitch)" : 0
+		2 : "Players can't drive it" : 0
+		4 : "Forward only" : 0
+		8 : "Not solid" : 0
+	]
+]
+@SolidClass base(Target) = func_traincontrols : "Where players stand to drive a func_tracktrain: inside it, press use to take control, then forward and back to speed up and slow down. Put it on the train."
+[
+	target(target_destination) : "Train" : : "The func_tracktrain it drives."
+]
+@SolidClass base(Target) = func_vehiclecontrols : "Where players stand to drive a func_vehicle: like func_traincontrols, for a vehicle."
+[
+	target(target_destination) : "Vehicle" : : "The func_vehicle it drives."
+]
+@BaseClass = PlatSounds
+[
+	movesnd(choices) : "Moving sound" : 0 : "The sound it makes while it moves." =
+	[
+		0 : "None"
+		1 : "Big 1"
+		2 : "Big 2"
+		3 : "Elevator 1"
+		4 : "Elevator 2"
+		5 : "Elevator 3"
+		6 : "Freight 1"
+		7 : "Freight 2"
+		8 : "Heavy"
+		9 : "Rack"
+		10 : "Rail"
+		11 : "Squeak"
+		12 : "Odd 1"
+		13 : "Odd 2"
+	]
+	stopsnd(choices) : "Stopping sound" : 0 : "The sound it makes when it stops." =
+	[
+		0 : "None"
+		1 : "Big 1"
+		2 : "Big 2"
+		3 : "Freight"
+		4 : "Heavy"
+		5 : "Rack"
+		6 : "Rail"
+		7 : "Squeak"
+		8 : "Odd"
+	]
+	volume(float) : "Volume (0-1)" : 0 : "0 means 0.85."
+]
+@SolidClass base(Targetname, RenderFields, ZHLT, PlatSounds) = func_platrot : "A lift that turns as it goes up and down. Needs an origin brush."
+[
+	height(integer) : "Travel" : 0 : "How far it moves (0 = its own height)."
+	rotation(integer) : "Turns (degrees)" : 0 : "How far it turns over the whole trip."
+	speed(integer) : "Speed" : 0 : "0 means 150."
+	spawnflags(flags) =
+	[
+		1 : "Only when set off" : 0
+		64 : "Turns round X" : 0
+		128 : "Turns round Y" : 0
+	]
+]
+@BaseClass base(Targetname, RenderFields, ZHLT, PlatSounds) = TrackChange
+[
+	train(target_destination) : "Train" : : "The func_tracktrain it carries."
+	toptrack(target_destination) : "Top track" : : "The path_track it lines up with at the top."
+	bottomtrack(target_destination) : "Bottom track" : : "The path_track it lines up with at the bottom."
+	height(integer) : "Travel" : 0 : "How far it moves down."
+	rotation(integer) : "Turns (degrees)" : 0 : "How far it turns between top and bottom."
+	speed(integer) : "Speed" : 0 : "0 means 150."
+	spawnflags(flags) =
+	[
+		8 : "Starts at the bottom" : 0
+		16 : "Turns only (doesn't move)" : 0
+		64 : "Turns round X" : 0
+		128 : "Turns round Y" : 0
+	]
+]
+@SolidClass base(TrackChange) = func_trackchange : "A piece of track that moves or turns, with the train on it, to join another track (a turntable, a train lift). Set it off to move it. Needs an origin brush."
+[
+]
+@SolidClass base(TrackChange) = func_trackautochange : "Like func_trackchange, but it moves by itself when the train arrives on it."
+[
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_guntarget : "A target that slides along path_corners when set off; shoot it enough and it stops and sets off its target."
+[
+	target(target_destination) : "First stop" : : "The path_corner it starts at."
+	speed(integer) : "Speed" : 0 : "0 means 100."
+	health(integer) : "Health" : 0 : "Damage it takes before it stops. 0 never stops."
+	message(target_destination) : "Fires when shot down"
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+	]
+]
+
+// ---- turrets (func_tank) --------------------------------------------------------------------
+
+@BaseClass base(Targetname, RenderFields, ZHLT) = TankBase
+[
+	angles(string) : "Turn (pitch yaw roll)" : "0 0 0" : "Build it facing east; the yaw here turns it in the game and is the middle of where it aims."
+	yawrate(integer) : "Turn speed (degrees a second)" : 0 : "0 never turns: 30 is usual."
+	yawrange(integer) : "Turns left and right (degrees)" : 0 : "How far either way from the middle of its aim. 180 all the way round."
+	yawtolerance(integer) : "Fires within (yaw degrees)" : 0 : "How close its aim must be before it fires: 15 is usual."
+	pitchrate(integer) : "Tilt speed (degrees a second)" : 0 : "How fast the gun aims up and down (degrees a second)."
+	pitchrange(integer) : "Tilts up and down (degrees)" : 0
+	pitchtolerance(integer) : "Fires within (pitch degrees)" : 0 : "5 is usual."
+	firerate(float) : "Shots a second" : 1
+	persistence(float) : "Keeps firing (seconds)" : 0 : "How long it keeps firing after losing sight. 0 never fires on its own: 1 is usual."
+	minRange(integer) : "Closest target" : 0
+	maxRange(integer) : "Farthest target" : 0 : "0 any distance."
+	firespread(choices) : "Spread" : 0 =
+	[
+		0 : "Perfect"
+		1 : "Small"
+		2 : "Medium"
+		3 : "Large"
+		4 : "Very large"
+	]
+	barrel(integer) : "Barrel length (x)" : 0 : "Where the shots start, from its origin brush, forward."
+	barrely(integer) : "Barrel side (y)" : 0
+	barrelz(integer) : "Barrel height (z)" : 0 : "How high the end of the barrel is above the gun's middle (units), where shots start."
+	spriteflash(sprite) : "Muzzle flash sprite"
+	spritesmoke(sprite) : "Smoke sprite" : : "The smoke sprite shown at the barrel when it fires."
+	spritescale(float) : "Sprite size" : 1
+	rotatesound(sound) : "Turning sound" : : "The sound it makes while it turns."
+	master(target_destination) : "Master" : : "While this multisource (or game_team_master) is off, players can't take control."
+	spawnflags(flags) =
+	[
+		1 : "Starts on (aims and fires on its own)" : 0
+		16 : "Fires as soon as it sees a target" : 0
+		32 : "Players can control it (with func_tankcontrols)" : 0
+	]
+]
+@SolidClass base(TankBase) = func_tank : "A gun turret: on its own it shoots at any player it sees (any team), or players take control from a func_tankcontrols. Build it facing east with an origin brush at the pivot. Bots don't use turrets."
+[
+	bullet(choices) : "Bullets" : 0 : "None fires nothing." =
+	[
+		0 : "None"
+		1 : "Pistol (5 damage)"
+		2 : "SMG (3 damage)"
+		3 : "Heavy (8 damage)"
+	]
+	bullet_damage(integer) : "Damage a bullet" : 0 : "0 uses the bullet's own damage."
+]
+@SolidClass base(TankBase) = func_tankmortar : "A mortar turret: each shot is an explosion where it aims. Build it facing east with an origin brush at the pivot."
+[
+	iMagnitude(integer) : "Explosion size" : 0 : "Damage and size of each blast: 100 is a grenade's."
+]
+@SolidClass base(TankBase) = func_tanklaser : "A laser turret: fires an env_laser (named below) where it aims. Build it facing east with an origin brush at the pivot."
+[
+	laserentity(target_destination) : "Laser" : : "The env_laser it fires. Without one it removes itself."
+]
+@SolidClass base(Target) = func_tankcontrols : "Where players take control of a turret: press use inside, aim with the mouse, fire with attack, use again to let go."
+[
+	target(target_destination) : "Turret" : : "The func_tank it controls (it needs Players can control it)."
+]
+
+// ---- chargers --------------------------------------------------------------------------------
+
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_healthcharger : "A wall unit players hold use on to heal. Give it a charger texture."
+[
+	health(integer) : "Health in it" : 0 : "0 means 50."
+	dmdelay(integer) : "Refills after (seconds)" : 0 : "0 means 60."
+]
+@SolidClass base(Targetname, RenderFields, ZHLT) = func_recharge : "A wall unit players hold use on for armor. Give it a charger texture."
+[
+	armorvalue(integer) : "Armor in it" : 0 : "0 means 75."
+	dmdelay(integer) : "Refills after (seconds)" : 0 : "0 means 30."
+]
+
+// ---- pickups (items and ammo) --------------------------------------------------------------
+
+@BaseClass base(Angle) size(-16 -16 0, 16 16 16) color(80 200 255) = Pickup
+[
+	target(target_destination) : "Fires when taken" : : "What to set off when a player picks it up."
+	spawnflags(flags) =
+	[
+		1073741824 : "Doesn't come back" : 0
+	]
+]
+@PointClass base(Pickup) studio("models/w_medkit.mdl") = item_healthkit : "A health kit: heals 15 (or Health). Comes back after mp_item_respawn_time (30 s) unless told not to."
+[
+	health(integer) : "Health" : 0 : "0 means 15."
+]
+@PointClass base(Pickup) studio("models/w_battery.mdl") = item_battery : "A battery: adds 15 armor (or Armor), up to 100."
+[
+	armorvalue(integer) : "Armor" : 0 : "0 means 15."
+]
+@PointClass base(Pickup) studio("models/w_kevlar.mdl") = item_kevlar : "Kevlar: armor up to 100." []
+@PointClass base(Pickup) studio("models/w_assault.mdl") = item_assaultsuit : "Kevlar and helmet: armor up to 100 with a helmet." []
+@PointClass base(Pickup) studio("models/w_thighpack.mdl") = item_thighpack : "A defuse kit (Counter-Terrorists only)." []
+@PointClass base(Pickup) studio("models/w_longjump.mdl") = item_longjump : "The long jump module: crouch and jump to leap far, until the player dies." []
+@BaseClass base(Angle) size(-16 -16 0, 16 16 16) color(200 200 80) = AmmoPickup
+[
+	spawnflags(flags) =
+	[
+		1073741824 : "Doesn't come back" : 0
+	]
+]
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_9mm : "9mm ammo (Glock, Dual Elites, MP5, TMP)." []
+@PointClass base(AmmoPickup) studio("models/w_shotbox.mdl") = ammo_buckshot : "Shotgun shells (M3, XM1014)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_556nato : "5.56mm ammo (FAMAS, Galil, M4A1, SG 552, AUG, SG 550)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_556natobox : "5.56mm box (M249)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_762nato : "7.62mm ammo (AK-47, Scout, G3SG1)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_45acp : ".45 ammo (USP, MAC-10, UMP45)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_50ae : ".50 AE ammo (Desert Eagle)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_338magnum : ".338 Magnum ammo (AWP)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_57mm : "5.7mm ammo (P90, Five-SeveN)." []
+@PointClass base(AmmoPickup) studio("models/w_9mmclip.mdl") = ammo_357sig : ".357 SIG ammo (P228)." []

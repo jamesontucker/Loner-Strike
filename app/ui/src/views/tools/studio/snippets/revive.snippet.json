@@ -1,0 +1,98 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Revive",
+ "description": "Fallen players are downed for 30 s; a teammate holding USE on them for 3 s brings them back (+200 for the helper).",
+ "nodes": [
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 20,
+    "y": 20
+   },
+   "params": {}
+  },
+  {
+   "id": "down",
+   "type": "player.down",
+   "pos": {
+    "x": 340,
+    "y": 84
+   },
+   "params": {
+    "secs": 30,
+    "hold": 3,
+    "health": 50
+   }
+  },
+  {
+   "id": "rv",
+   "type": "event.player_revived",
+   "pos": {
+    "x": 20,
+    "y": 300
+   },
+   "params": {}
+  },
+  {
+   "id": "pay",
+   "type": "player.add_money",
+   "pos": {
+    "x": 340,
+    "y": 287
+   },
+   "params": {
+    "amount": 200
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "down",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "down",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "rv",
+    "pin": "by"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "rv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

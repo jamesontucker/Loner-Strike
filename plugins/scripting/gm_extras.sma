@@ -50,6 +50,16 @@
 	       gm_joins, gm_joins_country, gm_joins_skipbots, gm_votekick, gm_voteban,
 	       gm_vote_percent, gm_vote_min, gm_vote_bantime, gm_vote_cooldown, gm_vote_bots,
 	       gm_empty, gm_empty_map, gm_empty_mode
+	Community roles (docs/ROLES.md): say /link asks for a code to link your SteamID to your
+	  Discord account. The plugin adds a line "<unix time> <userid> <SteamID> <name>" to
+	  data/gamemodes/lslink/requests.txt (a file only the server writes, so nothing a player says
+	  or is called can fake one, and it works with logging off). The host's Loner-Strike (or a
+	  Linux server's ls-control) asks Loner-Strike's list service for a code and puts the answer in
+	  data/gamemodes/lslink/answers.txt, "<userid> <SteamID> show <code>" or "<userid> <SteamID>
+	  fail <away|limit|unclaimed|steamid|error>", which this plugin reads and removes (no RCON, so
+	  no console password in the console log). Nothing within 15 seconds: the server can't make
+	  codes. (ls_link_show / ls_link_fail <userid> ... still work as server commands.) ls_claim
+	  (public, empty) is set by the app for a moment while it claims the server for community roles.
 */
 
 #include <amxmodx>
@@ -109,6 +119,12 @@ new bool:g_Geo
 // the vote going on (g_VoteMenu -1: none)
 new g_VoteMenu = -1, bool:g_VoteBan, g_VoteUid, g_VoteName[32], g_VoteAuth[40], g_VoteIp[24]
 new g_VoteYes, g_VoteNo, g_VoteVoters, bool:g_CanVote[33], g_Voted[33], Float:g_VoteEnded
+// /link (community roles): when each player last asked, and until when to look for answers
+#define TASK_LINK 7300
+#define TASK_LINK_POLL 7350
+#define LINK_COOLDOWN 30.0
+new Float:g_LinkAsked[33]
+new Float:g_LinkPollUntil
 
 public plugin_init()
 {
@@ -128,6 +144,8 @@ public plugin_init()
 	// public (in the server's rules): the Loner-Strike server list only lists servers set to 1,
 	// which the app does through friends.cfg when the host asks for it
 	register_cvar("ls_list", "0", FCVAR_SERVER)
+	// public too: the list service reads it back while the app claims the server (community roles)
+	register_cvar("ls_claim", "", FCVAR_SERVER)
 	g_pJoins         = register_cvar("gm_joins", "0")
 	g_pJoinsCountry  = register_cvar("gm_joins_country", "1")
 	g_pJoinsSkipBots = register_cvar("gm_joins_skipbots", "1")
@@ -145,6 +163,12 @@ public plugin_init()
 
 	register_srvcmd("gm_extrasreload", "srv_reload")
 	register_srvcmd("gm_extraswarn", "srv_warn")
+	register_srvcmd("ls_link_show", "srv_link_show")
+	register_srvcmd("ls_link_fail", "srv_link_fail")
+	// community roles: who's here and "reload admins", through files (no RCON echoed into the console log)
+	set_task(10.0, "task_lslink_files", TASK_LINK_POLL + 1, _, _, "b")
+	// the bots' voice helper (ls-voice): its requests come as files too (no RCON echoed into the console log)
+	set_task(0.2, "task_lsvoice", TASK_LINK_POLL + 2, _, _, "b")
 	register_event("30", "ev_intermission", "a")
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	// the game's own disconnect: not called on a map change (AMX Mod X's client_disconnected is)
@@ -157,6 +181,7 @@ public plugin_init()
 		register_clcmd(fmt("%s votekick", say), "cmd_votekick")
 		register_clcmd(fmt("%s /voteban", say), "cmd_voteban")
 		register_clcmd(fmt("%s voteban", say), "cmd_voteban")
+		register_clcmd(fmt("%s /link", say), "cmd_link")
 	}
 	// RegisterHamPlayer also covers Condition Zero bots; the callback ignores them
 	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
@@ -632,6 +657,285 @@ public client_putinserver(id)
 public client_disconnected(id)
 {
 	g_Watch[id] = false
+	g_LinkAsked[id] = 0.0
+	remove_task(TASK_LINK + id)
+}
+
+// ---- /link (community roles) ----------------------------------------------------------------
+
+public cmd_link(id)
+{
+	if (is_user_bot(id) || is_user_hltv(id))
+		return PLUGIN_HANDLED
+	new auth[40]
+	get_user_authid(id, auth, charsmax(auth))
+	if (!equal(auth, "STEAM_", 6) || containi(auth, "ID_") != -1)
+	{
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Linking needs a Steam account the server can see (yours shows as %s).", auth)
+		return PLUGIN_HANDLED
+	}
+	new Float:now = get_gametime()
+	if (g_LinkAsked[id] > 0.0 && now - g_LinkAsked[id] < LINK_COOLDOWN)
+	{
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Wait a few seconds before asking again.")
+		return PLUGIN_HANDLED
+	}
+	g_LinkAsked[id] = now
+	new name[32], dir[160]
+	get_user_name(id, name, charsmax(name))
+	formatex(dir, charsmax(dir), "%s/lslink", g_DataDir)
+	if (!dir_exists(dir))
+		mkdir(dir)
+	if (!dir_exists(dir))
+	{
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 This server can't make link codes right now. Type /link on an official Loner-Strike server.")
+		return PLUGIN_HANDLED
+	}
+	// the name goes last (it may hold spaces); nothing in it can start a new line
+	replace_all(name, charsmax(name), "^n", " ")
+	replace_all(name, charsmax(name), "^r", " ")
+	new line[160]
+	formatex(line, charsmax(line), "%d %d %s %s", get_systime(), get_user_userid(id), auth, name)
+	new req[180]
+	formatex(req, charsmax(req), "%s/requests.txt", dir)
+	// kept small: the relays only look at the last half minute anyway
+	if (file_exists(req) && file_size(req) > 65536)
+		delete_file(req)
+	write_file(req, line)
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Getting your link code... It will also be in your console: press ~.")
+	remove_task(TASK_LINK + id)
+	set_task(15.0, "task_link_none", TASK_LINK + id)
+	// answers come in a file: look every second for a while
+	g_LinkPollUntil = get_gametime() + 20.0
+	if (!task_exists(TASK_LINK_POLL))
+		set_task(1.0, "task_link_poll", TASK_LINK_POLL, _, _, "b")
+	return PLUGIN_HANDLED
+}
+
+public task_link_poll()
+{
+	new path[180]
+	formatex(path, charsmax(path), "%s/lslink/answers.txt", g_DataDir)
+	if (file_exists(path))
+	{
+		new line[96], len, uid[12], auth[40], what[8], arg[16]
+		for (new i = 0; read_file(path, i, line, charsmax(line), len); i++)
+		{
+			trim(line)
+			if (!line[0] || parse(line, uid, charsmax(uid), auth, charsmax(auth), what, charsmax(what), arg, charsmax(arg)) < 4)
+				continue
+			new id = link_player(uid)
+			// still the same player (a userid isn't reused within a map, but a SteamID check costs nothing)
+			new now_auth[40]
+			if (!id)
+				continue
+			get_user_authid(id, now_auth, charsmax(now_auth))
+			if (!equal(now_auth, auth))
+				continue
+			if (equal(what, "show"))
+				link_show(id, arg)
+			else if (equal(what, "fail"))
+				link_fail(id, arg)
+		}
+		delete_file(path)
+	}
+	if (get_gametime() > g_LinkPollUntil)
+		remove_task(TASK_LINK_POLL)
+}
+
+public task_link_none(taskid)
+{
+	new id = taskid - TASK_LINK
+	if (is_user_connected(id))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 This server can't make link codes right now. Type /link on an official Loner-Strike server.")
+}
+
+// Every 10 s: the SteamIDs of the people here, for the supporters check (lslink/players.txt),
+// and admins reloaded when the relay put supporters in users.ini (lslink/reload-admins).
+public task_lslink_files()
+{
+	new dir[160]
+	formatex(dir, charsmax(dir), "%s/lsvoice", g_DataDir)
+	if (dir_exists(dir))
+		voice_status(dir)
+	formatex(dir, charsmax(dir), "%s/lslink", g_DataDir)
+	if (!dir_exists(dir))
+		return
+	new flag[180]
+	formatex(flag, charsmax(flag), "%s/reload-admins", dir)
+	if (file_exists(flag))
+	{
+		delete_file(flag)
+		server_cmd("amx_reloadadmins")
+	}
+	new path[180], tmp[180], auth[40]
+	formatex(path, charsmax(path), "%s/players.txt", dir)
+	formatex(tmp, charsmax(tmp), "%s/players.txt.new", dir)
+	if (file_exists(tmp))
+		delete_file(tmp)
+	new f = fopen(tmp, "wt")
+	if (!f)
+		return
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_connected(id) || is_user_bot(id) || is_user_hltv(id))
+			continue
+		get_user_authid(id, auth, charsmax(auth))
+		if (equal(auth, "STEAM_", 6) && containi(auth, "ID_") == -1)
+			fprintf(f, "%s^n", auth)
+	}
+	fclose(f)
+	if (file_exists(path))
+		delete_file(path)
+	rename_file(tmp, path, 1)
+}
+
+// ---- ls-voice's requests, through data/gamemodes/lsvoice ----------------------------------
+// (looked at five times a second, so a heard line reaches the bots within 0.2 s)
+// ls-voice (the bots' voice helper) writes one file per request, "<number>.cmd": "feed <port>"
+// (where the engine sends players' voice) or "ask <userid> <words>" (a line the bots answer). Only
+// these two, checked here; every 10 s this plugin writes status.txt (the map, then the bots' names)
+// for it. The folder only exists when voice is on.
+
+public task_lsvoice()
+{
+	new dir[160]
+	formatex(dir, charsmax(dir), "%s/lsvoice", g_DataDir)
+	if (!dir_exists(dir))
+		return
+	new file[64], FileType:type, line[256], path[240]
+	new h = open_dir(dir, file, charsmax(file), type)
+	if (!h)
+		return
+	do
+	{
+		new len = strlen(file)
+		if (len < 5 || !equal(file[len - 4], ".cmd"))
+			continue
+		formatex(path, charsmax(path), "%s/%s", dir, file)
+		new f = fopen(path, "rt")
+		line[0] = 0
+		if (f)
+		{
+			fgets(f, line, charsmax(line))
+			fclose(f)
+		}
+		delete_file(path)
+		trim(line)
+		voice_request(line)
+	}
+	while (next_file(h, file, charsmax(file), type))
+	close_dir(h)
+}
+
+voice_request(line[])
+{
+	new word[8], rest[240]
+	strtok2(line, word, charsmax(word), rest, charsmax(rest), ' ', TRIM_FULL)
+	if (equal(word, "feed"))
+	{
+		new port = str_to_num(rest)
+		if (port >= 0 && port <= 65535 && get_cvar_pointer("sv_ls_voice_feed"))
+			set_cvar_num("sv_ls_voice_feed", port)
+	}
+	else if (equal(word, "ask"))
+	{
+		new uid[12], words[224]
+		strtok2(rest, uid, charsmax(uid), words, charsmax(words), ' ', TRIM_FULL)
+		// plain words only: nothing that could end the command or start another
+		replace_all(words, charsmax(words), "^"", "")
+		replace_all(words, charsmax(words), ";", " ")
+		if (str_to_num(uid) > 0 && words[0])
+			server_cmd("gm_botchat_ask %d ^"%s^" team", str_to_num(uid), words)
+	}
+}
+
+voice_status(const dir[])
+{
+	new path[180], tmp[180], map[64], name[32]
+	formatex(path, charsmax(path), "%s/status.txt", dir)
+	formatex(tmp, charsmax(tmp), "%s/status.txt.new", dir)
+	new f = fopen(tmp, "wt")
+	if (!f)
+		return
+	get_mapname(map, charsmax(map))
+	fprintf(f, "map %s^n", map)
+	// what the engine's voice feed is set to now (0 or none: not sending), and this plugin's channel version
+	new feed = get_cvar_pointer("sv_ls_voice_feed")
+	fprintf(f, "feed %d^nchannel 1^n", feed ? get_pcvar_num(feed) : -1)
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (is_user_connected(id) && is_user_bot(id))
+		{
+			get_user_name(id, name, charsmax(name))
+			fprintf(f, "bot %s^n", name)
+		}
+	}
+	fclose(f)
+	if (file_exists(path))
+		delete_file(path)
+	rename_file(tmp, path, 1)
+}
+
+// the player a server command names by userid (0: gone)
+link_player(const arg[])
+{
+	new uid = str_to_num(arg)
+	if (uid <= 0)
+		return 0
+	return find_player("k", uid)
+}
+
+public srv_link_show()
+{
+	new arg[12], code[16]
+	read_argv(1, arg, charsmax(arg))
+	read_argv(2, code, charsmax(code))
+	new id = link_player(arg)
+	if (id)
+		link_show(id, code)
+	return PLUGIN_HANDLED
+}
+
+link_show(id, const code[])
+{
+	// XXXX-XXXX: letters, digits and the hyphen only
+	if (strlen(code) != 9)
+		return
+	for (new i = 0; code[i]; i++)
+		if (!isalnum(code[i]) && code[i] != '-')
+			return
+	remove_task(TASK_LINK + id)
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your link code is ^4%s^1. In the Loner-Strike Discord type ^4/link %s^1 (10 minutes). It's also in your console: press ~.", code, code)
+	client_print(id, print_console, "^n[Loner-Strike] Your link code is %s^n[Loner-Strike] In the Loner-Strike Discord type:  /link %s^n[Loner-Strike] (It works for 10 minutes.)^n", code, code)
+	set_hudmessage(80, 255, 80, -1.0, 0.3, 0, 0.0, 12.0, 0.2, 0.5, -1)
+	show_hudmessage(id, "Link code: %s^nIn the Loner-Strike Discord: /link %s", code, code)
+}
+
+public srv_link_fail()
+{
+	new arg[12], why[16]
+	read_argv(1, arg, charsmax(arg))
+	read_argv(2, why, charsmax(why))
+	new id = link_player(arg)
+	if (id)
+		link_fail(id, why)
+	return PLUGIN_HANDLED
+}
+
+link_fail(id, const why[])
+{
+	remove_task(TASK_LINK + id)
+	if (equal(why, "away"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 The list service didn't see you on this server yet. Stay a moment and try /link again.")
+	else if (equal(why, "limit"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Too many link codes for now. Use your newest code, or try again later.")
+	else if (equal(why, "unclaimed"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 This server can't make link codes. Type /link on an official Loner-Strike server.")
+	else if (equal(why, "steamid"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your SteamID can't be linked (bots, LAN and pending ids can't).")
+	else
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Couldn't get a link code right now. Try again in a minute.")
 }
 
 public client_infochanged(id)
@@ -822,6 +1126,9 @@ apply_fastdl()
 	if (url[0])
 	{
 		set_cvar_string("sv_downloadurl", url)
+		// players may download at all (a server.cfg that turned it off would leave the
+		// address unused)
+		set_cvar_num("sv_allowdownload", 1)
 		set_localinfo("gm_fastdl", "1")
 	}
 	else if (was[0] == '1')

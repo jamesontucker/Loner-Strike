@@ -1,0 +1,97 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Round timer win",
+ "description": "The mode's own 3 minute clock; when it runs out, the Counter-Terrorists win.",
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 20,
+    "y": 44
+   },
+   "params": {}
+  },
+  {
+   "id": "clk",
+   "type": "clock.set",
+   "pos": {
+    "x": 340,
+    "y": 20
+   },
+   "params": {
+    "secs": 180
+   }
+  },
+  {
+   "id": "up",
+   "type": "event.time_up",
+   "pos": {
+    "x": 20,
+    "y": 196
+   },
+   "params": {}
+  },
+  {
+   "id": "msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 340,
+    "y": 172
+   },
+   "params": {
+    "text": "Time's up: the Counter-Terrorists held on!",
+    "seconds": 4
+   }
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 660,
+    "y": 172
+   },
+   "params": {
+    "winner": "ct"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "clk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "msg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

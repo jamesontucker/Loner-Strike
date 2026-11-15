@@ -72,6 +72,8 @@ pub trait Progress: Sync {
     fn fraction(&self, f: f64);
     /// Something the player should know that didn't stop setup (a plugin that didn't compile)
     fn note(&self, text: &str);
+    /// The game's ReGameDLL isn't Loner-Strike's and was kept (the done screen offers to replace it)
+    fn kept_other_brain(&self) {}
 }
 
 #[cfg(test)]
@@ -311,6 +313,9 @@ pub struct JobView {
     pub failed_compiles: Vec<String>,
     /// Things worth knowing that didn't stop setup (why a plugin didn't compile...)
     pub notes: Vec<String>,
+    /// Games whose ReGameDLL isn't Loner-Strike's and was kept ("cstrike", "czero")
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub other_brain: Vec<String>,
     /// The server a server job is setting up (None: not known, or not for one server)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<String>,
@@ -318,7 +323,7 @@ pub struct JobView {
 
 impl JobView {
     pub fn idle() -> JobView {
-        JobView { id: String::new(), state: "idle".into(), kind: String::new(), game: None, steps: vec![], progress: 0.0, error: None, failed_compiles: vec![], notes: vec![], server: None }
+        JobView { id: String::new(), state: "idle".into(), kind: String::new(), game: None, steps: vec![], progress: 0.0, error: None, failed_compiles: vec![], notes: vec![], other_brain: vec![], server: None }
     }
 }
 
@@ -431,6 +436,14 @@ impl Progress for Job {
         self.view.lock().unwrap().notes.push(format!("{prefix}{text}"));
         self.detail(text);
     }
+    fn kept_other_brain(&self) {
+        let mut v = self.view.lock().unwrap();
+        if let Some(g) = v.game.clone() {
+            if !v.other_brain.contains(&g) {
+                v.other_brain.push(g);
+            }
+        }
+    }
 }
 
 fn step(game: &str, id: &str, label: impl Into<String>, weight: f64) -> Step {
@@ -508,12 +521,19 @@ pub fn plan_install(install: Install, games: &[String], component_ids: &[String]
         steps.push(step(g, "core-bots", "Making the bot styles", 0.3));
         steps.push(step(g, "core-keys", "Adding the F3 and F4 menu keys", 0.1));
         // (a dedicated server keeps to the maps its owner gives it)
+        // (sized by the maps still to download: 24 of them took a third of a first install,
+        // and with a share of 1 the bar sat at 99% all that time: QA4-CORE)
         if !install.dedicated {
-            steps.push(step(g, "core-funmaps", "Getting the fun and popular maps", 1.0));
+            let funmaps = std::fs::read_to_string(res.join("catalog").join("funmaps.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
+            let to_get = funmaps.map(|c| components::maps_to_get(&c, &install.hl.join("cstrike").join("maps"))).unwrap_or(0);
+            steps.push(step(g, "core-funmaps", "Getting the fun and popular maps", FUNMAP_WEIGHT * to_get as f64 + 0.1));
         }
     }
     Ok(InstallPlan { install, games, components: chosen, catalog, steps })
 }
+
+/// A map's share of the install's progress bar (a mode's step is 3, the plugins' 2).
+pub const FUNMAP_WEIGHT: f64 = 1.0;
 
 /// Modes and add-ons the Game Mode Menu should offer: the built-in ones plus
 /// those of every installed component.
@@ -530,8 +550,40 @@ fn menu_contents(rec: &Record, catalog: &[Value]) -> (BTreeSet<String>, BTreeSet
 }
 
 /// Runs a step, marking it running then done (or failed: the error stops the job).
+/// Setup is changing a game players start themselves (not a dedicated server): every step
+/// checks first that the game isn't running (it can be started during the downloads).
+static WATCH_GAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What a step says while it waits for the game to close.
+pub const WAIT_FOR_GAME: &str = "Close Counter-Strike to continue. Setup goes on by itself once it's closed.";
+/// When it's still open after the wait.
+pub const STILL_OPEN: &str = "Counter-Strike is still open. Close it, then click Retry: setup can't change the game's files while it's running.";
+
+/// Waits (pausing, with a plain note) while the game runs: Ok once it's closed, Err after `tries` looks.
+pub fn wait_for_closed_game(running: impl Fn() -> bool, note: impl Fn(&str), pause: impl Fn(), tries: usize) -> Result<(), String> {
+    if !running() {
+        return Ok(());
+    }
+    note(WAIT_FOR_GAME);
+    for _ in 0..tries {
+        pause();
+        if !running() {
+            note("");
+            return Ok(());
+        }
+    }
+    Err(STILL_OPEN.into())
+}
+
 fn run_step<T>(job: &Job, id: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     job.start(id);
+    if WATCH_GAME.load(std::sync::atomic::Ordering::Relaxed) {
+        // (15 minutes at most, a look every 2 s)
+        if let Err(e) = wait_for_closed_game(crate::sys::game_running, |t| job.detail(t), || std::thread::sleep(std::time::Duration::from_secs(2)), 450) {
+            job.fail(&e);
+            return Err(e);
+        }
+    }
     let r = f();
     match &r {
         Ok(_) => job.finish(id, None),
@@ -580,11 +632,20 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
             }
         }
     }
-    let (modes, addons) = menu_contents(rec, &plan.catalog);
+    let (mut modes, addons) = menu_contents(rec, &plan.catalog);
     rec.begin("core");
-    let ok = run_step(job, &format!("{g}/core-plugins"), || core::plugins(rec, ctx))?;
-    if !ok {
-        job.failed_compile("Loner-Strike plugins");
+    let failed = run_step(job, &format!("{g}/core-plugins"), || core::plugins(rec, ctx))?;
+    for name in &failed {
+        job.failed_compile(&format!("{name}.amxx"));
+    }
+    // a mode whose plugin didn't build isn't offered (its line in modes.ini goes) until it does
+    let unbuilt = core::unbuilt_modes(rec, ctx, &failed);
+    for (id, _) in &unbuilt {
+        modes.remove(id);
+    }
+    if !unbuilt.is_empty() {
+        let names: Vec<&str> = unbuilt.iter().map(|(_, n)| n.as_str()).collect();
+        ctx.progress.note(&format!("Left out of the mode list until their plugins build: {}.", names.join(", ")));
     }
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
     run_step(job, &format!("{g}/core-quake"), || core::quake_sounds(rec, ctx))?;
@@ -797,6 +858,25 @@ fn spawn_job(job: Arc<Job>, f: impl FnOnce(&Job) + Send + 'static) {
     });
 }
 
+/// The setup done screen's "Use Loner-Strike's": Loner-Strike's ReGameDLL in place of another
+/// one setup kept, the old one backed up (QA4-CORE F4). Waits for the download (cached by setup).
+pub fn use_our_brain(install: &Install, res: &Path, game: &str) -> Result<String, String> {
+    struct Silent;
+    impl Progress for Silent {
+        fn detail(&self, _: &str) {}
+        fn fraction(&self, _: f64) {}
+        fn note(&self, _: &str) {}
+    }
+    if !GAMES.iter().any(|(g, _)| *g == game) || !install.hl.join(game).join("liblist.gam").is_file() {
+        return Err("That game isn't in this Half-Life folder.".into());
+    }
+    let mut rec = open_record(install, game)?;
+    let ctx = Ctx { install, res, progress: &Silent, store: None };
+    let tmp = TempDir::new()?;
+    foundation::use_our_brain(&mut rec, &ctx, &tmp)?;
+    Ok(format!("{} now has Loner-Strike's bot brain. The old ReGameDLL is backed up: Settings › Setup can put it back by removing Loner-Strike.", game_name(game)))
+}
+
 /// Starts an install in the background. Returns the job id.
 pub fn start_install(plan: InstallPlan, res: PathBuf, store: Option<Arc<MapStore>>) -> Result<String, String> {
     let job = begin("install", plan.steps.clone())?;
@@ -816,6 +896,13 @@ pub fn start_uninstall(plan: UninstallPlan, res: PathBuf, store: Option<Arc<MapS
 #[cfg(test)]
 pub fn job_for_test(kind: &str, steps: &[Step]) -> Arc<Job> {
     Job::new(kind, steps.to_vec())
+}
+
+#[cfg(test)]
+impl Job {
+    pub fn set_game_for_test(&self, game: &str) {
+        self.view.lock().unwrap().game = Some(game.into());
+    }
 }
 
 #[cfg(test)]
@@ -886,10 +973,35 @@ impl InstallPlan {
 /// Runs an install plan as part of a bigger job (no complete() at the end).
 pub fn install_into(job: &Job, plan: &InstallPlan, res: &Path, store: Option<Arc<MapStore>>) -> Result<(), String> {
     let ctx = Ctx { install: &plan.install, res, progress: job, store };
-    for g in &plan.games {
-        install_game(job, plan, &ctx, g)?;
+    WATCH_GAME.store(!plan.install.dedicated && !cfg!(test), std::sync::atomic::Ordering::Relaxed);
+    let r = (|| {
+        for g in &plan.games {
+            install_game(job, plan, &ctx, g)?;
+        }
+        Ok(())
+    })();
+    WATCH_GAME.store(false, std::sync::atomic::Ordering::Relaxed);
+    r
+}
+
+#[cfg(test)]
+mod wait_tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn setup_pauses_while_the_game_runs() {
+        // closed: goes straight on
+        assert!(wait_for_closed_game(|| false, |_| panic!("no note"), || panic!("no pause"), 5).is_ok());
+        // closed after three looks: the note, then on
+        let looks = Cell::new(0);
+        let notes = RefCell::new(vec![]);
+        let r = wait_for_closed_game(|| { looks.set(looks.get() + 1); looks.get() < 4 }, |t| notes.borrow_mut().push(t.to_string()), || {}, 10);
+        assert!(r.is_ok());
+        assert_eq!(notes.borrow().first().map(String::as_str), Some(WAIT_FOR_GAME));
+        // never closed: the plain message with Retry
+        assert_eq!(wait_for_closed_game(|| true, |_| {}, || {}, 3).unwrap_err(), STILL_OPEN);
     }
-    Ok(())
 }
 
 // ---- test helpers ------------------------------------------------------------------------

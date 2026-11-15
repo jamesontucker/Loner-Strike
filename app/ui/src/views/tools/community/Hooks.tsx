@@ -1,0 +1,122 @@
+// Small pieces other pages show for things installed from Community, each rendered with one line
+// there: the Mods page's "From Community" modes, and the spray maker's community sprays. They load
+// with those pages, so they stay light (the chip helpers, plain fetches).
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { getJson, ON_THIS_COMPUTER, currentTarget } from "../../../api";
+import { useNav } from "../../../store";
+import { useToast } from "../../../ui";
+import { post } from "../common/api";
+import { CommunityLink, originText, useOrigins } from "./chip";
+
+type Row = { key: string; kind: string; name: string; author: string; url: string; mode: string; update: number | null; pulled: boolean };
+
+function useRows(kind: string) {
+  const q = useQuery({
+    queryKey: ["tools", "community", "library"],
+    queryFn: () => getJson<{ items?: Row[] }>("/api/tools/community/library"),
+    enabled: ON_THIS_COMPUTER,
+    staleTime: 60_000,
+    retry: false,
+  });
+  return (q.data?.items ?? []).filter((i) => i.kind === kind);
+}
+
+function Rows({ rows, what }: { rows: Row[]; what: string }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const remove = async (r: Row) => {
+    setBusy(r.key);
+    const res = await post<{ ok: boolean }>("/api/tools/community/uninstall", { key: r.key });
+    setBusy(null);
+    if (res.error) return toast(res.error, true);
+    toast(`${r.name} removed.`);
+    qc.invalidateQueries({ queryKey: ["tools", "community"] });
+  };
+  return (
+    <ul className="cm-hook-rows" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+      {rows.map((r) => (
+        <li key={r.key} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}>
+          <strong>{r.name}</strong>
+          <a className="tag" style={{ fontSize: 11, padding: "0 6px", textDecoration: "none" }} href={r.url} target="_blank" rel="noreferrer" title="Opens its page">
+            Community{r.author ? ` · ${r.author}` : ""}
+          </a>
+          {r.update && <span className="tag" style={{ fontSize: 11, padding: "0 6px" }}>Update available</span>}
+          <span style={{ flex: 1 }} />
+          <button className="btn small" onClick={() => useNav.getState().go("tools", `community:${r.key.replace("-", ":")}`)}>Details</button>
+          <button className="btn small" disabled={busy !== null} aria-busy={busy === r.key} onClick={() => remove(r)}>
+            {busy === r.key ? <><span className="spinner" aria-hidden="true" />Removing…</> : "Remove"}
+          </button>
+        </li>
+      ))}
+      <li className="muted small-note">{what}</li>
+    </ul>
+  );
+}
+
+/** Mods page: the Game Mode Studio modes installed from Community (your own game only). */
+export function CommunityModes() {
+  const rows = useRows("mode");
+  if (currentTarget() || !ON_THIS_COMPUTER) return null;
+  return (
+    <section>
+      <div className="section-head">
+        <div className="section-title"><h3>Modes from Community</h3></div>
+        <p>Made by others in the Game Mode Studio and built on this computer. They're in your mode list; Remix one in Tools &gt; Community to make it your own.</p>
+        <div className="section-actions"><CommunityLink kind="mode" label="Browse community modes" /></div>
+      </div>
+      {rows.length ? (
+        <Rows rows={rows} what="To put one on a dedicated server, open the server's Community content tab." />
+      ) : (
+        <p className="muted small-note">None yet. Other players' Game Mode Studio modes install in a click and are built on this computer: nothing that runs code is downloaded.</p>
+      )}
+    </section>
+  );
+}
+
+/** Mods page: your own Game Mode Studio modes and your remixes (made by me / remixed). */
+export function OwnModes() {
+  const origins = useOrigins();
+  if (currentTarget() || !ON_THIS_COMPUTER || !origins) return null;
+  const rows = Object.entries(origins.modes).filter(([, o]) => o.kind === "mine" || o.kind === "remix");
+  if (!rows.length) return null;
+  return (
+    <section>
+      <div className="section-head">
+        <div className="section-title"><h3>Your Game Mode Studio modes</h3></div>
+        <p>Modes you made, and remixes of community modes (credited to who made the original).</p>
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+        {rows.map(([id, o]) => (
+          <li key={id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}>
+            <strong>{id}</strong>
+            <span className="tag" style={{ fontSize: 11, padding: "0 6px" }}>{originText(o)}</span>
+            <span style={{ flex: 1 }} />
+            <button className="btn small" onClick={() => useNav.getState().go("tools", `studio:${id}`)}>Open in Studio</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Spray maker: sprays installed from Community (the last one installed is the one in the game). */
+export function CommunitySprays() {
+  const rows = useRows("spray");
+  if (!ON_THIS_COMPUTER) return null;
+  return (
+    <section className="panel" style={{ display: "grid", gap: 6 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <h3 style={{ margin: 0 }}>Sprays from Community</h3>
+        <CommunityLink kind="spray" label="Browse community sprays" />
+      </div>
+      {rows.length ? (
+        <Rows rows={rows} what="Removing one puts back the spray you had before it." />
+      ) : (
+        <p className="muted small-note">None yet. Sprays other Loner-Strike players made install in a click; removing one puts yours back.</p>
+      )}
+    </section>
+  );
+}

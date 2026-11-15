@@ -41,6 +41,13 @@ pub struct Member {
     pub invited_by: String,
     #[serde(default)]
     pub seen: Option<u64>,
+    /// the community roles application they came in by (roles.rs; 0: none)
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub app: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -55,6 +62,9 @@ pub struct Invite {
     /// unix seconds
     pub expires: u64,
     pub by: String,
+    /// the community roles application it's for (roles.rs; 0: none)
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub app: u64,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -191,6 +201,34 @@ impl Files {
 
     /// A new invite (one person, one day). `by`: "owner", or the inviting Admin's id.
     pub fn invite(&self, config: &Config, role: Role, steam: &str, by: &str) -> Result<(String, String), String> {
+        self.invite_with(config, role, steam, by, 0)
+    }
+
+    /// A Moderator invite for a community roles application: the applicant's SteamID, one use, a day.
+    pub fn invite_for_application(&self, config: &Config, steam: &str, by: &str, app: u64) -> Result<(String, String), String> {
+        if app == 0 || !crate::common::valid_steamid(&steam.trim().to_uppercase()) {
+            return Err("The applicant's SteamID isn't one an invite can carry.".into());
+        }
+        self.invite_with(config, Role::Moderator, steam, by, app)
+    }
+
+    /// Whoever came in by an application, if they still have access.
+    pub fn member_of_application(&self, app: u64) -> Option<Member> {
+        if app == 0 {
+            return None;
+        }
+        self.read().ok()?.members.into_iter().find(|m| m.app == app)
+    }
+
+    /// Unused invites made for an application stop working.
+    pub fn cancel_application(&self, app: u64) -> Result<(), String> {
+        self.edit(|s| {
+            s.invites.retain(|i| !(i.app == app && app != 0));
+            Ok(())
+        })
+    }
+
+    fn invite_with(&self, config: &Config, role: Role, steam: &str, by: &str, app: u64) -> Result<(String, String), String> {
         let steam = steam.trim().to_uppercase();
         if !steam.is_empty() && !crate::common::valid_steamid(&steam) {
             return Err("That isn't a SteamID. It looks like STEAM_0:1:12345.".into());
@@ -206,7 +244,7 @@ impl Files {
             if s.invites.iter().filter(|i| i.server == server).count() >= MAX_INVITES {
                 return Err(format!("There are already {MAX_INVITES} unused invites for this server. Wait for them to be used or run out (a day)."));
             }
-            s.invites.push(Invite { id: id.clone(), code: sha(&secret), role, server: server.clone(), steam: steam.clone(), expires: now() + INVITE_HOURS * 3600, by: by.into() });
+            s.invites.push(Invite { id: id.clone(), code: sha(&secret), role, server: server.clone(), steam: steam.clone(), expires: now() + INVITE_HOURS * 3600, by: by.into(), app });
             Ok(())
         })?;
         Ok((id, encode_invite(&InviteText { a: vec![config.url.clone()], p: 443, f: String::new(), c: secret, s: config.name(), r: role })))
@@ -236,7 +274,7 @@ impl Files {
                 return Err("This server already has as many helpers as it can.".into());
             }
             let inv = s.invites.remove(i);
-            let m = Member { id: random_hex(6), name, role: inv.role, server: inv.server, key: sha(&key), steam: inv.steam, added: stamp(), invited_by: inv.by, seen: Some(now()) };
+            let m = Member { id: random_hex(6), name, role: inv.role, server: inv.server, key: sha(&key), steam: inv.steam, added: stamp(), invited_by: inv.by, seen: Some(now()), app: inv.app };
             s.members.push(m.clone());
             Ok(m)
         })

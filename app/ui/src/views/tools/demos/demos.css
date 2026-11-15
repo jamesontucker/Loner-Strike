@@ -1,0 +1,94 @@
+/* The demo manager (views/tools/demos): a table on the left, the picked demo's panel on the right. */
+.dm-page { display: grid; gap: 12px; container-type: inline-size; }
+.dm-bar { flex-wrap: wrap; gap: 8px 12px; }
+.dm-bar .search { flex: 1 1 220px; min-width: 0; max-width: 360px; }
+.dm-refresh { margin-left: auto; }
+
+.dm-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@container (min-width: 900px) {
+  .dm-layout.with-panel { grid-template-columns: minmax(0, 1fr) 320px; }
+  .dm-panel { position: sticky; top: 0; }
+}
+
+.dm-table-wrap { padding: 4px; min-width: 0; }
+.dm-table { width: 100%; border-collapse: separate; border-spacing: 0 2px; table-layout: fixed; }
+.dm-table th { text-align: left; font-size: 13px; font-weight: 700; color: var(--bone-faint); text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; }
+.dm-table th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.dm-table th button:hover { color: var(--bone); }
+.dm-table th button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.dm-sort { font-size: 9px; }
+.dm-table td { padding: 6px 10px; background: var(--bg); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-table td:first-child { border-radius: 2px 0 0 2px; }
+.dm-table td:last-child { border-radius: 0 2px 2px 0; }
+.dm-row { cursor: pointer; }
+.dm-row:hover td, .dm-row:focus-visible td { background: var(--panel-2); }
+.dm-row:focus-visible { outline: none; }
+.dm-row:focus-visible td:first-child { box-shadow: inset 2px 0 0 var(--signal); }
+.dm-row.on td { background: var(--panel-2); box-shadow: inset 0 2px 0 var(--signal), inset 0 -2px 0 var(--signal); }
+.dm-row.on td:first-child { box-shadow: inset 2px 2px 0 var(--signal), inset 0 -2px 0 var(--signal); }
+.dm-row.on td:last-child { box-shadow: inset -2px 2px 0 var(--signal), inset 0 -2px 0 var(--signal); }
+
+/* column widths: the name takes what's left */
+.dm-c-len { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
+.dm-c-when { width: 120px; }
+.dm-c-size { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
+.dm-c-act { width: 160px; padding-left: 0 !important; }
+th.dm-c-len, th.dm-c-size { text-align: right; }
+.dm-table td.dm-c-when, .dm-table td.dm-c-size { color: var(--bone-dim); }
+
+.dm-name-cell { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.dm-name-text { display: grid; min-width: 0; }
+.dm-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.dm-sub { display: flex; gap: 6px; align-items: center; font-size: 13px; min-width: 0; overflow: hidden; }
+.dm-sub .muted { overflow: hidden; text-overflow: ellipsis; }
+.dm-map { color: var(--bone-dim); font-weight: 600; }
+.dm-thumb { flex: none; display: block; width: 64px; height: 36px; border-radius: 2px; overflow: hidden; }
+.dm-thumb .tl-mb-thumb { width: 100%; height: 100%; }
+.dm-thumb.big { width: 100%; height: 150px; }
+.dm-badge { font-size: 11px; font-weight: 800; letter-spacing: .03em; padding: 0 6px; border-radius: 2px; text-transform: uppercase; white-space: nowrap; }
+.dm-badge.hltv { background: #2f4a63; color: #cfe3f5; }
+.dm-badge.mine { background: #4a4a26; color: #efe6a8; }
+
+/* row actions: shown on hover / focus, and on the picked row */
+.dm-row-acts { display: flex; gap: 2px; justify-content: flex-end; opacity: 0; transition: opacity .12s; }
+.dm-row:hover .dm-row-acts, .dm-row:focus-within .dm-row-acts, .dm-row.on .dm-row-acts { opacity: 1; }
+@media (hover: none) { .dm-row-acts { opacity: 1; } }
+.dm-act { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 2px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); cursor: pointer; }
+.dm-act:hover:not(:disabled) { color: var(--signal); }
+.dm-act.danger:hover:not(:disabled) { color: var(--weak); }
+.dm-act:disabled { opacity: .45; cursor: default; }
+.dm-act .spinner { width: 14px; height: 14px; }
+.dm-act:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+
+@container (max-width: 640px) { .dm-c-size { display: none; } }
+@container (max-width: 520px) { .dm-c-when { display: none; } }
+/* the panel under the table on narrow windows: picture beside the facts */
+@container (max-width: 899px) {
+  .dm-panel { grid-template-columns: 220px minmax(0, 1fr); column-gap: 18px; }
+  .dm-panel > * { grid-column: 2; }
+  .dm-panel > .dm-panel-head { grid-column: 1; grid-row: 1 / span 8; align-self: start; }
+}
+
+.dm-bad { color: var(--weak); }
+
+/* the picked demo */
+.dm-panel { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.dm-panel-head { position: relative; }
+.dm-close { position: absolute; top: 6px; right: 6px; background: rgba(0, 0, 0, .55); }
+.dm-panel-title { margin: 0; overflow-wrap: anywhere; }
+.dm-panel-actions, .dm-panel-more { display: flex; flex-wrap: wrap; gap: 6px; }
+.dm-panel-more { padding-top: 8px; border-top: 1px solid var(--bevel-lo); }
+.dm-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 14px; }
+.dm-facts dt { color: var(--bone-faint); }
+.dm-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.dm-label { font-size: 13px; color: var(--bone-faint); }
+.dm-players ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; max-height: 180px; overflow: auto; }
+.dm-players li { font-size: 13px; padding: 1px 7px; border-radius: 2px; background: var(--bg); box-shadow: var(--sunken); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-command { display: grid; gap: 6px; padding: 8px 10px; box-shadow: var(--sunken); border-radius: 2px; justify-items: start; }
+.dm-command code { font-size: 15px; font-weight: 700; user-select: all; overflow-wrap: anywhere; }
+.dm-note { display: grid; gap: 6px; justify-items: start; }
+
+/* the count and its "?" stay together when the bar wraps (QA4-T1 L6) */
+.dm-count { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* a Watch that can't be used looks it: no fill, faded (QA4-T1 L11) */
+.dm-panel-actions .btn.primary:disabled { opacity: .5; background: none; color: var(--bone-dim); box-shadow: inset 0 0 0 1px var(--bone-faint); cursor: default; }

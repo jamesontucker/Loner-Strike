@@ -72,12 +72,23 @@ pub fn inside(root: &Path, rel: &str) -> Option<PathBuf> {
     let mut out = root.to_path_buf();
     for part in Path::new(&rel).components() {
         match part {
+            // never a name Windows treats specially (CON, NUL, COM1...), an NTFS stream
+            // ("x.bsp:s") or a name ending in a dot or space (Windows drops them)
+            Component::Normal(p) if windows_unsafe(&p.to_string_lossy()) => return None,
             Component::Normal(p) => out.push(p),
             Component::CurDir => {}
             _ => return None,
         }
     }
     (out != root).then_some(out)
+}
+
+/// A path part Windows can't hold as given: reserved device names, ':' and a trailing dot or space.
+pub fn windows_unsafe(part: &str) -> bool {
+    let stem = part.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT")) && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit() && stem.as_bytes()[3] != b'0');
+    device || part.contains(':') || part.ends_with('.') || part.ends_with(' ')
 }
 
 /// The components installed in a game folder, for lists polled every few seconds:
@@ -189,6 +200,15 @@ impl Record {
     }
 
     pub fn copy(&mut self, src: &Path, rel: &str) -> Result<(), String> {
+        // Loner-Strike's fixed Ham Sandwich is never replaced by another build (an AMX Mod X
+        // package, an add-on's modules): the official one crashes on map changes (hamguard.rs)
+        if crate::hamguard::is_ham(rel) {
+            if let Some(dst) = inside(&self.game, rel) {
+                if crate::hamguard::keep_ours(&dst, src) {
+                    return Ok(());
+                }
+            }
+        }
         let full = self.prepare(rel)?;
         copy2(src, &full).map_err(|e| couldnt("write", rel, e))
     }
@@ -319,12 +339,20 @@ impl Record {
 }
 
 fn couldnt(what: &str, rel: &str, e: std::io::Error) -> String {
+    // (Windows: in use by another program, usually the game itself)
+    if matches!(e.raw_os_error(), Some(32 | 33)) && cfg!(windows) {
+        return format!("Couldn't {what} {rel}: another program has it open. Close Counter-Strike (and any server using this folder), then click Retry.");
+    }
     format!("Couldn't {what} {rel} ({e}).")
 }
 
 /// shutil.copy2: copies the contents and keeps the modification time.
 pub fn copy2(src: &Path, dst: &Path) -> std::io::Result<()> {
+    // (Windows: a read-only target can't be copied over, and the copy takes the source's
+    // read-only flag, which would block the next update)
+    crate::sys::make_writable(dst);
     std::fs::copy(src, dst)?;
+    crate::sys::make_writable(dst);
     if let Ok(t) = std::fs::metadata(src).and_then(|m| m.modified()) {
         if let Ok(f) = std::fs::OpenOptions::new().write(true).open(dst) {
             let _ = f.set_modified(t);

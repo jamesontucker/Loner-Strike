@@ -1,0 +1,58 @@
+/* Shared look for the Tools pages (views/tools/common). Built from the app's own pieces
+   (.panel, .seg, .switch, the checkbox, Settings' rows); loaded with the first tool opened,
+   so the start bundle doesn't carry it. */
+
+/* ---- setting rows: name and help on the left, the control on the right ----------------
+   The control keeps its natural width and never squeezes its labels; when the two don't fit
+   side by side, the control drops onto its own line under the name. */
+.tl-rows { border-top: 1px solid var(--bevel-lo); }
+.tl-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px;
+  padding: 11px 0; border-bottom: 1px solid var(--bevel-lo); box-shadow: 0 1px 0 rgba(136,145,128,.12);
+}
+.tl-rows.bare { border-top: 0; }
+.tl-rows.bare > .tl-row:last-child { border-bottom: 0; box-shadow: none; }
+.tl-row-label { flex: 1 1 180px; min-width: 0; }
+.tl-row-name { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.tl-row-note { display: block; margin-top: 1px; color: var(--bone-faint); font-weight: 500; font-size: 14px; max-width: 62ch; text-wrap-style: pretty; }
+.tl-row-control { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 16px; }
+/* a control that should take the room it's given (a search and a list, a long select) */
+.tl-row-control.wide { flex: 1 1 320px; }
+.tl-row-control.wide > :where(select, .search, input:not([type="checkbox"], [type="color"], [type="range"])) { flex: 1 1 180px; min-width: 0; max-width: none; }
+.tl-row-control > select { max-width: 100%; }
+/* a row of its own under the name (a list of games to tick, a long note) */
+.tl-row.stacked { display: grid; gap: 8px; justify-content: stretch; }
+.tl-row.stacked .tl-row-control { justify-content: flex-start; }
+
+/* a choice of a few words: one line of pills, labels never wrap (whole pills may) */
+.tl-page .seg button, .tl-row .seg button, .tools-bar .seg button, .tools-panel .seg button { white-space: nowrap; }
+.tl-row .seg { max-width: 100%; }
+
+/* ---- a checkbox with its label, kept on one line ---- */
+.tl-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.tl-check:has(input:disabled) { cursor: default; color: var(--bone-faint); }
+.tl-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+/* ---- empty, loading and error states ---- */
+.tl-empty { display: grid; gap: 6px; justify-items: start; padding: 18px 20px; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; }
+.tl-empty h3 { margin: 0; font-size: 17px; }
+.tl-empty p { margin: 0; color: var(--bone-faint); max-width: 68ch; text-wrap-style: pretty; }
+.tl-empty .row { margin-top: 6px; }
+.tl-empty.plain { background: none; box-shadow: none; padding: 6px 0; }
+.tl-loading { display: flex; align-items: center; gap: 2px; color: var(--bone-dim); font-weight: 600; margin: 0; }
+.tl-loading .spinner { flex: none; }
+
+/* ---- a tool's own heading row: what's open, then its actions at the right ---- */
+.tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tl-head-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.tl-head-title h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.tl-head-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* ---- the map list (map doctor, nav fixer, callouts) ---- */
+.tl-maps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.tl-map { display: flex; gap: 10px; align-items: baseline; width: 100%; min-width: 0; text-align: left; border: 0; border-radius: 2px; padding: 7px 12px; background: var(--panel); color: var(--bone); box-shadow: var(--raised); font: inherit; cursor: pointer; }
+.tl-map:hover, .tl-map:focus-visible { background: var(--panel-2); }
+.tl-map-name { font-weight: 700; flex: none; }
+.tl-map-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-map .push { margin-left: auto; white-space: nowrap; }
+.tl-count { white-space: nowrap; }

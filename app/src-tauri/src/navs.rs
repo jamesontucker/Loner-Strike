@@ -273,6 +273,8 @@ pub fn copy_with(e: &Entry, hl: &Path, local: &LocalNavs, only: Option<&str>, qu
             out.sent.push(stem.clone());
             // what the bot brain worked out from that nav goes with it
             send_knowledge(nav, &dest_dir);
+            // and its place names into the server's BotChatter.db, or the game drops any it doesn't list
+            crate::tools::callouts::teach_server(&e.dir, &e.game, &nav.path);
         }
     }
     // a server on this computer that already has the same nav: its knowledge too, if ours is
@@ -574,10 +576,30 @@ pub fn read_log(text: &str, map: &str) -> LogSays {
     if lower.contains("start position invalid") {
         return LogSays::Failed("bots couldn't find a place to start on it.".into());
     }
+    // Parity A (QA4-F F8): a fatal error ("FATAL ERROR (shutting down): Unable to initialize
+    // Steam."): under CrossOver the server then sits there with its error and never ends
+    if let Some(l) = text.lines().find(|l| l.contains("FATAL ERROR")) {
+        return LogSays::Failed(format!("the hidden server stopped with an error ({}).", l.trim().chars().take(120).collect::<String>()));
+    }
     if let Some(l) = text.lines().find(|l| l.contains("Host_Error") || l.to_lowercase().contains("couldn't spawn server")) {
         return LogSays::Failed(format!("the server couldn't load it ({}).", l.trim().chars().take(120).collect::<String>()));
     }
     LogSays::Nothing
+}
+
+/// Parity A (QA4-F F8): how long the hidden server may go without answering RCON: before its
+/// first answer (starting, loading the map), and after one (a bot walking keeps it answering).
+const FIRST_ANSWER: Duration = Duration::from_secs(300);
+const QUIET_AT_MOST: Duration = Duration::from_secs(180);
+
+/// Why the hidden server counts as gone (it ran `since` start, last answered `answered` ago),
+/// or None while it's fine.
+pub fn stopped_answering(since: Duration, answered: Option<Duration>) -> Option<&'static str> {
+    match answered {
+        None if since > FIRST_ANSWER => Some("the hidden server never answered (it may have stopped with an error)."),
+        Some(a) if a > QUIET_AT_MOST => Some("the hidden server stopped answering."),
+        _ => None,
+    }
 }
 
 /// The models and sprites a map's entities name ("models/props/barrel.mdl"): the server
@@ -624,7 +646,7 @@ pub fn learn_args(game: &str, port: u16, password: &str, map: &str) -> Vec<Strin
 /// on, and nothing that changes the map while it learns.
 const LEARN_CFG: &str = "// Written by Loner-Strike: the hidden server that teaches bots maps\n\
 hostname \"Loner-Strike bot teacher\"\nsv_lan 1\nmp_timelimit 0\nmp_maxrounds 0\nmp_winlimit 0\n\
-bot_quota 1\nbot_quota_mode normal\nbot_join_after_player 0\nbot_join_delay 0\nbot_join_team any\n";
+bot_enable 1\nbot_quota 1\nbot_quota_mode normal\nbot_join_after_player 0\nbot_join_delay 0\nbot_join_team any\n";
 
 /// The hidden server on this computer: a copy of Valve's server (the one servers are made
 /// from, downloaded first if there isn't one) in <servers folder>/.nav-learner, with no
@@ -641,6 +663,17 @@ impl LocalLearner {
     pub fn new(client: Install) -> Result<LocalLearner, String> {
         let root = servers::root_for(&client)?;
         Ok(LocalLearner { client, base: root.join(".base"), dir: root.join(".nav-learner"), leftovers: Vec::new() })
+    }
+
+    /// Parity A (QA4-F F6): ends the hidden server's Windows-side process on a Mac (by its own
+    /// path, .nav-learner's hlds.exe), which ending wine's launcher leaves running.
+    fn end_wine_side(&self) {
+        #[cfg(target_os = "macos")]
+        if self.client.kind == "crossover" {
+            if let Some(win) = servers::windows_path(&self.dir.join("hlds.exe")) {
+                crate::procmatch::end_wine_side(&win, Duration::from_secs(3));
+            }
+        }
     }
 
     fn spawn(&self, args: &[String], log: std::fs::File) -> Result<Child, String> {
@@ -685,6 +718,49 @@ impl LocalLearner {
             }
         }
     }
+}
+
+fn has_bot_profile(gdir: &Path) -> bool {
+    find_file(gdir, "botprofile", "db").is_some()
+}
+
+/// The marker Loner-Strike's bot brain (its ReGameDLL) carries.
+const BRAIN: &[u8] = b"lonerstrike_mapknow";
+
+/// Whether a game folder's server DLL is Loner-Strike's bot brain.
+fn has_brain(gdir: &Path) -> bool {
+    std::fs::read(gdir.join("dlls/mp.dll")).is_ok_and(|b| b.windows(BRAIN.len()).any(|w| w == BRAIN))
+}
+
+/// Copies the game's bot brain into a hidden server's game folder: its server DLL (only when
+/// it is Loner-Strike's ReGameDLL, which has the bots) and the bot profile and chatter files.
+pub(crate) fn bring_bots(game: &Path, gdir: &Path) -> Result<(), String> {
+    let dll_rel = "dlls/mp.dll";
+    // Parity A: the brain from the game being learned, else from the other game in the same
+    // Half-Life folder: setup puts the same ReGameDLL build in both, and a Condition Zero that
+    // hasn't been updated since (CZ updates when it's the game picked) still learns with ours
+    let siblings = game.parent().map(|hl| crate::setup::GAMES.iter().map(|(g, _)| hl.join(g)).filter(|d| d.as_path() != game).collect::<Vec<_>>()).unwrap_or_default();
+    let found = std::iter::once(game.to_path_buf()).chain(siblings).find(|d| has_brain(d));
+    let Some(src_game) = found else {
+        return Err(if game.join(dll_rel).is_file() {
+            "Your game has a different server DLL than Loner-Strike's bot brain, so bots can't learn maps with it. Open Mods and click Repair, then try again.".into()
+        } else {
+            "Your game's bot brain isn't installed. Open Mods and click Repair, then try again.".into()
+        });
+    };
+    let bytes = std::fs::read(src_game.join(dll_rel)).map_err(|e| format!("The bot brain couldn't be read ({e})."))?;
+    let dest = gdir.join(dll_rel);
+    if let Some(d) = dest.parent() {
+        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&dest, &bytes).map_err(|e| format!("The bot brain couldn't be copied ({e})."))?;
+    for name in ["botprofile", "botchatter"] {
+        if let Some(p) = find_file(game, name, "db") {
+            let file = p.file_name().map(|f| f.to_owned()).unwrap_or_default();
+            std::fs::copy(&p, gdir.join(file)).map_err(|e| format!("The bot files couldn't be copied ({e})."))?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -745,8 +821,15 @@ impl Learner for LocalLearner {
         servers::copy_tree(&self.base, &self.dir, false, &|rel: &Path| rel.components().next().is_some_and(|c| c.as_os_str() != "steamapps"))?;
         for g in games {
             let gdir = self.dir.join(g);
-            if !gdir.join("botprofile.db").is_file() {
-                return Err(format!("Valve's server for {} came without bots. Update the server files and try again.", setup::game_name(g)));
+            // Valve's servers run Valve's bots (CS 1.6's has none; Condition Zero's has its own):
+            // the bots learn with Loner-Strike's brain on both (its ReGameDLL and bot files), so
+            // what they learn is what our bots use (Parity A: CZ was learned by Valve's bots)
+            if !has_brain(&gdir) {
+                job.detail("Bringing the bots in from your game");
+                bring_bots(&self.client.hl.join(g), &gdir)?;
+            }
+            if !has_bot_profile(&gdir) {
+                return Err(format!("Valve's server for {} came without bots and your game has none to lend it. Open Mods and click Repair, then try again.", setup::game_name(g)));
             }
             std::fs::write(gdir.join("server.cfg"), LEARN_CFG).map_err(|e| e.to_string())?;
         }
@@ -780,9 +863,14 @@ impl Learner for LocalLearner {
         let mut from: Vec<u64> = logs.iter().map(|p| std::fs::metadata(p).map(|x| x.len()).unwrap_or(0)).collect();
         let out = std::fs::File::create(&logs[2]).map_err(|e| fail(e.to_string()))?;
         from[2] = 0;
+        // (one left from an earlier run that never ended: it would hold the files and a port)
+        self.end_wine_side();
         let mut child = self.spawn(&learn_args(&m.game, port, &password, &m.name), out).map_err(fail)?;
         sys::tie_to_app(&child);
         let started = Instant::now();
+        let rcon = crate::rcon::Rcon::at(password.clone(), "127.0.0.1", port);
+        let mut answered: Option<Instant> = None;
+        let mut asked = Instant::now();
         let mut text = String::new();
         let mut last: Option<(u64, SystemTime)> = None;
         let result = loop {
@@ -816,11 +904,21 @@ impl Learner for LocalLearner {
             if started.elapsed() > LEARN_LIMIT {
                 break Err(fail("it took longer than 45 minutes.".into()));
             }
+            // still there? (a server that hit an error can sit with it, its process alive)
+            if asked.elapsed() >= Duration::from_secs(20) {
+                asked = Instant::now();
+                if rcon.send("status").is_ok() {
+                    answered = Some(Instant::now());
+                }
+                if let Some(why) = stopped_answering(started.elapsed(), answered.map(|a| a.elapsed())) {
+                    break Err(fail(why.into()));
+                }
+            }
             let mins = started.elapsed().as_secs() / 60;
             job.detail(&if mins == 0 { "A bot is walking the map".to_string() } else { format!("A bot is walking the map ({mins} min so far)") });
         };
         // asked to quit, then ended if it hasn't
-        let _ = crate::rcon::Rcon::at(password, "127.0.0.1", port).send("quit");
+        let _ = rcon.send("quit");
         for _ in 0..25 {
             if matches!(child.try_wait(), Ok(Some(_))) {
                 break;
@@ -828,6 +926,8 @@ impl Learner for LocalLearner {
             std::thread::sleep(Duration::from_millis(200));
         }
         sys::stop_child(child, Duration::from_secs(3));
+        // Parity A (QA4-F F6): under CrossOver the server itself outlives wine's launcher
+        self.end_wine_side();
         // a map that isn't Valve's goes again at the end (no second copy kept)
         if !stock {
             self.leftovers.extend([bsp, nav]);
@@ -925,6 +1025,52 @@ pub fn owner_routes() -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bring_bots_takes_only_our_brain() {
+        let game = temp("bots-game");
+        let server = temp("bots-server");
+        std::fs::create_dir_all(game.join("dlls")).unwrap();
+        // Valve's DLL (no bots): refused, nothing copied
+        std::fs::write(game.join("dlls/mp.dll"), b"valve server code").unwrap();
+        std::fs::write(game.join("BotProfile.db"), b"profiles").unwrap();
+        assert!(bring_bots(&game, &server).is_err());
+        assert!(!has_bot_profile(&server));
+        // ours: the DLL and the bot files come over
+        std::fs::write(game.join("dlls/mp.dll"), b"...lonerstrike_mapknow...").unwrap();
+        std::fs::write(game.join("BotChatter.db"), b"chatter").unwrap();
+        bring_bots(&game, &server).unwrap();
+        assert!(has_bot_profile(&server) && server.join("BotChatter.db").is_file());
+        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow...");
+        assert!(LEARN_CFG.contains("bot_enable 1"));
+    }
+
+    #[test]
+    fn condition_zero_learns_with_our_brain() {
+        // Parity A: Valve's CZ server ships a bot profile, which used to mean "keep Valve's bots";
+        // and a CZ install not updated since keeps an older ReGameDLL: the brain comes from CS 1.6
+        let hl = temp("bots-hl-cz");
+        let (cs, cz) = (hl.join("cstrike"), hl.join("czero"));
+        for g in [&cs, &cz] {
+            std::fs::create_dir_all(g.join("dlls")).unwrap();
+        }
+        std::fs::write(cs.join("dlls/mp.dll"), b"...lonerstrike_mapknow v2...").unwrap();
+        std::fs::write(cz.join("dlls/mp.dll"), b"ReGameDLL 5.30.0.814-dev (older)").unwrap();
+        std::fs::write(cz.join("BotProfile.db"), b"cz profiles").unwrap();
+        let server = temp("bots-server-cz");
+        std::fs::create_dir_all(server.join("dlls")).unwrap();
+        std::fs::write(server.join("dlls/mp.dll"), b"valve cz server code").unwrap();
+        std::fs::write(server.join("BotProfile.db"), b"valve cz profiles").unwrap();
+        assert!(has_bot_profile(&server) && !has_brain(&server));
+        bring_bots(&cz, &server).unwrap();
+        assert!(has_brain(&server));
+        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow v2...");
+        // CZ's own bot profile (the game's) is what the brain reads there
+        assert_eq!(std::fs::read(server.join("BotProfile.db")).unwrap(), b"cz profiles");
+        // no brain in either game: refused, with the repair hint
+        std::fs::write(cs.join("dlls/mp.dll"), b"valve").unwrap();
+        assert!(bring_bots(&cz, &server).unwrap_err().contains("Repair"));
+    }
 
     fn nav_bytes(version: u32, bsp: u32, len: usize) -> Vec<u8> {
         let mut b = Vec::new();
@@ -1054,6 +1200,14 @@ mod tests {
         assert!(matches!(read_log("ERROR: Start position invalid\n", "de_x"), LogSays::Failed(_)));
         assert!(matches!(read_log("Host_Error: PF_precache_model_I: Model 'models/x.mdl' failed to load\n", "de_x"), LogSays::Failed(_)));
         assert_eq!(read_log("Adding bot\n", "de_x"), LogSays::Nothing);
+        // Parity A (QA4-F F8): a fatal error fails the job at once
+        assert!(matches!(read_log("FATAL ERROR (shutting down): Unable to initialize Steam.\n", "de_x"), LogSays::Failed(w) if w.contains("Unable to initialize Steam")));
+        // and a server that stops answering (or never does) is gone
+        let m = |s| Duration::from_secs(s);
+        assert_eq!(stopped_answering(m(60), None), None, "still starting");
+        assert!(stopped_answering(m(301), None).is_some());
+        assert_eq!(stopped_answering(m(1200), Some(m(30))), None, "a bot walking: it answers");
+        assert!(stopped_answering(m(1200), Some(m(181))).is_some());
     }
 
     #[test]

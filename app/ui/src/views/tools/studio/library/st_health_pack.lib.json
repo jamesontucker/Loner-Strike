@@ -1,0 +1,1680 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Health Pack",
+ "description": "A health pack on a trigger volume: heals (0: 50, up to 100) and comes back after Respawn seconds (0: 20).",
+ "category": "Starter: pickups",
+ "kind": "macro",
+ "root": "heal_take",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "heal_at",
+   "name": "Spawn Health Pack Here",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "pos",
+     "name": "Position",
+     "type": "vector"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "heal_spawn",
+   "name": "Spawn Health Pack",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "heal_take",
+   "name": "Take Health Pack",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "vol",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "heal",
+     "name": "Heal",
+     "type": "number"
+    },
+    {
+     "id": "respawn",
+     "name": "Respawn after",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "taken",
+     "name": "Taken",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not taken",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "heal_vols",
+   "name": "Health Pack volumes",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_pos",
+   "name": "Health Pack spots",
+   "type": "array<vector>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_mk",
+   "name": "Health Pack markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_spot",
+   "name": "Health Pack respawn spot",
+   "type": "vector",
+   "scope": "mode"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "heal_at_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 48,
+    "name": "heal"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_pickpos",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/glow01.spr",
+    "height": 16,
+    "scale": 0.5,
+    "r": 40,
+    "g": 255,
+    "b": 60,
+    "pulse": true
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 720
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 1080
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_bots",
+   "type": "bots.offer",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "kind": "pickup",
+    "cost": 60,
+    "order": 2
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_spawn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_epos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_spawn",
+   "type": "macro.use",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "macro": "heal_at"
+   },
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_take_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_hp",
+   "type": "player.get_health",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_full",
+   "type": "math.compare",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "op": "lt",
+    "b": 100
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal_d",
+   "type": "math.number",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "value": 50
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal",
+   "type": "logic.select",
+   "pos": {
+    "x": 3120,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_add",
+   "type": "math.op",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_cap",
+   "type": "math.op",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "op": "min",
+    "b": 100
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_sethp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "sound": "items/smallmedkit1.wav"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_g_posf",
+   "type": "var.get",
+   "pos": {
+    "x": 4420,
+    "y": 900
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_posf",
+   "type": "array.get",
+   "pos": {
+    "x": 4680,
+    "y": 900
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 4940,
+    "y": 1080
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 5200,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_botsoff",
+   "type": "bots.offer_clear",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rmmk",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 5720,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_keep",
+   "type": "var.set",
+   "pos": {
+    "x": 6240,
+    "y": 0
+   },
+   "params": {
+    "var": "heal_spot"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 6500,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 6760,
+    "y": 1440
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 7020,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 7280,
+    "y": 1620
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 7540,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 7800,
+    "y": 1800
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 8060,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 8320,
+    "y": 1980
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 8580,
+    "y": 2160
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs",
+   "type": "logic.select",
+   "pos": {
+    "x": 8840,
+    "y": 1980
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_spot",
+   "type": "var.get",
+   "pos": {
+    "x": 9100,
+    "y": 2160
+   },
+   "params": {
+    "var": "heal_spot"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 9360,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_again",
+   "type": "macro.use",
+   "pos": {
+    "x": 9620,
+    "y": 0
+   },
+   "params": {
+    "macro": "heal_at"
+   },
+   "graph": "heal_take"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "heal_at_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_at_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "heal_at_in",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "heal_at_pickpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "heal_at_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "heal_at_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "heal_at_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "heal_at_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "heal_at_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "heal_at_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "heal_at_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "heal_at_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "heal_at_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "heal_spawn_in",
+    "pin": "at"
+   },
+   "to": {
+    "node": "heal_spawn_epos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "heal_spawn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_spawn_spawn",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "heal_spawn_epos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_spawn_spawn",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "heal_spawn_spawn",
+    "pin": "next"
+   },
+   "to": {
+    "node": "heal_spawn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "heal_spawn_spawn",
+    "pin": "pick"
+   },
+   "to": {
+    "node": "heal_spawn_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "heal_take_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_take_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "heal_take_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "heal_take_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "heal_take_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "heal_take_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "heal_take_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "heal_take_hp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_full",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "heal_take_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "heal_take_full",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "heal"
+   },
+   "to": {
+    "node": "heal_take_heal_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "heal_take_heal_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "heal"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "heal_take_heal_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "heal_take_hp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_add",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "heal_take_heal",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_add",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "heal_take_add",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_cap",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "heal_take_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "heal_take_cap",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "heal_take_sethp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "heal_take_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "heal_take_g_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_posf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_posf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "heal_take_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "heal_take_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_botsoff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_botsoff",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "heal_take_botsoff",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rmmk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "heal_take_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rmmk",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "heal_take_rmmk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "heal_take_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "heal_take_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "heal_take_keep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "heal_take_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "heal_take_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "heal_take_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "heal_take_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "heal_take_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "heal_take_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "heal_take_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "taken"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "heal_take_rs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "heal_take_rs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "heal_take_rs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "heal_take_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "heal_take_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "heal_take_rs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "heal_take_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_again",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "heal_take_spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_again",
+    "pin": "pos"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "heal_take",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is offered to them as a pickup (hurt bots want it most)."
+  },
+  {
+   "id": "c1",
+   "graph": "heal_take",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Take Health Pack: Volume and Who are Begin Overlap's (name heal). Respawn after 0 is 20 seconds. How many pickups a map has is up to you."
+  }
+ ]
+}

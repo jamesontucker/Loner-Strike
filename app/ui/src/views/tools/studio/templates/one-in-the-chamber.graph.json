@@ -1,0 +1,2302 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "one_in_the_chamber",
+  "uid": "4e7a1c93-2b5d-4f60-a8c4-7d2e9b0f6a35",
+  "name": "One in the Chamber",
+  "description": "One bullet, a kill gives one more, three lives",
+  "settings": [
+   {
+    "cvar": "mp_freeforall",
+    "value": 1
+   },
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "lives",
+   "name": "Lives",
+   "type": "number",
+   "scope": "player",
+   "default": 3,
+   "reset": "round"
+  },
+  {
+   "id": "back",
+   "name": "Coming Back",
+   "type": "bool",
+   "scope": "player",
+   "default": false,
+   "reset": "round"
+  },
+  {
+   "id": "playing",
+   "name": "Still In",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "bestScore",
+   "name": "Best Score",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "over",
+   "name": "Round Over",
+   "type": "bool",
+   "scope": "mode",
+   "default": false,
+   "reset": "round"
+  },
+  {
+   "id": "best",
+   "name": "Leader",
+   "type": "player",
+   "scope": "mode"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 1065,
+    "y": 74
+   },
+   "params": {}
+  },
+  {
+   "id": "nobuy",
+   "type": "buy.where",
+   "pos": {
+    "x": 1565,
+    "y": 61
+   },
+   "params": {
+    "where": "nowhere"
+   }
+  },
+  {
+   "id": "bots",
+   "type": "bots.no_buy",
+   "pos": {
+    "x": 2065,
+    "y": 50
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "hello",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 2565,
+    "y": 50
+   },
+   "params": {
+    "text": "One in the Chamber: one bullet, one kill, one more bullet. Three lives.",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 65,
+    "y": 279
+   },
+   "params": {}
+  },
+  {
+   "id": "strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 565,
+    "y": 137
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "give",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1065,
+    "y": 190
+   },
+   "params": {
+    "weapon": "deagle",
+    "ammo": 0
+   }
+  },
+  {
+   "id": "hold",
+   "type": "player.switch_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 266
+   },
+   "params": {
+    "weapon": "deagle"
+   }
+  },
+  {
+   "id": "one",
+   "type": "player.set_ammo",
+   "pos": {
+    "x": 2065,
+    "y": 287
+   },
+   "params": {
+    "clip": 1,
+    "reserve": 0
+   }
+  },
+  {
+   "id": "here",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 341
+   },
+   "params": {
+    "var": "back",
+    "value": false
+   }
+  },
+  {
+   "id": "ah",
+   "type": "event.player_about_hurt",
+   "pos": {
+    "x": 65,
+    "y": 1046
+   },
+   "params": {}
+  },
+  {
+   "id": "gun",
+   "type": "player.weapon_held",
+   "pos": {
+    "x": 565,
+    "y": 1047
+   },
+   "params": {}
+  },
+  {
+   "id": "isdeagle",
+   "type": "text.equals",
+   "pos": {
+    "x": 1065,
+    "y": 1023
+   },
+   "params": {
+    "b": "deagle"
+   }
+  },
+  {
+   "id": "check",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1066
+   },
+   "params": {}
+  },
+  {
+   "id": "kill",
+   "type": "dmg.set",
+   "pos": {
+    "x": 2065,
+    "y": 1066
+   },
+   "params": {
+    "amount": 400
+   }
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1563
+   },
+   "params": {}
+  },
+  {
+   "id": "byplayer",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1565
+   },
+   "params": {}
+  },
+  {
+   "id": "other",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 565,
+    "y": 1522
+   },
+   "params": {
+    "op": "or"
+   }
+  },
+  {
+   "id": "notother",
+   "type": "logic.not",
+   "pos": {
+    "x": 1065,
+    "y": 1546
+   },
+   "params": {}
+  },
+  {
+   "id": "swap",
+   "type": "player.switch_weapon",
+   "pos": {
+    "x": 2065,
+    "y": 1426
+   },
+   "params": {
+    "weapon": "deagle"
+   }
+  },
+  {
+   "id": "bullet",
+   "type": "player.give_ammo",
+   "pos": {
+    "x": 2565,
+    "y": 1544
+   },
+   "params": {
+    "n": 1
+   }
+  },
+  {
+   "id": "lose",
+   "type": "var.add",
+   "pos": {
+    "x": 3065,
+    "y": 1591
+   },
+   "params": {
+    "var": "lives",
+    "amount": -1
+   }
+  },
+  {
+   "id": "left",
+   "type": "var.get",
+   "pos": {
+    "x": 2565,
+    "y": 1296
+   },
+   "params": {
+    "var": "lives"
+   }
+  },
+  {
+   "id": "any",
+   "type": "math.compare",
+   "pos": {
+    "x": 3065,
+    "y": 1296
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   }
+  },
+  {
+   "id": "more",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3565,
+    "y": 1459
+   },
+   "params": {}
+  },
+  {
+   "id": "coming",
+   "type": "var.set",
+   "pos": {
+    "x": 4065,
+    "y": 1455
+   },
+   "params": {
+    "var": "back",
+    "value": true
+   }
+  },
+  {
+   "id": "wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 4565,
+    "y": 1477
+   },
+   "params": {
+    "secs": 2
+   }
+  },
+  {
+   "id": "back",
+   "type": "player.respawn",
+   "pos": {
+    "x": 5065,
+    "y": 1631
+   },
+   "params": {}
+  },
+  {
+   "id": "out",
+   "type": "msg.chat",
+   "pos": {
+    "x": 4065,
+    "y": 1895
+   },
+   "params": {
+    "text": "Out of lives:"
+   }
+  },
+  {
+   "id": "pk2",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 2643
+   },
+   "params": {}
+  },
+  {
+   "id": "zero",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 2685
+   },
+   "params": {
+    "var": "playing",
+    "value": 0
+   }
+  },
+  {
+   "id": "each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1065,
+    "y": 2696
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "l2",
+   "type": "var.get",
+   "pos": {
+    "x": 1565,
+    "y": 2568
+   },
+   "params": {
+    "var": "lives"
+   }
+  },
+  {
+   "id": "has",
+   "type": "math.compare",
+   "pos": {
+    "x": 2065,
+    "y": 2568
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   }
+  },
+  {
+   "id": "alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1565,
+    "y": 2732
+   },
+   "params": {}
+  },
+  {
+   "id": "bk",
+   "type": "var.get",
+   "pos": {
+    "x": 1565,
+    "y": 2836
+   },
+   "params": {
+    "var": "back"
+   }
+  },
+  {
+   "id": "either",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 2065,
+    "y": 2750
+   },
+   "params": {
+    "op": "or"
+   }
+  },
+  {
+   "id": "both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 2565,
+    "y": 2666
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
+   "id": "in",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3065,
+    "y": 2623
+   },
+   "params": {}
+  },
+  {
+   "id": "count",
+   "type": "var.add",
+   "pos": {
+    "x": 3565,
+    "y": 2601
+   },
+   "params": {
+    "var": "playing",
+    "amount": 1
+   }
+  },
+  {
+   "id": "n",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 2966
+   },
+   "params": {
+    "var": "playing"
+   }
+  },
+  {
+   "id": "last",
+   "type": "math.compare",
+   "pos": {
+    "x": 565,
+    "y": 2966
+   },
+   "params": {
+    "op": "le",
+    "b": 1
+   }
+  },
+  {
+   "id": "done1",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 3118
+   },
+   "params": {
+    "var": "over"
+   }
+  },
+  {
+   "id": "notdone1",
+   "type": "logic.not",
+   "pos": {
+    "x": 565,
+    "y": 3142
+   },
+   "params": {}
+  },
+  {
+   "id": "decide1",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1065,
+    "y": 3078
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
+   "id": "over",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 3076
+   },
+   "params": {}
+  },
+  {
+   "id": "winner",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2065,
+    "y": 3065
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "cheer",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2565,
+    "y": 3065
+   },
+   "params": {
+    "text": "Last one standing:"
+   }
+  },
+  {
+   "id": "mark1",
+   "type": "var.set",
+   "pos": {
+    "x": 3065,
+    "y": 3054
+   },
+   "params": {
+    "var": "over",
+    "value": true
+   }
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3565,
+    "y": 3076
+   },
+   "params": {
+    "winner": "draw"
+   }
+  },
+  {
+   "id": "rs3",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 631
+   },
+   "params": {}
+  },
+  {
+   "id": "clock",
+   "type": "clock.set",
+   "pos": {
+    "x": 565,
+    "y": 607
+   },
+   "params": {
+    "secs": 180
+   }
+  },
+  {
+   "id": "rs4",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 2265
+   },
+   "params": {}
+  },
+  {
+   "id": "late",
+   "type": "timer.delay",
+   "pos": {
+    "x": 565,
+    "y": 2241
+   },
+   "params": {
+    "secs": 120
+   }
+  },
+  {
+   "id": "sd",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1065,
+    "y": 2241
+   },
+   "params": {
+    "text": "Sudden death! Everyone glows, and has one bullet.",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "everyone",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1565,
+    "y": 2230
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "red",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2065,
+    "y": 2166
+   },
+   "params": {
+    "color": "red"
+   }
+  },
+  {
+   "id": "draw",
+   "type": "player.switch_weapon",
+   "pos": {
+    "x": 2565,
+    "y": 2198
+   },
+   "params": {
+    "weapon": "deagle"
+   }
+  },
+  {
+   "id": "load",
+   "type": "player.set_ammo",
+   "pos": {
+    "x": 3065,
+    "y": 2194
+   },
+   "params": {
+    "clip": 1,
+    "reserve": 0
+   }
+  },
+  {
+   "id": "hunt",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 2065,
+    "y": 3471
+   },
+   "params": {
+    "every": 10,
+    "times": 0
+   }
+  },
+  {
+   "id": "hunters",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 2565,
+    "y": 3471
+   },
+   "params": {
+    "which": "bots"
+   }
+  },
+  {
+   "id": "prey",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 3065,
+    "y": 3449
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "self",
+   "type": "logic.equal",
+   "pos": {
+    "x": 3565,
+    "y": 3411
+   },
+   "params": {
+    "of": "player",
+    "op": "ne"
+   }
+  },
+  {
+   "id": "someone",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4065,
+    "y": 3368
+   },
+   "params": {}
+  },
+  {
+   "id": "chase",
+   "type": "bots.goal",
+   "pos": {
+    "x": 4565,
+    "y": 3406
+   },
+   "params": {
+    "who": "player",
+    "kind": "hunt",
+    "prio": 80,
+    "secs": 11,
+    "radius": 200
+   }
+  },
+  {
+   "id": "tu",
+   "type": "event.time_up",
+   "pos": {
+    "x": 65,
+    "y": 3849
+   },
+   "params": {}
+  },
+  {
+   "id": "done2",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 4295
+   },
+   "params": {
+    "var": "over"
+   }
+  },
+  {
+   "id": "still",
+   "type": "flow.branch",
+   "pos": {
+    "x": 565,
+    "y": 4016
+   },
+   "params": {}
+  },
+  {
+   "id": "reset",
+   "type": "var.set",
+   "pos": {
+    "x": 1065,
+    "y": 3994
+   },
+   "params": {
+    "var": "bestScore",
+    "value": -1
+   }
+  },
+  {
+   "id": "all",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1565,
+    "y": 4005
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "lv",
+   "type": "var.get",
+   "pos": {
+    "x": 2065,
+    "y": 3822
+   },
+   "params": {
+    "var": "lives"
+   }
+  },
+  {
+   "id": "pts",
+   "type": "math.op",
+   "pos": {
+    "x": 2565,
+    "y": 3822
+   },
+   "params": {
+    "op": "mul",
+    "b": 100
+   }
+  },
+  {
+   "id": "kills",
+   "type": "player.get_frags",
+   "pos": {
+    "x": 2565,
+    "y": 3974
+   },
+   "params": {}
+  },
+  {
+   "id": "score",
+   "type": "math.op",
+   "pos": {
+    "x": 3065,
+    "y": 3886
+   },
+   "params": {
+    "op": "add"
+   }
+  },
+  {
+   "id": "bs",
+   "type": "var.get",
+   "pos": {
+    "x": 3065,
+    "y": 4258
+   },
+   "params": {
+    "var": "bestScore"
+   }
+  },
+  {
+   "id": "better",
+   "type": "math.compare",
+   "pos": {
+    "x": 3565,
+    "y": 3995
+   },
+   "params": {
+    "op": "gt"
+   }
+  },
+  {
+   "id": "isbest",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4065,
+    "y": 3909
+   },
+   "params": {}
+  },
+  {
+   "id": "keep",
+   "type": "var.set",
+   "pos": {
+    "x": 4565,
+    "y": 3887
+   },
+   "params": {
+    "var": "bestScore"
+   }
+  },
+  {
+   "id": "lead",
+   "type": "var.set",
+   "pos": {
+    "x": 5065,
+    "y": 4073
+   },
+   "params": {
+    "var": "best"
+   }
+  },
+  {
+   "id": "who",
+   "type": "var.get",
+   "pos": {
+    "x": 1565,
+    "y": 4376
+   },
+   "params": {
+    "var": "best"
+   }
+  },
+  {
+   "id": "tell",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 4095
+   },
+   "params": {
+    "text": "Time! Most lives left:"
+   }
+  },
+  {
+   "id": "mark2",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 4084
+   },
+   "params": {
+    "var": "over",
+    "value": true
+   }
+  },
+  {
+   "id": "fin",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3065,
+    "y": 4106
+   },
+   "params": {
+    "winner": "draw"
+   }
+  },
+  {
+   "id": "nb_rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 834
+   },
+   "params": {}
+  },
+  {
+   "id": "nb_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 799
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "nb_take",
+   "type": "player.take_weapon",
+   "pos": {
+    "x": 1065,
+    "y": 810
+   },
+   "params": {
+    "weapon": "c4"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nobuy",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "nobuy",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hello",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "give",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hold",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "hold",
+    "pin": "then"
+   },
+   "to": {
+    "node": "one",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "one",
+    "pin": "then"
+   },
+   "to": {
+    "node": "here",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "give",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hold",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "one",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "here",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "ah",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "gun",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "gun",
+    "pin": "out"
+   },
+   "to": {
+    "node": "isdeagle",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "isdeagle",
+    "pin": "out"
+   },
+   "to": {
+    "node": "check",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ah",
+    "pin": "then"
+   },
+   "to": {
+    "node": "check",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "check",
+    "pin": "true"
+   },
+   "to": {
+    "node": "kill",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk",
+    "pin": "suicide"
+   },
+   "to": {
+    "node": "other",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "pk",
+    "pin": "world"
+   },
+   "to": {
+    "node": "other",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "other",
+    "pin": "out"
+   },
+   "to": {
+    "node": "notother",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "notother",
+    "pin": "out"
+   },
+   "to": {
+    "node": "byplayer",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "byplayer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "byplayer",
+    "pin": "true"
+   },
+   "to": {
+    "node": "swap",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "swap",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bullet",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "bullet",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lose",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "byplayer",
+    "pin": "false"
+   },
+   "to": {
+    "node": "lose",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "swap",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "bullet",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "lose",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "left",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "any",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "any",
+    "pin": "out"
+   },
+   "to": {
+    "node": "more",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "lose",
+    "pin": "then"
+   },
+   "to": {
+    "node": "more",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "more",
+    "pin": "true"
+   },
+   "to": {
+    "node": "coming",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "coming",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "back",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "coming",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "back",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "more",
+    "pin": "false"
+   },
+   "to": {
+    "node": "out",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "out",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "pk2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zero",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "zero",
+    "pin": "then"
+   },
+   "to": {
+    "node": "each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "in",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "in",
+    "pin": "true"
+   },
+   "to": {
+    "node": "count",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "l2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "l2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "has",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bk",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "either",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "bk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "either",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "has",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "either",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "in",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "each",
+    "pin": "then"
+   },
+   "to": {
+    "node": "over",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "over",
+    "pin": "true"
+   },
+   "to": {
+    "node": "winner",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "winner",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "cheer",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mark1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "mark1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "n",
+    "pin": "out"
+   },
+   "to": {
+    "node": "last",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "last",
+    "pin": "out"
+   },
+   "to": {
+    "node": "decide1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "done1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "notdone1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "notdone1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "decide1",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "decide1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "over",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "winner",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "rs3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "clock",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "rs4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "late",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "late",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "sd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "everyone",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "everyone",
+    "pin": "each"
+   },
+   "to": {
+    "node": "red",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "red",
+    "pin": "then"
+   },
+   "to": {
+    "node": "draw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "draw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "load",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "red",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "draw",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "load",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "everyone",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hunt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "hunt",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "hunters",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "hunters",
+    "pin": "each"
+   },
+   "to": {
+    "node": "prey",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "prey",
+    "pin": "then"
+   },
+   "to": {
+    "node": "someone",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "someone",
+    "pin": "true"
+   },
+   "to": {
+    "node": "chase",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "hunters",
+    "pin": "player"
+   },
+   "to": {
+    "node": "self",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "prey",
+    "pin": "player"
+   },
+   "to": {
+    "node": "self",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "self",
+    "pin": "out"
+   },
+   "to": {
+    "node": "someone",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "hunters",
+    "pin": "player"
+   },
+   "to": {
+    "node": "chase",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "prey",
+    "pin": "player"
+   },
+   "to": {
+    "node": "chase",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "tu",
+    "pin": "then"
+   },
+   "to": {
+    "node": "still",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "still",
+    "pin": "false"
+   },
+   "to": {
+    "node": "reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "all",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "all",
+    "pin": "each"
+   },
+   "to": {
+    "node": "isbest",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "isbest",
+    "pin": "true"
+   },
+   "to": {
+    "node": "keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "keep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lead",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "done2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "still",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pts",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "pts",
+    "pin": "out"
+   },
+   "to": {
+    "node": "score",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kills",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "kills",
+    "pin": "out"
+   },
+   "to": {
+    "node": "score",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "score",
+    "pin": "out"
+   },
+   "to": {
+    "node": "better",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "bs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "better",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "better",
+    "pin": "out"
+   },
+   "to": {
+    "node": "isbest",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "score",
+    "pin": "out"
+   },
+   "to": {
+    "node": "keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lead",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "all",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tell",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "tell",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mark2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "mark2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fin",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "who",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tell",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "nb_rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nb_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "nb_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "nb_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "player"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "Free for all, no buying. Everyone spawns with a knife and a deagle holding a single bullet.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 2778,
+    "h": 515
+   }
+  },
+  {
+   "id": "c2",
+   "text": "A deagle bullet always kills (the knife hurts as usual). Player About To Be Hurt can change the damage before it lands.",
+   "pos": {
+    "x": 41,
+    "y": 977
+   },
+   "size": {
+    "w": 2278,
+    "h": 243
+   }
+  },
+  {
+   "id": "c3",
+   "text": "A kill gives the killer one more bullet. The one who died loses a life, and comes back after 2 seconds if they have any left.",
+   "pos": {
+    "x": 41,
+    "y": 1250
+   },
+   "size": {
+    "w": 5278,
+    "h": 801
+   }
+  },
+  {
+   "id": "c4",
+   "text": "After each death, count who is still in: lives left, and alive or about to come back (someone who joins mid-round waits for the next round). When only one is left, they win and a new round starts with three lives each.",
+   "pos": {
+    "x": 41,
+    "y": 2522
+   },
+   "size": {
+    "w": 3778,
+    "h": 730
+   }
+  },
+  {
+   "id": "c5",
+   "text": "A round lasts 3 minutes, on the mode's own round clock (it shows on everyone's timer). Rounds end only here and at last one standing.",
+   "pos": {
+    "x": 41,
+    "y": 561
+   },
+   "size": {
+    "w": 778,
+    "h": 180
+   }
+  },
+  {
+   "id": "c6",
+   "text": "Sudden death with a minute left: everyone glows red and gets one bullet, so nobody can wait it out in a corner.",
+   "pos": {
+    "x": 41,
+    "y": 2120
+   },
+   "size": {
+    "w": 3278,
+    "h": 266
+   }
+  },
+  {
+   "id": "c7",
+   "text": "And every 10 seconds of sudden death each bot is told to hunt another player (Bots: Goal, Hunt it), so bots go looking instead of waiting.",
+   "pos": {
+    "x": 2041,
+    "y": 3322
+   },
+   "size": {
+    "w": 2778,
+    "h": 306
+   }
+  },
+  {
+   "id": "c8",
+   "text": "Time up: the one with the most lives left wins (a life is worth 100 points, each kill 1, so kills break a tie). Round Over makes sure a round is only decided once.",
+   "pos": {
+    "x": 41,
+    "y": 3776
+   },
+   "size": {
+    "w": 5278,
+    "h": 734
+   }
+  },
+  {
+   "id": "c9",
+   "text": "No bomb in this mode: on a bomb map the game hands one out each round, so at Round Started everyone loses it (Remove Weapon, the bomb). Bots then play the mode instead of the bomb, and a bomb can't end a round behind the mode's back.",
+   "pos": {
+    "x": 41,
+    "y": 753
+   },
+   "size": {
+    "w": 1278,
+    "h": 202
+   }
+  }
+ ]
+}

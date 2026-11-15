@@ -1042,7 +1042,7 @@ public saveStatsSql(id, typeSave){
 		case 2:{
 			format(queryData, sizeof(queryData), "\
 			UPDATE `players`\
-				SET `timePlay`='%d', `lastlogin`= CURRENT_TIMESTAMP\
+				SET `timePlay`='%d', `lastlogin`= CURRENT_TIMESTAMP \
 				WHERE `name` ='%s'", (floatround(userTime[id] +=  get_gametime()-userTimeConnectServer[id])), userName[id]);
 		}
 		case 3:{

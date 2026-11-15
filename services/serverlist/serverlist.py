@@ -11,6 +11,7 @@
 # Listens on 127.0.0.1 only; a Cloudflare Tunnel (or Caddy) in front gives it HTTPS.
 #   GET  /servers    {"servers": [...], "updated": <unix time>}, anyone may read it
 #   POST /register   {"address": "host[:port]"}: checks the server now and lists it
+#   /community/...   community creations (community.py), only with --community-db
 # Nothing else is served. No visitor addresses are kept or logged beyond a short
 # in-memory count for the rate limit.
 import argparse
@@ -27,12 +28,17 @@ HEADER = b"\xff\xff\xff\xff"
 SPLIT = b"\xfe\xff\xff\xff"
 INFO = HEADER + b"TSource Engine Query\x00"
 RULES = HEADER + b"V"
+PLAYERS = HEADER + b"U"
 # how often every listed server is asked again
 POLL_SECS = 120
 # shown while it answered this recently
 FRESH_SECS = 600
-# taken off the list after not answering this long
-GONE_SECS = 6 * 3600
+# taken off the list after not answering this long (a week: a server down for a day or two,
+# or a machine restarted, comes back on its own; it's only shown while it answers, FRESH_SECS)
+GONE_SECS = 7 * 24 * 3600
+# polls in a row that see the server's ls_list off before it leaves the list (a server just
+# started says 0 until its friends.cfg has run, a few seconds into the first map)
+OFF_POLLS = 2
 MAX_SERVERS = 500
 # sign-ups per visitor per hour
 MAX_REGISTER = 20
@@ -111,6 +117,31 @@ def parse_rules(data):
         return None
 
 
+def parse_players(data):
+    """An A2S_PLAYER reply ('D', after the header) as a list of player names, or None. (A2S says
+    names, scores and times only: never SteamIDs.)"""
+    if not data or data[0] != 0x44:
+        return None
+    try:
+        count, i, out = data[1], 2, []
+        for _ in range(count):
+            i += 1  # index
+            name, i = _cstr(data, i)
+            i += 8  # score, duration
+            out.append(name)
+        return out
+    except (IndexError, ValueError):
+        return None
+
+
+def players(listed):
+    """The names of the players on a server now, or None when it didn't say."""
+    found = clean_address(listed)
+    if not found:
+        return None
+    return ask(found[1], PLAYERS, parse_players)
+
+
 def _receive(s, deadline):
     """One reply, put back together when GoldSrc split it over several packets. The whole
     reply has to arrive by `deadline` (time.monotonic()), in MAX_PARTS packets at most."""
@@ -144,7 +175,7 @@ def ask(address, request, parse, timeout=2.0):
     s.settimeout(timeout)
     try:
         s.connect(address)
-        challenge = HEADER if request == RULES else b""
+        challenge = HEADER if request in (RULES, PLAYERS) else b""
         for _ in range(3):
             s.send(request + challenge)
             data = _receive(s, time.monotonic() + timeout)
@@ -224,9 +255,12 @@ class Registry:
         with self.lock:
             entry = self.servers.get(listed)
             if info and rules is not None and rules.get("ls_list") != "1":
-                # the host turned the list off (or never turned it on)
+                # the host turned the list off (or never turned it on); a listed server only
+                # leaves after OFF_POLLS polls in a row say so (not the moment after a start)
                 if entry:
-                    del self.servers[listed]
+                    entry["off"] = entry.get("off", 0) + 1
+                    if entry["off"] >= OFF_POLLS:
+                        del self.servers[listed]
                     self._save()
                 return False
             if info and rules is not None:
@@ -235,7 +269,7 @@ class Registry:
                         return False
                     entry = {"since": now}
                     self.servers[listed] = entry
-                entry.update(info=info, seen=now)
+                entry.update(info=info, seen=now, off=0)
                 self._save()
                 return True
             if entry and now - entry.get("seen", 0) > GONE_SECS:
@@ -282,7 +316,7 @@ class RateLimit:
             return True
 
 
-def make_handler(registry, limit, asker=check):
+def make_handler(registry, limit, asker=check, community=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "list"
         sys_version = ""
@@ -311,7 +345,22 @@ def make_handler(registry, limit, asker=check):
                 return (self.headers.get("CF-Connecting-IP") or peer).strip()
             return peer
 
+        def _community(self, method):
+            if community and self.path.startswith("/community/"):
+                community.handle(self, method, self._visitor())
+                return True
+            if community and getattr(community, "rolesvc", None) and self.path.startswith("/roles/"):
+                import community as cm
+                community.rolesvc.handle(self, method, self._visitor(), cm.read_body, cm.reply)
+                return True
+            if community and self.path.split("?", 1)[0] == "/discord/interactions" and method == "POST":
+                community.interactions(self)
+                return True
+            return False
+
         def do_GET(self):
+            if self._community("GET"):
+                return
             if self.path.split("?", 1)[0] == "/servers":
                 now = time.time()
                 self._send(200, {"servers": registry.public(now), "updated": int(now)}, "public, max-age=30")
@@ -321,6 +370,8 @@ def make_handler(registry, limit, asker=check):
         do_HEAD = do_GET
 
         def do_POST(self):
+            if self._community("POST"):
+                return
             if self.path.split("?", 1)[0] != "/register":
                 return self._send(404, {"error": "not found"})
             if not limit.allow(self._visitor(), time.time()):
@@ -345,6 +396,11 @@ def make_handler(registry, limit, asker=check):
                 return self._send(200, {"ok": False, "error": "The list is full right now."})
             self._send(200, {"ok": True, "address": listed})
 
+        def do_DELETE(self):
+            if self._community("DELETE"):
+                return
+            self._send(404, {"error": "not found"})
+
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -360,10 +416,53 @@ def main():
     p = argparse.ArgumentParser(description="Loner-Strike server list")
     p.add_argument("--listen", type=int, default=8100, help="port on 127.0.0.1")
     p.add_argument("--state", required=True, help="file that keeps the list between restarts")
+    p.add_argument("--community-db", default="", help="turns on community creations: their SQLite database")
+    p.add_argument("--roles-db", default="", help="turns on community roles (links, supporters, server moderators): their SQLite database")
+    p.add_argument("--recheck-hours", type=float, default=24, help="how often every community page is checked again")
+    p.add_argument("--admin-remote", action="store_true",
+                   help="also answer moderation through the tunnel (default: only on this machine, via ssh -L)")
     a = p.parse_args()
     registry = Registry(a.state)
     threading.Thread(target=registry.poll, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER)))
+    community = None
+    if a.community_db:
+        import community as cm
+        # secrets come from the service's env file (EnvironmentFile=, root-only, 0600), never on
+        # the command line; taken out of the environment once read
+        token = os.environ.pop("COMMUNITY_ADMIN_TOKEN", "").strip()
+        publish_token = os.environ.pop("COMMUNITY_PUBLISH_TOKEN", "").strip()
+        webhook = os.environ.pop("COMMUNITY_MOD_WEBHOOK", "").strip()
+        community = cm.Community(cm.Store(a.community_db), token=token, notifier=cm.Notifier(webhook),
+                                 admin_local=not a.admin_remote, publish_token=publish_token)
+        # the private mod channel's cards and buttons, through the bot application
+        bot_token = os.environ.pop("DISCORD_BOT_TOKEN", "").strip()
+        channel = os.environ.get("DISCORD_CHANNEL_ID", "").strip()
+        if bot_token and channel:
+            import modbot
+            modbot.Mod(community, modbot.Bot(bot_token, channel), os.environ.get("DISCORD_PUBLIC_KEY", "").strip(),
+                       os.environ.get("DISCORD_GUILD_ID", "").strip(), os.environ.get("DISCORD_MOD_ROLES", "").split(","),
+                       os.environ.get("DISCORD_OWNER_ID", "").strip(), webhook=webhook,
+                       apply_channel=os.environ.get("DISCORD_APPLY_CHANNEL_ID", "").strip(),
+                       apply_roles=os.environ.get("DISCORD_APPLY_ROLES", "").split(","),
+                       apply_privileged=os.environ.get("DISCORD_APPLY_PRIVILEGED", "moderator").split(","))
+        if a.roles_db:
+            import roles
+            # POLAR_WEBHOOK_SECRET from the env file; taken out of the environment once read
+            community.rolesvc = roles.Roles(roles.Store(a.roles_db), clean=clean_address, asker=check, players=players,
+                                            polar_secret=os.environ.pop("POLAR_WEBHOOK_SECRET", "").strip(),
+                                            mod=community.notifier if hasattr(community.notifier, "interaction") else None,
+                                            deciders=os.environ.get("DISCORD_SERVERMOD_DECIDERS", "").split(","),
+                                            # days per one-time donation, stacking (0: for good), and what it has to be
+                                            days=int(os.environ.get("POLAR_SUPPORTER_DAYS", os.environ.get("SUPPORTER_DAYS", "30")) or 0),
+                                            min_cents=int(os.environ.get("POLAR_SUPPORTER_MIN_CENTS", "300") or 0),
+                                            # the support products' ids (one-time and monthly); none: nothing counts
+                                            products=os.environ.get("POLAR_SUPPORTER_PRODUCTS", "").split(","))
+        if getattr(community, "rolesvc", None) and community.rolesvc.mod:
+            # the Supporter role in Discord, kept as the roles' rules say (hourly)
+            threading.Thread(target=community.rolesvc.sync_loop, daemon=True).start()
+        if a.recheck_hours > 0:
+            threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
+    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))
     server.daemon_threads = True
     server.serve_forever()
 

@@ -70,6 +70,12 @@ pub fn check(a: &Ask, known_setting: &dyn Fn(&str, &str) -> bool) -> Verdict {
     let both = Verdict::Allow(None);
     let admins = || if admin { Verdict::Allow(None) } else { deny(NOT_ROLE) };
     match (a.method, seg.as_slice()) {
+        // ---- community roles (roles.rs): an Admin sees their server's moderator applications,
+        // makes Moderator invites for approved ones and revokes them; never the claim or switches
+        ("GET", ["api", "roles", "server", s, "applications"]) if *s == a.server => admins(),
+        ("POST", ["api", "roles", "server", s, "applications", _, "invite" | "revoke"]) if *s == a.server => admins(),
+        ("GET" | "POST", ["api", "roles", ..]) => deny(NOT_YOURS),
+
         // ---- reading ---------------------------------------------------------------
         ("GET", ["api", "state"] | ["api", "health"] | ["api", "maps"] | ["api", "modes", _, "maps"] | ["thumb", _]) => both,
         ("GET", ["api", "control", "me"]) => both,
@@ -416,6 +422,20 @@ quit", "SV_PASSWORD x", "sv_rcon_banpenalty 0", "amx_pluginsdisable x"] {
         assert!(ok(&ask(m, "POST", "/api/servers/friday/console/send", Some(&json!({"command": "amx_kick STEAM_0:1:9"})))));
         assert!(!ok(&ask(a, "POST", "/api/servers/friday/console/send", Some(&json!({"command": "rcon_password x"})))));
         assert!(!ok(&ask(a, "POST", "/api/servers/other/console/send", Some(&json!({"command": "status"})))));
+    }
+
+    #[test]
+    fn community_roles_for_admins_of_their_server_only() {
+        let (a, m) = (Role::Admin, Role::Moderator);
+        assert!(ok(&ask(a, "GET", "/api/roles/server/friday/applications", None)));
+        assert!(ok(&ask(a, "POST", "/api/roles/server/friday/applications/7/invite", None)));
+        assert!(ok(&ask(a, "POST", "/api/roles/server/friday/applications/7/revoke", None)));
+        for p in ["/api/roles/server/other/applications", "/api/roles/server/friday", "/api/roles/server/friday/claim", "/api/roles/server/friday/settings",
+                  "/api/roles/server/friday/owner-code", "/api/roles/server/friday/unclaim", "/api/roles/server/other/applications/7/invite"] {
+            assert!(!ok(&ask(a, "GET", p, None)) && !ok(&ask(a, "POST", p, None)), "{p}");
+        }
+        assert!(!ok(&ask(m, "GET", "/api/roles/server/friday/applications", None)));
+        assert!(!ok(&ask(m, "POST", "/api/roles/server/friday/applications/7/invite", None)));
     }
 
     #[test]

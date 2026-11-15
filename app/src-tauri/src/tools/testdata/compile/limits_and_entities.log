@@ -1,0 +1,29 @@
+sdHLCSG v1.3.1 64-bit (Oct 16 2026)
+-----  BEGIN  sdHLCSG -----
+Command line: C:\Loner-Strike\Compiler\sdhlt-v1.3.1\tools\Win64\sdHLCSG_x64.exe C:\Loner-Strike\Compiler\work\big\big
+Entering C:\Loner-Strike\Compiler\work\big\big.map
+Error: Entity 0, Brush 1: mixed face contents
+Texture SKY and C1A0_W1
+Warning: Entity 2, Brush 0, Side 3: plane with no normal
+Error: Could not open wad file C:\maps\custom.wad
+Error: Could not find wad file
+Description: The compile tools could not locate a wad file that the map was referencing.
+Howto Fix: Make sure the wad's listed in the level editor actually all exist
+-----   END   sdHLCSG -----
+sdHLBSP v1.3.1 64-bit (Oct 16 2026)
+-----  BEGIN  sdHLBSP -----
+SolidBSP [hull 0] 10%...20%...30%...40%...50%...60%...70%...80%...90%...
+Error: Exceeded MAX_MAP_CLIPNODES
+Description: The map has a problem which must be fixed
+Howto Fix: Simplify the map or use CLIP brushes
+
+Object names  Objects/Maxobjs  Memory / Maxmem  Fullness
+------------  ---------------  ---------------  --------
+models              1/512           64/32768    ( 0.2%)
+clipnodes       33012/32767     264096/262136   (100.7%)
+* worldleaves    8300/8192           0/0        (101.3%)
+-----   END   sdHLBSP -----
+sdHLRAD v1.3.1 64-bit (Oct 16 2026)
+-----  BEGIN  sdHLRAD -----
+Error: AllocBlock: Full
+-----   END   sdHLRAD -----

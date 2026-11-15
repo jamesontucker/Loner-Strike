@@ -1,0 +1,41 @@
+/* The editor's Compile panel (CompilePanel.tsx). */
+.compile-panel { display: grid; gap: 10px; align-content: start; }
+.compile-panel p { margin: 0; }
+.compile-panel .editor-field input:not([type]) { width: 100%; font-size: 13px; padding: 3px 6px; }
+.compile-presets { width: 100%; }
+.compile-presets button { flex: 1 1 0; padding: 5px 6px; font-size: 13px; }
+.compile-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--bone-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compile-playtest { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--bevel-lo); border-radius: 2px; min-width: 0; }
+.compile-playtest legend { padding: 0 4px; font-weight: 700; color: var(--bone-dim); font-size: 13px; }
+.compile-playtest .btn.launch { justify-self: start; }
+.compile-inline { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+.compile-inline input[type="number"] { width: 64px; }
+.compile-inline select { min-width: 0; max-width: 170px; }
+.compile-problems { display: grid; gap: 6px; }
+.compile-leak { margin-top: 4px; }
+.compile-bad { color: #f0a58a; }
+.compile-log summary { cursor: pointer; font-size: 13px; color: var(--bone-dim); }
+.compile-log pre { max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 6px 8px; background: var(--bg); box-shadow: var(--sunken); font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; color: var(--bone-dim); white-space: pre-wrap; word-break: break-all; }
+.compile-foot { font-size: 12px; }
+/* P4: never cut off in a narrow side panel */
+.compile-panel { min-width: 0; }
+.compile-head { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bone-dim); }
+.compile-panel .editor-field { display: grid; gap: 4px; min-width: 0; }
+.compile-field-bad input { outline: 1.5px solid #ff7b6b; }
+.compile-presets { display: flex; }
+.compile-presets button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compile-playtest .editor-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.compile-inline select { max-width: 100%; width: 100%; }
+.compile-check { white-space: normal; }
+.compile-problems .editor-issue .linklike { text-align: left; overflow-wrap: anywhere; }
+.p4-cordon-line { display: grid; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--bevel-lo, rgba(255,255,255,0.1)); border-radius: 2px; }
+.p4-cordon-line .ed-check { min-width: 0; }
+/* Parity A (site screenshots): "Bots" and its box side by side, not the box pushed to the far edge
+   (.editor-row .editor-field's "auto 70px" gave the spare room to the label) */
+.compile-panel .editor-field.compile-inline { justify-content: start; column-gap: 8px; }
+/* Parity A: a Community map's name refused, and the follow-up after a Final compile */
+.compile-clash { padding: 8px 10px; border-left: 3px solid var(--signal); background: var(--panel-2); box-shadow: var(--raised); border-radius: 2px; display: grid; gap: 6px; }
+.compile-clash p { font-size: 13px; color: var(--bone); }
+.compile-sendout { display: grid; gap: 6px; justify-items: start; }
+.compile-sendout-summary { margin: 0; padding-left: 18px; color: var(--bone-dim); }
+.compile-sendout-summary li + li { margin-top: 2px; }

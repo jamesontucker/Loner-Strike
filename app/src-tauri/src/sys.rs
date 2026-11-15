@@ -8,7 +8,87 @@ use std::time::{Duration, Instant};
 
 /// The app's own files (install records, caches, playit key): <config dir>/Loner-Strike.
 pub fn app_dir() -> PathBuf {
+    // test builds (the Tools dev server, agents' test servers, cargo test) never touch the
+    // real app's files: everything goes under LS_APP_DIR, or a scratch folder (QA4-CORE F6)
+    #[cfg(test)]
+    {
+        let root = test_root();
+        check_isolated_once(&root);
+        return root;
+    }
+    #[allow(unreachable_code)]
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
+}
+
+/// Test builds: where every app path goes (LS_APP_DIR, else a scratch folder in the temp folder).
+#[cfg(test)]
+pub fn test_root() -> PathBuf {
+    std::env::var_os("LS_APP_DIR").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("loner-strike-test-app"))
+}
+
+/// Every folder and file the app keeps its own data in (settings, records, caches, downloads,
+/// the window's data, the old panel's folder it adopts). In a test build all of them must be
+/// under the test root, or the build refuses to go on.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn app_paths() -> Vec<(&'static str, PathBuf)> {
+    let mut v = vec![
+        ("the app folder", app_dir_unchecked()),
+        ("settings.json", crate::app_api::settings_path()),
+        ("the cache", cache_root()),
+        ("setup's downloads", crate::setup::fetch::cache_dir()),
+        ("the big folders", crate::localdata::local_root()),
+    ];
+    for rel in crate::localdata::BIG {
+        v.push(("a big folder", crate::localdata::dir(rel)));
+    }
+    v.extend(window_data_dirs().into_iter().map(|d| ("the window's data", d)));
+    if let Some(d) = old_panel_dir() {
+        v.push(("the old panel's folder", d));
+    }
+    if let Some(d) = crate::setup::fetch::legacy_cache() {
+        v.push(("the old installer's downloads", d));
+    }
+    v
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn app_dir_unchecked() -> PathBuf {
+    #[cfg(test)]
+    return test_root();
+    #[allow(unreachable_code)]
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
+}
+
+/// The paths of `app_paths` that aren't under `root` (a test build's check).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn outside(root: &Path, paths: &[(&'static str, PathBuf)]) -> Vec<String> {
+    paths.iter().filter(|(_, p)| !p.starts_with(root)).map(|(what, p)| format!("{what}: {}", p.display())).collect()
+}
+
+/// A test build refuses to go on (panics) the first time an app path is asked for, if any of
+/// them would be outside the test root: real app data is never written by a test.
+#[cfg(test)]
+fn check_isolated_once(root: &Path) {
+    static CHECKED: OnceLock<()> = OnceLock::new();
+    thread_local!(static CHECKING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+    if CHECKED.get().is_some() || CHECKING.with(|c| c.get()) {
+        return;
+    }
+    CHECKING.with(|c| c.set(true));
+    let bad = outside(root, &app_paths());
+    CHECKING.with(|c| c.set(false));
+    if !bad.is_empty() {
+        panic!("Test build: these app paths aren't under the test folder {} (LS_APP_DIR), so nothing runs:\n{}", root.display(), bad.join("\n"));
+    }
+    let _ = CHECKED.set(());
+}
+
+/// The window's own data (a Tauri plugin's and the web view's folders).
+pub fn window_data_dirs() -> Vec<PathBuf> {
+    #[cfg(test)]
+    return vec![test_root().join("window-data")];
+    #[allow(unreachable_code)]
+    [dirs::data_dir(), dirs::config_dir(), dirs::cache_dir()].into_iter().flatten().map(|d| d.join("gg.lonerstrike.app")).collect()
 }
 
 /// The app's cache (setup's downloads and work folders). On Windows not the system cache
@@ -16,6 +96,9 @@ pub fn app_dir() -> PathBuf {
 /// app itself (installMode currentUser), so clearing the cache there deleted the app. It
 /// goes in the app's own %LOCALAPPDATA%\gg.lonerstrike.app (the window's data is there too).
 pub fn cache_root() -> PathBuf {
+    #[cfg(test)]
+    return test_root().join("system-cache");
+    #[allow(unreachable_code)]
     let base = dirs::cache_dir().unwrap_or_else(std::env::temp_dir);
     if cfg!(windows) {
         base.join("gg.lonerstrike.app").join("cache")
@@ -26,6 +109,9 @@ pub fn cache_root() -> PathBuf {
 
 /// The old Python panel's folder, to bring its records over the first time.
 pub fn old_panel_dir() -> Option<PathBuf> {
+    #[cfg(test)]
+    return Some(test_root().join("CZ Control Panel"));
+    #[allow(unreachable_code)]
     dirs::home_dir().map(|h| h.join("CZ Control Panel"))
 }
 
@@ -88,11 +174,15 @@ pub fn tighten(path: &Path) {
 /// reading the file can hold it for a moment, which fails the rename: tried a few times
 /// before giving up. The temporary file is removed when it fails.
 pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    // (Windows: a read-only target can't be replaced; players mark config.cfg read-only)
+    if cfg!(windows) {
+        make_writable(path);
+    }
     let mut tries = 0;
     loop {
         match std::fs::rename(tmp, path) {
             Ok(()) => return Ok(()),
-            Err(e) if cfg!(windows) && tries < 5 && e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(e) if cfg!(windows) && tries < 5 && transient_lock(&e) => {
                 tries += 1;
                 std::thread::sleep(std::time::Duration::from_millis(60 * tries));
             }
@@ -102,6 +192,59 @@ pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
             }
         }
     }
+}
+
+/// A Windows error that usually clears by itself in a moment: access denied (5) while an
+/// antivirus or the indexer has the file, the file in use by another process (32: Rust calls
+/// it "uncategorized", not PermissionDenied) or a part of it locked (33).
+pub fn transient_lock(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// Windows: no "has stopped working" or "can't find a file" boxes for this app and every
+/// program it starts (they inherit the error mode): a crashed hlds.exe exits at once, so the
+/// server watcher and the crash records see it, instead of sitting behind a dialog until
+/// someone clicks. (Valve's own fatal-error message boxes still show.)
+pub fn quiet_crash_dialogs() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn SetErrorMode(mode: u32) -> u32;
+        }
+        const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+        const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+        const SEM_NOOPENFILEERRORBOX: u32 = 0x8000;
+        // (SAFETY: SetErrorMode only sets this process's error mode flags)
+        unsafe {
+            let old = SetErrorMode(0);
+            SetErrorMode(old | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+        }
+    }
+}
+
+/// A UDP port nothing holds: tried on every address and, when the server binds one, on that
+/// address too (on Windows a bind to all addresses can succeed while another program holds the
+/// port on one of them).
+pub fn udp_port_free(ip: Option<&str>, port: u16) -> bool {
+    let all = std::net::UdpSocket::bind(("0.0.0.0", port)).is_ok();
+    let one = match ip.filter(|i| !i.is_empty()) {
+        Some(i) => std::net::UdpSocket::bind((i, port)).is_ok(),
+        None => std::net::UdpSocket::bind(("127.0.0.1", port)).is_ok(),
+    };
+    all && one
+}
+
+/// Two Windows paths name the same folder: case-blind for every letter (not only ASCII:
+/// D:\Игры and d:\игры), "/" and "\" alike, a trailing separator ignored, a "\\?\" prefix
+/// dropped.
+pub fn same_windows_path(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        let s = s.replace('/', "\\");
+        let s = s.strip_prefix("\\\\?\\").unwrap_or(&s).to_string();
+        s.trim_end_matches('\\').to_lowercase()
+    };
+    norm(a) == norm(b)
 }
 
 /// A JSON file that's there but doesn't parse is kept aside (name.bad) rather than
@@ -543,9 +686,77 @@ fn game_dir_in(line: &str) -> Option<String> {
 pub fn same_game_dir(running: &str, ours: &Path) -> bool {
     let name = |s: &str| s.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next().unwrap_or("").to_lowercase();
     if cfg!(windows) {
-        return running.trim_end_matches('\\').eq_ignore_ascii_case(ours.to_string_lossy().trim_end_matches('\\'));
+        return same_windows_path(running, &ours.to_string_lossy());
     }
     name(running) == name(&ours.to_string_lossy())
+}
+
+#[cfg(test)]
+mod windows_tests {
+    use super::*;
+
+    /// QA4-CORE F6: under test every app path (settings.json, the cache, setup's downloads, the
+    /// big folders, the window's data, the old panel's folder, servers by default) is in the
+    /// test folder, and one outside it is caught
+    #[test]
+    fn test_builds_keep_every_app_path_in_the_test_folder() {
+        let root = super::test_root();
+        let paths = super::app_paths();
+        assert!(paths.len() >= 10, "{paths:?}");
+        assert!(super::outside(&root, &paths).is_empty(), "{:?}", super::outside(&root, &paths));
+        assert_eq!(crate::app_api::settings_path(), root.join("settings.json"));
+        assert!(super::cache_root().starts_with(&root) && crate::setup::fetch::cache_dir().starts_with(&root));
+        assert!(crate::setup::fetch::legacy_cache().is_none());
+        let client = crate::steam::Install { hl: "/x/Half-Life".into(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec!["cstrike".into()], dedicated: false };
+        assert!(crate::servers::default_root(&client).unwrap().starts_with(&root));
+        let mut bad = paths.clone();
+        bad.push(("settings.json", std::path::PathBuf::from("/Users/someone/Library/Application Support/Loner-Strike/settings.json")));
+        assert_eq!(super::outside(&root, &bad).len(), 1);
+    }
+
+
+    #[test]
+    fn windows_paths_compare_like_windows() {
+        assert!(same_windows_path(r"D:\Игры\Steam\steamapps\common\Half-Life\", r"d:\игры\steam\steamapps\common\half-life"));
+        assert!(same_windows_path(r"C:/Users/Zoë/Games/Half-Life", r"c:\users\ZOË\games\half-life"));
+        assert!(same_windows_path(r"\\?\C:\Program Files (x86)\Steam", r"C:\Program Files (x86)\Steam\"));
+        assert!(same_windows_path(r"\\server\share\Half-Life", r"\\SERVER\Share\half-life"));
+        assert!(!same_windows_path(r"C:\Half-Life", r"D:\Half-Life"));
+    }
+
+    #[test]
+    fn a_port_another_program_holds_isnt_free() {
+        let held = std::net::UdpSocket::bind(("127.0.0.1", 0)).unwrap();
+        let port = held.local_addr().unwrap().port();
+        assert!(!udp_port_free(None, port), "held on 127.0.0.1");
+        assert!(!udp_port_free(Some("127.0.0.1"), port));
+        drop(held);
+        assert!(udp_port_free(None, port));
+    }
+
+    #[test]
+    fn lock_errors_that_clear_by_themselves() {
+        for code in [5, 32, 33] {
+            assert!(transient_lock(&std::io::Error::from_raw_os_error(code)), "{code}");
+        }
+        assert!(transient_lock(&std::io::Error::from(std::io::ErrorKind::PermissionDenied)));
+        assert!(!transient_lock(&std::io::Error::from(std::io::ErrorKind::NotFound)));
+    }
+
+    #[test]
+    fn read_only_files_can_be_made_writable() {
+        let d = std::env::temp_dir().join(format!("ls-ro-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("config.cfg");
+        std::fs::write(&f, "a").unwrap();
+        let mut p = std::fs::metadata(&f).unwrap().permissions();
+        p.set_readonly(true);
+        std::fs::set_permissions(&f, p).unwrap();
+        make_writable(&f);
+        assert!(!std::fs::metadata(&f).unwrap().permissions().readonly());
+        std::fs::write(&f, "b").unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
 
 #[cfg(test)]

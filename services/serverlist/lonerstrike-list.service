@@ -1,12 +1,16 @@
 [Unit]
-Description=Loner-Strike server list
+Description=Loner-Strike server list and community creations
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 DynamicUser=yes
 StateDirectory=lonerstrike-list
-ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json
+# community secrets and Discord ids (root-only, 0600; read by systemd before it drops to the
+# service's user). Optional: without it the community part still answers, without moderation.
+EnvironmentFile=-/etc/lonerstrike-list/community.env
+# moderation (the admin API) answers only on this machine; add --admin-remote to open it through the tunnel
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json --community-db %S/lonerstrike-list/community.db --roles-db %S/lonerstrike-list/roles.db
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
@@ -17,7 +21,8 @@ PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
-MemoryMax=128M
+# the list and its database, plus one package-check child (formats_runner.py, its own address space capped at 256 MB)
+MemoryMax=384M
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,177 @@
+{
+ "_idRow": 82585,
+ "_nStatus": "0",
+ "_bIsPrivate": false,
+ "_bAccessorIsSubmitter": false,
+ "_bIsTrashed": false,
+ "_bIsWithheld": false,
+ "_sName": "Chen Qianyu Spray",
+ "_sCommentsMode": "open",
+ "_tsDateModified": 1793588375,
+ "_tsDateAdded": 1793588375,
+ "_sProfileUrl": "https://gamebanana.com/sprays/82585",
+ "_aPreviewMedia": {
+  "_aImages": [
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ico/sprays",
+    "_sFile": "6ae7fc52b4b73.png",
+    "_sFile220": "6ae7fc52b4b73.png",
+    "_hFile220": 512,
+    "_wFile220": 220,
+    "_sFile530": "6ae7fc52b4b73.png",
+    "_hFile530": 512,
+    "_wFile530": 530,
+    "_sFile100": "6ae7fc52b4b73.png",
+    "_hFile100": 512,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/sprays",
+    "_sCaption": "Chen 2",
+    "_sFile": "6ae7fc5d8e4ce.jpg",
+    "_sFile220": "220-90_6ae7fc5d8e4ce.jpg",
+    "_hFile220": 124,
+    "_wFile220": 220,
+    "_sFile530": "530-90_6ae7fc5d8e4ce.jpg",
+    "_hFile530": 298,
+    "_wFile530": 530,
+    "_sFile100": "100-90_6ae7fc5d8e4ce.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/sprays",
+    "_sCaption": "Chen 1",
+    "_sFile": "6ae7fc5d873a4.jpg",
+    "_sFile100": "100-90_6ae7fc5d873a4.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   }
+  ]
+ },
+ "_nUpdatesCount": 0,
+ "_bHasUpdates": false,
+ "_nAllTodosCount": 0,
+ "_bHasTodos": false,
+ "_nPostCount": 0,
+ "_aTags": [
+  {
+   "_sTitle": "Software Used",
+   "_sValue": "LonerStrike"
+  }
+ ],
+ "_bCreatedBySubmitter": true,
+ "_nThanksCount": 0,
+ "_sInitialVisibility": "show",
+ "_sDownloadUrl": "https://gamebanana.com/sprays/download/82585",
+ "_nDownloadCount": 9,
+ "_aFiles": [
+  {
+   "_idRow": 1873526,
+   "_sFile": "tempdecal_3125a.wad",
+   "_nFilesize": 7842,
+   "_tsDateAdded": 1793588345,
+   "_nDownloadCount": 9,
+   "_sDownloadUrl": "https://gamebanana.com/dl/1873526",
+   "_sMd5Checksum": "26600d11dcffa32874195d9a32bcc010",
+   "_sAnalysisState": "done",
+   "_sAnalysisResult": "ok",
+   "_sAnalysisResultVerbose": "File passed preliminary analysis",
+   "_sAvState": "done",
+   "_sAvResult": "clean",
+   "_bIsArchived": false,
+   "_bHasContents": true,
+   "_sVersion": "V1",
+   "_sDescription": "Extract and place file at cstrike"
+  }
+ ],
+ "_nSubscriberCount": 2,
+ "_aContributingStudios": [],
+ "_sLicense": "<a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png\" /></a><br />This work is licensed under a <a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\">Creative Commons Attribution-NonCommercial-NoDerivs 4.0 Unported License</a>.",
+ "_sDescription": "Chen Qianyu",
+ "_bGenerateTableOfContents": false,
+ "_nLikeCount": 2,
+ "_nViewCount": 97,
+ "_bAcceptsDonations": false,
+ "_bShowRipePromo": true,
+ "_aSubmitter": {
+  "_idRow": 6053413,
+  "_sName": "crossright",
+  "_sUserTitle": "Bananite",
+  "_sHonoraryTitle": "",
+  "_tsJoinDate": 1792548860,
+  "_sAvatarUrl": "https://images.gamebanana.com/img/av/6ae03dac32e85.png",
+  "_sSigUrl": "",
+  "_sProfileUrl": "https://gamebanana.com/members/6053413",
+  "_sPointsUrl": "https://gamebanana.com/members/logs/pointslog/6053413",
+  "_sMedalsUrl": "https://gamebanana.com/members/stats/medals/6053413",
+  "_bIsOnline": false,
+  "_sLocation": "<a href=\"https://gamebanana.com\">Home</a> > <a href=\"https://gamebanana.com/games/4254\"><img src=\"https://images.gamebanana.com/img/ico/games/5ea788a63f636.png\"/><span>Counter-Strike 1.6</span></a> > <a href=\"https://gamebanana.com/wips/games/4254\">WiPs</a> > <a href=\"https://gamebanana.com/wips/cats/358\">Tools & Plugins</a> > <a href=\"https://gamebanana.com/wips/49236\">MH | CSGO Hud</a>",
+  "_sOnlineTitle": "",
+  "_sOfflineTitle": "",
+  "_nPoints": 185,
+  "_nPointsRank": 322169,
+  "_aNormalMedals": [],
+  "_aRareMedals": [],
+  "_aLegendaryMedals": [],
+  "_bHasRipe": false,
+  "_nBuddyCount": 0,
+  "_nSubscriberCount": 0,
+  "_aDonationMethods": [],
+  "_bAccessorIsBuddy": false,
+  "_bBuddyRequestExistsWithAccessor": false,
+  "_bAccessorIsSubscribed": false,
+  "_aBio": [
+   {
+    "_sTitle": "Favorite Game",
+    "_sValue": "Classic Games"
+   },
+   {
+    "_sTitle": "Favorite CS Map",
+    "_sValue": "De_Dust2"
+   },
+   {
+    "_sTitle": "Favorite CS Weapon",
+    "_sValue": "UMP 45"
+   },
+   {
+    "_sTitle": "Gamer type",
+    "_sValue": "Casual"
+   }
+  ],
+  "_aDefaultLicenseChecklist": [
+   "yes",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "no",
+   "ask"
+  ],
+  "_sDefaultLicense": ""
+ },
+ "_bFollowLinks": false,
+ "_aGame": {
+  "_idRow": 4254,
+  "_sName": "Counter-Strike 1.6",
+  "_sAbbreviation": "CS1.6",
+  "_sProfileUrl": "https://gamebanana.com/games/4254",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_sBannerUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_nSubscriberCount": 6273,
+  "_bHasSubmissionQueue": false,
+  "_bAccessorIsSubscribed": false
+ },
+ "_aCategory": {
+  "_idRow": 628,
+  "_sName": "Funny",
+  "_sModelName": "SprayCategory",
+  "_sProfileUrl": "https://gamebanana.com/sprays/cats/628",
+  "_sIconUrl": "",
+  "_bIsObsolete": false
+ }
+}

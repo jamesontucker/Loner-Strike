@@ -25,6 +25,16 @@ pub const STOCK_CS: &[&str] = &[
     "de_vertigo",
 ];
 
+/// The maps Loner-Strike itself ships (plugins/game/maps, copied into every player's game by
+/// setup): every player has them, as they have the stock ones (a test keeps this list in step
+/// with the folder).
+pub const LONER_MAPS: &[&str] = &["br_valley", "ls_outpost"];
+
+/// Is this one of the maps Loner-Strike ships?
+pub fn ships_with_app(name: &str) -> bool {
+    LONER_MAPS.iter().any(|m| m.eq_ignore_ascii_case(name))
+}
+
 /// maps/<stock map>.* (never removed by an uninstall).
 pub fn is_stock_file(rel: &str) -> bool {
     let r = rel.replace('\\', "/").to_lowercase();
@@ -353,15 +363,17 @@ impl Game {
     /// The map's picture, converted once and then cached: screenshots as a small JPEG
     /// (shown at a fraction of GameBanana's 530 pixels), radars as PNG. Also its kind,
     /// and whether a better picture may still turn up (see thumb_source).
-    pub fn thumbnail(&self, name: &str) -> (Option<(PathBuf, &'static str)>, bool) {
+    /// `radar_now`: the radar even while a screenshot may still turn up (the top strip's
+    /// small picture, which has no layout of its own for a radar: QA4-CORE F1).
+    pub fn thumbnail(&self, name: &str, radar_now: bool) -> (Option<(PathBuf, &'static str)>, bool) {
         let (kind, src, looking) = self.thumb_source(name);
         let (Some(kind), Some(src)) = (kind, src) else { return (None, looking) };
         // while a screenshot may still turn up the card shows the map's name: the card
         // only lays a radar out as one once the map list says "radar"
-        if kind == "radar" && looking {
+        if kind == "radar" && looking && !radar_now {
             return (None, true);
         }
-        let cache = self.app.join("cache");
+        let cache = crate::localdata::join(&self.app, "cache");
         let _ = std::fs::create_dir_all(&cache);
         let base = format!("{kind}-{}", name.to_lowercase());
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
@@ -480,19 +492,19 @@ pub enum Shrink {
     Fit(u32),
 }
 
+/// [Caps] Biggest picture file convert reads (the biggest overview in the game is 2.3 MB).
+const MAX_PICTURE_FILE: u64 = 64 << 20;
+
 /// TGA/BMP/JPEG -> PNG, or JPEG when `out` ends in .jpg.
 pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
-    let data = std::fs::read(src).map_err(|e| e.to_string())?;
+    // [Caps] the file and its pixels are capped before decoding (game pictures are 1024 or less)
+    let data = crate::caps::read_file(src, "picture", MAX_PICTURE_FILE)?;
     let fmt = match src.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
         Some("tga") => Some(image::ImageFormat::Tga), // TGA has no magic number to guess from
         Some("bmp") => Some(image::ImageFormat::Bmp),
         _ => None,
     };
-    let mut img = match fmt {
-        Some(f) => image::load_from_memory_with_format(&data, f),
-        None => image::load_from_memory(&data),
-    }
-    .map_err(|e| e.to_string())?;
+    let mut img = crate::caps::decode_picture(&data, fmt, crate::caps::MAX_PICTURE_SIDE)?;
     if let Shrink::Fit(_) = shrink {
         let mut rgba = img.to_rgba8();
         // the green, give or take what a saved picture does to it
@@ -521,6 +533,16 @@ pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LONER_MAPS is the maps in plugins/game/maps (what setup copies into every game).
+    #[test]
+    fn loner_maps_are_the_shipped_ones() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/game/maps");
+        let mut shipped: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".bsp")).map(String::from)).collect();
+        shipped.sort();
+        assert_eq!(shipped, LONER_MAPS.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "update LONER_MAPS");
+        assert!(ships_with_app("LS_OUTPOST") && !ships_with_app("de_dust2"));
+    }
 
     #[test]
     fn categories() {

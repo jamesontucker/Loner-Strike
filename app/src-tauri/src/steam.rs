@@ -36,15 +36,42 @@ fn games_in(hl: &Path) -> Vec<String> {
 fn libraries(steam_root: &Path) -> Vec<String> {
     let mut out = vec![steam_root.to_string_lossy().to_string()];
     if let Ok(text) = std::fs::read_to_string(steam_root.join("steamapps").join("libraryfolders.vdf")) {
-        for line in text.lines() {
-            let t = line.trim();
-            if let Some(rest) = t.strip_prefix("\"path\"") {
-                let v = rest.trim().trim_matches('"').replace("\\\\", "\\");
+        out.extend(library_paths(&text));
+    }
+    out
+}
+
+/// The library folders in libraryfolders.vdf's text: `"path" "D:\\Lib"` (Steam since 2021)
+/// and the older `"1" "D:\\Lib"` (numbered keys whose value is a path).
+pub fn library_paths(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for line in text.lines() {
+        let t = line.trim();
+        let mut q = t.split('"').skip(1).step_by(2);
+        let (Some(k), Some(v)) = (q.next(), q.next()) else { continue };
+        let numbered = !k.is_empty() && k.bytes().all(|c| c.is_ascii_digit());
+        let looks_like_path = v.contains(":\\") || v.starts_with("\\\\") || v.starts_with('/');
+        if k.eq_ignore_ascii_case("path") || (numbered && looks_like_path) {
+            let v = v.replace("\\\\", "\\");
+            if !out.contains(&v) {
                 out.push(v);
             }
         }
     }
     out
+}
+
+#[cfg(test)]
+mod library_tests {
+    #[test]
+    fn both_libraryfolders_formats() {
+        let new = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t\t\"label\"\t\t\"\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}";
+        assert_eq!(super::library_paths(new), vec![r"C:\Program Files (x86)\Steam".to_string(), r"D:\SteamLibrary".to_string()]);
+        let old = "\"LibraryFolders\"\n{\n\t\"TimeNextStatsReport\"\t\t\"1600000000\"\n\t\"ContentStatsID\"\t\t\"-123\"\n\t\"1\"\t\t\"E:\\\\Games\\\\Steam\"\n}";
+        assert_eq!(super::library_paths(old), vec![r"E:\Games\Steam".to_string()]);
+        let unicode = "\"1\"\n{\n\t\"path\"\t\t\"D:\\\\Игры\\\\Steam\"\n}";
+        assert_eq!(super::library_paths(unicode), vec![r"D:\Игры\Steam".to_string()]);
+    }
 }
 
 /// The scan, plus Half-Life folders added by hand in Settings.

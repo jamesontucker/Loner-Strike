@@ -5,6 +5,10 @@ import { useNav, type Section } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { CommunityLink } from "./tools/community/chip";
+import { LicenseTerms, type Licence } from "./tools/community/Terms";
+/** (community) Get more sections → the Community browser's kinds */
+const COMMUNITY_KIND: Record<string, string> = { maps: "map", sprays: "spray", textures: "texture" };
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -212,6 +216,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
       <div>
         <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
           {back && <button className="btn" onClick={back.go}>{back.label}</button>}
+          {!server && <CommunityLink kind={COMMUNITY_KIND[section] ?? "all"} label="Made with Loner-Strike: Community" />}{/* (community) */}
           {ON_THIS_COMPUTER && !isSharedId(targetKey()) && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
@@ -328,6 +333,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
             <p className="muted">by {open.author}{open.type ? ` · ${open.type}` : ""}</p>
             {open.audio && <audio controls src={open.audio} className="preview" />}
             <p className="gb-text">{open.text}</p>
+            <LicenseTerms licence={(open as { licence?: Licence }).licence} />{/* (credits: the terms before download) */}
             {open.installed ? (
               <div className="banner">
                 <div>Installed.{ON_THIS_COMPUTER ? "" : " To remove it, use the computer running Loner-Strike."}</div>
@@ -388,7 +394,7 @@ function SlotsBar() {
     </p>
   );
 }
-const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menus" };
+const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menus", textures: "Texture pack" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
 function InstalledList({ onChanged, server, only, empty = "Nothing downloaded yet. Anything you install from here shows up in this list." }: { onChanged: () => void; server?: boolean; only?: string[]; empty?: string }) {
@@ -469,7 +475,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
 /** What you have of some kinds of GameBanana content in your own game, with Remove on each
  *  and a way to get more of that kind (Get more, opened on it): a chip per kind when there's
  *  more than one. */
-const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds" };
+const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds", textures: "Textures" };
 export function MyContent({ kinds, title, note, empty }: { kinds: string[]; title: string; note: string; empty: string }) {
   const [kind, setKind] = useState<string>(kinds.length > 1 ? "all" : kinds[0]);
   const these = kind === "all" ? kinds : [kind];

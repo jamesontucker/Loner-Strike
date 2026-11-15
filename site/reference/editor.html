@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map editor · Loner-Strike reference</title>
+<meta name="description" content="The map editor's 87 tools and commands, by task: what each does, where to find it and its keys.">
+<link rel="icon" href="../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../reference/base.css?v=42b858ab">
+<link rel="stylesheet" href="../reference/ref.css?v=0adeb583">
+</head>
+<body data-root="../" data-iv="129a52fa">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../docs.html#whats-new">What's new</a><a href="../docs.html#tools">Tools</a><a href="../docs.html#vps">Run a server</a><a href="../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Map editor <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><div class="ref-switch" role="navigation" aria-label="Reference sections"><a href="../reference/nodes.html" title="Studio nodes">Nodes</a><a href="../reference/entities.html" title="Map entities">Entities</a><a href="../reference/editor.html" title="Editor tools" aria-current="true">Editor</a><a href="../reference/#guides" title="Guides">Guides</a></div><details><summary><a href="#g-files">Files and projects</a><span class="n">8</span></summary><ul><li><a href="#ed-new-map">New map</a></li><li><a href="#ed-open-project">Open a project</a></li><li><a href="#ed-save">Save and Save as</a></li><li><a href="#ed-autosave">Autosave and recovery</a></li><li><a href="#ed-import-map">Import a .map</a></li><li><a href="#ed-import-rmf">Import from Hammer or J.A.C.K.</a></li><li><a href="#ed-export-map">Export a .map</a></li><li><a href="#ed-project-files">Project files</a></li></ul></details><details><summary><a href="#g-map">Map and settings</a><span class="n">4</span></summary><ul><li><a href="#ed-map-properties">Map properties</a></li><li><a href="#ed-entity-definitions">Entity definitions</a></li><li><a href="#ed-map-info">Map information</a></li><li><a href="#ed-entity-report">Entity report</a></li></ul></details><details><summary><a href="#g-building">Building</a><span class="n">16</span></summary><ul><li><a href="#ed-select-tool">Select</a></li><li><a href="#ed-move-rotate-scale">Move, Rotate and Scale</a></li><li><a href="#ed-vertex">Vertex</a></li><li><a href="#ed-box">Box</a></li><li><a href="#ed-shape">Shape</a></li><li><a href="#ed-clip">Clip</a></li><li><a href="#ed-measure">Measure</a></li><li><a href="#ed-hollow">Hollow</a></li><li><a href="#ed-carve">Carve</a></li><li><a href="#ed-merge">Merge</a></li><li><a href="#ed-snap-to-grid">Snap to grid</a></li><li><a href="#ed-flip">Flip</a></li><li><a href="#ed-turn-90">Turn 90°</a></li><li><a href="#ed-transform">Transform</a></li><li><a href="#ed-line-up">Line up and spread out</a></li><li><a href="#ed-nudge">Nudge</a></li></ul></details><details><summary><a href="#g-editing">Editing</a><span class="n">10</span></summary><ul><li><a href="#ed-undo">Undo and Redo</a></li><li><a href="#ed-history">Undo history</a></li><li><a href="#ed-clipboard">Cut, Copy and Paste</a></li><li><a href="#ed-duplicate">Duplicate</a></li><li><a href="#ed-paste-special">Paste special</a></li><li><a href="#ed-delete">Delete</a></li><li><a href="#ed-group">Group and Ungroup</a></li><li><a href="#ed-tie">Tie to entity</a></li><li><a href="#ed-move-to-world">Move to world</a></li><li><a href="#ed-replace-with">Replace with entity or prefab</a></li></ul></details><details><summary><a href="#g-selecting">Selecting and hiding</a><span class="n">9</span></summary><ul><li><a href="#ed-select-all">Select all, none or the rest</a></li><li><a href="#ed-select-same">Select the same or what's nearby</a></li><li><a href="#ed-goto">Go to brush or entity number</a></li><li><a href="#ed-find-replace">Find and replace</a></li><li><a href="#ed-outline">Outline</a></li><li><a href="#ed-hide">Hide and show</a></li><li><a href="#ed-lock">Lock</a></li><li><a href="#ed-visgroups">Visgroups</a></li><li><a href="#ed-pick-groups">What a click picks</a></li></ul></details><details><summary><a href="#g-texturing">Texturing</a><span class="n">5</span></summary><ul><li><a href="#ed-textures-panel">Textures</a></li><li><a href="#ed-apply-texture">Apply the current texture</a></li><li><a href="#ed-texture-tool">Texture tool</a></li><li><a href="#ed-face-sheet">Face sheet</a></li><li><a href="#ed-texture-lock">Texture lock</a></li></ul></details><details><summary><a href="#g-entities">Entities</a><span class="n">5</span></summary><ul><li><a href="#ed-entity-tool">Entity tool</a></li><li><a href="#ed-inspect">Inspect</a></li><li><a href="#ed-io">I/O: what triggers what</a></li><li><a href="#ed-gameplay">Gameplay</a></li><li><a href="#ed-models">Models in place of entity boxes</a></li></ul></details><details><summary><a href="#g-content">Content and prefabs</a><span class="n">5</span></summary><ul><li><a href="#ed-content-browser">Content Browser</a></li><li><a href="#ed-content-drawer">Content drawer</a></li><li><a href="#ed-import-files">Import your own files</a></li><li><a href="#ed-prefabs">Prefabs</a></li><li><a href="#ed-gamebanana">GameBanana</a></li></ul></details><details><summary><a href="#g-checking">Checking and leaks</a><span class="n">3</span></summary><ul><li><a href="#ed-checks">Checks</a></li><li><a href="#ed-leaks">Leaks</a></li><li><a href="#ed-budget">Budget</a></li></ul></details><details><summary><a href="#g-compile">Compile and playtest</a><span class="n">3</span></summary><ul><li><a href="#ed-compile-panel">Compile</a></li><li><a href="#ed-playtest">Playtest</a></li><li><a href="#ed-cordon">Cordon</a></li></ul></details><details><summary><a href="#g-sharing">Sharing</a><span class="n">1</span></summary><ul><li><a href="#ed-publish">Publish</a></li></ul></details><details><summary><a href="#g-view">View and navigation</a><span class="n">13</span></summary><ul><li><a href="#ed-layouts">View layouts</a></li><li><a href="#ed-view-kind">3D, Top, Front and Side</a></li><li><a href="#ed-maximize">Maximize a view</a></li><li><a href="#ed-zoom">Zoom to selection or the whole map</a></li><li><a href="#ed-fly">Fly or orbit</a></li><li><a href="#ed-nav-presets">Camera controls</a></li><li><a href="#ed-camera-speed">Camera speed</a></li><li><a href="#ed-camera-marks">Camera spots</a></li><li><a href="#ed-grid">Grid</a></li><li><a href="#ed-snapping">Snapping</a></li><li><a href="#ed-drawing-style">Drawing style</a></li><li><a href="#ed-frame-time">Frame time</a></li><li><a href="#ed-panels">Panels and layouts</a></li></ul></details><details><summary><a href="#g-help">Help and keys</a><span class="n">5</span></summary><ul><li><a href="#ed-palette">Find a command</a></li><li><a href="#ed-cheat-sheet">Keys cheat sheet</a></li><li><a href="#ed-change-keys">Change keys</a></li><li><a href="#ed-coords">Coordinates and axes</a></li><li><a href="#ed-tour">First map tour</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../docs.html#reference">Reference</a></p>
+    <h1>Map editor</h1>
+    <p class="lead">The map editor's 87 tools and commands, by task: what each does, where to find it and its keys.</p>
+<div class="ed-os" role="group" aria-label="Show the keys for"><span>Keys for</span><button type="button" data-os="win" aria-pressed="true">Windows</button><button type="button" data-os="mac" aria-pressed="false">Mac</button></div>
+<section class="ed-group" aria-labelledby="g-files"><h2 id="g-files">Files and projects</h2><p class="ed-intro">Start a map, open one, save it, and bring maps in from other editors. <a href="../docs.html#editor-start">More in the docs</a></p>
+<article class="card ed-card" id="ed-new-map" aria-labelledby="ed-new-map-h">
+<header><h3 id="ed-new-map-h"><a href="#ed-new-map">New map</a></h3><button class="copy-link" type="button" data-id="ed-new-map" aria-label="Copy a link to New map">Copy link</button></header>
+<p class="what">Starts a new map: an open-sky room with two spawns per team, ready to build in. If the open map has unsaved changes, it asks first.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>New map</span></span><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>New map</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>N</kbd></span></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>N</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>N</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-open-project" aria-labelledby="ed-open-project-h">
+<header><h3 id="ed-open-project-h"><a href="#ed-open-project">Open a project</a></h3><button class="copy-link" type="button" data-id="ed-open-project" aria-label="Copy a link to Open a project">Copy link</button></header>
+<p class="what">Opens a map you saved as a project (.lsmap), with its groups, hidden things and settings as you left them.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Open a project…</span></span><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>Open a project</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>O</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>O</kbd></span></span></dd></dl><p class="good"><b>Good to know:</b> Your recent maps are listed at the bottom of the File menu and on the start screen.</p>
+
+</article>
+<article class="card ed-card" id="ed-save" aria-labelledby="ed-save-h">
+<header><h3 id="ed-save-h"><a href="#ed-save">Save and Save as</a></h3><button class="copy-link" type="button" data-id="ed-save" aria-label="Copy a link to Save and Save as">Copy link</button></header>
+<p class="what">Keeps the map as a project (.lsmap) with everything in it: brushes, entities, groups, hidden and locked things.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Save</b><span>Saves over the project.</span></div><div class="ed-act-meta"><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Save</span></span><span class="crumbs"><span>Editor bar</span><span class="sep" aria-hidden="true">›</span><span>Save</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>S</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>S</kbd></span></span></div></li><li><div class="ed-act"><b>Save as…</b><span>Saves under a new name or in a new place.</span></div><div class="ed-act-meta"><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Save as…</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>S</kbd></span></span></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-save">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-autosave" aria-labelledby="ed-autosave-h">
+<header><h3 id="ed-autosave-h"><a href="#ed-autosave">Autosave and recovery</a></h3><button class="copy-link" type="button" data-id="ed-autosave" aria-label="Copy a link to Autosave and recovery">Copy link</button></header>
+<p class="what">The editor saves your work on its own every 3 minutes, and each save keeps the one before. After a crash, the start screen offers the work it kept.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>Recover it</span></span><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>Throw it away</span></span></dd></dl><p class="good"><b>Good to know:</b> Went to the start screen by mistake? Back to (your map's name) takes you straight back.</p>
+
+</article>
+<article class="card ed-card" id="ed-import-map" aria-labelledby="ed-import-map-h">
+<header><h3 id="ed-import-map-h"><a href="#ed-import-map">Import a .map</a></h3><button class="copy-link" type="button" data-id="ed-import-map" aria-label="Copy a link to Import a .map">Copy link</button></header>
+<p class="what">Opens a .map from TrenchBroom, Hammer, J.A.C.K. or any GoldSrc editor. TrenchBroom's groups and layers come in as groups.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Import a .map…</span></span><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>Import a .map…</span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#map-import">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-import-rmf" aria-labelledby="ed-import-rmf-h">
+<header><h3 id="ed-import-rmf-h"><a href="#ed-import-rmf">Import from Hammer or J.A.C.K.</a></h3><button class="copy-link" type="button" data-id="ed-import-rmf" aria-label="Copy a link to Import from Hammer or J.A.C.K.">Copy link</button></header>
+<p class="what">Opens a Hammer .rmf or a J.A.C.K. .jmf file, with its brushes, entities, groups and visgroups.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Import a Hammer .rmf or J.A.C.K. .jmf…</span></span><span class="crumbs"><span>Start screen</span><span class="sep" aria-hidden="true">›</span><span>Import from Hammer / J.A.C.K.</span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#map-import">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-export-map" aria-labelledby="ed-export-map-h">
+<header><h3 id="ed-export-map-h"><a href="#ed-export-map">Export a .map</a></h3><button class="copy-link" type="button" data-id="ed-export-map" aria-label="Copy a link to Export a .map">Copy link</button></header>
+<p class="what">Writes the map as a Valve 220 .map with its texture list, for any GoldSrc compiler or to keep working in TrenchBroom.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Export a .map…</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>E</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>E</kbd></span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#editor-save">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-project-files" aria-labelledby="ed-project-files-h">
+<header><h3 id="ed-project-files-h"><a href="#ed-project-files">Project files</a></h3><button class="copy-link" type="button" data-id="ed-project-files" aria-label="Copy a link to Project files">Copy link</button></header>
+<p class="what">Lists every file the map uses (models, sprites, sounds and texture files) and where each one is. Copy them into the game or next to the project, or let Find missing files… search a folder you pick.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Project files</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Project</span></span></dd></dl><p class="good"><b>Good to know:</b> The game won't load a map whose models or sprites are missing, so check here before you share it.</p>
+<div class="chips"><a class="chip" href="../docs.html#editor-checks">In the docs</a></div>
+</article></section>
+<section class="ed-group" aria-labelledby="g-map"><h2 id="g-map">Map and settings</h2><p class="ed-intro">Settings that belong to the whole map, and lists of what's in it. <a href="../docs.html#editor-start">More in the docs</a></p>
+<article class="card ed-card" id="ed-map-properties" aria-labelledby="ed-map-properties-h">
+<header><h3 id="ed-map-properties-h"><a href="#ed-map-properties">Map properties</a></h3><button class="copy-link" type="button" data-id="ed-map-properties" aria-label="Copy a link to Map properties">Copy link</button></header>
+<p class="what">Sets what the whole map is like: its title, the sky and how far players can see, the base light and the sun, the buying and bomb rules, and which texture files (WADs) it uses.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Map properties…</span></span><span class="crumbs"><span>File</span><span class="sep" aria-hidden="true">›</span><span>Map properties…</span></span><span class="crumbs"><span>Inspect panel, with nothing picked</span><span class="sep" aria-hidden="true">›</span><span>Map properties…</span></span></dd></dl><p class="good"><b>Good to know:</b> With nothing picked, Inspect shows the sky and the texture files too.</p>
+<div class="chips"><a class="chip code" href="entities/brush-entities.html#e-worldspawn">worldspawn</a></div>
+</article>
+<article class="card ed-card" id="ed-entity-definitions" aria-labelledby="ed-entity-definitions-h">
+<header><h3 id="ed-entity-definitions-h"><a href="#ed-entity-definitions">Entity definitions</a></h3><button class="copy-link" type="button" data-id="ed-entity-definitions" aria-label="Copy a link to Entity definitions">Copy link</button></header>
+<p class="what">Adds a mod's own entity file (FGD) so its entities show up in the entity list with their keys, or goes back to Loner-Strike's own list.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Map properties…</span><span class="sep" aria-hidden="true">›</span><span>Entity definitions</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Add your own FGD…</b><span>Adds a mod's FGD next to ours.</span></div><div class="ed-act-meta"></div></li><li><div class="ed-act"><b>Use ours only</b><span>Removes the added ones.</span></div><div class="ed-act-meta"></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-entities">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-map-info" aria-labelledby="ed-map-info-h">
+<header><h3 id="ed-map-info-h"><a href="#ed-map-info">Map information</a></h3><button class="copy-link" type="button" data-id="ed-map-info" aria-label="Copy a link to Map information">Copy link</button></header>
+<p class="what">Counts what's in the map (brushes, faces and entities) and lists the textures and texture files in use.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Map information…</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-entity-report" aria-labelledby="ed-entity-report-h">
+<header><h3 id="ed-entity-report-h"><a href="#ed-entity-report">Entity report</a></h3><button class="copy-link" type="button" data-id="ed-entity-report" aria-label="Copy a link to Entity report">Copy link</button></header>
+<p class="what">Lists every entity in the map. Filter by name or type, tick several to pick or delete them together, or double-click one to fly to it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Entity report…</span></span><span class="crumbs"><span>Inspect panel, with nothing picked</span><span class="sep" aria-hidden="true">›</span><span>Entity report…</span></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-building"><h2 id="g-building">Building</h2><p class="ed-intro">The tools on the left of the views, and the commands that change the shape of brushes. <a href="../docs.html#editor-tools">More in the docs</a></p>
+<article class="card ed-card" id="ed-select-tool" aria-labelledby="ed-select-tool-h">
+<header><h3 id="ed-select-tool-h"><a href="#ed-select-tool">Select</a></h3><button class="copy-link" type="button" data-id="ed-select-tool" aria-label="Copy a link to Select">Copy link</button></header>
+<p class="what">Click to pick a brush or entity. Drag a face of something picked to push or pull it, or drag across empty space to pick everything in a box.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Select tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>Q</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>S</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>S</kbd></span></span></span></dd></dl><p class="good"><b>Good to know:</b> Esc lets go of what's picked. The tool options set whether a box picks what it touches or only what's fully inside.</p>
+
+</article>
+<article class="card ed-card" id="ed-move-rotate-scale" aria-labelledby="ed-move-rotate-scale-h">
+<header><h3 id="ed-move-rotate-scale-h"><a href="#ed-move-rotate-scale">Move, Rotate and Scale</a></h3><button class="copy-link" type="button" data-id="ed-move-rotate-scale" aria-label="Copy a link to Move, Rotate and Scale">Copy link</button></header>
+<p class="what">Drag the handles in the views to move, turn or stretch what's picked. Hold Shift as you start a move to drag a copy instead.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tool rail</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Move</b><span>Drag the arrows.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Move tool</span></span><span class="keys"><kbd>W</kbd></span></div></li><li><div class="ed-act"><b>Rotate</b><span>Drag the rings; it turns in 15° steps.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Rotate tool</span></span><span class="keys"><kbd>E</kbd></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><kbd>R</kbd></span></span></div></li><li><div class="ed-act"><b>Scale</b><span>Drag the handles to stretch.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Scale tool</span></span><span class="keys"><kbd>R</kbd></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><kbd>T</kbd></span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-vertex" aria-labelledby="ed-vertex-h">
+<header><h3 id="ed-vertex-h"><a href="#ed-vertex">Vertex</a></h3><button class="copy-link" type="button" data-id="ed-vertex" aria-label="Copy a link to Vertex">Copy link</button></header>
+<p class="what">Drag a corner (yellow), an edge (blue) or a face (purple) of a picked brush to reshape it. The brush always stays convex.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Vertex tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>V</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>V</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>V</kbd></span></span></span></dd></dl><p class="good"><b>Good to know:</b> Shift-click picks several corners, the arrow keys nudge them, and Merge corners joins them into one.</p>
+
+</article>
+<article class="card ed-card" id="ed-box" aria-labelledby="ed-box-h">
+<header><h3 id="ed-box-h"><a href="#ed-box">Box</a></h3><button class="copy-link" type="button" data-id="ed-box" aria-label="Copy a link to Box">Copy link</button></header>
+<p class="what">Drag on the floor, or on top of a brush, to draw a box brush. Its height is in the tool options above the view.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Box tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>B</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>B</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>B</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-shape" aria-labelledby="ed-shape-h">
+<header><h3 id="ed-shape-h"><a href="#ed-shape">Shape</a></h3><button class="copy-link" type="button" data-id="ed-shape" aria-label="Copy a link to Shape">Copy link</button></header>
+<p class="what">Draws a cylinder, wedge, spike, cone, sphere, arch or torus. Pick the kind and how many sides above the view, then drag.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Shape tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>C</kbd></span></dd></dl><p class="good"><b>Good to know:</b> Preview… shows the shape before you draw it.</p>
+
+</article>
+<article class="card ed-card" id="ed-clip" aria-labelledby="ed-clip-h">
+<header><h3 id="ed-clip-h"><a href="#ed-clip">Clip</a></h3><button class="copy-link" type="button" data-id="ed-clip" aria-label="Copy a link to Clip">Copy link</button></header>
+<p class="what">Cuts what's picked along a line: click two points to place the cut, Tab chooses which side stays (or both), and Enter cuts.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Clip tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>X</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>X</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>X</kbd></span></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><kbd>C</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-measure" aria-labelledby="ed-measure-h">
+<header><h3 id="ed-measure-h"><a href="#ed-measure">Measure</a></h3><button class="copy-link" type="button" data-id="ed-measure" aria-label="Copy a link to Measure">Copy link</button></header>
+<p class="what">Drag between two points to see the distance between them, in game units.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Measure tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>M</kbd></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-hollow" aria-labelledby="ed-hollow-h">
+<header><h3 id="ed-hollow-h"><a href="#ed-hollow">Hollow</a></h3><button class="copy-link" type="button" data-id="ed-hollow" aria-label="Copy a link to Hollow">Copy link</button></header>
+<p class="what">Turns a solid brush into a room: walls of the thickness set in Inspect, with the inside empty.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Hollow</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Hollow</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>H</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>H</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-carve" aria-labelledby="ed-carve-h">
+<header><h3 id="ed-carve-h"><a href="#ed-carve">Carve</a></h3><button class="copy-link" type="button" data-id="ed-carve" aria-label="Copy a link to Carve">Copy link</button></header>
+<p class="what">Cuts the picked brush out of every brush it overlaps, like cutting a doorway through a wall. The brush you carve with stays.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Carve</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Carve</span></span></dd><dt>Keys</dt><dd><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>C</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-merge" aria-labelledby="ed-merge-h">
+<header><h3 id="ed-merge-h"><a href="#ed-merge">Merge</a></h3><button class="copy-link" type="button" data-id="ed-merge" aria-label="Copy a link to Merge">Copy link</button></header>
+<p class="what">Joins the picked brushes into one convex brush. If they don't make a convex shape together, the new brush fills the gaps between them.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Merge</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Merge</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-snap-to-grid" aria-labelledby="ed-snap-to-grid-h">
+<header><h3 id="ed-snap-to-grid-h"><a href="#ed-snap-to-grid">Snap to grid</a></h3><button class="copy-link" type="button" data-id="ed-snap-to-grid" aria-label="Copy a link to Snap to grid">Copy link</button></header>
+<p class="what">Rounds every corner of the picked brushes to the grid and rebuilds them, to fix small gaps and corners just off the grid.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Snap to grid</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Snap</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>B</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>B</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-flip" aria-labelledby="ed-flip-h">
+<header><h3 id="ed-flip-h"><a href="#ed-flip">Flip</a></h3><button class="copy-link" type="button" data-id="ed-flip" aria-label="Copy a link to Flip">Copy link</button></header>
+<p class="what">Mirrors what's picked along the X, Y or Z axis, around its middle.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Flip</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Flip along X</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Flip along X</span></span><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>L</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>L</kbd></span></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>F</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>F</kbd></span></span></span></div></li><li><div class="ed-act"><b>Flip along Y</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Flip along Y</span></span></div></li><li><div class="ed-act"><b>Flip along Z</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Flip along Z</span></span><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>I</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>I</kbd></span></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>F</kbd></span></span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-turn-90" aria-labelledby="ed-turn-90-h">
+<header><h3 id="ed-turn-90-h"><a href="#ed-turn-90">Turn 90°</a></h3><button class="copy-link" type="button" data-id="ed-turn-90" aria-label="Copy a link to Turn 90°">Copy link</button></header>
+<p class="what">Turns what's picked a quarter turn around the X, Y or Z axis, around its middle.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Turn</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Turn 90° around X</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Turn 90° around X</span></span></div></li><li><div class="ed-act"><b>Turn 90° around Y</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Turn 90° around Y</span></span></div></li><li><div class="ed-act"><b>Turn 90° around Z</b></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Turn 90° around Z</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-transform" aria-labelledby="ed-transform-h">
+<header><h3 id="ed-transform-h"><a href="#ed-transform">Transform</a></h3><button class="copy-link" type="button" data-id="ed-transform" aria-label="Copy a link to Transform">Copy link</button></header>
+<p class="what">Moves, turns or stretches what's picked by exact numbers instead of by dragging.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Transform…</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>M</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>M</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-line-up" aria-labelledby="ed-line-up-h">
+<header><h3 id="ed-line-up-h"><a href="#ed-line-up">Line up and spread out</a></h3><button class="copy-link" type="button" data-id="ed-line-up" aria-label="Copy a link to Line up and spread out">Copy link</button></header>
+<p class="what">Lines up two or more picked things on their low, middle or high side along an axis, or spreads three or more out evenly.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Transform…</span><span class="sep" aria-hidden="true">›</span><span>Line up</span></span><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Find a command…</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-nudge" aria-labelledby="ed-nudge-h">
+<header><h3 id="ed-nudge-h"><a href="#ed-nudge">Nudge</a></h3><button class="copy-link" type="button" data-id="ed-nudge" aria-label="Copy a link to Nudge">Copy link</button></header>
+<p class="what">Moves what's picked one grid step at a time: the arrow keys across, Page Up and Page Down up and down. Each nudge can be undone.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Any view, with something picked</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>Arrow keys</kbd></span> <span class="or">or</span> <span class="keys"><kbd>Page Up</kbd></span> <span class="or">or</span> <span class="keys"><kbd>Page Down</kbd></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-editing"><h2 id="g-editing">Editing</h2><p class="ed-intro">Undo, copy, duplicate and group: the Edit menu's everyday commands. <a href="../docs.html#editor-tools">More in the docs</a></p>
+<article class="card ed-card" id="ed-undo" aria-labelledby="ed-undo-h">
+<header><h3 id="ed-undo-h"><a href="#ed-undo">Undo and Redo</a></h3><button class="copy-link" type="button" data-id="ed-undo" aria-label="Copy a link to Undo and Redo">Copy link</button></header>
+<p class="what">Steps back through your changes, and forward again.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Undo</b><span>Takes back the last change.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Undo</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Z</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>Z</kbd></span></span></div></li><li><div class="ed-act"><b>Redo</b><span>Puts it back.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Redo</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd></span></span> <span class="or">or</span> <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Y</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>Y</kbd></span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-history" aria-labelledby="ed-history-h">
+<header><h3 id="ed-history-h"><a href="#ed-history">Undo history</a></h3><button class="copy-link" type="button" data-id="ed-history" aria-label="Copy a link to Undo history">Copy link</button></header>
+<p class="what">Lists every change you've made. Click a step to go back to it, or click a later one to redo up to there.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Undo history</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: History</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-clipboard" aria-labelledby="ed-clipboard-h">
+<header><h3 id="ed-clipboard-h"><a href="#ed-clipboard">Cut, Copy and Paste</a></h3><button class="copy-link" type="button" data-id="ed-clipboard" aria-label="Copy a link to Cut, Copy and Paste">Copy link</button></header>
+<p class="what">Moves or copies what's picked through the clipboard.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Cut</b><span>Copies it and takes it out of the map.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Cut</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>X</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>X</kbd></span></span></div></li><li><div class="ed-act"><b>Copy</b><span>Copies it.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Copy</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>C</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>C</kbd></span></span></div></li><li><div class="ed-act"><b>Paste</b><span>Puts the copy in the map.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Paste</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>V</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>V</kbd></span></span></div></li></ul><p class="good"><b>Good to know:</b> The clipboard holds .map text, so you can copy between maps and to or from other editors.</p>
+
+</article>
+<article class="card ed-card" id="ed-duplicate" aria-labelledby="ed-duplicate-h">
+<header><h3 id="ed-duplicate-h"><a href="#ed-duplicate">Duplicate</a></h3><button class="copy-link" type="button" data-id="ed-duplicate" aria-label="Copy a link to Duplicate">Copy link</button></header>
+<p class="what">Makes a copy of what's picked and picks the copy. Targets get new names so the copy works on its own.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Duplicate</b><span>A copy one grid step over.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Duplicate</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Duplicate</span></span><span class="crumbs"><span>Outline panel</span><span class="sep" aria-hidden="true">›</span><span>right-click</span><span class="sep" aria-hidden="true">›</span><span>Duplicate</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>D</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>D</kbd></span></span></div></li><li><div class="ed-act"><b>Duplicate in place</b><span>A copy right on top, to move next.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Duplicate in place</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>D</kbd></span></span></div></li><li><div class="ed-act"><b>Duplicate (keep names)</b><span>A copy with the same target names.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Find a command…</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-paste-special" aria-labelledby="ed-paste-special-h">
+<header><h3 id="ed-paste-special-h"><a href="#ed-paste-special">Paste special</a></h3><button class="copy-link" type="button" data-id="ed-paste-special" aria-label="Copy a link to Paste special">Copy link</button></header>
+<p class="what">Makes several copies at once: in a row, as stairs, in a ring or in a spiral, each a set distance and turn from the last.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Paste special…</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Paste special…</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-delete" aria-labelledby="ed-delete-h">
+<header><h3 id="ed-delete-h"><a href="#ed-delete">Delete</a></h3><button class="copy-link" type="button" data-id="ed-delete" aria-label="Copy a link to Delete">Copy link</button></header>
+<p class="what">Takes what's picked out of the map.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Delete</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Delete</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>Delete</kbd></span> <span class="or">or</span> <span class="keys"><kbd>Backspace</kbd></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-group" aria-labelledby="ed-group-h">
+<header><h3 id="ed-group-h"><a href="#ed-group">Group and Ungroup</a></h3><button class="copy-link" type="button" data-id="ed-group" aria-label="Copy a link to Group and Ungroup">Copy link</button></header>
+<p class="what">Keeps brushes and entities together, so a click picks them all.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Group</span></span><span class="crumbs"><span>Outline panel</span><span class="sep" aria-hidden="true">›</span><span>right-click</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Group</b><span>Makes what's picked one group.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Group</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>G</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>G</kbd></span></span></div></li><li><div class="ed-act"><b>Ungroup</b><span>Splits it again.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Ungroup</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>G</kbd></span></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>U</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>U</kbd></span></span></span></div></li></ul><p class="good"><b>Good to know:</b> Select › Clicks pick single objects lets you pick inside a group without ungrouping it.</p>
+
+</article>
+<article class="card ed-card" id="ed-tie" aria-labelledby="ed-tie-h">
+<header><h3 id="ed-tie-h"><a href="#ed-tie">Tie to entity</a></h3><button class="copy-link" type="button" data-id="ed-tie" aria-label="Copy a link to Tie to entity">Copy link</button></header>
+<p class="what">Makes the picked brushes one brush entity: a func_wall at first, then pick what it should be (a door, a breakable, a trigger…) in Inspect.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Tie to entity</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Tie</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>T</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>T</kbd></span></span></dd></dl>
+<div class="chips"><a class="chip code" href="entities/brush-entities.html#e-func-wall">func_wall</a><a class="chip code" href="entities/brush-entities.html#e-func-door">func_door</a><a class="chip code" href="entities/brush-entities.html#e-func-breakable">func_breakable</a></div>
+</article>
+<article class="card ed-card" id="ed-move-to-world" aria-labelledby="ed-move-to-world-h">
+<header><h3 id="ed-move-to-world-h"><a href="#ed-move-to-world">Move to world</a></h3><button class="copy-link" type="button" data-id="ed-move-to-world" aria-label="Copy a link to Move to world">Copy link</button></header>
+<p class="what">Turns brush entities back into plain world brushes.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Move to world</span></span><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Move to world</span></span></dd><dt>Keys</dt><dd><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>W</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-replace-with" aria-labelledby="ed-replace-with-h">
+<header><h3 id="ed-replace-with-h"><a href="#ed-replace-with">Replace with entity or prefab</a></h3><button class="copy-link" type="button" data-id="ed-replace-with" aria-label="Copy a link to Replace with entity or prefab">Copy link</button></header>
+<p class="what">Swaps each picked thing for another entity or for a prefab, in the same place.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Replace with entity or prefab…</span></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-selecting"><h2 id="g-selecting">Selecting and hiding</h2><p class="ed-intro">Pick things by what they are, find them by name or number, and hide or lock what's in the way. <a href="../docs.html#editor-tools">More in the docs</a></p>
+<article class="card ed-card" id="ed-select-all" aria-labelledby="ed-select-all-h">
+<header><h3 id="ed-select-all-h"><a href="#ed-select-all">Select all, none or the rest</a></h3><button class="copy-link" type="button" data-id="ed-select-all" aria-label="Copy a link to Select all, none or the rest">Copy link</button></header>
+<p class="what">Picks everything you can see, nothing, or everything that isn't picked now.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Select all</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select all</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>A</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>A</kbd></span></span></div></li><li><div class="ed-act"><b>Select none</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select none</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>A</kbd></span></span></div></li><li><div class="ed-act"><b>Invert selection</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Invert selection</span></span><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>I</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>I</kbd></span></span></div></li></ul><p class="good"><b>Good to know:</b> Hidden and locked things are left out.</p>
+
+</article>
+<article class="card ed-card" id="ed-select-same" aria-labelledby="ed-select-same-h">
+<header><h3 id="ed-select-same-h"><a href="#ed-select-same">Select the same or what's nearby</a></h3><button class="copy-link" type="button" data-id="ed-select-same" aria-label="Copy a link to Select the same or what's nearby">Copy link</button></header>
+<p class="what">Grows the selection from what's picked now.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Select same texture</b><span>Every face with the picked texture.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select same texture</span></span></div></li><li><div class="ed-act"><b>Select same type</b><span>Every entity of the picked kind (or every world brush).</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select same type</span></span></div></li><li><div class="ed-act"><b>Select same name</b><span>Every entity with the picked one's name (targetname).</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select same name</span></span></div></li><li><div class="ed-act"><b>Select touching</b><span>Everything touching what's picked.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select touching</span></span></div></li><li><div class="ed-act"><b>Select inside</b><span>Everything wholly inside the selection's box.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Select inside</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-goto" aria-labelledby="ed-goto-h">
+<header><h3 id="ed-goto-h"><a href="#ed-goto">Go to brush or entity number</a></h3><button class="copy-link" type="button" data-id="ed-goto" aria-label="Copy a link to Go to brush or entity number">Copy link</button></header>
+<p class="what">Picks a brush or entity by its number, the way the compiler names them in its messages (Entity 3, Brush 12), and flies to it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Go to brush or entity number…</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>J</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>J</kbd></span></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>G</kbd></span></span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#compile-problems">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-find-replace" aria-labelledby="ed-find-replace-h">
+<header><h3 id="ed-find-replace-h"><a href="#ed-find-replace">Find and replace</a></h3><button class="copy-link" type="button" data-id="ed-find-replace" aria-label="Copy a link to Find and replace">Copy link</button></header>
+<p class="what">Finds textures, entity types, key names or values across the map and replaces them, in the whole map or only in what's picked. Pick them selects everything it found.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Find and replace…</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>F</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>F</kbd></span></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-outline" aria-labelledby="ed-outline-h">
+<header><h3 id="ed-outline-h"><a href="#ed-outline">Outline</a></h3><button class="copy-link" type="button" data-id="ed-outline" aria-label="Copy a link to Outline">Copy link</button></header>
+<p class="what">Lists everything in the map by name and type. Search it, sort it, hide or lock a row, and double-click one to fly to it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Outline</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Outline</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-hide" aria-labelledby="ed-hide-h">
+<header><h3 id="ed-hide-h"><a href="#ed-hide">Hide and show</a></h3><button class="copy-link" type="button" data-id="ed-hide" aria-label="Copy a link to Hide and show">Copy link</button></header>
+<p class="what">Hides things to work on what's behind them; hidden things stay in the map and still compile.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Inspect panel</span><span class="sep" aria-hidden="true">›</span><span>Hide</span></span><span class="crumbs"><span>Outline panel (per row)</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Hide</b><span>Hides what's picked.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Hide</span></span><span class="keys"><kbd>H</kbd></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>H</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>H</kbd></span></span></span></div></li><li><div class="ed-act"><b>Hide everything else</b><span>Leaves only what's picked.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Hide everything else</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>H</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>H</kbd></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>I</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>I</kbd></span></span></span></div></li><li><div class="ed-act"><b>Show everything</b><span>Brings it all back.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Show everything</span></span><span class="keys"><kbd>U</kbd></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>H</kbd></span></span></span></div></li><li><div class="ed-act"><b>Hide all point entities</b><span>Spawns, lights, sounds and the like.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Hide all point entities</span></span></div></li><li><div class="ed-act"><b>Hide triggers and zones</b><span>Triggers, buy zones, bomb sites and rescue zones.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Hide triggers and zones</span></span></div></li><li><div class="ed-act"><b>Hide world brushes</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Hide world brushes</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-lock" aria-labelledby="ed-lock-h">
+<header><h3 id="ed-lock-h"><a href="#ed-lock">Lock</a></h3><button class="copy-link" type="button" data-id="ed-lock" aria-label="Copy a link to Lock">Copy link</button></header>
+<p class="what">Locked things can't be picked by a click, so you can't move them by mistake.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Outline panel (per row)</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Lock</b><span>Locks what's picked.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Lock</span></span><span class="keys"><kbd>L</kbd></span></div></li><li><div class="ed-act"><b>Unlock everything</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Unlock everything</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>L</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>L</kbd></span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-visgroups" aria-labelledby="ed-visgroups-h">
+<header><h3 id="ed-visgroups-h"><a href="#ed-visgroups">Visgroups</a></h3><button class="copy-link" type="button" data-id="ed-visgroups" aria-label="Copy a link to Visgroups">Copy link</button></header>
+<p class="what">Named sets of brushes and entities you can show and hide together, at the top of the Outline.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Outline panel</span><span class="sep" aria-hidden="true">›</span><span>New visgroup</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-pick-groups" aria-labelledby="ed-pick-groups-h">
+<header><h3 id="ed-pick-groups-h"><a href="#ed-pick-groups">What a click picks</a></h3><button class="copy-link" type="button" data-id="ed-pick-groups" aria-label="Copy a link to What a click picks">Copy link</button></header>
+<p class="what">Sets whether a click on a grouped brush picks the whole group or just the one object.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tool options (above the views)</span><span class="sep" aria-hidden="true">›</span><span>Pick groups / Pick objects / Pick brushes</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Clicks pick whole groups</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Clicks pick whole groups</span></span></div></li><li><div class="ed-act"><b>Clicks pick single objects</b></div><div class="ed-act-meta"><span class="crumbs"><span>Select</span><span class="sep" aria-hidden="true">›</span><span>Clicks pick single objects</span></span></div></li></ul><p class="good"><b>Good to know:</b> Pick brushes (in the tool options) picks single brushes even inside a brush entity, like Hammer's Solids.</p>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-texturing"><h2 id="g-texturing">Texturing</h2><p class="ed-intro">Choose textures, paint them on and line them up. <a href="../docs.html#editor-textures">More in the docs</a></p>
+<article class="card ed-card" id="ed-textures-panel" aria-labelledby="ed-textures-panel-h">
+<header><h3 id="ed-textures-panel-h"><a href="#ed-textures-panel">Textures</a></h3><button class="copy-link" type="button" data-id="ed-textures-panel" aria-label="Copy a link to Textures">Copy link</button></header>
+<p class="what">Shows the textures in the map's texture files. Click one to make it the current texture, or double-click to paint it on what's picked.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Textures</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Textures</span></span></dd></dl><p class="good"><b>Good to know:</b> Add texture files (WADs) in Map properties.</p>
+
+</article>
+<article class="card ed-card" id="ed-apply-texture" aria-labelledby="ed-apply-texture-h">
+<header><h3 id="ed-apply-texture-h"><a href="#ed-apply-texture">Apply the current texture</a></h3><button class="copy-link" type="button" data-id="ed-apply-texture" aria-label="Copy a link to Apply the current texture">Copy link</button></header>
+<p class="what">Paints the current texture on the picked faces, or on every face of the picked brushes.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Edit</span><span class="sep" aria-hidden="true">›</span><span>Apply the current texture</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>T</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>T</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-texture-tool" aria-labelledby="ed-texture-tool-h">
+<header><h3 id="ed-texture-tool-h"><a href="#ed-texture-tool">Texture tool</a></h3><button class="copy-link" type="button" data-id="ed-texture-tool" aria-label="Copy a link to Texture tool">Copy link</button></header>
+<p class="what">Click a face to pick it (Shift adds more), drag it to slide the texture, and drag the handles to turn or stretch it. Alt-click picks up a face's texture.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Texture tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>T</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>A</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>A</kbd></span></span></span></dd></dl><p class="good"><b>Good to know:</b> In the 3D view, right-click paints the current texture on a face, and Alt-right-click paints it and carries the alignment round the corner, like Hammer.</p>
+
+</article>
+<article class="card ed-card" id="ed-face-sheet" aria-labelledby="ed-face-sheet-h">
+<header><h3 id="ed-face-sheet-h"><a href="#ed-face-sheet">Face sheet</a></h3><button class="copy-link" type="button" data-id="ed-face-sheet" aria-label="Copy a link to Face sheet">Copy link</button></header>
+<p class="what">With faces picked, Inspect shows how their texture lies: shift, scale and turn it, Fit or Justify it, align it to the world or to the face (good for slopes), or pick up a face's texture to reuse.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Inspect panel, with faces picked</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-texture-lock" aria-labelledby="ed-texture-lock-h">
+<header><h3 id="ed-texture-lock-h"><a href="#ed-texture-lock">Texture lock</a></h3><button class="copy-link" type="button" data-id="ed-texture-lock" aria-label="Copy a link to Texture lock">Copy link</button></header>
+<p class="what">Keeps textures in place on the brushes as you move or turn them. Scale lock, beside it, decides what stretching a brush does: on, the textures stretch with it; off, they keep their size and repeat.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Texture lock on / off</span></span><span class="crumbs"><span>Tool options (above the views)</span><span class="sep" aria-hidden="true">›</span><span>Texture lock, Scale lock</span></span></dd><dt>Keys</dt><dd><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>L</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>L</kbd></span></span></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-entities"><h2 id="g-entities">Entities</h2><p class="ed-intro">Place entities, set their keys and see how they trigger each other. <a href="../docs.html#editor-entities">More in the docs</a></p>
+<article class="card ed-card" id="ed-entity-tool" aria-labelledby="ed-entity-tool-h">
+<header><h3 id="ed-entity-tool-h"><a href="#ed-entity-tool">Entity tool</a></h3><button class="copy-link" type="button" data-id="ed-entity-tool" aria-label="Copy a link to Entity tool">Copy link</button></header>
+<p class="what">Click a surface to place an entity there: a spawn, a light, a weapon or anything in the list. Choose the kind in the tool options first.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tools</span><span class="sep" aria-hidden="true">›</span><span>Entity tool</span></span><span class="crumbs"><span>Tool rail</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>N</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>E</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>E</kbd></span></span></span></dd></dl>
+<div class="chips"><a class="chip code" href="entities/point-entities.html#e-info-player-start">info_player_start</a><a class="chip code" href="entities/point-entities.html#e-info-player-deathmatch">info_player_deathmatch</a><a class="chip code" href="entities/point-entities.html#e-light">light</a></div>
+</article>
+<article class="card ed-card" id="ed-inspect" aria-labelledby="ed-inspect-h">
+<header><h3 id="ed-inspect-h"><a href="#ed-inspect">Inspect</a></h3><button class="copy-link" type="button" data-id="ed-inspect" aria-label="Copy a link to Inspect">Copy link</button></header>
+<p class="what">A form for what's picked, with help on every key: an entity's name, color, brightness, flags and other keys, or a brush's size, turn and textures. Pick several entities to change them together.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Properties of what's picked</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Inspect</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Alt</kbd>+<kbd>Enter</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>Enter</kbd></span></span></dd></dl><p class="good"><b>Good to know:</b> A model, sprite or sound key has Choose…, ↗ to show it in the Content Browser, and Use selected.</p>
+
+</article>
+<article class="card ed-card" id="ed-io" aria-labelledby="ed-io-h">
+<header><h3 id="ed-io-h"><a href="#ed-io">I/O: what triggers what</a></h3><button class="copy-link" type="button" data-id="ed-io" aria-label="Copy a link to I/O: what triggers what">Copy link</button></header>
+<p class="what">Lists every link between entities (targets, multi_managers, masters and kill targets) and draws them as arrows in the views. Show all of them, only broken ones, or the chain of what's picked.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>I/O: what triggers what</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: I/O</span></span></dd></dl>
+<div class="chips"><a class="chip code" href="entities/point-entities.html#e-multi-manager">multi_manager</a><a class="chip code" href="entities/brush-entities.html#e-trigger-multiple">trigger_multiple</a></div>
+</article>
+<article class="card ed-card" id="ed-gameplay" aria-labelledby="ed-gameplay-h">
+<header><h3 id="ed-gameplay-h"><a href="#ed-gameplay">Gameplay</a></h3><button class="copy-link" type="button" data-id="ed-gameplay" aria-label="Copy a link to Gameplay">Copy link</button></header>
+<p class="what">Loner-Strike's mode pieces (wave spawners, loot crates, capture points and more), and Mode kits: set Made for to a mode and it lists the markers and pieces that mode needs, with Place for each.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Gameplay</span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#editor-library">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-models" aria-labelledby="ed-models-h">
+<header><h3 id="ed-models-h"><a href="#ed-models">Models in place of entity boxes</a></h3><button class="copy-link" type="button" data-id="ed-models" aria-label="Copy a link to Models in place of entity boxes">Copy link</button></header>
+<p class="what">Draws hostages, spawns, weapons and model entities as their models instead of colored boxes.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Models in place of entity boxes on / off</span></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-content"><h2 id="g-content">Content and prefabs</h2><p class="ed-intro">Models, sprites, sounds, textures and ready-made pieces to drop into the map. <a href="../docs.html#content-browser">More in the docs</a></p>
+<article class="card ed-card" id="ed-content-browser" aria-labelledby="ed-content-browser-h">
+<header><h3 id="ed-content-browser-h"><a href="#ed-content-browser">Content Browser</a></h3><button class="copy-link" type="button" data-id="ed-content-browser" aria-label="Copy a link to Content Browser">Copy link</button></header>
+<p class="what">Every model, sprite, sound, texture and prefab you can use, from the game, your downloads, Community and your own folder. Drag a tile onto the map to place it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Content Browser</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Content</span></span></dd></dl><p class="good"><b>Good to know:</b> A dropped model becomes a cycler_sprite, a sprite an env_sprite and a sound an ambient_generic.</p>
+<div class="chips"><a class="chip code" href="entities/point-entities.html#e-cycler-sprite">cycler_sprite</a><a class="chip code" href="entities/point-entities.html#e-env-sprite">env_sprite</a><a class="chip code" href="entities/point-entities.html#e-ambient-generic">ambient_generic</a></div>
+</article>
+<article class="card ed-card" id="ed-content-drawer" aria-labelledby="ed-content-drawer-h">
+<header><h3 id="ed-content-drawer-h"><a href="#ed-content-drawer">Content drawer</a></h3><button class="copy-link" type="button" data-id="ed-content-drawer" aria-label="Copy a link to Content drawer">Copy link</button></header>
+<p class="what">Slides the Content Browser up over the bottom panels; Esc or a click elsewhere puts it away.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Content drawer</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Space</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Space</kbd></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Space</kbd></span></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-import-files" aria-labelledby="ed-import-files-h">
+<header><h3 id="ed-import-files-h"><a href="#ed-import-files">Import your own files</a></h3><button class="copy-link" type="button" data-id="ed-import-files" aria-label="Copy a link to Import your own files">Copy link</button></header>
+<p class="what">Copies your own models, sprites, sounds and texture files into the project's folder, so they go with Playtest, Publish and remixes. Sounds in .mp3, .ogg or .flac become a WAV the game plays well.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Content Browser</span><span class="sep" aria-hidden="true">›</span><span>Import…</span></span><span class="crumbs"><span>Drop files from Finder or Explorer on the Content Browser</span></span></dd></dl><p class="good"><b>Good to know:</b> Save the project first: the files go next to it.</p>
+
+</article>
+<article class="card ed-card" id="ed-prefabs" aria-labelledby="ed-prefabs-h">
+<header><h3 id="ed-prefabs-h"><a href="#ed-prefabs">Prefabs</a></h3><button class="copy-link" type="button" data-id="ed-prefabs" aria-label="Copy a link to Prefabs">Copy link</button></header>
+<p class="what">Ready-made pieces (a doorway, stairs, crates, a bombsite kit, a buy zone and more) and your own. Drag one in, or press Place and click; R turns it before you place it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Content Browser</span><span class="sep" aria-hidden="true">›</span><span>Prefabs</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Save what's picked…</b><span>Makes your own prefab.</span></div><div class="ed-act-meta"></div></li><li><div class="ed-act"><b>Share as a package…</b><span>Saves a prefab as a file to give to someone.</span></div><div class="ed-act-meta"></div></li><li><div class="ed-act"><b>Community prefabs…</b><span>Finds more that others shared.</span></div><div class="ed-act-meta"></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-library">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-gamebanana" aria-labelledby="ed-gamebanana-h">
+<header><h3 id="ed-gamebanana-h"><a href="#ed-gamebanana">GameBanana</a></h3><button class="copy-link" type="button" data-id="ed-gamebanana" aria-label="Copy a link to GameBanana">Copy link</button></header>
+<p class="what">Finds models, sprites and sounds to download from GameBanana, with their terms first. Downloads land under Downloaded.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Content Browser</span><span class="sep" aria-hidden="true">›</span><span>GameBanana</span></span></dd></dl>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-checking"><h2 id="g-checking">Checking and leaks</h2><p class="ed-intro">Find what would stop the map compiling or loading, before it does. <a href="../docs.html#editor-checks">More in the docs</a></p>
+<article class="card ed-card" id="ed-checks" aria-labelledby="ed-checks-h">
+<header><h3 id="ed-checks-h"><a href="#ed-checks">Checks</a></h3><button class="copy-link" type="button" data-id="ed-checks" aria-label="Copy a link to Checks">Copy link</button></header>
+<p class="what">Finds broken brushes, missing textures, spawns and files, broken targets, limits, and what a mode still needs, as you build. Click a problem to go to it; most have a one-click fix.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Check the map</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Checks</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-leaks" aria-labelledby="ed-leaks-h">
+<header><h3 id="ed-leaks-h"><a href="#ed-leaks">Leaks</a></h3><button class="copy-link" type="button" data-id="ed-leaks" aria-label="Copy a link to Leaks">Copy link</button></header>
+<p class="what">When a compile finds a leak (a gap to the void), a red line runs from an entity out through the hole, and a bar names the brush beside the gap.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Go to leak</b><span>Flies along the line to the hole and picks the brush beside it.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Go to leak</span></span><span class="crumbs"><span>Leak bar</span><span class="sep" aria-hidden="true">›</span><span>Go to leak</span></span></div></li><li><div class="ed-act"><b>Show or hide the leak line</b></div><div class="ed-act-meta"><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Show or hide the leak line</span></span><span class="crumbs"><span>Leak bar</span><span class="sep" aria-hidden="true">›</span><span>Hide line</span></span></div></li><li><div class="ed-act"><b>Load pointfile…</b><span>Loads a leak line (.lin or .pts) from another compile.</span></div><div class="ed-act-meta"><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Load pointfile…</span></span></div></li></ul><p class="good"><b>Good to know:</b> Close the gap with a brush and compile again. The leak bar also has Pick brushes at the hole and Forget it.</p>
+<div class="chips"><a class="chip" href="../docs.html#compile-leak">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-budget" aria-labelledby="ed-budget-h">
+<header><h3 id="ed-budget-h"><a href="#ed-budget">Budget</a></h3><button class="copy-link" type="button" data-id="ed-budget" aria-label="Copy a link to Budget">Copy link</button></header>
+<p class="what">Shows how close the map is to the engine's limits (models, sounds, entities, textures and, after a compile, the map's own numbers). Click a bar for what uses the most.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Budget</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Budget</span></span></dd></dl><p class="good"><b>Good to know:</b> Green has room, yellow is over 75%, red over 90%. Playtest and Publish ask first when a bar is red.</p>
+<div class="chips"><a class="chip" href="../docs.html#editor-budget">In the docs</a></div>
+</article></section>
+<section class="ed-group" aria-labelledby="g-compile"><h2 id="g-compile">Compile and playtest</h2><p class="ed-intro">Turn the map into a .bsp and play it with bots. <a href="../docs.html#compile-playtest">More in the docs</a></p>
+<article class="card ed-card" id="ed-compile-panel" aria-labelledby="ed-compile-panel-h">
+<header><h3 id="ed-compile-panel-h"><a href="#ed-compile-panel">Compile</a></h3><button class="copy-link" type="button" data-id="ed-compile-panel" aria-label="Copy a link to Compile">Copy link</button></header>
+<p class="what">Compiles the map with SDHLT into a .bsp: give it a name, pick Fast, Normal or Final, and press Compile to watch the steps.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Compile and play…</span></span><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel: Compile</span></span></dd><dt>Keys</dt><dd><span class="none">None in our key set</span><span class="alt-keys">Hammer-style: <span class="keys"><kbd>F9</kbd></span></span></dd></dl><p class="good"><b>Good to know:</b> The first time, the panel offers Download SDHLT (about 3 MB). On a Mac it runs through CrossOver.</p>
+<div class="chips"><a class="chip" href="../docs.html#compile">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-playtest" aria-labelledby="ed-playtest-h">
+<header><h3 id="ed-playtest-h"><a href="#ed-playtest">Playtest</a></h3><button class="copy-link" type="button" data-id="ed-playtest" aria-label="Copy a link to Playtest">Copy link</button></header>
+<p class="what">Compiles the map, puts it in your game and starts it with bots, using the mode and bots set in the Compile panel.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Playtest</span></span><span class="crumbs"><span>Editor bar</span><span class="sep" aria-hidden="true">›</span><span>Playtest</span></span><span class="crumbs"><span>Compile panel</span><span class="sep" aria-hidden="true">›</span><span>Playtest</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>F5</kbd></span></dd></dl><p class="good"><b>Good to know:</b> Leave Teach bots the map first ticked so bots know their way round.</p>
+<div class="chips"><a class="chip" href="../docs.html#playtest">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-cordon" aria-labelledby="ed-cordon-h">
+<header><h3 id="ed-cordon-h"><a href="#ed-cordon">Cordon</a></h3><button class="copy-link" type="button" data-id="ed-cordon" aria-label="Copy a link to Cordon">Copy link</button></header>
+<p class="what">Compiles only what's inside the boxes you draw, sealed with sky or black walls, so you can try one part of a big map quickly.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Compile panel</span><span class="sep" aria-hidden="true">›</span><span>Cordon</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Box round picked</b><span>A box round what's picked.</span></div><div class="ed-act-meta"></div></li><li><div class="ed-act"><b>From view</b><span>A box round what the view shows.</span></div><div class="ed-act-meta"></div></li><li><div class="ed-act"><b>Remove all</b><span>Back to the whole map.</span></div><div class="ed-act-meta"></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#cordon">In the docs</a></div>
+</article></section>
+<section class="ed-group" aria-labelledby="g-sharing"><h2 id="g-sharing">Sharing</h2><p class="ed-intro">Package a finished map for others. <a href="../docs.html#publish-steps">More in the docs</a></p>
+<article class="card ed-card" id="ed-publish" aria-labelledby="ed-publish-h">
+<header><h3 id="ed-publish-h"><a href="#ed-publish">Publish</a></h3><button class="copy-link" type="button" data-id="ed-publish" aria-label="Copy a link to Publish">Copy link</button></header>
+<p class="what">Packages a compiled map for you to upload to GameBanana, with its files and credits. Compile it into the game first.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Map</span><span class="sep" aria-hidden="true">›</span><span>Publish…</span></span><span class="crumbs"><span>Editor bar</span><span class="sep" aria-hidden="true">›</span><span>Publish…</span></span></dd></dl><p class="good"><b>Good to know:</b> If a Budget bar is red, it asks first: players may not be able to load the map.</p>
+
+</article></section>
+<section class="ed-group" aria-labelledby="g-view"><h2 id="g-view">View and navigation</h2><p class="ed-intro">Move around the map, arrange the views and the panels, and set up the grid. <a href="../docs.html#editor-camera">More in the docs</a></p>
+<article class="card ed-card" id="ed-layouts" aria-labelledby="ed-layouts-h">
+<header><h3 id="ed-layouts-h"><a href="#ed-layouts">View layouts</a></h3><button class="copy-link" type="button" data-id="ed-layouts" aria-label="Copy a link to View layouts">Copy link</button></header>
+<p class="what">How many views you see at once.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Editor bar</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Single</b><span>One view.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Layout: Single</span></span><span class="keys"><span class="k-win"><kbd>Alt</kbd>+<kbd>1</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>1</kbd></span></span></div></li><li><div class="ed-act"><b>Quad</b><span>3D, Top, Front and Side at once, like Hammer.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Layout: Quad</span></span><span class="keys"><span class="k-win"><kbd>Alt</kbd>+<kbd>2</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>2</kbd></span></span></div></li><li><div class="ed-act"><b>1+3</b><span>One big view and three small ones.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Layout: 1+3</span></span><span class="keys"><span class="k-win"><kbd>Alt</kbd>+<kbd>3</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>3</kbd></span></span></div></li><li><div class="ed-act"><b>Two</b><span>Two views side by side.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Layout: Two</span></span><span class="keys"><span class="k-win"><kbd>Alt</kbd>+<kbd>4</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>4</kbd></span></span></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-views">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-view-kind" aria-labelledby="ed-view-kind-h">
+<header><h3 id="ed-view-kind-h"><a href="#ed-view-kind">3D, Top, Front and Side</a></h3><button class="copy-link" type="button" data-id="ed-view-kind" aria-label="Copy a link to 3D, Top, Front and Side">Copy link</button></header>
+<p class="what">Sets what the active view shows.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>3D view</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>3D view</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>1</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>1</kbd></span></span></div></li><li><div class="ed-act"><b>Top view</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Top view</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>2</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>2</kbd></span></span></div></li><li><div class="ed-act"><b>Front view</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Front view</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>3</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>3</kbd></span></span></div></li><li><div class="ed-act"><b>Side view</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Side view</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>4</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>4</kbd></span></span></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-views">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-maximize" aria-labelledby="ed-maximize-h">
+<header><h3 id="ed-maximize-h"><a href="#ed-maximize">Maximize a view</a></h3><button class="copy-link" type="button" data-id="ed-maximize" aria-label="Copy a link to Maximize a view">Copy link</button></header>
+<p class="what">Makes the view under the mouse fill the window, and puts it back.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Maximize the pane / put it back</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>Space</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>Space</kbd></span></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>Z</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>Z</kbd></span></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Space</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>Space</kbd></span></span></span></dd></dl>
+<div class="chips"><a class="chip" href="../docs.html#editor-views">In the docs</a></div>
+</article>
+<article class="card ed-card" id="ed-zoom" aria-labelledby="ed-zoom-h">
+<header><h3 id="ed-zoom-h"><a href="#ed-zoom">Zoom to selection or the whole map</a></h3><button class="copy-link" type="button" data-id="ed-zoom" aria-label="Copy a link to Zoom to selection or the whole map">Copy link</button></header>
+<p class="what">Brings what's picked, or the whole map, into every view.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Zoom to selection</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Zoom to selection</span></span><span class="keys"><kbd>Z</kbd></span><span class="alt-keys">Hammer-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd></span></span></span><span class="alt-keys">TrenchBroom-style: <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>U</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>U</kbd></span></span></span></div></li><li><div class="ed-act"><b>Zoom to the whole map</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Zoom to the whole map</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>Z</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>Z</kbd></span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-fly" aria-labelledby="ed-fly-h">
+<header><h3 id="ed-fly-h"><a href="#ed-fly">Fly or orbit</a></h3><button class="copy-link" type="button" data-id="ed-fly" aria-label="Copy a link to Fly or orbit">Copy link</button></header>
+<p class="what">Switches the 3D camera between flying with W A S D and orbiting round what you look at.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Fly / orbit camera</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>F</kbd></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-nav-presets" aria-labelledby="ed-nav-presets-h">
+<header><h3 id="ed-nav-presets-h"><a href="#ed-nav-presets">Camera controls</a></h3><button class="copy-link" type="button" data-id="ed-nav-presets" aria-label="Copy a link to Camera controls">Copy link</button></header>
+<p class="what">Makes the 3D view move like the editor you know. The editor asks the first time you open it.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Move like Unreal</b><span>Hold right mouse to look and W A S D to fly, scroll for speed; Alt-drag orbits.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Move like Unreal</span></span></div></li><li><div class="ed-act"><b>Move like Blender</b><span>Drag to orbit, right-drag to pan, scroll to zoom; F to fly.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Move like Blender</span></span></div></li><li><div class="ed-act"><b>Move like Hammer</b><span>Z for mouse-look with W A S D; drag to look, right-drag to move.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Move like Hammer</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-camera-speed" aria-labelledby="ed-camera-speed-h">
+<header><h3 id="ed-camera-speed-h"><a href="#ed-camera-speed">Camera speed</a></h3><button class="copy-link" type="button" data-id="ed-camera-speed" aria-label="Copy a link to Camera speed">Copy link</button></header>
+<p class="what">How fast the camera flies. Hold the right mouse button in the 3D view and scroll to change it.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>3D view</span><span class="sep" aria-hidden="true">›</span><span>right mouse button + scroll</span></span><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Find a command…</span><span class="sep" aria-hidden="true">›</span><span>Camera faster / Camera slower</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-camera-marks" aria-labelledby="ed-camera-marks-h">
+<header><h3 id="ed-camera-marks-h"><a href="#ed-camera-marks">Camera spots</a></h3><button class="copy-link" type="button" data-id="ed-camera-marks" aria-label="Copy a link to Camera spots">Copy link</button></header>
+<p class="what">Keep up to nine camera spots and jump back to them: Ctrl (⌘ on a Mac) with a number keeps one, the number alone goes back.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>3D view</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>1…9</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>1…9</kbd></span></span> <span class="or">or</span> <span class="keys"><kbd>1…9</kbd></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-grid" aria-labelledby="ed-grid-h">
+<header><h3 id="ed-grid-h"><a href="#ed-grid">Grid</a></h3><button class="copy-link" type="button" data-id="ed-grid" aria-label="Copy a link to Grid">Copy link</button></header>
+<p class="what">The grid things snap to as you draw and move them.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Tool options (above the views)</span><span class="sep" aria-hidden="true">›</span><span>Grid</span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Smaller grid</b><span>Halves the grid size.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Smaller grid</span></span><span class="keys"><kbd>[</kbd></span></div></li><li><div class="ed-act"><b>Bigger grid</b><span>Doubles it.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Bigger grid</span></span><span class="keys"><kbd>]</kbd></span></div></li><li><div class="ed-act"><b>Show / hide the grid</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Show / hide the grid</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>G</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>G</kbd></span></span></div></li><li><div class="ed-act"><b>Grid and snapping…</b><span>Grid size, turn steps and snapping in one place.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Grid and snapping…</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-snapping" aria-labelledby="ed-snapping-h">
+<header><h3 id="ed-snapping-h"><a href="#ed-snapping">Snapping</a></h3><button class="copy-link" type="button" data-id="ed-snapping" aria-label="Copy a link to Snapping">Copy link</button></header>
+<p class="what">Whether new points land on the grid, and on the corners and edges of brushes when you're close to one.</p>
+<dl class="ed-facts"><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Alt (held)</kbd></span><span class="k-mac"><kbd>⌥ (held)</kbd></span></span></dd></dl><ul class="ed-actions"><li><div class="ed-act"><b>Snap to grid on / off</b><span>Holding Alt flips it while you drag.</span></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Snap to grid on / off</span></span><span class="keys"><span class="k-win"><kbd>Shift</kbd>+<kbd>W</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>W</kbd></span></span></div></li><li><div class="ed-act"><b>Snap to corners and edges on / off</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Snap to corners and edges on / off</span></span></div></li></ul>
+
+</article>
+<article class="card ed-card" id="ed-drawing-style" aria-labelledby="ed-drawing-style-h">
+<header><h3 id="ed-drawing-style-h"><a href="#ed-drawing-style">Drawing style</a></h3><button class="copy-link" type="button" data-id="ed-drawing-style" aria-label="Copy a link to Drawing style">Copy link</button></header>
+<p class="what">Draws the active view textured, flat, as a wireframe, or textured with the wireframe on top.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Next drawing style for the active pane</span></span><span class="crumbs"><span>The style picker in the view's corner</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-frame-time" aria-labelledby="ed-frame-time-h">
+<header><h3 id="ed-frame-time-h"><a href="#ed-frame-time">Frame time</a></h3><button class="copy-link" type="button" data-id="ed-frame-time" aria-label="Copy a link to Frame time">Copy link</button></header>
+<p class="what">Shows frames a second and slow frames, for judging how a big map runs in the editor.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Show frame time</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span><span class="k-mac"><kbd>⌥</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-panels" aria-labelledby="ed-panels-h">
+<header><h3 id="ed-panels-h"><a href="#ed-panels">Panels and layouts</a></h3><button class="copy-link" type="button" data-id="ed-panels" aria-label="Copy a link to Panels and layouts">Copy link</button></header>
+<p class="what">Drag a panel's tab to another side, float it, or open it in its own window. A panel layout puts them all back in a set arrangement.</p>
+<ul class="ed-actions"><li><div class="ed-act"><b>Default (Unreal-like)</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel layout: Default (Unreal-like)</span></span></div></li><li><div class="ed-act"><b>Hammer</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel layout: Hammer</span></span></div></li><li><div class="ed-act"><b>Unreal-like</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel layout: Unreal-like</span></span></div></li><li><div class="ed-act"><b>All on the right</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Panel layout: All on the right</span></span></div></li><li><div class="ed-act"><b>Reset the panel layout</b></div><div class="ed-act-meta"><span class="crumbs"><span>View</span><span class="sep" aria-hidden="true">›</span><span>Reset the panel layout</span></span></div></li></ul>
+<div class="chips"><a class="chip" href="../docs.html#editor-views">In the docs</a></div>
+</article></section>
+<section class="ed-group" aria-labelledby="g-help"><h2 id="g-help">Help and keys</h2><p class="ed-intro">Find any command, see every key, and use the keys you're used to. <a href="../docs.html#editor-views">More in the docs</a></p>
+<article class="card ed-card" id="ed-palette" aria-labelledby="ed-palette-h">
+<header><h3 id="ed-palette-h"><a href="#ed-palette">Find a command</a></h3><button class="copy-link" type="button" data-id="ed-palette" aria-label="Copy a link to Find a command">Copy link</button></header>
+<p class="what">Type a few letters to find any command, with its key; arrows and Enter run it. Greyed-out ones need something picked first.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Find a command…</span></span><span class="crumbs"><span>Editor bar</span><span class="sep" aria-hidden="true">›</span><span>Find a command</span></span></dd><dt>Keys</dt><dd><span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>K</kbd></span><span class="k-mac"><kbd>⌘</kbd><kbd>K</kbd></span></span> <span class="or">or</span> <span class="keys"><span class="k-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><span class="k-mac"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd></span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-cheat-sheet" aria-labelledby="ed-cheat-sheet-h">
+<header><h3 id="ed-cheat-sheet-h"><a href="#ed-cheat-sheet">Keys cheat sheet</a></h3><button class="copy-link" type="button" data-id="ed-cheat-sheet" aria-label="Copy a link to Keys cheat sheet">Copy link</button></header>
+<p class="what">Every key in the key set you use, on one page you can print.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Keys cheat sheet</span></span></dd><dt>Keys</dt><dd><span class="keys"><kbd>?</kbd></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-change-keys" aria-labelledby="ed-change-keys-h">
+<header><h3 id="ed-change-keys-h"><a href="#ed-change-keys">Change keys</a></h3><button class="copy-link" type="button" data-id="ed-change-keys" aria-label="Copy a link to Change keys">Copy link</button></header>
+<p class="what">Switch to Hammer's or TrenchBroom's keys, or set your own. It warns when a key is already taken, and Put back undoes your changes.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Change keys…</span></span></dd></dl><p class="good"><b>Good to know:</b> Picking the Hammer-style keys also switches the views to Quad.</p>
+
+</article>
+<article class="card ed-card" id="ed-coords" aria-labelledby="ed-coords-h">
+<header><h3 id="ed-coords-h"><a href="#ed-coords">Coordinates and axes</a></h3><button class="copy-link" type="button" data-id="ed-coords" aria-label="Copy a link to Coordinates and axes">Copy link</button></header>
+<p class="what">Explains the map's numbers: Z is up, X east and Y north, the engine's own coordinates.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>Coordinates and axes</span></span><span class="crumbs"><span>The axes in the corner of a view</span></span></dd></dl>
+
+</article>
+<article class="card ed-card" id="ed-tour" aria-labelledby="ed-tour-h">
+<header><h3 id="ed-tour-h"><a href="#ed-tour">First map tour</a></h3><button class="copy-link" type="button" data-id="ed-tour" aria-label="Copy a link to First map tour">Copy link</button></header>
+<p class="what">Walks you through a first map: draw a room, hollow it, add a light and spawns, then play it. Each step ticks off as you go.</p>
+<dl class="ed-facts"><dt>Where</dt><dd><span class="crumbs"><span>Help</span><span class="sep" aria-hidden="true">›</span><span>First map tour</span></span></dd></dl>
+
+</article></section>
+    <p class="meta ty">Made from the app's own catalog (docs/reference/editor.json, with the editor's own menus and keys), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#g-files">Files and projects</a></li><li><a href="#g-map">Map and settings</a></li><li><a href="#g-building">Building</a></li><li><a href="#g-editing">Editing</a></li><li><a href="#g-selecting">Selecting and hiding</a></li><li><a href="#g-texturing">Texturing</a></li><li><a href="#g-entities">Entities</a></li><li><a href="#g-content">Content and prefabs</a></li><li><a href="#g-checking">Checking and leaks</a></li><li><a href="#g-compile">Compile and playtest</a></li><li><a href="#g-sharing">Sharing</a></li><li><a href="#g-view">View and navigation</a></li><li><a href="#g-help">Help and keys</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../reference/ref.js?v=51d57d64" defer></script>
+</body>
+</html>

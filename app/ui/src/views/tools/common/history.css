@@ -1,0 +1,34 @@
+/* History & restore (common/History.tsx): a file's earlier versions, compare, restore */
+.hist { display: flex; flex-direction: column; gap: 10px; }
+.hist-sheet .sheet-body > p.muted { margin-bottom: 12px; }
+.hist-error { color: var(--weak); }
+.hist-file { background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; padding: 8px 12px; }
+.hist-file > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; list-style-position: inside; }
+.hist-file > summary::-webkit-details-marker { margin-right: 2px; }
+.hist-name { font-weight: 700; overflow-wrap: anywhere; }
+.hist-count { margin-left: auto; font-size: 14px; white-space: nowrap; }
+.hist-gone { color: var(--weak); }
+.hist-rel { font-size: 13px; overflow-wrap: anywhere; margin: 2px 0 8px; }
+.hist-file > .row { margin: 0 0 8px; }
+.hist-versions { list-style: none; padding: 0; margin: 0 0 6px; }
+.hist-version { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--bevel-lo); }
+.hist-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.hist-what > span { overflow-wrap: anywhere; }
+.hist-when { font-variant-numeric: tabular-nums; color: var(--bone-dim); white-space: nowrap; }
+.hist-buttons { flex: none; gap: 6px; }
+.hist-diff { max-height: 55vh; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px 12px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.hist-add { color: var(--ok); background: rgba(179, 199, 127, .12); display: block; }
+.hist-del { color: var(--weak); background: rgba(217, 154, 122, .12); display: block; }
+.hist-fold { color: var(--bone-faint); font-style: italic; display: block; }
+.hist-plus { color: var(--ok); }
+.hist-minus { color: var(--weak); }
+@media (max-width: 640px) {
+  .hist-version { flex-direction: column; align-items: flex-start; }
+}
+
+/* Settings ▸ Backups & defaults */
+.bk-group h4 { margin: 4px 0 6px; font-size: 15px; color: var(--bone-dim); }
+.bk-files { list-style: none; padding: 0; margin: 0; }
+.bk-files li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--bevel-lo); }
+.bk-files li > div { min-width: 0; }
+.bk-files .mono { overflow-wrap: anywhere; font-size: 13px; }

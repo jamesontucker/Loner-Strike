@@ -1,0 +1,7 @@
+/* the creature type picker (CreaturePicker.tsx) */
+.creature-picker { display: inline-flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.creature-picker-row { display: flex; gap: 4px; min-width: 0; }
+.creature-picker-input { flex: 1 1 auto; min-width: 0; }
+.creature-picker-add { flex: 0 0 auto; max-width: 7.5em; }
+.creature-picker-warn { color: var(--t, #d9a441); font-size: 12px; line-height: 1.35; }
+.creature-picker-shown { font-size: 12px; }

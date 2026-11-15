@@ -7,26 +7,33 @@
   /* Steam's original (2003-2007) skin: olive panels, mustard highlight, raised bevels */
   --bg: #3e4637;
   --side: #353c2f;
-  --panel: #4c5844;
-  --panel-2: #5a6a50;
+  /* Parity A (QA4 contrast pass, WCAG AA): panels a shade darker so text on them reaches 4.5:1 (was #4c5844, #5a6a50) */
+  --panel: #475240;
+  --panel-2: #4e5b45;
   --line: #292c21;
   --bevel-hi: rgba(136, 145, 128, .55);
   --bevel-lo: #292c21;
   --bone: #d8ded3;
-  /* readable on every panel: dim ~4.4:1, faint ~3.7:1 on --panel, more on --bg */
-  --bone-dim: #c2c9b7;
-  --bone-faint: #aeb7a2;
-  --signal: #c4b550;
+  /* AA (4.5:1) on --panel and --panel-2 (selected tabs and segments): dim 5.6 / 4.9, faint 5.2 / 4.5, signal 5.2 / 4.6;
+     were dim #c2c9b7 4.4 / 3.4, faint #aeb7a2 3.6 / 2.8, signal #c4b550 3.6 / 2.8 */
+  --bone-dim: #d0d6c8;
+  --bone-faint: #c9cfc1;
+  --signal: #d9cf8d;
   --signal-ink: #26240f;
-  --t: #d9a441;
-  --ct: #8fb4d6;
-  --ok: #b3c77f;
-  --warn: #d9b25a;
-  --weak: #d99a7a;
+  /* 4.5:1 on --panel-2 too (were 3.2-4.1 on --panel, 2.5-3.2 on --panel-2) */
+  --t: #e9c98e;
+  --ct: #b8d0e5;
+  --ok: #c3d49b;
+  --warn: #e5ca8d;
+  --weak: #e9c6b3;
+  /* errors and danger buttons (was #f0b9a6, 4.2 on --panel-2) */
+  --danger: #f2c3b2;
+  /* the tools' accent (the Focus hint, tour ticks); was a fallback #c8b56a, 4.0:1 */
+  --khaki: var(--signal);
   --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
   --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
   --stencil: "Counter-Strike", "Big Shoulders Stencil Display", Impact, sans-serif;
-  --text: "Barlow Semi Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --text: "Barlow Semi Condensed", "Bahnschrift SemiCondensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
   --side-w: 224px;
   --strip-h: 64px;
   /* the page's side margin: the top bar, the quick bar and the page line up on it */
@@ -371,7 +378,7 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 /* ---- shared controls (classic Steam) ------------------------------------ */
 .muted { color: var(--bone-faint); }
 .big { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
-.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
 .narrow { max-width: 820px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .start-mode { display: inline-flex; align-items: center; gap: 8px; }
@@ -379,13 +386,15 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 .row.between { justify-content: space-between; flex-wrap: nowrap; gap: 20px; }
 .row.center { justify-content: center; }
 .spacer { flex: 1; }
-.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; max-width: 100%; }
+.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+/* "Docs ↗" (a link) lines up with the buttons beside it (QA4-T1 L6) */
+.section-actions .docs-link { margin-left: 0 !important; display: inline-flex; align-items: center; vertical-align: baseline !important; }
 .server-more { margin: 4px 0 28px; gap: 8px; }
 p { margin: 0 0 8px; }
 a { color: var(--signal); }
 .btn.primary { background: var(--signal); color: var(--signal-ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
 .btn.primary:hover { color: var(--signal-ink); filter: brightness(1.06); }
-.btn.danger { color: #f0b9a6; }
+.btn.danger { color: var(--danger); }
 .btn.small { padding: 2px 8px; font-size: 13px; }
 p > .btn.small { margin-left: 6px; }
 .btn:disabled { opacity: .55; cursor: default; }
@@ -396,6 +405,21 @@ select, .search {
 }
 .search { flex: 1 1 260px; max-width: 420px; }
 .search::placeholder { color: var(--bone-faint); }
+/* Every text field the app's look by default, so a field without a class is never the browser's
+   white box, system font or monospace textarea. Zero specificity (:where): any component's own rule
+   wins, and the size follows the text around it (the compact editor and Studio panels stay compact;
+   .search is the big one). Checkboxes, radios, sliders, color pickers and buttons keep their own. */
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="url"], input[type="email"],
+  input[type="password"], input[type="tel"], input[type="time"], input[type="date"], input[type="datetime-local"], textarea) {
+  background: var(--bg); color: var(--bone); border: 0; border-radius: 2px;
+  box-shadow: var(--sunken); padding: 0.3em 0.55em; font: inherit; line-height: 1.35;
+}
+:where(input, textarea)::placeholder { color: var(--bone-faint); opacity: 1; }
+:where(input, textarea, select):disabled { opacity: .55; cursor: default; }
+:where(input, textarea, select):focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+:where(input, textarea)[readonly] { color: var(--bone-dim); }
+:where(textarea) { resize: vertical; }
+:where(input[type="time"], input[type="date"], input[type="datetime-local"]) { color-scheme: dark; }
 
 .seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
 .seg button { border: 0; background: transparent; color: var(--bone-dim); padding: 5px 11px; font-size: 14px; font-weight: 600; border-radius: 2px; }
@@ -423,9 +447,9 @@ select, .search {
 /* a panel that's one line (a title and note, a button at the side): no paragraph gap at its foot */
 .panel.row > p:last-child, .panel.row > div > p:last-child { margin-bottom: 0; }
 .panel h3 { margin: 0 0 10px; font-size: 17px; }
-.err-text { color: #f0b9a6; }
+.err-text { color: var(--danger); }
 
-.toasts { position: fixed; right: 20px; bottom: 20px; display: grid; justify-items: end; gap: 8px; z-index: 60; width: max-content; max-width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toasts { position: fixed; right: 20px; bottom: 20px; display: grid; justify-items: end; gap: 8px; z-index: 60; width: max-content; max-width: min(420px, calc(100vw - 32px)); pointer-events: none; contain: layout style; /* a toast coming or going lays out only the stack, not the page */ }
 /* a short rise into place, nothing more */
 @media (prefers-reduced-motion: no-preference) {
   .toast { animation: toast-in 180ms cubic-bezier(.2, .7, .3, 1); }
@@ -437,6 +461,9 @@ select, .search {
 .toast-text { user-select: text; }
 .toast-x { background: none; border: 0; padding: 0 2px; font-size: 18px; line-height: 1; color: var(--bone-dim); }
 .toast-x:hover { color: var(--bone); }
+/* a page with a bottom action bar (tools' ActionBar, every Studio): toasts stack above it, never
+   over Save / Try it / More. --tl-ab-h is the bar's distance from the window's bottom (ActionBar.tsx). */
+body:has(.tl-actionbar) .toasts { bottom: max(20px, calc(var(--tl-ab-h, 56px) + 12px)); }
 /* text people copy: addresses, folders, errors, codes, the console */
 code, pre, .mono, .address, .err-text, .copyable, .load-error p, .console, input, textarea { user-select: text; -webkit-user-select: text; }
 .load-error { padding: 14px 16px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid #d9826b; display: grid; gap: 8px; justify-items: start; }
@@ -661,6 +688,7 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
   .sheet-backdrop { align-items: end; padding: 0; }
   .sheet, .sheet.wide { width: 100%; max-height: 92vh; border-radius: 6px 6px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .toasts { left: var(--gutter); right: var(--gutter); width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; justify-items: stretch; }
+  body:has(.tl-actionbar) .toasts { bottom: max(calc(76px + env(safe-area-inset-bottom)), calc(var(--tl-ab-h, 56px) + 12px)); }
 }
 
 .section-tabs { margin: 0 0 12px; }
@@ -730,7 +758,7 @@ fieldset.plain { display: contents; border: 0; margin: 0; padding: 0; min-width:
 .job-steps li { display: flex; gap: 10px; align-items: baseline; color: var(--bone-faint); }
 .job-steps li.running { color: var(--bone); }
 .job-steps li.done { color: var(--bone-dim); }
-.job-steps li.error { color: #f0b9a6; }
+.job-steps li.error { color: var(--danger); }
 .dot-state { width: 16px; text-align: center; font-weight: 800; color: var(--ok); }
 .job-steps li.running .dot-state { color: var(--signal); }
 .tips { text-align: left; max-width: 560px; display: grid; gap: 6px; margin: 10px 0 18px; }
@@ -1344,7 +1372,7 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 .cm-report-buttons { flex: none; justify-content: flex-end; }
 .cm-words .chip { display: inline-flex; align-items: center; gap: 6px; }
 .cm-words .chip svg { opacity: .7; }
-.cm-words .chip:hover svg { opacity: 1; color: #f0b9a6; }
+.cm-words .chip:hover svg { opacity: 1; color: var(--danger); }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
   .cm-stat.head { display: none; }
   .cm-stat { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; padding: 10px 4px; min-height: 44px; text-align: left; }
@@ -1458,6 +1486,7 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .files-update { margin-bottom: 16px; border-left: 3px solid var(--signal); }
 .files-update h3 { margin: 0 0 6px; }
 .files-update-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
+.files-update-game h3 { margin: 0; font-size: 15px; }
 .files-update-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
 .files-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; padding: 8px 10px 8px 14px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 14px; }
 .files-bar-actions { display: flex; align-items: center; gap: 6px; }
@@ -1470,7 +1499,7 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .info-btn { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--bone-dim); font: 700 11px/17px var(--text); text-align: center; cursor: help; box-shadow: var(--raised); }
 .info-btn:hover, .info-btn[aria-expanded="true"] { color: var(--signal); }
-.info-pop { position: fixed; left: 0; top: 0; visibility: hidden; z-index: 60; width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 8px 10px; background: var(--bg); color: var(--bone); box-shadow: var(--raised), 0 8px 24px rgba(0,0,0,.45); border-radius: 2px; font: 400 13px/1.4 var(--text); text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; pointer-events: none; }
+.info-pop { position: fixed; left: 0; top: 0; visibility: hidden; z-index: 1000; width: max-content; max-width: min(320px, calc(100vw - 32px)); overflow-wrap: anywhere; padding: 8px 10px; background: var(--bg); color: var(--bone); box-shadow: var(--raised), 0 8px 24px rgba(0,0,0,.45); border-radius: 2px; font: 400 13px/1.4 var(--text); text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; pointer-events: none; }
 .field-note { font-size: 12.5px; color: var(--bone-dim); max-width: 260px; margin-top: 2px; }
 .start-settings { align-items: flex-start; }
 /* every label line the same height (its "?" is taller than the text), so the controls line up */
@@ -1704,9 +1733,10 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .qmenu-group + .qmenu-group { border-top: 1px solid var(--bevel-lo); margin-top: 4px; padding-top: 4px; }
 .qmenu-head { padding: 6px 10px 2px; color: var(--bone-faint); font-size: 12px; font-weight: 700; }
 .qmenu-note { padding: 4px 10px 6px 32px; max-width: 280px; color: var(--bone-faint); font-size: 13px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
-.qmenu-list button.danger { color: #f0b9a6; }
+.qmenu-list button.danger { color: var(--danger); }
 .qmenu-list .tick .spinner { width: 10px; height: 10px; margin: 0; }
 .ask-field { margin: -4px 0 16px; }
+.ask-field .ask-error { color: var(--danger); font-size: 13px; line-height: 1.4; }
 @media (max-width: 760px), (pointer: coarse) {
   .prow-act .btn.small { min-height: 40px; padding: 4px 12px; }
 }
@@ -1768,6 +1798,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .radio-list { list-style: none; margin: 3px 0 0; padding: 3px; max-height: 210px; overflow-y: auto; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; }
 .radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--bone-dim); font: 600 13px/1.2 var(--text); }
 .radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--bone-faint); }
+.radio .radio-list .radio-tag { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; font: 600 9px/13px var(--text); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: #8fb3a0; vertical-align: 1px; }
 .radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
 .radio .radio-list button:hover { color: var(--signal); }
 .radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
@@ -1905,3 +1936,82 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .maps.grid.stale { opacity: .45; transition: opacity .15s; pointer-events: none; }
 .setting .style-pick { justify-self: start; }
 .setting .style-pick select { min-width: 200px; }
+
+/* ---- Tools in the sidebar (the pages' own styles are in views/tools/tools.css, loaded with them) ---- */
+/* Tools is in beta for 1.0: a small tag in the sidebar and on the page */
+.nav-beta { margin-left: auto; font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; }
+/* Tools in the sidebar: like Servers, the tools grouped Create / Map tools / Personalize / Watch & inspect / Share (App.tsx ToolsNav) */
+.nav-group-fold { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); padding: 0; border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--bone-faint); text-align: left; cursor: pointer; }
+.nav-group-fold:hover { color: var(--bone-dim); }
+.nav-group-fold .nav-beta { margin-left: 0; }
+.nav-group-fold .fold-caret { margin-left: auto; flex: none; }
+.nav-subgroup { margin: 8px 10px 2px 12px; font-size: 11px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+
+/* a Studio mode's settings (hosts can change them): Play page and a server's Modes tab */
+.mode-settings { display: grid; gap: 8px; margin: 8px 0; }
+.mode-settings h3 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 4px; }
+.mode-settings h4 { margin: 4px 0 0; font-size: 0.85rem; color: var(--bone-dim, #9aa); text-transform: uppercase; letter-spacing: 0.05em; }
+.mode-settings-group { display: grid; gap: 6px; }
+.mode-setting { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(90px, 260px); align-items: center; gap: 2px 10px; }
+.mode-setting .small-note { grid-column: 1 / -1; }
+.mode-setting input[type="number"], .mode-setting select { width: 100%; }
+.mode-setting-input { display: flex; align-items: center; gap: 6px; }
+.mode-setting-mark { color: var(--accent, #e8c35a); }
+.mode-setting-warn { color: var(--warn, #e0a03c); }
+.mode-setting input[aria-invalid="true"] { border-color: var(--warn, #e0a03c); }
+.mode-settings-reset { margin-left: auto; font-size: 0.85rem; font-weight: normal; }
+
+/* the top strip's map picture (QA4-CORE F1): the name tile under it, the picture fades in over it */
+.strip-thumb { position: relative; overflow: hidden; }
+.strip-thumb .no-pic { padding: 2px; gap: 1px; }
+.strip-thumb .no-pic-kind { font-size: 8px; padding: 1px 3px; letter-spacing: .04em; }
+.strip-thumb .no-pic-name { font-size: 10px; line-height: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+.strip-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: strip-thumb-in .25s ease-out; }
+@keyframes strip-thumb-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .strip-thumb img { animation: none; } }
+
+/* setup done: the game kept another ReGameDLL (QA4-CORE F4) */
+.other-brain { display: grid; gap: 10px; justify-items: start; text-align: left; padding: 10px 14px; border-left: 3px solid var(--warn); background: var(--panel); margin: 4px 0; }
+.other-brain p { margin: 0; }
+.other-brain.ok { border-left-color: var(--signal); }
+
+/* a disabled main button looks switched off, not like a gold one that does nothing (QA4-CORE UX 4) */
+.btn.primary:disabled:not([aria-busy="true"]) { background: var(--panel); color: var(--bone-dim); box-shadow: var(--sunken); filter: none; opacity: .8; }
+
+/* Find servers in a narrow window (QA4-CORE UX 5): Game and Bots go first, so Map and Latency stay
+   in view instead of off to the side */
+.browser-window { container-type: inline-size; }
+@container (max-width: 760px) {
+  .browser-row:not(.players-row) { min-width: 0; grid-template-columns: 18px 18px minmax(120px, 2fr) 70px minmax(90px, 1fr) 64px; gap: 10px; }
+  .browser-row.with-last { grid-template-columns: 18px 18px minmax(120px, 2fr) 70px minmax(90px, 1fr) 64px 90px; }
+  .browser-window .browser-row .c-game, .browser-window .browser-row .c-bots { display: none; }
+}
+
+/* Admins › Add someone: the Name field lines up with SteamID (same label row, same input height;
+   the SteamID column's note no longer stretches it: QA4-CORE UX 6) */
+.editor-grid { align-items: start; }
+.editor-grid .field { align-content: start; }
+.editor-grid .field > span:first-child { min-height: 22px; display: flex; align-items: center; }
+.rot-missing { align-items: center; gap: 8px 12px; flex-wrap: wrap; } .rot-missing p { margin: 0; }
+.game-card .game-folder { font-size: 12px; color: var(--bone-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* Small windows (QA4-CORE UX 3): the quick bar's last buttons fold into More, and the update
+   banner keeps to one line */
+.qb-more { display: none; }
+@media (max-width: 1080px) {
+  .qb-full { display: none; }
+  .qb-more { display: contents; }
+}
+@media (max-height: 700px) {
+  .files-bar { flex-wrap: nowrap; padding-top: 4px; padding-bottom: 4px; margin-bottom: 10px; }
+  .files-bar > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files-bar > span:first-child .muted { display: none; }
+  .files-bar-actions { flex: none; }
+}
+
+/* the setup card: no empty scrollbar track beside content that (nearly) fits (QA4-CORE) */
+.setup-pane { scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.setup-pane::-webkit-scrollbar { width: 8px; background: transparent; }
+.setup-pane::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
+.setup-pane::-webkit-scrollbar-thumb { background: var(--panel-2); box-shadow: var(--raised); min-height: 24px; }
+.name-left { color: var(--bone-faint); font-variant-numeric: tabular-nums; }

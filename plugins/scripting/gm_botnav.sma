@@ -31,6 +31,11 @@
 	  botnav_flood(slot, Float:origin[3])        walking distance from origin to every area (slots 0, 1)
 	  Float:botnav_flood_dist(slot, area)        -1.0 when unreachable
 	  botnav_farthest(slot, Float:out[3])        area farthest from the flood origin
+	  botnav_route(Float:from[3], Float:to[3], Float:out[], maxpts)
+	                                             a walking route for anything (NPCs): up to maxpts
+	                                             points (x y z each), the last one the goal; 0 when
+	                                             there's no mesh or no way. Also callable with
+	                                             callfunc as the public botnav_route_cf (same args).
 	Deadly ground: a trigger_hurt that is always on and kills (dmg 50+, not switched by
 	anything, so not a trap) marks the areas it covers as deadly. Routes avoid them (a big
 	cost, not a wall: a route that can't go round still can), a bot jumps from the edge when
@@ -156,6 +161,7 @@ public plugin_natives()
 	register_native("botnav_flood", "n_flood")
 	register_native("botnav_flood_dist", "n_flood_dist")
 	register_native("botnav_farthest", "n_farthest")
+	register_native("botnav_route", "n_route")
 }
 
 // A mesh made by the bots learning the map only exists after they finished
@@ -1263,6 +1269,93 @@ public n_path_to(plugin, params)
 	g_BackUntil[id] = 0.0
 	g_RunJump[id] = false
 	return 1
+}
+
+// A route between two points, for things that aren't bots (Studio's NPC Move To through
+// gm_components): the crossings A* finds, pulled straight where a person-sized box passes,
+// the goal last. 0: no mesh, no area or no way there.
+public n_route(plugin, params)
+{
+	new Float:a[3], Float:b[3], Float:out[64 * 3]
+	get_array_f(1, a, 3)
+	get_array_f(2, b, 3)
+	new n = route(a, b, out, clamp(get_param(4), 1, 64))
+	if (n)
+		set_array_f(3, out, n * 3)
+	return n
+}
+
+public botnav_route_cf(Float:a[3], Float:b[3], Float:out[], maxpts)
+	return route(a, b, out, clamp(maxpts, 1, 64))
+
+route(const Float:a[3], const Float:b[3], Float:out[], maxp)
+{
+	if (!g_Loaded)
+		return 0
+	new s = area_under(a)
+	if (s < 0)
+		s = nearest_visible_area(a)
+	if (s < 0)
+		s = area_at(a)
+	new g = area_at(b)
+	if (s < 0 || g < 0)
+		return 0
+	new bool:reached
+	new last = astar(s, g, reached)
+	if (!reached)
+		return 0
+	new n
+	for (new x = last; x != -1 && n < MAX_AREAS; x = g_Parent[x])
+		g_Tmp[n++] = x
+	// every crossing in order (at most 256), then the goal
+	static Float:cr[257][3]
+	new m = 0, Float:cur[3]
+	cur = a
+	for (new i = n - 1; i > 0 && m < 256; i--)
+	{
+		portal(g_Tmp[i], g_Tmp[i - 1], cur, cr[m])
+		cur = cr[m]
+		m++
+	}
+	cr[m++] = b
+	// pulled straight: from where it is, the farthest crossing a person-sized box reaches
+	new k = 0, at = -1, Float:from[3]
+	from = a
+	while (at < m - 1 && k < maxp)
+	{
+		new j = m - 1
+		for (; j > at + 1; j--)
+			if (clear_walk(from, cr[j]))
+				break
+		at = j
+		out[k * 3] = cr[j][0]
+		out[k * 3 + 1] = cr[j][1]
+		out[k * 3 + 2] = cr[j][2]
+		from = cr[j]
+		k++
+	}
+	if (at < m - 1)
+	{
+		// too many turns for the list: the goal last anyway (the walker goes on from there)
+		out[(maxp - 1) * 3] = b[0]
+		out[(maxp - 1) * 3 + 1] = b[1]
+		out[(maxp - 1) * 3 + 2] = b[2]
+	}
+	return k
+}
+
+bool:clear_walk(const Float:p[3], const Float:q[3])
+{
+	if (floatabs(q[2] - p[2]) > STEP_HEIGHT * 2.0)
+		return false
+	new Float:x[3], Float:y[3], Float:frac
+	x = p
+	y = q
+	x[2] += 40.0
+	y[2] += 40.0
+	engfunc(EngFunc_TraceHull, x, y, IGNORE_MONSTERS, HULL_HUMAN, 0, 0)
+	get_tr2(0, TR_flFraction, frac)
+	return frac >= 1.0 && !get_tr2(0, TR_StartSolid)
 }
 
 public n_stop(plugin, params)

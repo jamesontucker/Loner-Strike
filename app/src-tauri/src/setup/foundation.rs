@@ -1,6 +1,6 @@
 //! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL
 //! (Loner-Strike's fork: the bots' changes). Dedicated servers also get REHLDS (Loner-Strike's
-//! fork of the engine: voice awareness for the bots), ReAPI and relocalizebugfix.
+//! fork of the engine: voice awareness for the bots) and ReAPI.
 //! Every version is the one Loner-Strike
 //! is tested with, pinned by checksum.
 
@@ -33,26 +33,21 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls20/regamedll-bin-5.30.0.814-ls20.zip",
-    sha256: "0f2a60be49663e6f1b49cd567ebbaa54555af764635d10771ed7fe159c5ed3e5",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls22/regamedll-bin-5.30.0.814-ls22.zip",
+    sha256: "8f9dca11a383c0c08d237e4f447f57521734ec4b67618eee0551898c428e7cc1",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
 /// engine for dedicated servers
 pub const REHLDS: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls7/rehlds-bin-3.15.0.896-ls7.zip",
-    sha256: "e75f92b5629a55f4607e6c5b29ba9e5348853652ec15c518fb3523a78aa6402c",
+    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls8/rehlds-bin-3.15.0.896-ls8.zip",
+    sha256: "95973fca8731b89e95def1168bc3a8ea0a2b72e2a0bd00c89a1859e9cdfca721",
     what: "ReHLDS",
 };
 pub const REAPI: Pinned = Pinned {
     url: "https://github.com/rehlds/ReAPI/releases/download/5.29.0.358/reapi-bin-5.29.0.358.zip",
     sha256: "f33a7435540bea8706db3fa948e51a85b511f5b18c383b97402a204dc5419195",
     what: "ReAPI",
-};
-pub const RELOCALIZEBUGFIX: Pinned = Pinned {
-    url: "https://github.com/rehlds/relocalizebugfix/releases/download/v2.8/relocalizebugfix-v2.8.zip",
-    sha256: "262c4f021e4863fd772fcdbe48689f171426d33321ff0f2c9787eb083cacb1b0",
-    what: "relocalizebugfix",
 };
 pub const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 
@@ -175,14 +170,46 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
     Ok(())
 }
 
-/// ReGameDLL replaces the game's own server code (mp.dll); the original is backed up.
+/// What server code (mp.dll) a game has, as setup sees it (QA4-CORE F4).
+#[derive(Debug, PartialEq, Eq)]
+pub enum ServerCode {
+    /// Loner-Strike's ReGameDLL, any version (its bot cvars, `bot_ls_...`): setup puts the
+    /// pinned one in, as an update
+    OurBrain,
+    /// another ReGameDLL (a mod pack's, the stock one) that Loner-Strike didn't put there: kept,
+    /// and the player is told the bots won't have Loner-Strike's brain until it's replaced
+    OtherReGameDll,
+    /// the game's own (Valve's), one setup wrote, or none: replaced, the original backed up
+    Replace,
+}
+
+pub fn server_code(rec: &Record) -> ServerCode {
+    const MP: &str = "dlls/mp.dll";
+    if mentions(rec, MP, b"bot_ls_") {
+        ServerCode::OurBrain
+    } else if theirs(rec, MP) && mentions(rec, MP, b"ReGameDLL") {
+        ServerCode::OtherReGameDll
+    } else {
+        ServerCode::Replace
+    }
+}
+
+/// ReGameDLL replaces the game's own server code (mp.dll); the original is backed up. Another
+/// ReGameDLL is kept (see ServerCode); Loner-Strike's own brain of any version is updated.
 pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
-    // a server that already runs ReGameDLL (maybe a newer one) keeps its own
-    if theirs(rec, "dlls/mp.dll") && mentions(rec, "dlls/mp.dll", b"ReGameDLL") {
-        ctx.progress.note("Kept the ReGameDLL that was already there.");
-    } else {
-        rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    match server_code(rec) {
+        ServerCode::OtherReGameDll => {
+            ctx.progress.note(KEPT_OTHER_REGAMEDLL);
+            ctx.progress.kept_other_brain();
+        }
+        code => {
+            let was_ours_elsewhere = code == ServerCode::OurBrain && !rec.ours("dlls/mp.dll");
+            rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+            if was_ours_elsewhere {
+                ctx.progress.note("Updated Loner-Strike's bot brain (its ReGameDLL) to the current one. The old one is backed up.");
+            }
+        }
     }
     for cfg in ["game.cfg", "game_init.cfg"] {
         if !rec.exists(cfg) {
@@ -190,6 +217,18 @@ pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), Strin
         }
     }
     Ok(())
+}
+
+pub const KEPT_OTHER_REGAMEDLL: &str =
+    "Kept the ReGameDLL that was already there. It isn't Loner-Strike's, so bots won't have Loner-Strike's brain until it's replaced.";
+
+/// Puts Loner-Strike's ReGameDLL in place of another one setup kept (the setup done screen's
+/// "Use Loner-Strike's"): the old one is backed up, like every file setup replaces.
+pub fn use_our_brain(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
+    let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
+    rec.begin("foundation");
+    rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    rec.save()
 }
 
 /// liblist.gam with gamedll pointing at Metamod, or None if it already does.
@@ -236,6 +275,48 @@ mod tests {
         assert_eq!(point_at_metamod("game \"x\"\n\n").unwrap(), "game \"x\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
     }
 
+    /// QA4-CORE F4 (and QA4-A's CZ trap): Loner-Strike's brain of any version is updated, another
+    /// ReGameDLL is kept (and said), Valve's or one setup wrote is replaced; the same in both games
+    #[test]
+    fn which_server_code_is_kept() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "brain-").unwrap();
+        for game in ["cstrike", "czero"] {
+            let dir = root.join(game);
+            std::fs::create_dir_all(dir.join("dlls")).unwrap();
+            let put = |b: &[u8]| std::fs::write(dir.join("dlls/mp.dll"), b).unwrap();
+            let rec = Record::open(&dir);
+            put(b"MZ...ReGameDLL version: 5.30.0.841-dev...bot_ls_lines\0");
+            assert_eq!(server_code(&rec), ServerCode::OurBrain, "an older Loner-Strike brain left behind: updated");
+            put(b"MZ...ReGameDLL version: 5.21.0.556-dev...");
+            assert_eq!(server_code(&rec), ServerCode::OtherReGameDll, "another ReGameDLL: kept");
+            put(b"MZ...Counter-Strike...");
+            assert_eq!(server_code(&rec), ServerCode::Replace, "Valve's own: replaced");
+            // a stock ReGameDLL an earlier setup put there itself (CZ on this Mac, QA4-A): replaced
+            let mut rec = Record::open(&dir);
+            put(b"MZ...ReGameDLL version: 5.30.0.814-dev...");
+            rec.begin("foundation");
+            rec.copy(&dir.join("dlls/mp.dll"), "dlls/mp.dll").unwrap();
+            assert_eq!(server_code(&rec), ServerCode::Replace, "{game}: one setup wrote, without the brain");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The done screen hears which game kept another ReGameDLL (and only once)
+    #[test]
+    fn a_kept_regamedll_reaches_the_done_screen() {
+        let job = crate::setup::job_for_test("install", &[]);
+        job.set_game_for_test("czero");
+        let p: &dyn crate::setup::Progress = &*job;
+        p.note(KEPT_OTHER_REGAMEDLL);
+        p.kept_other_brain();
+        p.kept_other_brain();
+        let v = job.view();
+        assert_eq!(v.other_brain, ["czero"]);
+        assert!(v.notes[0].starts_with("Counter-Strike: Condition Zero: Kept the ReGameDLL") && v.notes[0].contains("won't have Loner-Strike's brain"), "{:?}", v.notes);
+        assert!(serde_json::to_value(&v).unwrap()["other_brain"] == serde_json::json!(["czero"]));
+        assert!(serde_json::to_value(crate::setup::JobView::idle()).unwrap().get("other_brain").is_none());
+    }
+
     /// AMX Mod X's own configs a game already has (admins, the player's plugins) are kept on a
     /// repair: only these are skipped when the download is copied in
     #[test]
@@ -253,5 +334,46 @@ mod tests {
         assert_eq!(kept, ["addons/amxmodx/configs/maps/de_dust2.cfg", "addons/amxmodx/configs/plugins.ini", "addons/amxmodx/configs/users.ini"]);
         assert!(present(&root.join("nothing-here")).is_empty());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A fresh install's server code is the pinned brain (ls22: 5.30.0.1317-dev): the pinned
+    /// ReGameDLL through the app's own download path (mirror first, SHA-256 checked) into a
+    /// scratch game, as setup's ReGameDLL step puts it in. Network:
+    /// `LS_APP_DIR=<scratch> cargo test -- --ignored pinned_brain_installs`.
+    #[test]
+    #[ignore]
+    fn pinned_brain_installs() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "brain-install-").unwrap();
+        let hl = root.join("Half-Life");
+        let game = hl.join("cstrike");
+        std::fs::create_dir_all(game.join("dlls")).unwrap();
+        std::fs::write(game.join("liblist.gam"), "game \"Counter-Strike\"\r\ngamedll \"dlls\\mp.dll\"\r\n").unwrap();
+        std::fs::write(game.join("dlls/mp.dll"), b"MZ Valve's own server code").unwrap();
+        let install = crate::steam::Install { hl: hl.clone(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec!["cstrike".into()], dedicated: false };
+        let res = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let ctx = Ctx { install: &install, res: &res, progress: &crate::setup::Quiet, store: None };
+        let mut rec = Record::open(&game);
+        rec.begin("foundation");
+        let tmp = TempDir::new().unwrap();
+        regamedll(&mut rec, &ctx, &tmp).unwrap();
+        let dll = std::fs::read(game.join("dlls/mp.dll")).unwrap();
+        let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
+        assert!(has(b"5.30.0.1317-dev") && has(b"bot_ls_"), "the pinned brain");
+        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls22.zip"));
+        // Valve's was backed up, and is what an uninstall puts back
+        assert!(rec.ours("dlls/mp.dll"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The pinned ReHLDS through the app's own download path (the mirror first, the SHA-256
+    /// checked) has both engines in it. Network: `cargo test -- --ignored pinned_rehlds`.
+    #[test]
+    #[ignore]
+    fn pinned_rehlds_downloads_with_both_engines() {
+        let file = crate::setup::fetch::download(REHLDS.url, Some(REHLDS.sha256), REHLDS.what, &crate::setup::Quiet).unwrap();
+        let tmp = crate::setup::TempDir::new().unwrap();
+        crate::setup::fetch::unpack(&file, &tmp.0).unwrap();
+        assert!(tmp.0.join("bin/win32/swds.dll").is_file());
+        assert!(tmp.0.join("bin/linux32/engine_i486.so").is_file());
     }
 }

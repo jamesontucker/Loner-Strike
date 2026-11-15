@@ -280,7 +280,7 @@ impl Saved {
 }
 
 fn clean_server_name(name: &str) -> String {
-    name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect()
+    crate::sharing::clean_name(name)
 }
 
 // ---- passwords and webhooks --------------------------------------------------------------
@@ -1797,7 +1797,7 @@ impl Restore {
             if matches!(self.target, Target::NewRemote(_)) {
                 job.run(&step("srv-service"), || {
                     let mut failed = String::new();
-                    let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &servers::launch_args(&e)).as_bytes(), |line| {
+                    let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &servers::launch_args(&e), &e.connect()).as_bytes(), |line| {
                         if !line.starts_with("@@") && !line.trim().is_empty() {
                             failed = line.trim().to_string();
                         }
@@ -1838,7 +1838,7 @@ impl Restore {
                 Ok(p) => (p, false),
                 Err(_) => (plan(&self.st, &src, false, &parts, false)?, src.entry.as_ref().is_some_and(|e| e.remote.is_some())),
             };
-            let dir = crate::sys::app_dir().join("backups");
+            let dir = crate::localdata::dir("backups");
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             let stem = format!("{}-before-restore-", src.id.replace(':', "-"));
             let path = dir.join(format!("{stem}{}.{EXT}", crate::sys::stamp()));
@@ -2405,7 +2405,7 @@ async fn api_info(State(st): State<Shared>) -> Reply {
         }
         let machines: Vec<Value> = machines().into_iter().map(|(id, r)| json!({"id": id, "host": r.host, "user": r.user})).collect();
         let parts: Vec<Value> = PARTS.iter().map(|(id, name)| json!({"id": id, "name": name})).collect();
-        json!({"sources": sources, "machines": machines, "parts": parts, "kept_dir": crate::sys::app_dir().join("backups").to_string_lossy(), "app_version": env!("CARGO_PKG_VERSION")})
+        json!({"sources": sources, "machines": machines, "parts": parts, "kept_dir": crate::localdata::dir("backups").to_string_lossy(), "app_version": env!("CARGO_PKG_VERSION")})
     })
     .await
     .unwrap_or_default();
@@ -3408,7 +3408,7 @@ use std::time::Duration;
 const AUTO_KEEP: usize = 7;
 
 pub fn auto_dir() -> PathBuf {
-    crate::sys::app_dir().join("backups").join("auto")
+    crate::localdata::dir("backups").join("auto")
 }
 
 /// A server's daily backups, newest first: (path, when, bytes).

@@ -1,0 +1,5 @@
+n117 Objective Marker needs something to follow (an entity wired into Follow) or a Position.
+n123 Effect Burst needs an entity wired into At or a Position.
+n188 View model is a model file: models/...mdl (like models/v_knife.mdl).
+n27 That command is refused: it's empty.
+n28 That command is refused: it's empty.

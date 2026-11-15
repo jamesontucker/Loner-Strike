@@ -6,6 +6,8 @@ import { setAdminList, sharedRole, useGameState } from "../queries";
 import { TabLink } from "./goto";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { LinkHelp, SupporterVip } from "./Roles"; // P5: community roles
+import { DocsLink } from "./DocsLink"; // P5
 import { useDirty, useNav } from "../store";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
@@ -32,7 +34,7 @@ const COLUMNS: Role[] = ["vip", "moderator", "admin", "owner"];
 
 /** What each ability does and how players use it. unfair: off in modes it would break. */
 const ABILITIES: { key: AbilityKey; name: string; what: string; how: string; unfair?: boolean }[] = [
-  { key: "gear", name: "Spawn gear", what: "The armour, defuse kit, grenades and money set up under VIP & donations.", how: "Given automatically" },
+  { key: "gear", name: "Spawn gear", what: "The armor, defuse kit, grenades and money set up under VIP & donations.", how: "Given automatically" },
   { key: "hook", name: "Grappling hook", what: "Shoots a rope and pulls them to wherever they aim.", how: "Bind a key to +hook" },
   { key: "jump", name: "Double jump", what: "One more jump in mid-air.", how: "Press jump again in the air", unfair: true },
   { key: "respawn", name: "Respawn", what: "Come back once a round after dying.", how: "Say /respawn while dead", unfair: true },
@@ -201,7 +203,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
   return (
     <div className="stack narrow">
-      <SectionHead title="Admins" note={<>Who has admin powers or VIP perks, and what each role gets. Bans and everyone who has joined are under <TabLink tab="moderation" sub="bans">Moderation</TabLink>.</>} />
+      <SectionHead title="Admins" note={<>Who has admin powers or VIP perks, and what each role gets. Bans and everyone who has joined are under <TabLink tab="moderation" sub="bans">Moderation</TabLink>.</>}>
+        <DocsLink to="admins" what="admins and VIPs" />
+      </SectionHead>
       <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
@@ -249,7 +253,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           {!people.length && <li className="empty">{dedicated ? "Nobody yet. Add yourself as Owner to get admin powers on this server." : "Nobody yet. As the host you already have every power in your own game."}</li>}
         </ul>
         <p className="muted small-note">
-          People are recognised by their SteamID. Admins open the admin menu with <b>amxmodmenu</b> in the console. When a VIP's time runs out they go back to
+          People are recognized by their SteamID. Admins open the admin menu with <b>amxmodmenu</b> in the console. When a VIP's time runs out they go back to
           being a normal player.
         </p>
       </div>
@@ -342,7 +346,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
               {donate !== null && donate !== d.donate && <BusyButton className="btn primary" busy={busy("donate")} label="Save" busyLabel="Saving…" onClick={saveDonate} />}
             </div>
           </div>
-          <Perk label="Free armour and helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
+          <Perk label="Free armor and helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
           <Perk label="Defuse kit" note="For VIPs on the CT side." on={d.perks.defuse} busy={busy("perk:defuse")} set={(v) => setPerks({ defuse: v })} />
           <Perk label="Free grenades" note="HE, flash and smoke each spawn." on={d.perks.nades} busy={busy("perk:nades")} set={(v) => setPerks({ nades: v })} />
           <div className="setting">
@@ -359,8 +363,11 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         </div>
         <p className="muted small-note">
           To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife arena skip the spawn perks, and deathmatch and one-weapon modes only give
-          armour and the kit. Changes reach a running game straight away; the mode check happens on the next map.
+          armor and the kit. Changes reach a running game straight away; the mode check happens on the next map.
         </p>
+        {/* P5: Loner-Strike supporters' VIP, and how /link works */}
+        <SupporterVip />
+        <LinkHelp compact />
       </div>
       )}
     </div>

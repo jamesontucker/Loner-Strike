@@ -1,0 +1,1263 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "every_node_4",
+  "name": "Every node 4 (HUD & View)",
+  "description": "the engine nodes"
+ },
+ "variables": [],
+ "nodes": [
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "hud",
+   "type": "eng.hide_hud",
+   "pos": {
+    "x": 240,
+    "y": 0
+   },
+   "params": {
+    "crosshair": true,
+    "money": true,
+    "timer": false,
+    "radar": false,
+    "weapons": false,
+    "flashlight": false,
+    "reset": true
+   }
+  },
+  {
+   "id": "huda",
+   "type": "eng.hide_hud",
+   "pos": {
+    "x": 480,
+    "y": 0
+   },
+   "params": {
+    "crosshair": false,
+    "money": false,
+    "timer": true,
+    "radar": true,
+    "weapons": true,
+    "flashlight": true,
+    "reset": false
+   }
+  },
+  {
+   "id": "fov",
+   "type": "eng.fov",
+   "pos": {
+    "x": 720,
+    "y": 0
+   },
+   "params": {
+    "fov": 100,
+    "reset": false
+   }
+  },
+  {
+   "id": "vm",
+   "type": "eng.view_model",
+   "pos": {
+    "x": 960,
+    "y": 0
+   },
+   "params": {
+    "weapon": "current",
+    "model": "models/v_knife.mdl",
+    "pmodel": "",
+    "restore": false
+   }
+  },
+  {
+   "id": "vm2",
+   "type": "eng.view_model",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "weapon": "usp",
+    "model": "models/v_usp.mdl",
+    "pmodel": "models/p_usp.mdl",
+    "restore": false
+   }
+  },
+  {
+   "id": "vm3",
+   "type": "eng.view_model",
+   "pos": {
+    "x": 1440,
+    "y": 0
+   },
+   "params": {
+    "weapon": "usp",
+    "model": "models/v_usp.mdl",
+    "pmodel": "",
+    "restore": true
+   }
+  },
+  {
+   "id": "li",
+   "type": "eng.flashlight",
+   "pos": {
+    "x": 1680,
+    "y": 0
+   },
+   "params": {
+    "do": "on",
+    "battery": 50
+   }
+  },
+  {
+   "id": "li2",
+   "type": "eng.flashlight",
+   "pos": {
+    "x": 1920,
+    "y": 0
+   },
+   "params": {
+    "do": "deny",
+    "battery": -1
+   }
+  },
+  {
+   "id": "nv",
+   "type": "eng.nightvision",
+   "pos": {
+    "x": 2160,
+    "y": 0
+   },
+   "params": {
+    "do": "give"
+   }
+  },
+  {
+   "id": "nv2",
+   "type": "eng.nightvision",
+   "pos": {
+    "x": 2400,
+    "y": 0
+   },
+   "params": {
+    "do": "on"
+   }
+  },
+  {
+   "id": "st",
+   "type": "eng.footsteps",
+   "pos": {
+    "x": 2640,
+    "y": 0
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "tag",
+   "type": "eng.score_tag",
+   "pos": {
+    "x": 2880,
+    "y": 0
+   },
+   "params": {
+    "tag": "vip",
+    "reset": true
+   }
+  },
+  {
+   "id": "col",
+   "type": "eng.score_color",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "cd",
+   "type": "eng.soundtrack",
+   "pos": {
+    "x": 3360,
+    "y": 0
+   },
+   "params": {
+    "do": "play",
+    "track": "11",
+    "loop": true
+   }
+  },
+  {
+   "id": "cd1",
+   "type": "eng.soundtrack",
+   "pos": {
+    "x": 3600,
+    "y": 0
+   },
+   "params": {
+    "do": "stop",
+    "track": "2",
+    "loop": false
+   }
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 3840,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "sp",
+   "type": "eng.spectate",
+   "pos": {
+    "x": 4080,
+    "y": 0
+   },
+   "params": {
+    "do": "watch"
+   }
+  },
+  {
+   "id": "sp2",
+   "type": "eng.spectate",
+   "pos": {
+    "x": 4320,
+    "y": 0
+   },
+   "params": {
+    "do": "release"
+   }
+  },
+  {
+   "id": "bp",
+   "type": "ent.bone_pos",
+   "pos": {
+    "x": 4560,
+    "y": 300
+   },
+   "params": {
+    "model": "models/player.mdl",
+    "bone": "Bip01 R Hand"
+   }
+  },
+  {
+   "id": "ap",
+   "type": "ent.attachment_pos",
+   "pos": {
+    "x": 4800,
+    "y": 300
+   },
+   "params": {
+    "model": "models/player.mdl",
+    "attachment": 1
+   }
+  },
+  {
+   "id": "pb",
+   "type": "debug.print",
+   "pos": {
+    "x": 5040,
+    "y": 300
+   },
+   "params": {
+    "text": "hand [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pf",
+   "type": "debug.print",
+   "pos": {
+    "x": 5280,
+    "y": 300
+   },
+   "params": {
+    "text": "found [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pa",
+   "type": "debug.print",
+   "pos": {
+    "x": 5520,
+    "y": 300
+   },
+   "params": {
+    "text": "angles [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "pt",
+   "type": "debug.print",
+   "pos": {
+    "x": 5760,
+    "y": 300
+   },
+   "params": {
+    "text": "att [0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "be",
+   "type": "fx.beam_ents",
+   "pos": {
+    "x": 6000,
+    "y": 600
+   },
+   "params": {
+    "colour": "gold",
+    "secs": 3,
+    "width": 12,
+    "noise": 5
+   }
+  },
+  {
+   "id": "ic",
+   "type": "fx.icon_over",
+   "pos": {
+    "x": 6240,
+    "y": 600
+   },
+   "params": {
+    "do": "show",
+    "sprite": "sprites/iplayervip.spr",
+    "secs": 0,
+    "height": 45,
+    "who": "all"
+   }
+  },
+  {
+   "id": "ic2",
+   "type": "fx.icon_over",
+   "pos": {
+    "x": 6480,
+    "y": 600
+   },
+   "params": {
+    "do": "show",
+    "sprite": "sprites/ic4.spr",
+    "secs": 5,
+    "height": 60,
+    "who": "player"
+   }
+  },
+  {
+   "id": "icr",
+   "type": "fx.icon_over",
+   "pos": {
+    "x": 6720,
+    "y": 600
+   },
+   "params": {
+    "do": "remove",
+    "sprite": "sprites/iplayervip.spr",
+    "secs": 0,
+    "height": 45,
+    "who": "t"
+   }
+  },
+  {
+   "id": "sa",
+   "type": "fx.sprite_at",
+   "pos": {
+    "x": 6960,
+    "y": 600
+   },
+   "params": {
+    "sprite": "sprites/glow01.spr",
+    "scale": 2,
+    "bright": 180
+   }
+  },
+  {
+   "id": "tr",
+   "type": "fx.tracer",
+   "pos": {
+    "x": 7200,
+    "y": 600
+   },
+   "params": {}
+  },
+  {
+   "id": "rb",
+   "type": "hud.radar_blip",
+   "pos": {
+    "x": 7440,
+    "y": 600
+   },
+   "params": {
+    "do": "show",
+    "kind": "hostage",
+    "slot": "2",
+    "who": "ct"
+   }
+  },
+  {
+   "id": "rb2",
+   "type": "hud.radar_blip",
+   "pos": {
+    "x": 7680,
+    "y": 600
+   },
+   "params": {
+    "do": "show",
+    "kind": "bomb",
+    "slot": "1",
+    "who": "all"
+   }
+  },
+  {
+   "id": "rbc",
+   "type": "hud.radar_blip",
+   "pos": {
+    "x": 7920,
+    "y": 600
+   },
+   "params": {
+    "do": "clear",
+    "kind": "hostage",
+    "slot": "2",
+    "who": "ct"
+   }
+  },
+  {
+   "id": "tsc",
+   "type": "hud.team_score",
+   "pos": {
+    "x": 8160,
+    "y": 600
+   },
+   "params": {
+    "team": "ct",
+    "score": 7
+   }
+  },
+  {
+   "id": "we",
+   "type": "world.weather",
+   "pos": {
+    "x": 8400,
+    "y": 600
+   },
+   "params": {
+    "kind": "snow"
+   }
+  },
+  {
+   "id": "we2",
+   "type": "world.weather",
+   "pos": {
+    "x": 8640,
+    "y": 600
+   },
+   "params": {
+    "kind": "rain"
+   }
+  },
+  {
+   "id": "fg",
+   "type": "world.fog",
+   "pos": {
+    "x": 8880,
+    "y": 600
+   },
+   "params": {
+    "r": 100,
+    "g": 120,
+    "b": 140,
+    "density": 0.003
+   }
+  },
+  {
+   "id": "vp4",
+   "type": "vec.player",
+   "pos": {
+    "x": 9120,
+    "y": 600
+   },
+   "params": {
+    "what": "origin"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "huda",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "huda",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fov",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "fov",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "fov",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vm",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "vm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vm2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "vm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vm3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vm3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "vm3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "li",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "li",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "li",
+    "pin": "then"
+   },
+   "to": {
+    "node": "li2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "li2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "li2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nv",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "nv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "nv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nv2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "nv2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "nv2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tag",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tag",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "tag",
+    "pin": "then"
+   },
+   "to": {
+    "node": "col",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "col",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "col",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "cd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "cd1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "sp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "sp",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "sp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "sp2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "cd1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "bp",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "pb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pf",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "bp",
+    "pin": "found"
+   },
+   "to": {
+    "node": "pf",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "pf",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pa",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "bp",
+    "pin": "angles"
+   },
+   "to": {
+    "node": "pa",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "pa",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "ap",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "pt",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bp",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ap",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "pt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "be",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "be",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ic",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "ic",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ic2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "ic2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "icr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "icr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sa",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "sa",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "tr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "rb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rb2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "rb2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rbc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "rbc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tsc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "tsc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "we",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "we",
+    "pin": "then"
+   },
+   "to": {
+    "node": "we2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "we2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w157",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "be",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w158",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "be",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w159",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ic",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w160",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ic2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w161",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ic2",
+    "pin": "viewer"
+   }
+  },
+  {
+   "id": "w162",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "icr",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w163",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sa",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w164",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "vp4",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w165",
+   "from": {
+    "node": "vp4",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tr",
+    "pin": "from"
+   }
+  },
+  {
+   "id": "w166",
+   "from": {
+    "node": "bp",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "tr",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w167",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rb",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w168",
+   "from": {
+    "node": "vp4",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rb2",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w169",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "we2",
+    "pin": "player"
+   }
+  }
+ ],
+ "comments": [],
+ "functions": []
+}

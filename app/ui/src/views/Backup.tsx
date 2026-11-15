@@ -5,6 +5,7 @@ import type { ServerInfo } from "../types";
 import { BusyButton, Info, Sheet, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
 import type { Job } from "./Setup";
+import { capName, NameLeft } from "../serverName";
 
 /** Backing up servers and this computer's own game to a .lsbackup file, and restoring
  *  one: onto a new server here or on a Linux machine, over a server, or onto the game. */
@@ -22,7 +23,7 @@ const PART_NOTE: Record<string, string> = {
   settings: "Server settings, modes, presets, the welcome page and the rest of the Game Mode Menu",
   admins: "Admins, VIPs and regulars",
   bans: "Banned players and IPs, and mutes",
-  rotation: "The map cycle, each mode's rotation and favourite maps",
+  rotation: "The map cycle, each mode's rotation and favorite maps",
   plugins: "Plugins you added yourself on the Mods page",
   content: "Maps, models and sounds you added, round music and skins, and the GameBanana downloads. For your game, maps you copied in yourself are only told apart from Valve's when a server here has Valve's files to compare with",
   mods: "The modes and add-ons installed",
@@ -460,7 +461,8 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
                 {where.startsWith("new") && (
                   <label className="field">
                     <span>Name</span>
-                    <input className="search" maxLength={48} placeholder="Like Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
+                    <input className="search" placeholder="Like Friday night frags" value={name} onChange={(e) => setName(capName(e.target.value))} />
+                    <NameLeft name={name} />
                   </label>
                 )}
                 {where === "new-remote" && (

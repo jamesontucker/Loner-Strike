@@ -1,0 +1,337 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Kill Cam",
+ "description": "Shows the victim the killer for Seconds (0: 3), from behind the killer, then back.",
+ "category": "Starter: spectacle",
+ "kind": "macro",
+ "root": "kc_show",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "kc_show",
+   "name": "Kill Cam",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "victim",
+     "name": "Victim",
+     "type": "player"
+    },
+    {
+     "id": "killer",
+     "name": "Killer",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [],
+ "nodes": [
+  {
+   "id": "kc_show_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_same",
+   "type": "logic.equal",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "ne"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_valid",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_view",
+   "type": "fun.view_from",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "who": "player",
+    "secs": 3,
+    "offset": 96,
+    "move": 2,
+    "freeze": false
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_kpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "kc_show"
+  },
+  {
+   "id": "kc_show_vpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 720
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "kc_show"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_same",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_same",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_valid",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "kc_show_same",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "kc_show_valid",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "kc_show_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "kc_show_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "kc_show_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "kc_show_view",
+    "pin": "then"
+   },
+   "to": {
+    "node": "kc_show_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "kc_show_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "kc_show_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "kc_show_kpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "kc_show_kpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "kc_show_in",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "kc_show_vpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "kc_show_vpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "kc_show_view",
+    "pin": "pos"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "kc_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Kill Cam: Wire Player Killed in (Victim, Killer). Nothing for a suicide or a fall. Bots get it too (it doesn't change what they do)."
+  }
+ ]
+}

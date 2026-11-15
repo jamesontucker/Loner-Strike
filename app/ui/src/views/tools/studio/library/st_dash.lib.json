@@ -1,0 +1,780 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Dash",
+ "description": "A quick dash the way the player looks (Speed 0: 700), at most once every Cooldown seconds (0: 3).",
+ "category": "Starter: movement",
+ "kind": "macro",
+ "root": "dash_go",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "dash_go",
+   "name": "Dash",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    },
+    {
+     "id": "cd",
+     "name": "Cooldown",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Dashed",
+     "type": "exec"
+    },
+    {
+     "id": "wait",
+     "name": "Not ready",
+     "type": "exec"
+    },
+    {
+     "id": "left",
+     "name": "Seconds left",
+     "type": "number"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "dash_at",
+   "name": "Dash ready at",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "dash_go_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 700
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_now",
+   "type": "game.time",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_at",
+   "type": "var.get",
+   "pos": {
+    "x": 2340,
+    "y": 360
+   },
+   "params": {
+    "var": "dash_at"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_left",
+   "type": "math.op",
+   "pos": {
+    "x": 2600,
+    "y": 360
+   },
+   "params": {
+    "op": "sub"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ok",
+   "type": "math.compare",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ceil",
+   "type": "math.fn",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {
+    "op": "ceil"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_aim",
+   "type": "vec.player",
+   "pos": {
+    "x": 3640,
+    "y": 1260
+   },
+   "params": {
+    "what": "aim"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ab",
+   "type": "vec.break",
+   "pos": {
+    "x": 3900,
+    "y": 1260
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_flat",
+   "type": "vec.make",
+   "pos": {
+    "x": 4160,
+    "y": 1260
+   },
+   "params": {
+    "z": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_dir",
+   "type": "vec.normalize",
+   "pos": {
+    "x": 4420,
+    "y": 1260
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_fast",
+   "type": "vec.scale",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_lift",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 1440
+   },
+   "params": {
+    "y": 0,
+    "z": 120
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_v",
+   "type": "vec.op",
+   "pos": {
+    "x": 4940,
+    "y": 1440
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_push",
+   "type": "player.set_velocity",
+   "pos": {
+    "x": 5200,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_nxt",
+   "type": "math.op",
+   "pos": {
+    "x": 5460,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_st",
+   "type": "var.set",
+   "pos": {
+    "x": 5720,
+    "y": 0
+   },
+   "params": {
+    "var": "dash_at"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "sound": "weapons/knife_slash1.wav"
+   },
+   "graph": "dash_go"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "dash_go_cd_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "dash_go_cd_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "dash_go_cd_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "dash_go_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "dash_go_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "dash_go_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "dash_go_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_left",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "dash_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_left",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "dash_go_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "dash_go_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "dash_go_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "dash_go_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ceil",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "dash_go_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "wait"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "dash_go_ceil",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_aim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "dash_go_aim",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ab",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "dash_go_ab",
+    "pin": "x"
+   },
+   "to": {
+    "node": "dash_go_flat",
+    "pin": "x"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "dash_go_ab",
+    "pin": "y"
+   },
+   "to": {
+    "node": "dash_go_flat",
+    "pin": "y"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "dash_go_flat",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_dir",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "dash_go_dir",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_fast",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "dash_go_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_fast",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "dash_go_fast",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_v",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "dash_go_lift",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_v",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "dash_go_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "dash_go_v",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "v"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "dash_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_nxt",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "dash_go_cd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_nxt",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "dash_go_push",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "dash_go_nxt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "dash_go_st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "dash_go_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "next"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "dash_go",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Dash: Wire Player Pressed Button (Reload, or any key you like) in with the player. Not ready says the seconds left. Bots: from a Repeat, Bot Wants Ability (Ability with Cooldown) lets them dash now and then while chasing or fleeing; the cooldown holds for them too."
+  }
+ ]
+}

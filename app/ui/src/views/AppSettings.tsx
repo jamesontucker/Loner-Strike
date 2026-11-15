@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ReleaseNotes } from "./WhatsNew";
 import { useQuery } from "@tanstack/react-query";
 import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions, useActivity } from "../api";
@@ -10,6 +10,9 @@ import { useNav, type Section } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { BackupSheet, RestoreSheet } from "./Backup";
+// AI agents (MCP): its own chunk, loaded when Settings opens
+const AgentSettings = lazy(() => import("./AgentSettings"));
+const BackupsDefaults = lazy(() => import("./BackupsDefaults"));
 
 const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
@@ -296,6 +299,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         )}
       </section>
 
+      {ON_THIS_COMPUTER && <Suspense fallback={null}><AgentSettings /></Suspense>}
+
       <section>
         <SectionHead title="App" />
         <div className="panel settings-list">
@@ -443,6 +448,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         {backup === "restore" && <RestoreAll onClose={() => setBackup(null)} onChanged={reloadApp} />}
       </section>
 
+      {ON_THIS_COMPUTER && <Suspense fallback={null}><BackupsDefaults /></Suspense>}
+
       <section>
         <SectionHead title="Storage" />
         <div className="panel settings-list">
@@ -528,7 +535,9 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>,{" "}
           <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and{" "}
           <a href="https://github.com/jamesontucker/Loner-Strike" target="_blank" rel="noreferrer">source and credits on GitHub</a>. Made by{" "}
-          <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a>.
+          <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a>.{" "}
+          <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> ·{" "}
+          <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy</a>
         </p>
       </section>
     </div>

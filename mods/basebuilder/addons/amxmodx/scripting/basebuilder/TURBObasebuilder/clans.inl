@@ -1573,11 +1573,11 @@ stock check_user_clan(const userName[]){
 	return foundClan;
 }
 stock createClan(id, const clanName[]){
-	new bbClan[clanInfo], queryData[128], safeClanName[64], error[128], errorNum;
+	new bbClan[clanInfo], queryData[256], safeClanName[64], error[128], errorNum;
 
 	replace_all_string(clanName, safeClanName, sizeof(safeClanName));
 	
-	format(queryData, sizeof(queryData), "INSERT INTO `clans` (`name`, `createDate`, `info`, `upgradetime`) VALUES ('%s', NOW(), 'Brak Ogloszenia', '%d');", safeClanName, get_systime());
+	format(queryData, sizeof(queryData), "INSERT INTO `clans` (`name`, `createDate`, `info`, `upgradetime`) VALUES ('%s', CURRENT_TIMESTAMP, 'Brak Ogloszenia', '%d');", safeClanName, get_systime());
 	
 	new Handle:connectHandle = SQL_Connect(sql, errorNum, error, sizeof(error));
 	

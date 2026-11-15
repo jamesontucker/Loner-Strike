@@ -25,14 +25,14 @@ export type Scan = { installs: SetupInstall[]; catalog: CatalogItem[]; native_ma
  *  `rate` is bytes a second, `left` seconds to go; both optional. */
 export type Transfer = { sent: number; total: number; rate?: number; left?: number };
 export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string; transfer?: Transfer; upload?: Transfer };
-export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
+export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[]; other_brain?: string[] };
 
 const ratingOf = (c: CatalogItem) => {
   if (c.kind !== "mode") return null;
   const mode = c.id.replace(/^mode-/, "");
   return BOT_RATING[mode] ?? "great";
 };
-const BASICS = "Classic, Deathmatch, Free for all, knife/pistol/deagle/AWP/scout modes and Surf";
+const BASICS = "Classic, Deathmatch, Free for all, knife/pistol/deagle/AWP/scout modes, Surf, Match (5v5), Last Stand and Battle Royale";
 
 export const anySetUp = (scan: Scan | null) => !!scan?.installs.some((i) => i.games.some((g) => g.installed));
 
@@ -87,6 +87,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   const gameOpen = stage === "review" && !!runningQ.data?.running;
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
+  // setup also brings the fun and popular maps the game doesn't have yet (up to 24, from GameBanana)
+  const mapsNote = ", plus the popular maps you don't have yet";
 
   const { run, busy } = useActions();
   const start = () => run("setup:install", async () => {
@@ -153,13 +155,15 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <img src={logo} alt="" width={112} height={112} />
             <h1>Loner-Strike</h1>
             <p className="tagline">Play Counter-Strike like it's 2004,<br />alone or with the friends you don't have.</p>
-            <p>Setup adds bots that play like people, 22 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
+            <p>Setup adds bots that play like people, 22 classic community modes, Last Stand and Battle Royale. This app also makes maps and game modes. Everything it changes is backed up and can be removed again.</p>
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
               <button className="btn" onClick={onClose}>{intro ? "Close" : "Set up later"}</button>
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
+            {/* (terms: shown where people start using the app, so setting it up is agreeing) */}
+            <p className="muted later">By using Loner-Strike you agree to the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy policy</a>.</p>
             <p className="made-by setup-by">by <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
           </section>
         )}
@@ -188,6 +192,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                     onClick={() => setGames((cur) => (on ? cur.filter((x) => x !== id) : [...cur, id].sort((a) => (a === "cstrike" ? -1 : 1))))}
                   >
                     <span className="game-title">{gameTitle(id)}</span>
+                    {/* which folder: it matters once a chosen folder sits beside Steam's (QA4-CORE UX 9) */}
+                    {g && scan.installs.length > 1 && <span className="game-folder mono" title={`${install.hl}/${id}`}>{`${install.hl}/${id}`}</span>}
                     <span className="muted">
                       {!g ? "Not installed in this Steam" : g.installed ? "Set up already; picking it updates it" : g.foreign ? "Has other mods installed; Loner-Strike works alongside them" : "Ready to set up"}
                     </span>
@@ -256,11 +262,12 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </ul>
             <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
             <p className="estimate">
+              {/* (measured: everything took about 7 minutes on a busy Mac, a third of it the maps; they now come 4 at a time) */}
               {preset === "basics" || !chosen.length
-                ? "About 15 MB to download. Usually under a minute."
+                ? `About 15 MB${mapsNote}. Usually 2 to 4 minutes.`
                 : preset === "all"
-                  ? "About 100 MB to download. Usually 2 to 5 minutes."
-                  : `Between 15 and 100 MB, depending on what you picked. A few minutes at most.`}
+                  ? `About 100 MB${mapsNote}. Usually 4 to 8 minutes.`
+                  : `Between 15 and 100 MB${mapsNote}, depending on what you picked. Usually 2 to 8 minutes.`}
             </p>
             {gameOpen && (
               <div className="banner">
@@ -326,14 +333,16 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <p>Start the game and Loner-Strike connects by itself.</p>
             <ul className="done-tips">
               <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>
-              <li><span className="kbd">Maps</span><span>The first time you play a map, the bots spend a few minutes learning it.</span></li>
+              <li><span className="kbd">Maps</span><span>Most maps come ready for the bots. A new one takes them a few minutes to learn.</span></li>
+              <li><span className="kbd">Make</span><span>Build maps and game modes, or host a server, under Tools and Servers.</span></li>
               <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone (see Use on your phone in Settings).</span></li>
               {new Set([...games, ...(install?.games.filter((g) => g.installed).map((g) => g.id) ?? [])]).size > 1 && (
                 <li><span className="kbd">Games</span><span>Two games: switch between them with the CS 1.6 and CZ buttons at the top.</span></li>
               )}
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}. Run full setup again from Settings to retry. If it keeps failing, use Copy diagnostics under Settings, Help.</p>}
-            {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
+            {install && job?.other_brain?.map((g) => <OtherBrain key={g} hl={install.hl} game={g} />)}
+            {job?.notes?.filter((n) => !(job.other_brain?.length && n.includes("Kept the ReGameDLL"))).map((n) => <p key={n} className="muted">{n}</p>)}
             <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Start playing" busyLabel="Opening…" onClick={finish} />
             <p className="muted done-links">
               Find people to play with on <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and what's new at <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>.
@@ -341,6 +350,31 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+/** QA4-CORE F4: the game kept a ReGameDLL that isn't Loner-Strike's, so its bots don't have
+ *  Loner-Strike's brain. Said plainly, with a way to switch (the old one is backed up). */
+export function OtherBrain({ hl, game }: { hl: string; game: string }) {
+  const { run, busy } = useActions();
+  const toast = useToast();
+  const [done, setDone] = useState("");
+  const use = () =>
+    run(`brain:${game}`, async () => {
+      type Reply = { ok?: boolean; message?: string; error?: string };
+      const r = await postJson<Reply>("/api/setup/use-our-brain", { hl, game }).catch((): Reply => ({ ok: false, error: "Couldn't reach the app." }));
+      if (!r.ok) return toast(r.error ?? "Couldn't replace it.", true);
+      setDone(r.message ?? "Done.");
+    }, "Replacing the server code…");
+  if (done) return <p className="other-brain ok" role="status">{done}</p>;
+  return (
+    <div className="other-brain" role="group" aria-label={`${gameTitle(game)}: server code`}>
+      <p>
+        <b>{gameTitle(game)}: the bots won't have Loner-Strike's brain.</b> This game already had another ReGameDLL (the server code), so setup kept it. Bots play the old
+        way until it's replaced with Loner-Strike's. The one there now is backed up first.
+      </p>
+      <BusyButton className="btn primary" busy={busy(`brain:${game}`)} label="Use Loner-Strike's" busyLabel="Replacing…" onClick={use} />
     </div>
   );
 }
@@ -389,17 +423,20 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
-            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then click Look again. With Parallels, install the game and the Windows version of Loner-Strike inside Windows instead.</p>
+            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then click Look again (<a href="https://lonerstrike.com/docs#mac" target="_blank" rel="noreferrer">how</a>). With Parallels, use the Windows version of Loner-Strike inside Windows.</p>
           ) : (
-            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then click Look again.</p>
+            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then click Look again{navigator.platform.startsWith("Mac") ? <> (<a href="https://lonerstrike.com/docs#mac" target="_blank" rel="noreferrer">how</a>)</> : null}.</p>
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
-            {!nativeMac && <BusyButton className="btn" busy={choosing} label="Choose the game folder" busyLabel="Choosing…" onClick={choose} />}
+            {/* (also with the Mac Half-Life: the CrossOver one may be in a bottle Loner-Strike didn't look in: QA4-CORE UX 13) */}
+            <BusyButton className="btn" busy={choosing} label="Choose the game folder" busyLabel="Choosing…" onClick={choose} />
             <button className="btn" onClick={onClose}>Continue anyway</button>
           </div>
           <p className="muted small-note">
-            Installed somewhere unusual, like another Steam library or drive? Choose the Half-Life folder: the one with cstrike or czero in it.
+            {nativeMac
+              ? "Already have it in CrossOver, in a bottle or folder Loner-Strike didn't find? Choose that Half-Life folder: the one with cstrike or czero in it."
+              : "Installed somewhere unusual, like another Steam library or drive? Choose the Half-Life folder: the one with cstrike or czero in it."}
           </p>
         </section>
       </div>

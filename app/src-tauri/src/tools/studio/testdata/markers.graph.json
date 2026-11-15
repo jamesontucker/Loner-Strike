@@ -1,0 +1,489 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "mk_test",
+  "name": "Marker test",
+  "description": "Finds the map's ls_marker entities"
+ },
+ "variables": [],
+ "comments": [],
+ "nodes": [
+  {
+   "id": "ms",
+   "type": "event.map_started",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "fe",
+   "type": "marker.for_each",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "marker": "spawn"
+   }
+  },
+  {
+   "id": "fmt",
+   "type": "text.format",
+   "pos": {
+    "x": 260,
+    "y": 200
+   },
+   "params": {
+    "text": "spawn [0] entity [1] at [2] wave [3]"
+   }
+  },
+  {
+   "id": "pos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "pr",
+   "type": "debug.print",
+   "pos": {
+    "x": 560,
+    "y": 0
+   },
+   "params": {
+    "text": "MK",
+    "chat": false
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 700
+   },
+   "params": {}
+  },
+  {
+   "id": "cnt",
+   "type": "marker.count",
+   "pos": {
+    "x": 0,
+    "y": 900
+   },
+   "params": {
+    "marker": "spawn"
+   }
+  },
+  {
+   "id": "pc",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 700
+   },
+   "params": {
+    "text": "MK spawns:",
+    "chat": false
+   }
+  },
+  {
+   "id": "fb",
+   "type": "marker.find",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {
+    "marker": "base",
+    "n": 1
+   }
+  },
+  {
+   "id": "pb",
+   "type": "debug.print",
+   "pos": {
+    "x": 560,
+    "y": 700
+   },
+   "params": {
+    "text": "MK base found:",
+    "chat": false
+   }
+  },
+  {
+   "id": "fp2",
+   "type": "marker.find",
+   "pos": {
+    "x": 0,
+    "y": 1300
+   },
+   "params": {
+    "marker": "patrol",
+    "n": 2
+   }
+  },
+  {
+   "id": "ppath",
+   "type": "debug.print",
+   "pos": {
+    "x": 860,
+    "y": 700
+   },
+   "params": {
+    "text": "MK patrol 2nd at:",
+    "chat": false
+   }
+  },
+  {
+   "id": "fz",
+   "type": "marker.find",
+   "pos": {
+    "x": 0,
+    "y": 1500
+   },
+   "params": {
+    "marker": "spawn",
+    "n": 99
+   }
+  },
+  {
+   "id": "pz",
+   "type": "debug.print",
+   "pos": {
+    "x": 1160,
+    "y": 700
+   },
+   "params": {
+    "text": "MK 99th found:",
+    "chat": false
+   }
+  },
+  {
+   "id": "kw",
+   "type": "marker.get",
+   "pos": {
+    "x": 0,
+    "y": 200
+   },
+   "params": {
+    "key": "wave"
+   }
+  },
+  {
+   "id": "ks",
+   "type": "marker.get",
+   "pos": {
+    "x": 0,
+    "y": 320
+   },
+   "params": {
+    "key": "side"
+   }
+  },
+  {
+   "id": "prs",
+   "type": "debug.print",
+   "pos": {
+    "x": 860,
+    "y": 0
+   },
+   "params": {
+    "text": "MK side:",
+    "chat": false
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ms",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fe",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "fe",
+    "pin": "each"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "fe",
+    "pin": "index"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "pos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "fmt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pr",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "cnt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pc",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "pc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "fb",
+    "pin": "found"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "pb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ppath",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "fp2",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "ppath",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ppath",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "fz",
+    "pin": "found"
+   },
+   "to": {
+    "node": "pz",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "kw",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "kw",
+    "pin": "num"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "pr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ks",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ks",
+    "pin": "text"
+   },
+   "to": {
+    "node": "prs",
+    "pin": "value"
+   }
+  }
+ ],
+ "markers": [
+  {
+   "id": "spawn",
+   "label": "Creature spawn",
+   "description": "Where creatures come in",
+   "type": "point",
+   "min": 2,
+   "max": 16,
+   "keys": [
+    {
+     "name": "wave",
+     "type": "number",
+     "default": 1,
+     "help": "First wave",
+     "min": 1,
+     "max": 99
+    },
+    {
+     "name": "side",
+     "type": "choice",
+     "default": "north",
+     "help": "",
+     "choices": [
+      [
+       "north",
+       "North"
+      ],
+      [
+       "south",
+       "South"
+      ]
+     ]
+    }
+   ],
+   "colour": "#c0392b",
+   "icon": "skull"
+  },
+  {
+   "id": "base",
+   "label": "Base",
+   "description": "",
+   "type": "area",
+   "min": 1,
+   "max": 1,
+   "size": [
+    512,
+    512,
+    128
+   ]
+  },
+  {
+   "id": "patrol",
+   "label": "Patrol",
+   "description": "",
+   "type": "path",
+   "min": 0
+  }
+ ],
+ "mapKit": {
+  "size": "small",
+  "playersMin": 2,
+  "playersMax": 12,
+  "notes": "Test map for markers."
+ }
+}

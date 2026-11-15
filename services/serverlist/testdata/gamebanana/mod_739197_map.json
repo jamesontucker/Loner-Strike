@@ -1,0 +1,193 @@
+{
+ "_idRow": 739197,
+ "_nStatus": "0",
+ "_bIsPrivate": false,
+ "_bAccessorIsSubmitter": false,
+ "_bIsTrashed": false,
+ "_bIsWithheld": false,
+ "_sName": "de_marakesh",
+ "_sCommentsMode": "open",
+ "_tsDateModified": 1794415806,
+ "_tsDateAdded": 1794415806,
+ "_sProfileUrl": "https://gamebanana.com/mods/739197",
+ "_aPreviewMedia": {
+  "_aImages": [
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Main Street",
+    "_sFile": "6af497f615a70.jpg",
+    "_sFile220": "220-90_6af497f615a70.jpg",
+    "_hFile220": 124,
+    "_wFile220": 220,
+    "_sFile530": "530-90_6af497f615a70.jpg",
+    "_hFile530": 298,
+    "_wFile530": 530,
+    "_sFile100": "100-90_6af497f615a70.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Sniper's Balcony",
+    "_sFile": "6af497f614fbf.jpg",
+    "_sFile100": "100-90_6af497f614fbf.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Restaurant Corridors",
+    "_sFile": "6af497f624ec3.jpg",
+    "_sFile100": "100-90_6af497f624ec3.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Restaurant Entrance",
+    "_sFile": "6af497f624ada.jpg",
+    "_sFile100": "100-90_6af497f624ada.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Dining Hall",
+    "_sFile": "6af497f628662.jpg",
+    "_sFile100": "100-90_6af497f628662.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sCaption": "Back Entrance",
+    "_sFile": "6af497f648d23.jpg",
+    "_sFile100": "100-90_6af497f648d23.jpg",
+    "_hFile100": 56,
+    "_wFile100": 100
+   }
+  ]
+ },
+ "_nUpdatesCount": 0,
+ "_bHasUpdates": false,
+ "_nAllTodosCount": 0,
+ "_bHasTodos": false,
+ "_nPostCount": 0,
+ "_aTags": [
+  {
+   "_sTitle": "Software Used",
+   "_sValue": "Hammer"
+  },
+  {
+   "_sTitle": "Software Used",
+   "_sValue": "LonerStrike"
+  }
+ ],
+ "_bCreatedBySubmitter": true,
+ "_bIsPorted": false,
+ "_nThanksCount": 0,
+ "_sInitialVisibility": "show",
+ "_sDownloadUrl": "https://gamebanana.com/mods/download/739197",
+ "_nDownloadCount": 69,
+ "_aFiles": [
+  {
+   "_idRow": 1885247,
+   "_sFile": "de_marakesh-loner-strike.zip",
+   "_nFilesize": 216842,
+   "_tsDateAdded": 1794415598,
+   "_nDownloadCount": 69,
+   "_sDownloadUrl": "https://gamebanana.com/dl/1885247",
+   "_sMd5Checksum": "bb48b1faf89c4daad7545c4f3a2ce681",
+   "_sAnalysisState": "done",
+   "_sAnalysisResult": "ok",
+   "_sAnalysisResultVerbose": "File passed preliminary analysis",
+   "_sAvState": "done",
+   "_sAvResult": "clean",
+   "_bIsArchived": false,
+   "_bHasContents": true,
+   "_sVersion": "1.0"
+  }
+ ],
+ "_nSubscriberCount": 0,
+ "_aContributingStudios": [],
+ "_sLicense": "<a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png\" /></a><br />This work is licensed under a <a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\">Creative Commons Attribution-NonCommercial-NoDerivs 4.0 Unported License</a>.",
+ "_bGenerateTableOfContents": false,
+ "_bIsObsolete": false,
+ "_nLikeCount": 2,
+ "_nViewCount": 101,
+ "_sVersion": "",
+ "_bAcceptsDonations": false,
+ "_bShowRipePromo": true,
+ "_aSubmitter": {
+  "_idRow": 6096365,
+  "_sName": "TheHouthi",
+  "_sUserTitle": "Bananite",
+  "_sHonoraryTitle": "",
+  "_tsJoinDate": 1793452963,
+  "_sAvatarUrl": "https://images.gamebanana.com/img/av/6af4a38be0973.jpg",
+  "_sSigUrl": "",
+  "_sProfileUrl": "https://gamebanana.com/members/6096365",
+  "_sPointsUrl": "https://gamebanana.com/members/logs/pointslog/6096365",
+  "_sMedalsUrl": "https://gamebanana.com/members/stats/medals/6096365",
+  "_bIsOnline": false,
+  "_sLocation": "<a href=\"https://gamebanana.com\">Home</a> > <a href=\"https://gamebanana.com/games/4254\"><img src=\"https://images.gamebanana.com/img/ico/games/5ea788a63f636.png\"/><span>Counter-Strike 1.6</span></a> > <a href=\"https://gamebanana.com/tuts/games/4254\">Tutorials</a> > <a href=\"https://gamebanana.com/tuts/cats/2114\">Modeling</a> > <a href=\"https://gamebanana.com/tuts/11015\">Creating a working CS model using Milkshape 3D</a>",
+  "_sOnlineTitle": "",
+  "_sOfflineTitle": "",
+  "_nPoints": 25,
+  "_nPointsRank": 0,
+  "_aNormalMedals": [],
+  "_aRareMedals": [],
+  "_aLegendaryMedals": [],
+  "_bHasRipe": false,
+  "_nBuddyCount": 0,
+  "_nSubscriberCount": 0,
+  "_aDonationMethods": [],
+  "_bAccessorIsBuddy": false,
+  "_bBuddyRequestExistsWithAccessor": false,
+  "_bAccessorIsSubscribed": false,
+  "_aDefaultLicenseChecklist": [
+   "yes",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "no",
+   "ask"
+  ],
+  "_sDefaultLicense": ""
+ },
+ "_bFollowLinks": false,
+ "_aGame": {
+  "_idRow": 4254,
+  "_sName": "Counter-Strike 1.6",
+  "_sAbbreviation": "CS1.6",
+  "_sProfileUrl": "https://gamebanana.com/games/4254",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_sBannerUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_nSubscriberCount": 6273,
+  "_bHasSubmissionQueue": false,
+  "_bAccessorIsSubscribed": false
+ },
+ "_aCategory": {
+  "_idRow": 5484,
+  "_sName": "Bomb/Defuse",
+  "_sModelName": "ModCategory",
+  "_sProfileUrl": "https://gamebanana.com/mods/cats/5484",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/ModCategory/5e1282c1bd8e9.png",
+  "_bIsObsolete": false
+ },
+ "_aSuperCategory": {
+  "_idRow": 5474,
+  "_sName": "Maps",
+  "_sModelName": "ModCategory",
+  "_sProfileUrl": "https://gamebanana.com/mods/cats/5474",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/ModCategory/609848f4edf1a.gif"
+ }
+}

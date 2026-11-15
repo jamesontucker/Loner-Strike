@@ -445,6 +445,32 @@ pub(crate) fn with_bots_line(text: &str, bots_empty: bool) -> String {
     format!("{}\n{line}\n", lines.join("\n"))
 }
 
+/// How many creatures may be alive at once on this host (the game DLL's ls_creature_max; Last
+/// Stand's own cap scales with the team up to 96 and never goes over it). Measured (docs/notes/Y.md):
+/// a native server (Linux, Windows) holds 220+ fps with 32 bots and 100+ creatures; a Mac's
+/// server runs under CrossOver about 100x slower per bot, so it gets a small cap. The adaptive
+/// cap (ls_creature_adaptive 1) lowers it further while the server's fps is under 85, everywhere.
+pub(crate) const CREATURES_NATIVE: u32 = 128;
+pub(crate) const CREATURES_CROSSOVER: u32 = 24;
+
+pub(crate) fn creature_cap(e: &Entry) -> u32 {
+    if e.remote.is_none() && e.kind == "crossover" {
+        CREATURES_CROSSOVER
+    } else {
+        CREATURES_NATIVE
+    }
+}
+
+/// friends.cfg with its creature lines set (ls_creature_max for the host, the adaptive cap on),
+/// the rest kept as it is.
+pub(crate) fn with_creature_lines(text: &str, max: u32) -> String {
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim_start().starts_with("ls_creature_max") && !l.trim_start().starts_with("ls_creature_adaptive")).collect();
+    if lines.is_empty() {
+        lines.push("// Written by Loner-Strike");
+    }
+    format!("{}\nls_creature_max {max}\nls_creature_adaptive 1\n", lines.join("\n"))
+}
+
 /// Brings friends.cfg's bots line in step with the server's setting (start options can't
 /// carry it: ReGameDLL's game.cfg sets it back to 1 on every map, and friends.cfg runs
 /// after it). Whether the file changed.
@@ -452,7 +478,7 @@ fn write_bots_line(e: &Entry) -> Result<bool, String> {
     let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
     let path = data.join("friends.cfg");
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    let new = with_list_line(&with_bots_line(&old, bots_when_empty(e)), e.ls_listed);
+    let new = with_creature_lines(&with_list_line(&with_bots_line(&old, bots_when_empty(e)), e.ls_listed), creature_cap(e));
     if new == old {
         return Ok(false);
     }
@@ -531,6 +557,11 @@ pub fn find_install(hl: &Path) -> Option<Install> {
 /// Where servers live: inside the game's CrossOver bottle on a Mac (so wine sees
 /// them as C:\Loner-Strike Servers), the app's local data folder on Windows.
 pub(crate) fn root_for(client: &Install) -> Result<PathBuf, String> {
+    // (testing: LS_SERVERS_DIR puts servers and the hidden ones somewhere of their own)
+    if let Some(dir) = std::env::var_os("LS_SERVERS_DIR").map(PathBuf::from) {
+        servers_dir_ok(&dir, client)?;
+        return Ok(dir);
+    }
     // the folder picked in Settings, if it suits this game (on a Mac: in its bottle)
     if let Some(dir) = crate::app_api::load_settings().servers_dir.map(PathBuf::from) {
         if servers_dir_ok(&dir, client).is_ok() {
@@ -543,6 +574,13 @@ pub(crate) fn root_for(client: &Install) -> Result<PathBuf, String> {
 /// Loner-Strike/Servers: in the game's CrossOver bottle on a Mac (the servers run
 /// there), in the app's data folder on Windows.
 pub fn default_root(client: &Install) -> Result<PathBuf, String> {
+    // a test build never makes servers in the player's bottle (LS_SERVERS_DIR picks a folder)
+    #[cfg(test)]
+    {
+        let _ = client;
+        return Ok(crate::sys::test_root().join("Servers"));
+    }
+    #[allow(unreachable_code)]
     if client.kind == "crossover" {
         Ok(drive_c(client)?.join("Loner-Strike").join("Servers"))
     } else {
@@ -662,7 +700,7 @@ pub(crate) fn safe_start_map(m: &str) -> bool {
 // ---- SteamCMD ----------------------------------------------------------------------
 
 fn steamcmd_dir() -> PathBuf {
-    sys::app_dir().join("steamcmd")
+    crate::localdata::dir("steamcmd")
 }
 
 fn steamcmd_exe() -> PathBuf {
@@ -717,6 +755,111 @@ fn parse_progress(line: &str) -> Option<(f64, String)> {
 /// Downloads (or updates) HLDS for `game` into `dir`. SteamCMD often needs more
 /// than one go for app 90, so it retries until the game folder is there.
 pub(crate) fn download_hlds(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
+    update_base(dir, game, &|d: &Path| steamcmd_app_90(job, d, game), &|msg: &str| setup::Progress::detail(job, msg))
+}
+
+/// What's missing from a dedicated server download for `game` (None: it's whole). Not only
+/// hlds.exe and liblist.gam: on one Mac, SteamCMD's validate removed Half-Life (app 70) and
+/// Counter-Strike (app 10) from an existing download and still said "Success!" (QA4-F F7),
+/// and a server made from that hangs at "Console initialized." forever.
+pub(crate) fn base_problem(dir: &Path, game: &str) -> Option<String> {
+    let need = ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"];
+    for f in need.iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+        if !dir.join(&f).is_file() {
+            return Some(format!("{f} is missing"));
+        }
+    }
+    let count = |d: &Path, limit: usize| crate::archive::walk(d).into_iter().take(limit).count();
+    // (a whole download has about 4200 files in valve and over 1000 in cstrike or czero)
+    if count(&dir.join("valve"), 1000) < 1000 {
+        return Some("valve/ is nearly empty".into());
+    }
+    let maps = std::fs::read_dir(dir.join(game).join("maps")).map(|r| r.flatten().filter(|f| f.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("bsp"))).count()).unwrap_or(0);
+    if maps < 3 {
+        return Some(format!("{game}/maps has no maps"));
+    }
+    None
+}
+
+/// Updates (or makes) a server download in `dir` with `run` (SteamCMD), and only says it worked
+/// when the result is whole (base_problem). A whole download is kept aside first (an APFS clone
+/// on a Mac: instant, no space), so a run that strips it puts the old one back instead of
+/// leaving every new server broken. When that isn't possible, a fresh download into an empty
+/// folder replaces it, checked the same way; the stripped one is only removed once the fresh
+/// one is whole. P5 (QA4-F F7).
+pub(crate) fn update_base(dir: &Path, game: &str, run: &dyn Fn(&Path) -> Result<(), String>, say: &dyn Fn(&str)) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let was_whole = base_problem(dir, game).is_none();
+    let kept = if was_whole { keep_aside(dir) } else { None };
+    let r = run(dir);
+    let problem = base_problem(dir, game);
+    if r.is_ok() && problem.is_none() {
+        if let Some(k) = kept {
+            let _ = std::fs::remove_dir_all(k);
+        }
+        return Ok(());
+    }
+    let why = problem.clone().unwrap_or_else(|| r.clone().err().unwrap_or_default());
+    eprintln!("server download in {} isn't whole after SteamCMD ({why})", dir.display());
+    // the kept copy back: the servers made from it work as before (just not updated this time)
+    if let Some(k) = kept {
+        let broken = sibling(dir, "stripped");
+        if std::fs::rename(dir, &broken).is_ok() && std::fs::rename(&k, dir).is_ok() {
+            let _ = std::fs::remove_dir_all(&broken);
+            if base_problem(dir, game).is_none() {
+                say("SteamCMD left the server download incomplete, so the one from before was kept.");
+                return Ok(());
+            }
+        }
+    }
+    // a fresh download into an empty folder, then swapped in
+    say("The server download was incomplete. Downloading it again into a fresh folder…");
+    let fresh = sibling(dir, "fresh");
+    let _ = std::fs::remove_dir_all(&fresh);
+    std::fs::create_dir_all(&fresh).map_err(|e| e.to_string())?;
+    let r2 = run(&fresh);
+    if let Some(p) = base_problem(&fresh, game) {
+        let _ = std::fs::remove_dir_all(&fresh);
+        return Err(r2.err().unwrap_or_else(|| format!("The server download from Steam came out incomplete ({p}). Try again later; nothing was changed.")));
+    }
+    let old = sibling(dir, "old");
+    let _ = std::fs::remove_dir_all(&old);
+    std::fs::rename(dir, &old).map_err(|e| format!("Couldn't swap in the fresh server download ({e})."))?;
+    if let Err(e) = std::fs::rename(&fresh, dir) {
+        let _ = std::fs::rename(&old, dir);
+        return Err(format!("Couldn't swap in the fresh server download ({e})."));
+    }
+    let _ = std::fs::remove_dir_all(&old);
+    Ok(())
+}
+
+/// `dir.<what>` next to it (".base" -> ".base.fresh").
+fn sibling(dir: &Path, what: &str) -> PathBuf {
+    let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "base".into());
+    dir.with_file_name(format!("{name}.{what}"))
+}
+
+/// A copy of a whole download kept while SteamCMD works on it: an APFS clone on a Mac (instant,
+/// no extra space); elsewhere none (a full copy is a gigabyte), and the fresh download covers it.
+fn keep_aside(dir: &Path) -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    let k = sibling(dir, "kept");
+    let _ = std::fs::remove_dir_all(&k);
+    let mut c = sys::command("cp");
+    c.arg("-c").arg("-R").arg(dir).arg(&k);
+    match sys::run_output(c, Duration::from_secs(300)) {
+        Some((true, _, _)) if k.join("hlds.exe").is_file() => Some(k),
+        _ => {
+            let _ = std::fs::remove_dir_all(&k);
+            None
+        }
+    }
+}
+
+/// One SteamCMD run (up to 4 tries) of app 90 for `game` into `dir`.
+fn steamcmd_app_90(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let mut last = String::new();
     for attempt in 1..=4 {
@@ -872,7 +1015,7 @@ pub(crate) fn content_filter(rel: &Path) -> bool {
 }
 
 pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, String), String> {
-    let name = req.name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>();
+    let name = crate::sharing::clean_name(&req.name);
     if name.is_empty() {
         return Err("Give the server a name.".into());
     }
@@ -991,6 +1134,58 @@ fn local_setup(entry: Entry, base: PathBuf, source: Option<PathBuf>, components:
                 }
             })
         }))
+    })
+}
+
+/// A server only the map simulator uses, when there's none on this computer: built the way
+/// local_setup builds one from the "Your game" template (Valve's download in `.base`, shared
+/// with every server and kept; a copy of it at `dir`; Loner-Strike with the mods the game has;
+/// the engine; the game's mode settings). It isn't in the server list, and the caller deletes
+/// `dir` when it's done. Runs as the setup job; returns its id.
+pub(crate) fn start_hidden_server(client: Install, dir: PathBuf, game: String, res: PathBuf) -> Result<String, String> {
+    if !["cstrike", "czero"].contains(&game.as_str()) {
+        return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
+    }
+    let catalog = setup::components::load_catalog(&res)?;
+    let (source, components) = template_source("local", &game, &client, &catalog).ok_or("The game's own files couldn't be read.")?;
+    let base = root_for(&client)?.join(".base");
+    let g = game.clone();
+    let steps = vec![
+        setup::server_step(&g, "sim-steamcmd", "Getting SteamCMD (Valve's server downloader)", 1.0),
+        setup::server_step(&g, "sim-download", "Downloading the server from Valve (the first time only)", 8.0),
+        setup::server_step(&g, "sim-copy", "Making the map simulator's hidden server", 1.0),
+        setup::server_step(&g, "sim-engine", "Installing Loner-Strike's server engine", 0.5),
+        setup::server_step(&g, "sim-settings", "Copying your game's modes", 0.3),
+    ];
+    setup::start_job("server", steps, move |job| {
+        job.run(&format!("{g}/sim-steamcmd"), || ensure_steamcmd(job))?;
+        job.run(&format!("{g}/sim-download"), || download_hlds(job, &base, &g))?;
+        job.run(&format!("{g}/sim-copy"), || {
+            let other = if g == "cstrike" { "czero" } else { "cstrike" };
+            let keep_other = g == "czero";
+            copy_tree(&base, &dir, false, &|rel: &Path| {
+                let first = rel.components().next().map(|c| c.as_os_str().to_string_lossy().to_string()).unwrap_or_default();
+                first != "steamapps" && (keep_other || first != other)
+            })
+            .map(|_| ())
+        })?;
+        let install = Install { hl: dir.clone(), kind: client.kind.clone(), bottle: client.bottle.clone(), games: vec![g.clone()], dedicated: true };
+        let plan = setup::plan_install(install, &[g.clone()], &components, &res, false)?;
+        job.insert_before(&format!("{g}/sim-engine"), plan.step_list());
+        setup::install_into(job, &plan, &res, None)?;
+        job.run(&format!("{g}/sim-engine"), || install_engine(job, &dir, &g))?;
+        job.run(&format!("{g}/sim-settings"), || {
+            let data = dir.join(&g).join("addons/amxmodx/data/gamemodes");
+            copy_tree(&source.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
+            let _ = std::fs::create_dir_all(&data);
+            for f in ["banned.cfg", "listip.cfg"] {
+                let p = dir.join(&g).join(f);
+                if !p.exists() {
+                    let _ = std::fs::write(p, "");
+                }
+            }
+            Ok(())
+        })
     })
 }
 
@@ -1442,7 +1637,7 @@ fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usi
 /// Renames the server whose data folder is `data` (Play with friends sets the name players
 /// see; the server list keeps the same one). Nothing for the player's own game.
 pub fn rename_by_data(data: &Path, name: &str) {
-    let name: String = name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect();
+    let name: String = crate::sharing::clean_name(name);
     let of = |e: &Entry| e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
     if name.is_empty() || !load().iter().any(|e| of(e) == data && e.name != name) {
         return;
@@ -1590,7 +1785,7 @@ pub fn write_service(e: &Entry) -> Result<(), String> {
     };
     // (from the list as it is now: the start options may have changed since `e` was read)
     let now = get(&e.id).unwrap_or_else(|| e.clone());
-    let ok = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&now.id, &now.game, &launch_args(&now)).as_bytes(), |_| {});
+    let ok = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&now.id, &now.game, &launch_args(&now), &now.connect()).as_bytes(), |_| {});
     match ok {
         Ok(0) => {
             set(false);
@@ -1616,7 +1811,7 @@ pub fn upload(e: &Entry) -> Result<u64, String> {
 /// (remote::SETUP_SH), then Loner-Strike built here like any server, uploaded, and run
 /// as a service. Returns (id, job).
 pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(String, String), String> {
-    let name = req.name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>();
+    let name = crate::sharing::clean_name(&req.name);
     if name.is_empty() {
         return Err("Give the server a name.".into());
     }
@@ -1773,7 +1968,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
         job.run(&format!("{g}/srv-upload"), || upload(&entry).map(|n| setup::Progress::detail(job, &format!("{n} files uploaded"))))?;
         job.run(&format!("{g}/srv-service"), || {
             let mut failed = String::new();
-            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &entry.game, &launch_args(&entry)).as_bytes(), |line| {
+            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &entry.game, &launch_args(&entry), &entry.connect()).as_bytes(), |line| {
                 if !line.starts_with("@@") && !line.trim().is_empty() {
                     failed = line.trim().to_string();
                 }
@@ -1868,10 +2063,12 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
 
 /// Loner-Strike's server engine on a dedicated server on this computer: our ReHLDS (Valve's
 /// engine with ReHLDS's fixes, and it tells the bots who is talking on voice), ReAPI for
-/// plugins, and relocalizebugfix (blocks names and chat that crash other players' games).
-/// The Valve files it replaces are kept in .valve-engine the first time, to go back to.
-fn install_engine(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
-    use setup::foundation::{REAPI, REHLDS, RELOCALIZEBUGFIX};
+/// plugins. The Valve files it replaces are kept in .valve-engine the first time, to go back to.
+/// relocalizebugfix, which earlier versions put in, is taken out of Metamod's list: it was
+/// built for ReHLDS API 2 and never loads on ours (API 3; `meta list` shows it as "fail"). The
+/// bot brain does its job now ('#' in chat drawn as a fullwidth sign; '%' and '#' in names).
+fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(), String> {
+    use setup::foundation::{REAPI, REHLDS};
     let tmp = setup::TempDir::new()?;
     let get = |p: &setup::foundation::Pinned, sub: &str| -> Result<PathBuf, String> {
         let file = setup::fetch::download(p.url, Some(p.sha256), p.what, job)?;
@@ -1905,30 +2102,73 @@ fn install_engine(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
     let ra = get(&REAPI, "reapi")?;
     copy(&ra.join("addons/amxmodx/modules/reapi_amxx.dll"), &gdir.join("addons/amxmodx/modules/reapi_amxx.dll"))?;
 
-    let rl = get(&RELOCALIZEBUGFIX, "rlb")?;
-    copy(&rl.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"), &gdir.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"))?;
     let ini = gdir.join("addons/metamod/plugins.ini");
     // as bytes: the file may not be UTF-8, and its other lines must stay as they are
-    let text = std::fs::read(&ini).unwrap_or_default();
-    if !text.windows(16).any(|w| w.eq_ignore_ascii_case(b"relocalizebugfix")) {
-        let line = br"win32 addons\relocalizebugfix\relocalizebugfix_mm.dll";
-        let mut out = text.clone();
-        while matches!(out.last(), Some(b'\r' | b'\n')) {
-            out.pop();
+    if let Ok(text) = std::fs::read(&ini) {
+        if let Some(out) = without_relocalizebugfix(&text) {
+            sys::write_atomic(&ini, &out).map_err(|e| e.to_string())?;
         }
-        if !out.is_empty() {
-            out.extend_from_slice(b"\r\n");
-        }
-        out.extend_from_slice(line);
-        out.extend_from_slice(b"\r\n");
-        sys::write_atomic(&ini, &out).map_err(|e| e.to_string())?;
     }
+    let _ = std::fs::remove_dir_all(gdir.join("addons/relocalizebugfix"));
     Ok(())
+}
+
+/// Metamod's plugins.ini without its relocalizebugfix lines (None when it has none)
+fn without_relocalizebugfix(text: &[u8]) -> Option<Vec<u8>> {
+    let has = |l: &[u8]| l.windows(16).any(|w| w.eq_ignore_ascii_case(b"relocalizebugfix"));
+    if !has(text) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(text.len());
+    for line in text.split_inclusive(|&b| b == b'\n') {
+        if !has(line) {
+            out.extend_from_slice(line);
+        }
+    }
+    Some(out)
 }
 
 // ---- bringing in a server the player already runs ------------------------------------
 
 /// `key "value"` or `key value` from a .cfg
+/// P5 (QA4-F F5): the panel's RCON password file (the plugin sets rcon_password from it as a map
+/// loads, and the app knocks with it). Servers made before 1.0 may not have it: it's written from
+/// the server's own rcon_password (server.cfg), so tools that know that one keep working, else a
+/// new one. Only on this computer, only with Loner-Strike's plugins there, never over a file
+/// that's there. True when it wrote one.
+pub(crate) fn ensure_panel_rcon(e: &Entry) -> bool {
+    if e.remote.is_some() {
+        return false;
+    }
+    let g = e.dir.join(&e.game);
+    let data = g.join("addons/amxmodx/data/gamemodes");
+    let file = data.join("panel_rcon.txt");
+    if std::fs::read_to_string(&file).is_ok_and(|t| !t.trim().is_empty()) || !g.join("addons/amxmodx/plugins/gamemodes.amxx").is_file() {
+        return false;
+    }
+    let cfg = std::fs::read_to_string(g.join("server.cfg")).unwrap_or_default();
+    let pw = cfg_value(&cfg, "rcon_password").filter(|p| p.len() >= 6 && p.chars().all(|c| c.is_ascii_graphic() && c != '"')).unwrap_or_else(|| {
+        use rand::Rng;
+        const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut rng = rand::thread_rng();
+        (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
+    });
+    let _ = std::fs::create_dir_all(&data);
+    sys::write_atomic(&file, format!("{pw}\n").as_bytes()).is_ok()
+}
+
+/// At the first start of 1.0 (and every start after: it's quick), the file for every server on
+/// this computer that isn't running (a running one keeps what it has until it restarts).
+pub fn migrate_panel_rcon() {
+    std::thread::spawn(|| {
+        for e in load().iter().filter(|e| e.remote.is_none() && e.ready) {
+            if !with_runs(|r| r.procs.contains_key(&e.id)) && !left_running(e) && ensure_panel_rcon(e) {
+                eprintln!("server {}: wrote the panel's RCON password file (made before 1.0)", e.id);
+            }
+        }
+    });
+}
+
 fn cfg_value(text: &str, key: &str) -> Option<String> {
     text.lines().rev().find_map(|l| {
         let l = l.split("//").next().unwrap_or("").trim();
@@ -1991,7 +2231,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     }
     let cfg = sys::read_latin1(&dir.join(game).join("server.cfg")).unwrap_or_default();
     let name = cfg_value(&cfg, "hostname").filter(|n| !n.is_empty()).unwrap_or_else(|| "Imported server".into());
-    let name: String = name.chars().filter(|c| !c.is_control() && *c != '"').take(48).collect();
+    let name: String = crate::sharing::clean_name(&name);
     let password = cfg_value(&cfg, "sv_password").unwrap_or_default();
     let id = slug(&name, &list);
     let entry = Entry {
@@ -2109,6 +2349,10 @@ fn remote_state(e: &Entry) -> (bool, u64) {
     match state {
         Ok(state) => {
             SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
+            // running and meant to be listed: back on the server list if it fell off (W2)
+            if state.0 && e.ls_listed {
+                crate::browser::ensure_listed(&e.connect());
+            }
             if let Some(m) = UNREACHABLE.lock().unwrap().as_mut() {
                 m.remove(&e.id);
             }
@@ -2267,7 +2511,8 @@ fn spawn(e: &Entry) -> Result<Child, String> {
     // not tied to the app: whether servers stop with it is decided when it quits
     // (main.rs), so turning "Keep servers running" on also keeps the ones already going.
     // Its pid is kept, so one the app lost track of (a crash) can still be ended.
-    let _ = std::fs::write(pid_file(e), child.id().to_string());
+    // (with its start time: a pid alone can belong to another program after a while, procmatch.rs)
+    let _ = std::fs::write(pid_file(e), crate::procmatch::pid_file_text(child.id()));
     Ok(child)
 }
 
@@ -2282,29 +2527,33 @@ fn end_leftover(e: &Entry) {
     let file = pid_file(e);
     let Ok(text) = std::fs::read_to_string(&file) else { return };
     let _ = std::fs::remove_file(&file);
-    #[cfg(unix)]
-    if let Ok(pid) = text.trim().parse::<i32>() {
-        let mut c = sys::command("ps");
-        c.args(["-p", &pid.to_string(), "-o", "command="]);
-        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
-            // CrossOver's wine is given the server's Windows path (C:\...\hlds.exe)
-            let win = windows_path(&e.hlds());
-            if out.contains(&*e.dir.to_string_lossy()) || win.is_some_and(|w| !w.is_empty() && out.contains(&w)) {
-                unsafe { libc::kill(pid, libc::SIGKILL) };
-            }
-        }
+    // only the very program the app started: the pid, its executable and its start time
+    // (Windows reuses pids quickly; another server or program may have this one now)
+    if let Some((pid, started)) = crate::procmatch::parse_pid_file(&text) {
+        // (CrossOver's wine is given the server's Windows path, C:\...\hlds.exe)
+        let win = windows_path(&e.hlds());
+        crate::procmatch::end_if_ours(pid, started, &e.hlds(), win.as_deref());
     }
-    #[cfg(windows)]
-    if let Ok(pid) = text.trim().parse::<u32>() {
-        let mut c = sys::command("tasklist");
-        c.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
-        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
-            if out.to_lowercase().contains("hlds.exe") {
-                let mut k = sys::command("taskkill");
-                k.args(["/PID", &pid.to_string(), "/F"]);
-                let _ = sys::run_output(k, Duration::from_secs(5));
+    end_wine_side(e);
+}
+
+/// Parity A (QA4-F F6): on a Mac, ending wine's launcher leaves the server itself (the
+/// Windows-side hlds.exe) running on its port; it's ended by its Windows path, which is this
+/// server's alone. True when nothing of it is left (always on other systems).
+pub(crate) fn end_wine_side(e: &Entry) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if e.remote.is_none() {
+            if let Some(win) = windows_path(&e.hlds()) {
+                return crate::procmatch::end_wine_side(&win, Duration::from_secs(3));
             }
         }
+        true
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = e;
+        true
     }
 }
 
@@ -2356,6 +2605,8 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // whether bots play on an empty server and whether it's listed (friends.cfg runs after every map)
     let bots_changed = write_bots_line(&e).unwrap_or(false);
+    // the creatures of maps that aren't on it any more go (tools/creaturesrv.rs)
+    let bots_changed = crate::tools::creaturesrv::prune(&e.dir.join(&e.game)).unwrap_or(false) || bots_changed;
     if e.ls_listed {
         // the list checks the server itself, so once it's had time to load a map
         let address = e.connect();
@@ -2396,6 +2647,8 @@ pub fn start(id: &str) -> Result<(), String> {
         if let Err(why) = crate::remote::ensure_ham(r, &e.id, &e.game) {
             crate::diagnostics::log_error("ham sandwich", &why);
         }
+        // Half-Life's monster models as the players' games have them (hlmodels.rs)
+        crate::hlmodels::copy_to_server(&e);
         clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
@@ -2411,8 +2664,25 @@ pub fn start(id: &str) -> Result<(), String> {
     end_leftover(&e);
     // the bots' newer navigation files from this computer's games
     crate::navs::copy_to_server(&e, None, true);
+    // Half-Life's monster models as the players' games have them (hlmodels.rs)
+    crate::hlmodels::copy_to_server(&e);
+    // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
+    crate::hamguard::before_start(&e.dir.join(&e.game), &format!("starting {}", e.name));
+    // a server made before 1.0 has no panel_rcon.txt: the plugin reads it as the map loads,
+    // so it's there before the start, never written later under a running server (QA4-F F5)
+    ensure_panel_rcon(&e);
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
+    }
+    // another program on this computer (or a server the app doesn't know): Windows' hlds would
+    // quietly take the next port, and the app couldn't reach it (procmatch.rs / sys.rs)
+    // (a server just ended can take a moment to let go of its port)
+    let free = || sys::udp_port_free(e.bind_ip().as_deref(), e.port);
+    if !free() && !(0..10).any(|_| {
+        std::thread::sleep(Duration::from_millis(300));
+        free()
+    }) {
+        return Err(format!("Port {} is in use by another program on this computer. Close it, or change this server's port.", e.port));
     }
     let child = spawn(&e)?;
     with_runs(|r| {
@@ -2468,14 +2738,22 @@ pub fn stop(id: &str) {
     if let Some(rcon) = e.as_ref().and_then(|e| e.rcon()) {
         let _ = rcon.send("quit");
     }
+    let mut ended = false;
     for _ in 0..50 {
         if matches!(child.try_wait(), Ok(Some(_))) {
             sys::untie(child.id());
-            return;
+            ended = true;
+            break;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    sys::stop_child(child, Duration::from_secs(3));
+    if !ended {
+        sys::stop_child(child, Duration::from_secs(3));
+    }
+    // (a hung server: its launcher is gone, the server itself may not be)
+    if let Some(e) = &e {
+        end_wine_side(e);
+    }
 }
 
 /// Stops every server this session started, all at once (each can take seconds).
@@ -2595,6 +2873,7 @@ fn watch_frozen() {
         std::thread::sleep(Duration::from_secs(15));
         let due: Vec<String> = with_runs(|r| r.procs.iter().filter(|(_, p)| !p.stopping && p.started.elapsed() > FROZEN_GRACE).map(|(id, _)| id.clone()).collect());
         for id in due {
+            let mut ended = false;
             let Some(e) = get(&id) else { continue };
             // the server-info query, else RCON: a server started with -nomaster (not on the
             // public list) may never answer the query while it plays on fine
@@ -2608,8 +2887,13 @@ fn watch_frozen() {
                     let _ = p.child.kill();
                     // (the crash watcher sees it end and starts it again)
                     p.answered = Instant::now();
+                    ended = true;
                 }
             });
+            // Parity A (QA4-F F6): the server itself too, not only wine's launcher
+            if ended {
+                end_wine_side(&e);
+            }
         }
     });
 }
@@ -3045,7 +3329,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
         let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args || old.tick_rate.unwrap_or(300) != new.tick_rate.unwrap_or(300);
-        let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>());
+        let name = req.name.as_ref().map(|n| crate::sharing::clean_name(n));
         if name.as_ref().is_some_and(|n| n.is_empty()) {
             return Err("Give the server a name.".into());
         }
@@ -3943,6 +4227,99 @@ mod restart_tests {
 mod tests {
     use super::*;
 
+    /// P5 (QA4-F F7): a whole fake server download (the files base_problem checks, 1000 in valve, 3 maps).
+    fn fake_base(dir: &Path, game: &str) {
+        for f in ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"].iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"x").unwrap();
+        }
+        std::fs::create_dir_all(dir.join("valve/sound")).unwrap();
+        for i in 0..1000 {
+            std::fs::write(dir.join(format!("valve/sound/s{i}.wav")), b"x").unwrap();
+        }
+        std::fs::create_dir_all(dir.join(game).join("maps")).unwrap();
+        for m in ["de_a", "de_b", "cs_c"] {
+            std::fs::write(dir.join(game).join(format!("maps/{m}.bsp")), b"x").unwrap();
+        }
+    }
+
+    /// What SteamCMD did to the Mac's download: apps 70 and 10 gone, "Success!" anyway.
+    fn strip(dir: &Path) {
+        let _ = std::fs::remove_dir_all(dir.join("valve"));
+        let _ = std::fs::remove_dir_all(dir.join("cstrike/maps"));
+    }
+
+    #[test]
+    fn a_stripped_server_download_is_never_taken_for_whole() {
+        let root = std::env::temp_dir().join(format!("ls-base-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let base = root.join(".base");
+        let said = std::sync::Mutex::new(Vec::<String>::new());
+        let say = |m: &str| said.lock().unwrap().push(m.to_string());
+        // a fresh download that comes out whole
+        update_base(&base, "cstrike", &|d: &Path| { fake_base(d, "cstrike"); Ok(()) }, &say).unwrap();
+        assert!(base_problem(&base, "cstrike").is_none());
+        assert!(base_problem(&base, "czero").is_some(), "another game isn't there");
+        // an update that strips it and says it worked: put right (the kept copy on a Mac, a
+        // fresh download elsewhere), and never left stripped
+        let runs = std::sync::atomic::AtomicUsize::new(0);
+        update_base(&base, "cstrike", &|d: &Path| {
+            if runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 { strip(d) } else { fake_base(d, "cstrike") }
+            Ok(())
+        }, &say).unwrap();
+        assert!(base_problem(&base, "cstrike").is_none(), "{:?}", base_problem(&base, "cstrike"));
+        assert!(!said.lock().unwrap().is_empty());
+        // SteamCMD stripping it every time: on a Mac the kept copy comes back; elsewhere the
+        // fresh one fails, it says so, and nothing is swapped
+        let r = update_base(&base, "cstrike", &|d: &Path| { strip(d); Ok(()) }, &say);
+        if cfg!(target_os = "macos") {
+            assert!(r.is_ok() && base_problem(&base, "cstrike").is_none());
+        } else {
+            assert!(r.unwrap_err().contains("incomplete"));
+        }
+        // no leftovers next to it
+        for what in ["kept", "fresh", "old", "stripped"] {
+            assert!(!sibling(&base, what).exists(), "{what}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P5 (QA4-F F5): a server made before 1.0 gets panel_rcon.txt from its own rcon_password
+    /// (else a new one), only with Loner-Strike's plugins there, and never over one that's there.
+    #[test]
+    fn panel_rcon_for_servers_made_before_1_0() {
+        let root = std::env::temp_dir().join(format!("ls-panelrcon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut e: Entry = serde_json::from_str(r#"{"id":"old-one","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"crossover","bottle":null}"#).unwrap();
+        e.dir = root.clone();
+        let g = root.join("cstrike");
+        let file = g.join("addons/amxmodx/data/gamemodes/panel_rcon.txt");
+        std::fs::create_dir_all(&g).unwrap();
+        std::fs::write(g.join("server.cfg"), "hostname \"Old\"\nrcon_password \"oldsecret1\"\n").unwrap();
+        assert!(!ensure_panel_rcon(&e), "no Loner-Strike plugins: nothing written");
+        std::fs::create_dir_all(g.join("addons/amxmodx/plugins")).unwrap();
+        std::fs::write(g.join("addons/amxmodx/plugins/gamemodes.amxx"), b"x").unwrap();
+        assert!(ensure_panel_rcon(&e));
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "oldsecret1");
+        assert!(!ensure_panel_rcon(&e), "there already");
+        std::fs::remove_file(&file).unwrap();
+        std::fs::write(g.join("server.cfg"), "hostname \"Old\"\n").unwrap();
+        assert!(ensure_panel_rcon(&e));
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim().len(), 24);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+
+    /// Shared creatures reach a Linux server with the next upload: creatures.ini and the models
+    /// and sounds the app copies into its folder here go up, and come off when they're gone.
+    #[test]
+    fn shared_creatures_go_up_with_the_server_folder() {
+        for key in ["addons/amxmodx/configs/gamemodes/creatures.ini", "models/qa/runner_x.mdl", "sound/qa/x.wav"] {
+            assert!(upload_filter(Path::new(key)) && !server_owned(key), "{key}");
+        }
+    }
+
     #[test]
     fn console_lines_by_who_sends_them() {
         // anyone: one command, never the console password (in any case, quoted or chained)
@@ -4054,8 +4431,8 @@ mod tests {
         assert_eq!(ok(" Play.LonerStrike.com "), Some("play.lonerstrike.com".into()));
         assert_eq!(ok("play.example.com:27016"), Some("play.example.com:27016".into()));
         assert_eq!(ok("play.example.com."), Some("play.example.com".into()));
-        assert_eq!(ok("178.156.241.180"), Some("178.156.241.180".into()));
-        assert_eq!(ok("178.156.241.180:27015"), Some("178.156.241.180:27015".into()));
+        assert_eq!(ok("203.0.113.10"), Some("203.0.113.10".into()));
+        assert_eq!(ok("203.0.113.10:27015"), Some("203.0.113.10:27015".into()));
         assert_eq!(ok("my-home.duckdns.org:65535"), Some("my-home.duckdns.org:65535".into()));
         assert_eq!(ok("localhost"), Some("localhost".into()));
         let long = format!("{}.com", vec!["a".repeat(60); 5].join("."));
@@ -4097,9 +4474,9 @@ mod tests {
         e.listen_ip.clear();
         e.public_address = None;
         e.port = 27015;
-        e.remote = serde_json::from_value(serde_json::json!({"host": "178.156.241.180", "key": "/k"})).unwrap();
-        assert_eq!(e.connect(), "178.156.241.180:27015");
-        assert_eq!(e.join_address(), "178.156.241.180:27015");
+        e.remote = serde_json::from_value(serde_json::json!({"host": "203.0.113.10", "key": "/k"})).unwrap();
+        assert_eq!(e.connect(), "203.0.113.10:27015");
+        assert_eq!(e.join_address(), "203.0.113.10:27015");
         assert_eq!(e.public_at(27020), None);
         e.public_address = Some("play.lonerstrike.com".into());
         assert_eq!(e.connect(), "play.lonerstrike.com", "27015 is the game's usual port: left off");
@@ -4245,6 +4622,23 @@ mod tests {
         assert!(held_back(None, &now, &mut changed, &mut gone).is_none() && changed.len() == 1);
     }
 
+    /// A server name of 63 bytes of UTF-8 (Steam's limit) reaches friends.cfg's quoted hostname
+    /// and friends.json whole; a longer one is cut between characters
+    #[test]
+    fn server_names_up_to_63_bytes() {
+        let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "names-").unwrap();
+        let name = format!("Café {}", "x".repeat(57)); // 6 + 57 = 63 bytes
+        assert_eq!(name.len(), 63);
+        write_join(&dir, &name, "", false, false).unwrap();
+        let cfg = std::fs::read_to_string(dir.join("friends.cfg")).unwrap();
+        assert!(cfg.contains(&format!("hostname \"{name}\"\n")), "{cfg}");
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("friends.json")).unwrap()).unwrap();
+        assert_eq!(saved["name"], name.as_str());
+        write_join(&dir, &format!("{name}é\"; quit"), "", false, false).unwrap();
+        assert!(std::fs::read_to_string(dir.join("friends.cfg")).unwrap().contains(&format!("hostname \"{name}\"\n")), "cut whole, nothing after the quote");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn friends_cfg_list_line() {
         let cfg = "// Written by Loner-Strike\nhostname \"A\"\nbot_join_after_player 0\n";
@@ -4265,6 +4659,51 @@ mod tests {
         assert_eq!(off, "// Written by Loner-Strike's Friends tab\nhostname \"A\"\nsv_password \"\"\nbot_join_after_player 1\n");
         assert_eq!(with_bots_line(&off, false), off, "the same twice");
         assert_eq!(off.matches("bot_join_after_player").count(), 1);
+    }
+
+    #[test]
+    fn friends_cfg_creature_lines_by_host() {
+        let cfg = "// Written by Loner-Strike\nhostname \"A\"\n";
+        let on = with_creature_lines(cfg, 128);
+        assert_eq!(on, format!("{cfg}ls_creature_max 128\nls_creature_adaptive 1\n"));
+        assert_eq!(with_creature_lines(&on, 128), on, "the same twice");
+        assert_eq!(with_creature_lines(&on, 24).matches("ls_creature_max").count(), 1);
+        let mac: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"crossover","bottle":null}"#).unwrap();
+        let win: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
+        assert_eq!(creature_cap(&mac), CREATURES_CROSSOVER);
+        assert_eq!(creature_cap(&win), CREATURES_NATIVE);
+    }
+
+    /// The engine install as an update runs it, on a copy of a server: `LS_ENGINE_TEST_DIR=<a
+    /// copy> cargo test -- --ignored engine_install_on_a_copy` (network: the pinned downloads).
+    /// Our ReHLDS goes in, the files it replaced are kept in .valve-engine (the first time only).
+    #[test]
+    #[ignore]
+    fn engine_install_on_a_copy() {
+        use sha2::Digest;
+        let dir = PathBuf::from(std::env::var("LS_ENGINE_TEST_DIR").expect("LS_ENGINE_TEST_DIR"));
+        let sum = |p: &Path| -> String { sha2::Sha256::digest(std::fs::read(p).unwrap()).iter().map(|b| format!("{b:02x}")).collect() };
+        let kept_before = dir.join(".valve-engine/swds.dll").is_file().then(|| sum(&dir.join(".valve-engine/swds.dll")));
+        let engine_before = sum(&dir.join("swds.dll"));
+        install_engine(&setup::Quiet, &dir, "cstrike").unwrap();
+        let file = setup::fetch::download(setup::foundation::REHLDS.url, Some(setup::foundation::REHLDS.sha256), "ReHLDS", &setup::Quiet).unwrap();
+        let tmp = setup::TempDir::new().unwrap();
+        setup::fetch::unpack(&file, &tmp.0).unwrap();
+        assert_eq!(sum(&dir.join("swds.dll")), sum(&tmp.0.join("bin/win32/swds.dll")), "our ReHLDS is in");
+        let kept = sum(&dir.join(".valve-engine/swds.dll"));
+        match kept_before {
+            Some(k) => assert_eq!(kept, k, "the kept engine stays as it was"),
+            None => assert_eq!(kept, engine_before, "the replaced engine is kept"),
+        }
+        assert!(dir.join("cstrike/addons/amxmodx/modules/reapi_amxx.dll").is_file());
+        assert!(!std::fs::read_to_string(dir.join("cstrike/addons/metamod/plugins.ini")).unwrap_or_default().contains("relocalizebugfix"));
+    }
+
+    #[test]
+    fn relocalizebugfix_taken_out() {
+        let ini = b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\nwin32 addons\\relocalizebugfix\\relocalizebugfix_mm.dll\r\n; mine\xff\r\n";
+        assert_eq!(without_relocalizebugfix(ini).unwrap(), b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n; mine\xff\r\n".to_vec());
+        assert!(without_relocalizebugfix(b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n").is_none());
     }
 
     #[test]

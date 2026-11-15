@@ -106,6 +106,13 @@ pub struct Member {
     pub invited_by: String,
     #[serde(default)]
     pub seen: Option<u64>,
+    /// MCP: the community roles application they came in by (roles.rs; 0: none)
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub app: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -122,6 +129,9 @@ struct Invite {
     /// unix seconds
     expires: u64,
     by: String,
+    /// MCP: the community roles application it's for (roles.rs; 0: none)
+    #[serde(default, skip_serializing_if = "is_zero")]
+    app: u64,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -146,7 +156,7 @@ pub struct Helper(pub Member);
 /// Tests: a helper as `guard` would let one through (nothing is saved).
 #[cfg(test)]
 pub(crate) fn test_member(role: Role, server: &str) -> Member {
-    Member { id: "m-test".into(), name: "Helper".into(), role, server: server.into(), key: String::new(), steam: String::new(), added: String::new(), invited_by: "owner".into(), seen: None }
+    Member { id: "m-test".into(), name: "Helper".into(), role, server: server.into(), key: String::new(), steam: String::new(), added: String::new(), invited_by: "owner".into(), seen: None, app: 0 }
 }
 
 static STORE: Mutex<()> = Mutex::new(());
@@ -252,6 +262,33 @@ pub fn decode_invite(s: &str) -> Option<InviteText> {
 
 /// A new invite to `server` (one person, one day).
 fn invite(server: &str, role: Role, steam: &str, by: &str, addresses: Option<Vec<String>>) -> Result<(String, String), String> {
+    invite_with(server, role, steam, by, addresses, 0)
+}
+
+/// MCP: a Moderator invite for a community roles application (roles.rs): bound to the applicant's
+/// SteamID, one use, a day. `by`: "owner" or the inviting Admin's member id. (id, invite text, expires)
+pub fn invite_for_application(server: &str, steam: &str, by: &str, app: u64) -> Result<(String, String, u64), String> {
+    if !crate::admins::valid_steamid(&steam.trim().to_uppercase()) {
+        return Err("The applicant's SteamID isn't one an invite can carry.".into());
+    }
+    let (id, text) = invite_with(server, Role::Moderator, steam, by, None, app)?;
+    Ok((id, text, now() + INVITE_HOURS * 3600))
+}
+
+/// MCP: whoever came in by a community roles application on `server`, if they still have access.
+pub fn member_of_application(server: &str, app: u64) -> Option<Member> {
+    load().members.into_iter().find(|m| m.server == server && m.app == app && app != 0)
+}
+
+/// MCP: an unused invite made for a community roles application stops working (its id).
+pub fn cancel_application_invites(server: &str, app: u64) {
+    let _ = edit(|s| {
+        s.invites.retain(|i| !(i.server == server && i.app == app && app != 0));
+        Ok(())
+    });
+}
+
+fn invite_with(server: &str, role: Role, steam: &str, by: &str, addresses: Option<Vec<String>>, app: u64) -> Result<(String, String), String> {
     let e = crate::servers::get(server).filter(|e| e.ready).ok_or("That server isn't set up.")?;
     let steam = steam.trim().to_uppercase();
     if !steam.is_empty() && !crate::admins::valid_steamid(&steam) {
@@ -275,7 +312,7 @@ fn invite(server: &str, role: Role, steam: &str, by: &str, addresses: Option<Vec
         if s.invites.iter().filter(|i| i.server == server).count() >= MAX_INVITES {
             return Err(format!("There are already {MAX_INVITES} unused invites for this server. Wait for them to be used or run out (a day)."));
         }
-        s.invites.push(Invite { id: id.clone(), code: sha(&secret), role, server: server.into(), steam: steam.clone(), expires: now() + INVITE_HOURS * 3600, by: by.into() });
+        s.invites.push(Invite { id: id.clone(), code: sha(&secret), role, server: server.into(), steam: steam.clone(), expires: now() + INVITE_HOURS * 3600, by: by.into(), app });
         Ok((s.addresses.clone(), s.port.unwrap_or(DEFAULT_PORT)))
     })?;
     Ok((id, encode_invite(&InviteText { a: addrs, p: port, f: fingerprint, c: secret, s: e.name, r: role })))
@@ -303,6 +340,7 @@ fn redeem(secret: &str, name: &str) -> Result<(Member, String), String> {
             added: crate::sys::stamp(),
             invited_by: inv.by,
             seen: Some(now()),
+            app: inv.app,
         };
         s.members.push(m.clone());
         Ok(m)
@@ -395,7 +433,7 @@ fn seen(id: &str) {
 // ---- activity ----------------------------------------------------------------------
 
 fn log_dir() -> PathBuf {
-    crate::sys::app_dir().join("control-log")
+    crate::localdata::dir("control-log")
 }
 
 /// A change a helper made goes in the server's log (bodies without anything secret-looking).
@@ -818,6 +856,12 @@ fn server_invite(st: &Shared, e: &crate::servers::Entry, role: Role, steam: &str
 
 /// People on a Linux server's own list with a SteamID are in-game admins there with their
 /// role (`gone`: no longer). Kept in this app's copy of the server's admins and sent up.
+/// MCP: people a Linux server's ls-control removed (community roles revoke) lose their in-game role
+/// in this app's copy of its admins too.
+pub fn server_game_admins_gone(e: &crate::servers::Entry, people: &[Value]) {
+    server_game_admins(e, people, true);
+}
+
 fn server_game_admins(e: &crate::servers::Entry, people: &[Value], gone: bool) {
     let Some(g) = crate::servers::game_for(&e.id, || None) else { return };
     let mut changed = false;
@@ -962,36 +1006,47 @@ async fn api_remove(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Optio
             server_game_admins(&e, &gone, true);
             return Ok(json!({"ok": true, "removed": gone.len(), "left_bans": false}));
         }
-        edit(|s| {
-            let i = s.members.iter().position(|m| m.id == mid).ok_or("They don't have access any more.")?;
-            // invites they made, and the people who came in through them (an Admin's
-            // Moderators), end with them
-            s.invites.retain(|inv| inv.by != mid);
-            let mut gone = vec![s.members.remove(i)];
-            let (theirs, rest): (Vec<Member>, Vec<Member>) = std::mem::take(&mut s.members).into_iter().partition(|m| m.invited_by == mid);
-            s.members = rest;
-            s.invites.retain(|inv| !theirs.iter().any(|t| t.id == inv.by));
-            gone.extend(theirs);
-            Ok(gone)
-        })
-        .map(|gone| {
-            for m in &gone {
-                game_admin(m, None);
-            }
-            // nobody helps any more: bans changed there while they did aren't passed on to
-            // the owner's other servers (it leaves the shared ban list; ticking it again shares)
-            let mut left_bans = false;
-            if let Some(server) = gone.first().map(|m| m.server.clone()) {
-                if !has_helpers(&server) && crate::lists::memberships(&server).iter().any(|l| l == "bans") {
-                    crate::lists::leave(&server, "bans");
-                    left_bans = true;
-                }
-            }
-            quiet_if_unused();
-            json!({"ok": true, "removed": gone.len(), "left_bans": left_bans})
-        })
+        remove_member(&mid)
     })
     .await
+}
+
+/// Takes someone's access away on this computer (and the in-game role, and whoever an Admin
+/// brought in). MCP: someone who came in by a community roles application is revoked on the list
+/// service too (the Discord role goes).
+pub fn remove_member(mid: &str) -> Result<Value, String> {
+    edit(|s| {
+        let i = s.members.iter().position(|m| m.id == *mid).ok_or("They don't have access any more.")?;
+        // invites they made, and the people who came in through them (an Admin's
+        // Moderators), end with them
+        s.invites.retain(|inv| inv.by != *mid);
+        let mut gone = vec![s.members.remove(i)];
+        let (theirs, rest): (Vec<Member>, Vec<Member>) = std::mem::take(&mut s.members).into_iter().partition(|m| m.invited_by == *mid);
+        s.members = rest;
+        s.invites.retain(|inv| !theirs.iter().any(|t| t.id == inv.by));
+        gone.extend(theirs);
+        Ok(gone)
+    })
+    .map(|gone| {
+        for m in &gone {
+            game_admin(m, None);
+            if m.app != 0 {
+                let (server, app) = (m.server.clone(), m.app);
+                std::thread::spawn(move || crate::roles::revoked(&server, app));
+            }
+        }
+        // nobody helps any more: bans changed there while they did aren't passed on to
+        // the owner's other servers (it leaves the shared ban list; ticking it again shares)
+        let mut left_bans = false;
+        if let Some(server) = gone.first().map(|m| m.server.clone()) {
+            if !has_helpers(&server) && crate::lists::memberships(&server).iter().any(|l| l == "bans") {
+                crate::lists::leave(&server, "bans");
+                left_bans = true;
+            }
+        }
+        quiet_if_unused();
+        json!({"ok": true, "removed": gone.len(), "left_bans": left_bans})
+    })
 }
 
 #[derive(Deserialize)]
@@ -1014,7 +1069,11 @@ async fn api_redeem(Json(req): Json<RedeemReq>) -> Reply {
         let m2 = m.clone();
         std::thread::spawn(move || {
             game_admin(&m2, Some(m2.role));
-            log_change(&m2, "/api/control/redeem", Some(&json!({"invited_by": m2.invited_by})), None);
+            log_change(&m2, "/api/control/redeem", Some(&json!({"invited_by": m2.invited_by, "application": m2.app})), None);
+            // MCP: came in by a community roles application: the list service gives the Discord role
+            if m2.app != 0 {
+                crate::roles::redeemed(&m2.server, m2.app, &m2.id);
+            }
         });
         Ok(json!({"ok": true, "key": key, "member": m.id, "role": m.role, "server": {"id": e.id, "name": e.name, "game": e.game}}))
     })
@@ -1241,7 +1300,7 @@ async fn api_cancel_invite(UrlPath(iid): UrlPath<String>, headers: HeaderMap, on
             let n = s.invites.len();
             s.invites.retain(|i| i.id.is_empty() || i.id != iid);
             if s.invites.len() == n {
-                return Err("That invite was already used, cancelled or ran out.".into());
+                return Err("That invite was already used, canceled or ran out.".into());
             }
             Ok(json!({"ok": true}))
         });

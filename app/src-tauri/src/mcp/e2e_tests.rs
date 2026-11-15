@@ -1,0 +1,451 @@
+//! End to end, as an agent works: JSON-RPC `tools/call` requests through the connector into
+//! the map editor's real routes (its own editor in a temp folder, no game: nothing reaches the
+//! person's game or app files) and the Game Mode Studio's own checks and plugin generator.
+//! The two compilers are stand-ins (SDHLT and amxxpc need the game; the real map compile has
+//! its opt-in test in tools/compile.rs, the Studio's in tools/studio): they answer the way
+//! the real routes do, the Studio's from its real checks and generator.
+
+use super::*;
+use crate::server::AppState;
+use crate::tools::studio::{gen, graph};
+use axum::http::HeaderMap;
+use std::sync::RwLock;
+
+fn state() -> Shared {
+    Arc::new(AppState {
+        current: RwLock::new(None),
+        hosts: RwLock::new(vec!["127.0.0.1:8027".into()]),
+        lan_hosts: RwLock::new(vec![]),
+        token: RwLock::new("testtoken0123456789".into()),
+        app: OnceLock::new(),
+        phone: Mutex::new(crate::app_api::Phone::default()),
+    })
+}
+
+type Calls = Arc<Mutex<Vec<String>>>;
+
+/// The compilers' stand-ins (same paths and answers as tools/compile.rs and tools/studio).
+fn stand_ins(calls: Calls) -> Router<Shared> {
+    let (c1, c2) = (calls.clone(), calls.clone());
+    Router::new()
+        .route("/api/tools/compile/start", post(move |Json(b): Json<Value>| {
+            let c = c1.clone();
+            async move {
+                c.lock().unwrap().push(format!("compile {b}"));
+                Json(json!({"ok": true, "job": 1, "map": "ls_agent_room"}))
+            }
+        }))
+        .route("/api/tools/compile/progress", get(|| async {
+            Json(json!({"job": {"id": 1, "kind": "compile", "running": false, "stage": "done", "label": "Done", "fraction": 1.0, "problems": [], "leak": null,
+                "result": {"bsp": "ls_agent_room.bsp", "installed": false}, "error": null, "stopped": false}, "lines": ["> sdHLCSG", "> sdHLBSP", "> sdHLRAD"], "next": 3}))
+        }))
+        .route("/api/tools/studio/validate", post(|Json(b): Json<Value>| async move {
+            match graph::from_value(b["graph"].clone()) {
+                Ok(g) => Json(json!({"problems": graph::validate(&g)})),
+                Err(e) => Json(json!({"error": e})),
+            }
+        }))
+        .route("/api/tools/studio/generate", post(|Json(b): Json<Value>| async move {
+            let g = match graph::from_value(b["graph"].clone()) {
+                Ok(g) => g,
+                Err(e) => return Json(json!({"error": e})),
+            };
+            let problems = graph::validate(&g);
+            if graph::has_errors(&problems) {
+                return Json(json!({"problems": problems}));
+            }
+            let out = gen::generate(&g, false);
+            Json(json!({"problems": problems, "source": out.source, "spans": out.spans, "plugin": gen::plugin_name(&g.mode.id)}))
+        }))
+        .route("/api/tools/studio/compile", post(move |Json(b): Json<Value>| {
+            let c = c2.clone();
+            async move {
+                // the real route checks, generates, runs amxxpc and installs; here: checks and
+                // generates, and says what it would install
+                let g = match graph::from_value(b["graph"].clone()) {
+                    Ok(g) => g,
+                    Err(e) => return Json(json!({"error": e})),
+                };
+                let problems = graph::validate(&g);
+                if graph::has_errors(&problems) {
+                    return Json(json!({"ok": false, "problems": problems}));
+                }
+                let out = gen::generate(&g, false);
+                c.lock().unwrap().push(format!("studio compile {} ({} lines)", g.mode.id, out.source.lines().count()));
+                Json(json!({"ok": true, "problems": problems, "plugin": gen::plugin_name(&g.mode.id), "installedAs": g.mode.id, "output": "stand-in: not installed", "debug": false}))
+            }
+        }))
+        .route("/api/tools/studio/graph/:id", get(|| async { Json(json!({"error": "There's no graph with that id."})) }))
+        .route("/api/tools/creatures", get(|| async { Json(json!({"types": [], "templates": []})) }))
+}
+
+struct Agent {
+    ctx: Ctx,
+    sessions: rpc::Sessions,
+    asked: Arc<Mutex<Vec<String>>>,
+    calls: Calls,
+    dir: std::path::PathBuf,
+}
+
+impl Agent {
+    fn new() -> Agent {
+        let dir = std::env::temp_dir().join(format!("ls-mcp-e2e-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let calls: Calls = Arc::default();
+        let app = crate::tools::editor::routes_in(dir.clone()).merge(stand_ins(calls.clone())).with_state(state());
+        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let a = asked.clone();
+        Agent {
+            ctx: Ctx { app, host: "127.0.0.1:8027".into(), changes: true, confirm: Arc::new(move |t| {
+                a.lock().unwrap().push(t);
+                true
+            }), log: Arc::new(Log::default()), st: None },
+            sessions: rpc::Sessions::default(),
+            asked,
+            calls,
+            dir,
+        }
+    }
+
+    /// One tools/call over JSON-RPC (the modern era, headers mirrored); the tool's JSON answer.
+    async fn call(&self, name: &str, args: Value) -> Value {
+        let meta = json!({"io.modelcontextprotocol/protocolVersion": rpc::MODERN, "io.modelcontextprotocol/clientInfo": {"name": "e2e", "version": "1"}, "io.modelcontextprotocol/clientCapabilities": {}});
+        let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args, "_meta": meta}});
+        let mut h = HeaderMap::new();
+        h.insert("mcp-protocol-version", rpc::MODERN.parse().unwrap());
+        h.insert("mcp-method", "tools/call".parse().unwrap());
+        h.insert("mcp-name", name.parse().unwrap());
+        let r = rpc::handle(&self.ctx, &self.sessions, &h, body.to_string().as_bytes()).await;
+        assert_eq!(r.status, StatusCode::OK, "{name}: {:?}", r.body);
+        let res = r.body.unwrap()["result"].clone();
+        let text = res["content"][0]["text"].as_str().unwrap_or("").to_string();
+        assert_ne!(res["isError"], true, "{name} {args}: {text}");
+        serde_json::from_str(&text).unwrap_or(Value::String(text))
+    }
+}
+
+impl Drop for Agent {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn ids(v: &Value) -> Vec<u64> {
+    v.as_array().into_iter().flatten().filter_map(Value::as_u64).collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
+    let ag = Agent::new();
+
+    // ---- 1. a small map: a room, hollowed, a light, spawns, a texture lined up --------------
+    ag.call("editor_new", json!({})).await;
+    let doc = ag.call("editor_state", json!({"limit": 500})).await;
+    let brushes: Vec<u64> = doc["brushes"].as_array().unwrap().iter().filter_map(|b| b["id"].as_u64()).collect();
+    let entities: Vec<u64> = doc["entities"].as_array().unwrap().iter().filter_map(|e| e["id"].as_u64()).collect();
+    ag.call("editor_delete", json!({"brushes": brushes, "entities": entities})).await;
+    let room = ag.call("editor_add_shape", json!({"shape": "box", "min": [-256, -256, 0], "max": [256, 256, 192], "texture": "BRICK01"})).await;
+    let room_id = ids(&room["created"]["brushes"])[0];
+    let walls = ag.call("editor_hollow", json!({"brushes": [room_id], "thickness": 16})).await;
+    let walls = ids(&walls["created"]["brushes"]);
+    assert_eq!(walls.len(), 6, "a hollow box is six walls: {walls:?}");
+    // the floor: the wall whose top is lowest; its face that looks up
+    let faces = ag.call("editor_faces", json!({"brushes": walls})).await;
+    let mut floor_face = None;
+    let state = ag.call("editor_state", json!({"limit": 500})).await;
+    for b in state["brushes"].as_array().unwrap() {
+        if b["max"][2].as_f64() == Some(16.0) {
+            let id = b["id"].as_u64().unwrap();
+            let f = faces["brushes"].as_array().unwrap().iter().find(|x| x["brush"] == id).unwrap();
+            let up = f["faces"].as_array().unwrap().iter().find(|x| x["facing"] == "up").unwrap()["face"].as_u64().unwrap();
+            floor_face = Some((id, up));
+        }
+    }
+    let (floor_id, up) = floor_face.expect("the floor slab is 0..16 high");
+    ag.call("editor_set_texture", json!({"faces": [[floor_id, up]], "texture": "FLOOR01"})).await;
+    ag.call("editor_align_texture", json!({"faces": [[floor_id, up]], "action": "set", "scale_u": 0.5, "scale_v": 0.5, "rotation": 0})).await;
+    ag.call("editor_align_texture", json!({"faces": [[floor_id, up]], "action": "justify", "mode": "center"})).await;
+    let after = ag.call("editor_faces", json!({"brushes": [floor_id]})).await;
+    let top = after["brushes"][0]["faces"].as_array().unwrap().iter().find(|f| f["face"] == up).unwrap().clone();
+    assert_eq!(top["texture"], "FLOOR01");
+    assert_eq!(top["align"]["scaleU"], 0.5, "{top}");
+    // a light, and spawns: one CT spawn sunk into the floor on purpose (Checks should find it)
+    ag.call("editor_add_entity", json!({"classname": "light", "origin": [0, 0, 128], "keys": {"_light": "255 255 230 300"}})).await;
+    let stuck = ag.call("editor_add_entity", json!({"classname": "info_player_start", "origin": [-128, 0, 20]})).await;
+    let stuck = ids(&stuck["created"]["entities"])[0];
+    ag.call("editor_add_entity", json!({"classname": "info_player_deathmatch", "origin": [128, 0, 60]})).await;
+
+    // ---- 2. the checks, and a fix by id ----------------------------------------------------
+    let f = ag.call("editor_findings", json!({})).await;
+    let stuck_finding = f["findings"].as_array().unwrap().iter().find(|x| x["kind"] == "stuck-in-solid" && ids(&x["entities"]).contains(&stuck)).unwrap_or_else(|| panic!("no stuck-in-solid for the sunk spawn: {f}")).clone();
+    assert_eq!(stuck_finding["severity"], "error", "{stuck_finding}");
+    assert!(stuck_finding["location"].is_array());
+    let fix = stuck_finding["fixes"][0]["fixId"].as_str().unwrap().to_string();
+    let fixed = ag.call("editor_apply_fix", json!({"fixId": fix})).await;
+    assert_eq!(fixed["changed"], true, "{fixed}");
+    let f2 = ag.call("editor_findings", json!({"kind": "stuck-in-solid"})).await;
+    assert_eq!(f2["matched"], 0, "the spawn is out of the floor now: {f2}");
+    // the move is one undo step, named in the history
+    let hist = ag.call("editor_history", json!({})).await;
+    assert!(hist.to_string().to_lowercase().contains("fix"), "{hist}");
+
+    // ---- 3. the Budget ---------------------------------------------------------------------
+    let b = ag.call("editor_budget", json!({})).await;
+    let bars = b["bars"].as_array().unwrap();
+    for id in ["precache_models", "precache_sounds"] {
+        let bar = bars.iter().find(|x| x["id"] == id).unwrap_or_else(|| panic!("{id}: {b}"));
+        assert!(bar["used"].as_u64().unwrap() >= 197, "the game's baseline is in: {bar}");
+        assert_eq!(bar["status"], "green");
+    }
+    assert!(bars.iter().any(|x| x["group"] == "as you build" && x["id"].as_str().is_some_and(|i| i.contains("entit"))), "{b}");
+    assert_eq!(b["warnings"], json!([]));
+
+    // ---- 4. compile and read the result ----------------------------------------------------
+    let started = ag.call("compile_start", json!({"preset": "fast", "name": "ls_agent_room"})).await;
+    assert_eq!(started["ok"], true);
+    let p = ag.call("compile_progress", json!({"from": 0})).await;
+    assert_eq!(p["job"]["stage"], "done");
+    assert_eq!(p["job"]["result"]["bsp"], "ls_agent_room.bsp");
+    assert!(ag.calls.lock().unwrap().iter().any(|c| c.contains("\"preset\":\"fast\"")));
+
+    // ---- 5. a Studio mode: an event, a node and wires --------------------------------------
+    let d = ag.call("studio_draft_open", json!({"id": "agent_e2e", "from": "new", "name": "Agent test"})).await;
+    assert_eq!(d["nodes"], json!([]));
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_node", "type": "event.player_killed", "x": 0, "y": 0},
+        {"op": "add_node", "type": "msg.chat", "x": 400, "y": 0},
+    ]})).await;
+    let (ev, chat) = (r["results"][0]["result"].as_str().unwrap().to_string(), r["results"][1]["result"].as_str().unwrap().to_string());
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "connect", "from": {"node": ev, "pin": "then"}, "to": {"node": chat, "pin": "exec"}},
+        {"op": "connect", "from": format!("{ev}.attacker"), "to": format!("{chat}.player")},
+        {"op": "set_value", "node": chat, "param": "text", "value": "Nice shot!"},
+    ]})).await;
+    assert!(r["results"][0]["result"].as_str().is_some_and(|w| w.starts_with('w')), "{r}");
+    let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    // a wrong wire is refused and nothing changes
+    let bad = catalog::call_tool(&ag.ctx, "studio_edit", json!({"id": "agent_e2e", "ops": [{"op": "connect", "from": format!("{ev}.headshot"), "to": format!("{chat}.exec")}]})).await;
+    assert_eq!(bad["isError"], true, "{bad}");
+    let view = ag.call("studio_draft", json!({"id": "agent_e2e"})).await;
+    let chat_node = view["nodes"].as_array().unwrap().iter().find(|n| n["id"] == chat.as_str()).unwrap();
+    assert_eq!(chat_node["settings"]["text"], "Nice shot!");
+    assert!(chat_node["inputs"].as_array().unwrap().iter().any(|p| p["id"] == "exec" && p["wires"].is_array()), "{chat_node}");
+    assert_eq!(view["errors"], 0);
+    // undo and redo the wiring batch
+    let u = ag.call("studio_draft_undo", json!({"id": "agent_e2e"})).await;
+    assert_eq!(u["wires"], json!([]));
+    let u = ag.call("studio_draft_redo", json!({"id": "agent_e2e"})).await;
+    assert_eq!(u["wires"].as_array().unwrap().len(), 2);
+
+    // event graph tabs, custom events and timelines (Studio parity): a custom event on its own tab,
+    // called from the kill event, with an input pin from the custom event's own inputs
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_event_graph", "name": "Rewards"},
+        {"op": "add_custom_event", "name": "Reward", "inputs": [{"name": "Who", "type": "player"}]},
+        {"op": "add_timeline", "name": "Pulse", "length": 2, "loop": true},
+    ]})).await;
+    let (eg, ce, tl) = (r["results"][0]["result"].as_str().unwrap().to_string(), r["results"][1]["result"].as_str().unwrap().to_string(), r["results"][2]["result"].as_str().unwrap().to_string());
+    assert_eq!((eg.as_str(), ce.as_str(), tl.as_str()), ("eg1", "ce1", "tl1"), "{r}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_node", "type": "event.custom", "params": {"event": ce}, "graph": eg, "x": 0, "y": 300},
+        {"op": "add_node", "type": "event.call", "params": {"event": ce}, "x": 800, "y": 0},
+    ]})).await;
+    let (on, call) = (r["results"][0]["result"].as_str().unwrap().to_string(), r["results"][1]["result"].as_str().unwrap().to_string());
+    let view = ag.call("studio_draft", json!({"id": "agent_e2e"})).await;
+    let on_node = view["nodes"].as_array().unwrap().iter().find(|n| n["id"] == on.as_str()).unwrap();
+    assert_eq!(on_node["graph"], eg.as_str());
+    assert!(on_node["outputs"].as_array().unwrap().iter().any(|p| p["id"] == "a1" && p["type"] == "player"), "the custom event's input is a pin: {on_node}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "connect", "from": format!("{chat}.then"), "to": format!("{call}.exec")},
+        {"op": "connect", "from": format!("{ev}.attacker"), "to": format!("{call}.a1")},
+    ]})).await;
+    let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(ag.call("studio_draft", json!({"id": "agent_e2e"})).await["timelines"][0]["name"], "Pulse");
+    // a data table and a Get Row on it: its columns are pins
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_table", "name": "Prices", "key": "item", "columns": [{"id": "item", "name": "Item", "type": "text"}, {"id": "cost", "name": "Cost", "type": "number"}], "rows": [["armor", 650], ["helmet", 350]]},
+    ]})).await;
+    let dt = r["results"][0]["result"].as_str().unwrap().to_string();
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [{"op": "add_node", "type": "table.get_row", "params": {"table": dt}, "x": 0, "y": 900}]})).await;
+    let row = r["results"][0]["result"].as_str().unwrap().to_string();
+    let view = ag.call("studio_draft", json!({"id": "agent_e2e"})).await;
+    assert_eq!(view["dataTables"][0]["rows"][1][0], "helmet");
+    let row_node = view["nodes"].as_array().unwrap().iter().find(|n| n["id"] == row.as_str()).unwrap();
+    assert!(row_node["outputs"].as_array().unwrap().iter().any(|p| p["id"] == "cost" && p["type"] == "number"), "{row_node}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [{"op": "remove", "ids": [row]}, {"op": "remove_table", "table": dt}]})).await;
+    assert!(r["results"].is_array(), "{r}");
+    assert!(ag.call("studio_draft", json!({"id": "agent_e2e"})).await["dataTables"].as_array().map_or(true, |a| a.is_empty()));
+    let help = ag.call("studio_node_help", json!({"type": "event.custom"})).await;
+    assert!(help["help"]["what"].is_string(), "{help}");
+
+    // ---- 6. compile it -----------------------------------------------------------------------
+    // (the plugin comes in pages: read them all)
+    let mut text = String::new();
+    let mut offset = 0;
+    loop {
+        let code = ag.call("studio_code", json!({"id": "agent_e2e", "draft": true, "offset": offset})).await;
+        text.push_str(code["text"].as_str().unwrap_or_default());
+        match code["next"].as_u64() {
+            Some(n) if n > offset as u64 => offset = n as usize,
+            _ => break,
+        }
+    }
+    assert!(text.contains("Nice shot!"), "the plugin says it");
+    let built = ag.call("studio_compile", json!({"id": "agent_e2e", "draft": true})).await;
+    assert_eq!(built["ok"], true, "{built}");
+    assert_eq!(built["plugin"], gen::plugin_name("agent_e2e"));
+    // installing into the game is asked about first; nothing else was
+    let asked = ag.asked.lock().unwrap().clone();
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert!(asked[0].contains("install"), "{asked:?}");
+    assert!(ag.calls.lock().unwrap().iter().any(|c| c.starts_with("studio compile agent_e2e")));
+}
+
+/// The final Studio check over MCP: an agent sees the new categories and types, reads each new
+/// node's help and pins, and builds a mode with Spawn Projectile + Projectile Hit, View From, Player
+/// Pressed Button + Cooldown, a Trigger Volume's overlap and the typed values (Color, a Creature
+/// cast, a Hit Zone into Switch on Enum) through studio_edit; it checks clean and compiles.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_builds_a_mode_with_the_new_nodes_and_types() {
+    let ag = Agent::new();
+    let reg = ag.call("studio_nodes", json!({"search": ""})).await;
+    for c in ["Colors", "Files", "Projectiles", "Collision", "HUD & View"] {
+        assert!(reg["categories"].as_array().unwrap().iter().any(|x| x == c), "category {c}");
+    }
+    for t in ["color", "model", "sprite", "sound", "creature", "npc", "projectile", "volume", "objmarker", "component", "soundloop"] {
+        assert!(reg["pinTypes"][t]["label"].is_string(), "pin type {t}");
+    }
+    for k in ["proj.spawn", "proj.on_hit", "fun.view_from", "in.pressed", "cd.start", "vol.spawn", "vol.on_begin", "color.make", "color.literal", "cast.npc", "cast.creature", "ent.set_transform"] {
+        let h = ag.call("studio_node_help", json!({"type": k})).await;
+        assert!(h["help"]["what"].is_string(), "{k}: {h}");
+    }
+    ag.call("studio_draft_open", json!({"id": "agent_types", "from": "new", "name": "Agent types"})).await;
+    let r = ag.call("studio_edit", json!({"id": "agent_types", "ops": [
+        {"op": "add_node", "type": "in.pressed", "x": 0, "y": 0},
+        {"op": "add_node", "type": "cd.start", "x": 300, "y": 0},
+        {"op": "add_node", "type": "proj.spawn", "x": 600, "y": 0},
+        {"op": "add_node", "type": "proj.on_hit", "x": 0, "y": 300},
+        {"op": "add_node", "type": "flow.switch_enum", "x": 300, "y": 300},
+        {"op": "add_node", "type": "fun.view_from", "x": 600, "y": 300},
+        {"op": "add_node", "type": "event.round_started", "x": 0, "y": 600},
+        {"op": "add_node", "type": "vol.spawn", "x": 300, "y": 600},
+        {"op": "add_node", "type": "vol.on_begin", "x": 0, "y": 900},
+        {"op": "add_node", "type": "player.set_glow", "x": 300, "y": 900},
+        {"op": "add_node", "type": "color.literal", "x": 0, "y": 1100},
+        {"op": "add_node", "type": "cast.player", "x": 150, "y": 900},
+        {"op": "add_node", "type": "flow.pick_entity", "x": 150, "y": 600, "params": {"by": "class", "name": "info_player_start"}},
+    ]})).await;
+    let id = |i: usize| r["results"][i]["result"].as_str().unwrap().to_string();
+    let (press, cd, shoot, hit, sw, view, rs, vol, enter, glow, col, asp, pe) = (id(0), id(1), id(2), id(3), id(4), id(5), id(6), id(7), id(8), id(9), id(10), id(11), id(12));
+    let r = ag.call("studio_edit", json!({"id": "agent_types", "ops": [
+        {"op": "connect", "from": format!("{press}.then"), "to": format!("{cd}.exec")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{cd}.player")},
+        {"op": "connect", "from": format!("{cd}.then"), "to": format!("{shoot}.exec")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{shoot}.owner")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{shoot}.at_ent")},
+        {"op": "connect", "from": format!("{hit}.then"), "to": format!("{sw}.exec")},
+        {"op": "set_value", "node": sw, "param": "enum", "value": "ls_hitzone"},
+        {"op": "connect", "from": format!("{hit}.zone"), "to": format!("{sw}.in")},
+        {"op": "connect", "from": format!("{sw}.v1"), "to": format!("{view}.exec")},
+        {"op": "connect", "from": format!("{hit}.owner"), "to": format!("{view}.player")},
+        {"op": "connect", "from": format!("{hit}.proj"), "to": format!("{view}.from")},
+        {"op": "connect", "from": format!("{rs}.then"), "to": format!("{pe}.exec")},
+        {"op": "connect", "from": format!("{pe}.then"), "to": format!("{vol}.exec")},
+        {"op": "connect", "from": format!("{pe}.entity"), "to": format!("{vol}.at_ent")},
+        {"op": "connect", "from": format!("{enter}.then"), "to": format!("{asp}.exec")},
+        {"op": "connect", "from": format!("{enter}.who"), "to": format!("{asp}.in")},
+        {"op": "connect", "from": format!("{asp}.ok"), "to": format!("{glow}.exec")},
+        {"op": "connect", "from": format!("{asp}.out"), "to": format!("{glow}.player")},
+        {"op": "connect", "from": format!("{col}.out"), "to": format!("{glow}.color")},
+    ]})).await;
+    let bad: Vec<&Value> = r["results"].as_array().unwrap().iter().filter(|x| x["ok"] == false).collect();
+    assert!(bad.is_empty(), "{bad:#?}");
+    let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let code = ag.call("studio_code", json!({"id": "agent_types", "draft": true})).await;
+    // (the plugin comes in pages; it starts with its header and has no problems)
+    assert!(code["text"].as_str().unwrap_or_default().contains("Agent types - made with"), "{code}");
+    assert_eq!(code["problems"], json!([]));
+    let built = ag.call("studio_compile", json!({"id": "agent_types", "draft": true})).await;
+    assert_eq!(built["ok"], true, "{built}");
+}
+
+/// P5: leak tracing as an agent: the line of a leaking compile, its hole and the brushes there.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_finds_the_leak() {
+    let _turn = crate::tools::editor::leak::TEST_LOCK.lock().await;
+    let ag = Agent::new();
+    ag.call("editor_new", json!({})).await;
+    let doc = ag.call("editor_state", json!({"limit": 500})).await;
+    let brushes: Vec<u64> = doc["brushes"].as_array().unwrap().iter().filter_map(|b| b["id"].as_u64()).collect();
+    let entities: Vec<u64> = doc["entities"].as_array().unwrap().iter().filter_map(|e| e["id"].as_u64()).collect();
+    ag.call("editor_delete", json!({"brushes": brushes, "entities": entities})).await;
+    // a room 0..512 whose east wall stops short of the ceiling: the gap
+    let mut made = vec![];
+    for (min, max) in [([0, 0, 0], [512, 512, 16]), ([0, 0, 240], [512, 512, 256]), ([0, 0, 16], [16, 512, 240]), ([496, 0, 16], [512, 512, 200]), ([16, 0, 16], [496, 16, 240]), ([16, 496, 16], [496, 512, 240])] {
+        let r = ag.call("editor_add_box", json!({"min": min, "max": max, "texture": "BRICK01"})).await;
+        made.push(ids(&r["created"]["brushes"])[0]);
+    }
+    ag.call("editor_add_entity", json!({"classname": "info_player_start", "origin": [256, 256, 64]})).await;
+    // nothing leaked yet
+    crate::tools::editor::leak::set(None);
+    assert_eq!(ag.call("editor_leak", json!({})).await["leaked"], false);
+    // the compile's line: from the spawn, up to the gap, out
+    let line: Vec<[f64; 3]> = vec![[256.0, 256.0, 64.0], [400.0, 256.0, 210.0], [504.0, 256.0, 220.0], [600.0, 256.0, 220.0]];
+    crate::tools::editor::leak::set(Some(crate::tools::editor::leak::Leak { points: line, pointfile: "ls_agent_room.lin".into(), from: "compile" }));
+    let l = ag.call("editor_leak", json!({})).await;
+    assert_eq!(l["leaked"], true, "{l}");
+    assert_eq!(l["pointCount"], 4);
+    assert_eq!(l["hole"]["at"], json!([504.0, 256.0, 220.0]), "{l}");
+    let near: Vec<u64> = l["nearest"].as_array().unwrap().iter().filter_map(|n| n["brush"].as_u64()).collect();
+    // the ceiling and the short east wall
+    assert!(near[..2].contains(&made[1]) && near[..2].contains(&made[3]), "{l}");
+    assert_eq!(l["start"]["classname"], "info_player_start");
+    assert!(l["advice"].as_str().unwrap().contains("world brush"));
+    // fewer points on request; the hole stays in
+    assert_eq!(ag.call("editor_leak", json!({"points": 0})).await["points"], json!([]));
+    crate::tools::editor::leak::set(None);
+}
+
+/// P5: the entity I/O view as an agent: a deathrun trap chain, its multi_manager fan-out with
+/// delays, a broken name, the chain of one entity, and the Checks fix that clears the dead key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_follows_what_triggers_what() {
+    let ag = Agent::new();
+    ag.call("editor_new", json!({})).await;
+    let add = |class: &'static str, keys: Value| {
+        let ag = &ag;
+        async move { ids(&ag.call("editor_add_entity", json!({"classname": class, "origin": [0, 0, 64], "keys": keys})).await["created"]["entities"])[0] }
+    };
+    let button = add("trigger_relay", json!({"targetname": "start", "target": "trap1_mm"})).await;
+    let mm = add("multi_manager", json!({"targetname": "trap1_mm", "trap1_spike": "0", "trap1_spike#1": "2.5", "trap1_sound": "0"})).await;
+    let spike = add("env_explosion", json!({"targetname": "trap1_spike"})).await;
+    let all = ag.call("editor_io", json!({})).await;
+    assert_eq!(all["counts"]["broken"], 1, "{all}");
+    assert_eq!(all["broken"][0]["name"], "trap1_sound");
+    let fan: Vec<&Value> = all["links"].as_array().unwrap().iter().filter(|l| l["from"] == mm).collect();
+    assert_eq!(fan.len(), 3, "{all}");
+    assert!(fan.iter().any(|l| l["key"] == "trap1_spike#1" && l["delay"] == 2.5 && l["to"] == json!([spike])));
+    // the chain from the relay: the manager and the spike (and the manager's broken name);
+    // an unrelated relay stays out
+    let other = add("trigger_relay", json!({"targetname": "elsewhere", "target": "start_light"})).await;
+    let light = add("light", json!({"targetname": "start_light"})).await;
+    let c = ag.call("editor_io", json!({"entity": button})).await;
+    assert_eq!(c["chain"]["down"], json!([mm, spike]), "{c}");
+    let names: Vec<&str> = c["links"].as_array().unwrap().iter().filter_map(|l| l["name"].as_str()).collect();
+    assert!(names.contains(&"trap1_sound") && !names.contains(&"start_light"), "{c}");
+    assert!(c["nodes"].as_array().unwrap().iter().all(|n| n["entity"] != other && n["entity"] != light));
+    let b = ag.call("editor_io", json!({"broken_only": true})).await;
+    assert_eq!(b["matched"], 1);
+    // the Checks finding and its fix take the dead name off the manager, nothing else
+    let f = ag.call("editor_findings", json!({"kind": "dangling-target"})).await;
+    assert_eq!(f["matched"], 1, "{f}");
+    assert!(f["findings"][0]["message"].as_str().unwrap().contains("fires \"trap1_sound\""), "{f}");
+    let fix = f["findings"][0]["fixes"][0]["fixId"].as_str().unwrap().to_string();
+    ag.call("editor_apply_fix", json!({"fixId": fix})).await;
+    let after = ag.call("editor_io", json!({})).await;
+    assert_eq!(after["counts"]["broken"], 0, "{after}");
+    assert_eq!(after["links"].as_array().unwrap().iter().filter(|l| l["from"] == mm).count(), 2);
+}

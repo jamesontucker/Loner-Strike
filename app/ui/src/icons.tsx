@@ -44,7 +44,32 @@ const P: Record<string, string> = {
   moderation: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   stats: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  // a wrench: tools for looking inside (and later fixing) maps
+  tools: '<path d="M4.5 19.5l7.8-7.8"/><path d="M12.3 11.7a4.5 4.5 0 0 1 5.9-6.6l-2.7 2.7.3 2.4 2.4.3 2.7-2.7a4.5 4.5 0 0 1-6.6 5.9"/>',
   kreedz: '<path d="M3 21l6-10 4 5 3-4 5 9z"/><path d="M14 6l2-3 2 3"/>',
+  // a closing circle round a parachute-ish drop marker: the zone
+  br: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="4.5"/><path d="M12 9.5v5M9.5 12h5"/>',
+  // a wall of three blocks with a shield in front: hold the line
+  laststand: '<path d="M3 20h18M4 20v-5h5v5M15 20v-5h5v5M9.5 15v-4h5v4"/><path d="M12 3.5l4 1.6v3c0 2.6-1.7 4.4-4 5.4-2.3-1-4-2.8-4-5.4v-3z"/>',
+  // ---- one per tool (views/tools/registry.tsx), by its id: tool-<id> ----
+  "tool-overview": '<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/>',
+  "tool-map": '<path d="M3 16.5l9-4 9 4-9 4z"/><path d="M4.5 8C6.5 5 9 3.8 12 3.8S17.5 5 19.5 8c-2 3-4.5 4.2-7.5 4.2S6.5 11 4.5 8z"/><circle cx="12" cy="8" r="1.7"/>',
+  "tool-replay": '<circle cx="4.5" cy="18.5" r="1.5"/><path d="M6 18.5c3 0 3-5.5 6-5.5s2.5 4 6.5 4" stroke-dasharray="2.2 2.4"/><path d="M13 3.5v8l6.5-4z"/>',
+  "tool-demos": '<rect x="3.5" y="10" width="17" height="10" rx="1"/><path d="M3.5 10l-.6-3.6 16.3-2.8.6 3.6"/><path d="M8.2 5.6l2.4 3.2M13.6 4.7l2.4 3.2"/>',
+  "tool-health": '<path d="M12 20s-8-4.7-8-10.3A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 8 2.3C20 15.3 12 20 12 20z"/><path d="M6.5 12.5h3l1.5-2.5 2 4.5 1.5-2h3"/>',
+  "tool-doctor": '<rect x="3.5" y="7.5" width="17" height="12.5" rx="1.5"/><path d="M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M12 10.8v6M9 13.8h6"/>',
+  "tool-navfix": '<path d="M8.5 3.5h7v6h-7zM3 14.5h7v6H3zM14 14.5h7v6h-7z"/><path d="M7 14.5l3-5M17 14.5l-3-5"/><path d="M10.5 17.5h3" stroke-dasharray="1 2"/>',
+  "tool-callouts": '<path d="M4 4.5h16v11h-8.5l-4.5 4v-4H4z"/><path d="M9.6 13l2.4-5.5 2.4 5.5M10.4 11.2h3.2"/>',
+  "tool-assets": '<path d="M3.5 3.5h10v10h-10z"/><path d="M3.5 8.5h10M8.5 3.5v10"/><path d="M3.5 3.5h5v5h-5zM8.5 8.5h5v5h-5z" fill="currentColor" fill-opacity=".35" stroke="none"/><path d="M17 11.5l4 2.2v4.6L17 20.5l-4-2.2v-1"/><path d="M13 13.7l4 2.3 4-2.3M17 16v4.5"/>',
+  "tool-editor": '<path d="M3.5 13l8.5-3.5 8.5 3.5-8.5 3.5z"/><path d="M3.5 13v4.5L12 21l8.5-3.5V13M12 16.5V21"/><path d="M12 7.5V2.5M9.8 4.5L12 2.5l2.2 2"/>',
+  "tool-studio": '<rect x="2.5" y="4" width="8" height="6" rx="1.2"/><rect x="13.5" y="14" width="8" height="6" rx="1.2"/><path d="M10.5 7c5 0 0 10 3 10"/><circle cx="10.5" cy="7" r=".9" fill="currentColor"/><circle cx="13.5" cy="17" r=".9" fill="currentColor"/>',
+  "tool-plugins": '<path d="M7.5 7L3 12l4.5 5M16.5 7L21 12l-4.5 5M13.5 4.5l-3 15"/>',
+  "tool-creatures": '<path d="M12 20.5c-3.4 0-5.3-1.6-5.3-3.7 0-2.6 2.5-4.8 5.3-4.8s5.3 2.2 5.3 4.8c0 2.1-1.9 3.7-5.3 3.7z"/><circle cx="5" cy="10.5" r="1.8"/><circle cx="9" cy="6" r="1.9"/><circle cx="15" cy="6" r="1.9"/><circle cx="19" cy="10.5" r="1.8"/>',
+  "tool-radar": '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6-6"/><path d="M15.6 15.2h.01" stroke-width="2.6"/>',
+  "tool-spray": '<rect x="6.5" y="9" width="8" height="12" rx="1.5"/><path d="M8.5 9V6.5h4V9M10.5 6.5V4.5h2.5"/><path d="M17 4.5h.01M19.5 3h.01M19.5 6h.01M17.5 8h.01M21 4.5h.01" stroke-width="2.2"/><path d="M6.5 13.5h8"/>',
+  "tool-playercfg": '<path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/><path d="M12 12h.01" stroke-width="2.6"/>',
+  "tool-people": '<rect x="2.5" y="5" width="19" height="14" rx="1.5"/><circle cx="8.5" cy="10.5" r="2.2"/><path d="M5 16.5c.7-1.8 2-2.8 3.5-2.8s2.8 1 3.5 2.8"/><path d="M14.5 10h4M14.5 13.5h3"/>',
+  "tool-community": '<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/>',
 };
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {

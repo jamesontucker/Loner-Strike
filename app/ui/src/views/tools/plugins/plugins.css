@@ -1,0 +1,140 @@
+/* The Plugin Studio (views/tools/plugins). */
+.ps { display: flex; flex-direction: column; gap: 10px; }
+.ps-note { margin: 0; padding: 8px 12px; border-radius: 3px; background: var(--side); color: var(--bone-dim); box-shadow: var(--sunken); }
+.ps-note.warn { color: var(--warn); }
+.ps-main { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 12px; height: max(560px, calc(100vh - 220px)); }
+
+/* files */
+.ps-files { display: flex; flex-direction: column; gap: 6px; padding: 10px; overflow: auto; min-height: 0; }
+.ps-files-head { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-folder { display: flex; flex-direction: column; gap: 2px; }
+.ps-folder-head { all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 4px; padding: 4px 2px; font-weight: 700; color: var(--bone); white-space: nowrap; }
+.ps-folder-head:hover { color: var(--signal); }
+.ps-folder-head:focus-visible, .ps-file:focus-visible, .ps-file-del:focus-visible, .ps-problem:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.ps-caret { width: 12px; color: var(--bone-faint); }
+.ps-folder-empty { margin: 2px 0 6px 16px; font-size: 13px; }
+.ps-filter { flex: none; max-width: none; margin: 2px 0 4px 16px; padding: 3px 6px; font: inherit; font-size: 13px; width: calc(100% - 16px); }
+.ps-file-list { list-style: none; margin: 0; padding: 0 0 0 12px; }
+.ps-file-list li { display: flex; align-items: center; border-radius: 2px; }
+.ps-file-list li.on { background: var(--panel-2); }
+.ps-file { all: unset; cursor: pointer; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 6px; font-size: 14px; color: var(--bone-dim); }
+.ps-file:hover, .ps-file-list li.on .ps-file { color: var(--signal); }
+.ps-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-file-del { all: unset; cursor: pointer; padding: 2px 6px; font-size: 11px; color: var(--bone-faint); opacity: 0; }
+.ps-file-list li:hover .ps-file-del, .ps-file-del:focus-visible { opacity: 1; }
+.ps-file-del:hover { color: var(--weak); }
+.ps-dirty { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); flex: none; margin-left: 6px; }
+.ps-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; box-shadow: 0 0 6px var(--ok); }
+.ps-new { padding: 8px; border-radius: 3px; background: var(--side); box-shadow: var(--sunken); }
+.ps-new .field { margin-bottom: 8px; }
+.ps-new input, .ps-new select { font: inherit; padding: 4px 6px; width: 100%; }
+.ps-new .row { display: flex; gap: 6px; }
+
+/* editor */
+.ps-editor-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.ps-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.ps-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ps-title .tag { font-size: 12px; }
+.ps-trying { color: var(--ok); }
+.ps-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-actions .btn { white-space: nowrap; }
+.ps-editor-wrap { position: relative; flex: 1 1 60%; min-height: 240px; border-radius: 3px; box-shadow: var(--sunken); overflow: hidden; background: #2b3126; }
+.ps-editor { position: absolute; inset: 0; }
+.ps-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; color: var(--bone-dim); background: #2b3126; pointer-events: none; }
+.ps-empty > * { pointer-events: auto; max-width: 46ch; }
+.ps-opening { position: absolute; top: 10px; right: 14px; }
+
+/* problems, log, output */
+.ps-bottom { flex: 0 1 34%; min-height: 150px; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; overflow: hidden; }
+.ps-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ps-result { margin-left: auto; font-size: 14px; color: var(--bone-dim); }
+.ps-result.ok { color: var(--ok); }
+.ps-result.warn { color: var(--warn); }
+.ps-result.bad { color: var(--weak); }
+.ps-tab-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.ps-tab-body > p { margin: 4px 2px; }
+.ps-good { color: var(--ok); }
+.ps-problems { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ps-problem { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 4px 6px; border-radius: 2px; cursor: pointer; }
+.ps-problem:disabled { cursor: default; }
+.ps-problem:not(:disabled):hover { background: var(--panel-2); }
+.ps-problem-where { font-variant-numeric: tabular-nums; color: var(--bone-dim); white-space: nowrap; }
+.ps-problem-kind { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.ps-problems li.bad .ps-problem-kind { color: var(--weak); }
+.ps-problems li.warn .ps-problem-kind { color: var(--warn); }
+.ps-problem-raw { font-size: 13px; }
+.ps-problem-foot { padding: 4px 6px; font-size: 14px; }
+.ps-output, .ps-log { margin: 0; font: 13px/1.45 Menlo, Consolas, monospace; color: var(--bone-dim); white-space: pre-wrap; word-break: break-word; }
+.ps-log-wrap { display: flex; flex-direction: column; gap: 4px; height: 100%; }
+.ps-log-note { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.ps-log { flex: 1 1 auto; overflow: auto; padding: 6px 8px; border-radius: 2px; background: var(--side); box-shadow: var(--sunken); min-height: 60px; }
+.ps-log .bad { color: var(--weak); }
+.ps-log-at { color: var(--bone-faint); }
+
+/* the app's own .main (the page shell) would turn Monaco's suggestion rows into columns */
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main { flex-direction: row; min-height: 0; }
+
+/* read only: the lock in the file list and the note over the editor */
+.ps-ro { margin-left: auto; font-size: 11px; color: var(--bone-dim); flex: none; }
+.ps-changed { color: var(--warn); font-size: 10px; flex: none; }
+.ps-readonly { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 6px 10px; border-radius: 3px; background: var(--side); box-shadow: var(--sunken); font-size: 14px; color: var(--bone-dim); }
+.ps-readonly-text { flex: 1 1 300px; min-width: 0; }
+.ps-readonly-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-actions kbd { font: 12px Menlo, Consolas, monospace; padding: 0 4px; border-radius: 2px; background: var(--side); color: var(--bone-faint); margin-left: 2px; }
+.ps-actions .btn[aria-pressed="true"] { color: var(--signal); }
+
+/* help & docs */
+.ps-help { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; min-height: 0; }
+@media (max-width: 1100px) { .ps-help { grid-template-columns: minmax(0, 1fr); } }
+.ps-help h4 { margin: 4px 0 6px; font-size: 14px; color: var(--bone); }
+.ps-help-box { width: 100%; font: inherit; padding: 5px 8px; }
+.ps-help-hits { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ps-help-hit { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 3px 6px; border-radius: 2px; }
+.ps-help-hit:hover, .ps-help-hits li.on .ps-help-hit { background: var(--panel-2); }
+.ps-help-hit:focus-visible, .ps-help-link:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.ps-help-hit code { color: var(--signal); font-size: 14px; }
+.ps-help-hit .muted { font-size: 13px; }
+.ps-help-line { flex-basis: 100%; font-size: 13px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-help-doc { padding: 4px 8px 8px; font-size: 14px; }
+.ps-help-doc pre { margin: 2px 0 6px; padding: 6px 8px; background: var(--side); box-shadow: var(--sunken); border-radius: 2px; font: 13px/1.4 Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.ps-help-doc p { margin: 4px 0; }
+.ps-help-doc dl { margin: 4px 0; display: grid; gap: 2px; }
+.ps-help-doc dl > div { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px; }
+.ps-help-doc dd { margin: 0; }
+.ps-help-doc .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.ps-help-dep { color: var(--warn); }
+.ps-help-guides ul { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.ps-help-guides a { color: var(--signal); }
+.ps-help-link { all: unset; cursor: pointer; color: var(--signal); text-decoration: underline; }
+.small-note { font-size: 13px; }
+
+/* Loner-Strike's docs, read in a sheet */
+.ps-md { font-size: 15px; line-height: 1.5; }
+.ps-md h2, .ps-md h3, .ps-md h4, .ps-md h5 { margin: 14px 0 6px; }
+.ps-md pre { padding: 8px 10px; background: var(--side); box-shadow: var(--sunken); border-radius: 2px; overflow: auto; font: 13px/1.45 Menlo, Consolas, monospace; }
+.ps-md code { font-family: Menlo, Consolas, monospace; font-size: .9em; }
+.ps-md a { color: var(--signal); }
+.ps-md-table { overflow-x: auto; }
+.ps-md table { border-collapse: collapse; font-size: 14px; }
+.ps-md th, .ps-md td { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+
+/* the action bar sits under the studio */
+.ps > .tl-actionbar { margin-top: 0; }
+
+.ps-files-toggle { display: none; }
+/* (last, so it wins over the rules above) narrow windows (down to 800x600): the editor first, the file list a drawer over it (Files),
+   and the tool's blurb hidden (QA4-T1 H1) */
+@media (max-width: 1000px), (max-height: 700px) {
+  .tools-head:has(~ .ps) > p { display: none; }
+  .ps-main { position: relative; grid-template-columns: minmax(0, 1fr); height: max(400px, calc(100vh - 150px)); }
+  .ps-files { display: none; }
+  .ps-files.open { display: flex; position: absolute; z-index: 5; top: 0; left: 0; bottom: 0; width: min(300px, 90%); box-shadow: 0 8px 28px rgba(0, 0, 0, .5); }
+  .ps-files-toggle { display: inline-flex; }
+  .ps-bottom { flex-basis: 30%; min-height: 120px; }
+}
+.ps-new-error { color: #f0b9a6; }
+
+/* where sharing would be: plugins aren't shared, modes are */
+.ps-share-note { margin: 4px 0 0; font-size: 12px; }
+.ps-share { gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.ps-share .ps-share-note { margin: 0; flex: 1 1 260px; }

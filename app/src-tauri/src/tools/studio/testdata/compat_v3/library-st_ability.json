@@ -1,0 +1,1162 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Ability with Cooldown",
+ "description": "A template for any ability: Use runs when it's ready, Not ready says the seconds left; Bot Wants Ability for bots.",
+ "category": "Starter: abilities",
+ "kind": "macro",
+ "root": "ab_use",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "ab_bot",
+   "name": "Bot Wants Ability",
+   "inputs": [
+    {
+     "id": "bot",
+     "name": "Bot",
+     "type": "player"
+    },
+    {
+     "id": "chance",
+     "name": "Chance a second",
+     "type": "number"
+    },
+    {
+     "id": "range",
+     "name": "Range",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "yes",
+     "name": "Use it",
+     "type": "bool"
+    }
+   ]
+  }
+ ],
+ "macros": [
+  {
+   "id": "ab_use",
+   "name": "Ability with Cooldown",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "cd",
+     "name": "Cooldown",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "use",
+     "name": "Use",
+     "type": "exec"
+    },
+    {
+     "id": "wait",
+     "name": "Not ready",
+     "type": "exec"
+    },
+    {
+     "id": "left",
+     "name": "Seconds left",
+     "type": "number"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "ab_ready",
+   "name": "Ability ready at",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "ab_seen",
+   "name": "Enemy near",
+   "type": "bool",
+   "scope": "mode",
+   "default": false
+  }
+ ],
+ "nodes": [
+  {
+   "id": "ab_use_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 10
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_now",
+   "type": "game.time",
+   "pos": {
+    "x": 1300,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_at",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 360
+   },
+   "params": {
+    "var": "ab_ready"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_left",
+   "type": "math.op",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "op": "sub"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_ready",
+   "type": "math.compare",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_next",
+   "type": "math.op",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_st",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_ready"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_ceil",
+   "type": "math.fn",
+   "pos": {
+    "x": 3120,
+    "y": 720
+   },
+   "params": {
+    "op": "ceil"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_bot_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 25
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 1080
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1260
+   },
+   "params": {
+    "value": 1500
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 1080
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_s0",
+   "type": "var.set",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_seen",
+    "value": false
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_myt",
+   "type": "player.get_team",
+   "pos": {
+    "x": 2600,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_hist",
+   "type": "player.get_team",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_other",
+   "type": "logic.equal",
+   "pos": {
+    "x": 3120,
+    "y": 360
+   },
+   "params": {
+    "of": "team",
+    "op": "ne"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_pa",
+   "type": "vec.player",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_pb",
+   "type": "vec.player",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_dist",
+   "type": "vec.distance",
+   "pos": {
+    "x": 3900,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_near",
+   "type": "math.compare",
+   "pos": {
+    "x": 4160,
+    "y": 540
+   },
+   "params": {
+    "op": "lt"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 4420,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_br2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_s1",
+   "type": "var.set",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_seen",
+    "value": true
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_isbot",
+   "type": "player.is_bot",
+   "pos": {
+    "x": 5200,
+    "y": 720
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_roll",
+   "type": "math.random",
+   "pos": {
+    "x": 5460,
+    "y": 900
+   },
+   "params": {
+    "min": 0,
+    "max": 100
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_lucky",
+   "type": "math.compare",
+   "pos": {
+    "x": 5720,
+    "y": 900
+   },
+   "params": {
+    "op": "lt"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_seen",
+   "type": "var.get",
+   "pos": {
+    "x": 5980,
+    "y": 720
+   },
+   "params": {
+    "var": "ab_seen"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_a1",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 6240,
+    "y": 720
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_a2",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 6500,
+    "y": 720
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 6760,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "ab_use_cd_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "ab_use_cd_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ab_use_cd_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ab_use_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "ab_use_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_left",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "ab_use_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_left",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "ab_use_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_ready",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "ab_use_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ab_use_ready",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "ab_use_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_next",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "ab_use_cd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_next",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ab_use_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "ab_use_next",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "ab_use_st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "use"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ab_use_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_ceil",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "ab_use_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "wait"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "ab_use_ceil",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "chance"
+   },
+   "to": {
+    "node": "ab_bot_chance_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ab_bot_chance_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "chance"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ab_bot_chance_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "range"
+   },
+   "to": {
+    "node": "ab_bot_range_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "ab_bot_range_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "range"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "ab_bot_range_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_s0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "ab_bot_s0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_myt",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ab_bot_hist",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "ab_bot_myt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_other",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "ab_bot_hist",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_other",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_pa",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ab_bot_pb",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "ab_bot_pa",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_dist",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "ab_bot_pb",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_dist",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "ab_bot_dist",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_near",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "ab_bot_range",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_near",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "ab_bot_other",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "ab_bot_near",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "ab_bot_br2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ab_bot_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_br2",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "ab_bot_br2",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ab_bot_s1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_isbot",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "ab_bot_roll",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_lucky",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "ab_bot_chance",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_lucky",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "ab_bot_isbot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "ab_bot_seen",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a1",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "ab_bot_a1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a2",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "ab_bot_lucky",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a2",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "ab_bot_a2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_ret",
+    "pin": "yes"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "ab_use",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Ability with Cooldown: Wire your key or event into In with the Player; build the ability on Use. Cooldown 0 is 10 seconds. Bots: Bot Wants Ability (Chance a second, 0: 25%) says yes when a living enemy is within Range (0: 1500) so a Repeat every second can fire it in fights."
+  },
+  {
+   "id": "c1",
+   "graph": "ab_use",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Ability with Cooldown: each player has their own cooldown. Seconds left is whole seconds (for a HUD line)."
+  }
+ ]
+}

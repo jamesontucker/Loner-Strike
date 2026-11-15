@@ -1,0 +1,15 @@
+/* Checks panel (agent Checks): filter bar, settings, groups, one finding per row */
+.ck-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ck-bar .seg { flex-wrap: wrap; }
+.ck-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 8px; }
+.ck-settings input { width: 72px; }
+.ck-bad { color: #d9775a; }
+.ck-group { margin-bottom: 10px; }
+.ck-group h4 { margin: 6px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.ck-group > .btn { margin: 0 6px 6px 0; }
+.ck .editor-issue { display: grid; gap: 3px; justify-items: start; padding: 2px 0 4px 8px; }
+.ck .editor-issue.info { border-left-color: #7fb6ff66; }
+.ck-msg { overflow-wrap: anywhere; }
+.ck-at { font-size: 12px; font-variant-numeric: tabular-nums; }
+.ck-hint { font-size: 12px; opacity: 0.8; overflow-wrap: anywhere; }
+.ck-actions { display: flex; flex-wrap: wrap; gap: 4px; }

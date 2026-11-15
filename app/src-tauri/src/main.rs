@@ -6,19 +6,29 @@ mod admins;
 mod app_api;
 mod connect;
 mod archive;
+mod caps; // [Caps]
 mod backup;
 mod browser;
 mod community;
 mod consolehints;
 mod control;
 mod content;
+mod crashes; // MCP: crash tracking for the player's servers
+mod deeplink; // P5: loner-strike:// links (Open in Loner-Strike on the website)
+mod localdata; // MCP: big folders in Local AppData on Windows, moved once from Roaming
+mod roles; // MCP: community roles, the host's side (claim, /link relay, supporters, moderator invites)
+mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
+mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
+mod compat; // W2: format versions across 1.x (docs/notes/Compat.md)
 mod extras;
+mod fastdl; // W2: fast downloads from Loner-Strike's mirror (dl.lonerstrike.com/fastdl/<server>)
 mod game;
 mod gamebanana;
 mod hltv;
 mod lists;
 mod maps;
+mod mcp;
 mod mapcopy;
 mod modevote;
 mod notify;
@@ -30,6 +40,10 @@ mod remote;
 mod scrim;
 mod server;
 mod navs;
+mod goldsrc;
+mod hlmodels;
+pub mod editor;
+mod tools;
 mod navpack;
 mod servercontent;
 mod servers;
@@ -40,6 +54,7 @@ mod setup_api;
 mod sharing;
 mod smartchat;
 mod saved;
+mod safety;
 mod sounds;
 mod steam;
 mod sys;
@@ -51,6 +66,15 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 const PORT: u16 = 8027;
 
 fn main() {
+    // `loner-strike --mcp-stdio`: the AI agents bridge only (mcp/stdio.rs), no window
+    if mcp::stdio::wanted() {
+        return mcp::stdio::run();
+    }
+
+    // Windows: crashed servers exit at once instead of waiting behind a dialog (sys.rs)
+    sys::quiet_crash_dialogs();
+    // Windows: the big folders move from Roaming to Local AppData once (localdata.rs)
+    localdata::start();
 
     // Bind before opening the window so the page never loads too early.
     // If the Python panel already has 8027, take any free port.
@@ -83,6 +107,8 @@ fn main() {
                 let _ = w.set_focus();
             }
         }))
+        // P5: loner-strike:// links (after single-instance, which hands a second launch's link here)
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -92,6 +118,7 @@ fn main() {
         .on_menu_event(|app, event| menu_clicked(app, event.id().as_ref()))
         .setup(move |app| {
             let _ = state.app.set(app.handle().clone());
+            deep_links(app);
             tauri::async_runtime::spawn(server::serve(state.clone(), listener));
             // friends helping run a shared server reach this app here (control/)
             control::listen(&state);
@@ -107,8 +134,12 @@ fn main() {
             // dedicated servers' daily restarts (Server extras, Schedule)
             servers::schedule_restarts();
             servers::sync_loop();
+            // P5 (QA4-F F5): servers made before 1.0 get the panel's RCON password file
+            servers::migrate_panel_rcon();
             // voice for servers kept running while the app was closed
             servers::resume_voice();
+            // MCP: community roles: the /link relay and supporters for claimed servers here
+            roles::start();
             // servers' Loner-Strike updates, once nobody is playing
             setup_api::auto_update_loop(state.clone());
             // Linux servers' bans, admins and settings kept here too, once a day
@@ -116,8 +147,16 @@ fn main() {
             // ready-made bot navigation for the maps this computer's game has (navpack.rs)
             navpack::start_loop();
             notify::watch(app.handle().clone(), state.clone());
+            // crash alerts to Discord, for servers that asked for them
+            crashes::watch();
+            // where the fixed Ham Sandwich is, for putting it back before Play and local starts
+            if let Some(res) = tauri::Manager::path(app).resolve("catalog", tauri::path::BaseDirectory::Resource).ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
+                hamguard::init(res);
+            }
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());
+            // AI agents (MCP), if turned on in Settings
+            mcp::start(&state);
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI
@@ -133,8 +172,34 @@ fn main() {
                 w = f64::min(w, size.width - 40.0);
                 h = f64::min(h, size.height - 60.0);
             }
+            // P5: the map editor's "Open in its own window" panels: window.open("") from the
+            // app's page gets a real window sharing the page (so it can draw the panel into it);
+            // anything else asked of window.open is refused here (outside links go through
+            // /api/app/open-url to the browser).
+            let handle = app.handle().clone();
+            let next_panel = std::sync::atomic::AtomicU32::new(1);
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                .on_new_window(move |url, features| {
+                    if url.as_str() != "about:blank" {
+                        return tauri::webview::NewWindowResponse::Deny;
+                    }
+                    let label = format!("panel-{}", next_panel.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+                    let Ok(blank) = "about:blank".parse() else { return tauri::webview::NewWindowResponse::Deny };
+                    // (P5: the page's own drag and drop, as in the main window)
+                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).disable_drag_drop_handler().enable_clipboard_access().build() {
+                        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                        Err(_) => tauri::webview::NewWindowResponse::Deny,
+                    }
+                })
                 .title("Loner-Strike")
+                // P5: Tauri's own file-drop handling swallows the page's HTML drag and drop (on
+                // Windows always, on a Mac too): the editor drags prefabs, components, models,
+                // sprites, sounds and textures onto the map, and nothing in the app takes files
+                // dropped from the desktop
+                .disable_drag_drop_handler()
+                // (Windows: WebView2 asks the person before a page reads the clipboard; the editor
+                // and the Studio paste .map text and nodes from other programs)
+                .enable_clipboard_access()
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
                 .center()
@@ -202,6 +267,12 @@ async fn check_for_update(app: tauri::AppHandle) {
 
     let Ok(updater) = app.updater_builder().on_before_exit(before_update_exit).build() else { return };
     let Ok(Some(update)) = updater.check().await else { return };
+    // (the same rule as Settings' Install: never in the middle of a setup or a restore, which
+    // the exit would cut off)
+    let busy = || crate::setup::current().state == "running" || crate::backup::restoring_any();
+    if busy() {
+        return;
+    }
     let install = app
         .dialog()
         .message(format!(
@@ -211,6 +282,10 @@ async fn check_for_update(app: tauri::AppHandle) {
         .title("Update available")
         .buttons(MessageDialogButtons::OkCancelCustom("Install".into(), "Later".into()))
         .blocking_show();
+    if install && busy() {
+        app.dialog().message("Something is being set up or restored. Update from Settings once it's finished.").title("Update later").blocking_show();
+        return;
+    }
     if install && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
         app.restart();
     }
@@ -268,6 +343,7 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:tools", "Tools").build(app)?)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;
     let help = SubmenuBuilder::new(app, "Help")
@@ -276,6 +352,34 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("link:github", "Loner-Strike on GitHub").build(app)?)
         .build()?;
     MenuBuilder::new(app).items(&[&app_menu, &edit, &view, &window, &help]).build()
+}
+
+/// P5: loner-strike:// links: the scheme registered where the app needs to do it itself
+/// (Windows; macOS reads it from the bundle's Info.plist), the link that started the app and
+/// the ones that come while it runs. Each is checked (deeplink.rs), kept for the page, and the
+/// page nudged to ask for it (it also asks when it loads).
+fn deep_links(app: &tauri::App) {
+    use tauri::Manager;
+    use tauri_plugin_deep_link::DeepLinkExt;
+    #[cfg(windows)]
+    if let Err(e) = app.deep_link().register_all() {
+        eprintln!("couldn't register {}:// links: {e}", deeplink::SCHEME);
+    }
+    let nudge = |h: &tauri::AppHandle, links: Vec<String>| {
+        if deeplink::open(&links) {
+            if let Some(w) = h.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+                let _ = w.eval("window.dispatchEvent(new CustomEvent('ls-open'))");
+            }
+        }
+    };
+    if let Ok(Some(urls)) = app.deep_link().get_current() {
+        nudge(app.handle(), urls.iter().map(|u| u.to_string()).collect());
+    }
+    let h = app.handle().clone();
+    app.deep_link().on_open_url(move |event| nudge(&h, event.urls().iter().map(|u| u.to_string()).collect()));
 }
 
 /// A menu item for the page: it listens for "ls-menu" (section:<id>, updates).

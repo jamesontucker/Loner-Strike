@@ -677,7 +677,7 @@ fn install_music(g: &Game, p: &Pack) -> Result<String, String> {
     if g.store.content.for_game(&g.dir).contains_key(&key) {
         return Err("That pack is already in.".into());
     }
-    let work = g.app.join("cache").join("downloads");
+    let work = crate::localdata::join(&g.app, "cache").join("downloads");
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let tmp = crate::sys::make_temp_dir(&work, "snd-").map_err(|e| e.to_string())?;
     let res = (|| {
@@ -860,8 +860,9 @@ async fn api_file(State(st): State<Shared>, headers: HeaderMap, Query(q): Query<
     let Some(g) = st.game() else { return not_found() };
     let Some(path) = pool_dir(&g.dir, &pool, off).and_then(|d| find_in(&d, &name)) else { return not_found() };
     let Some(kind) = sound_kind(&name) else { return not_found() };
-    let data = match tokio::task::spawn_blocking(move || std::fs::read(path)).await {
-        Ok(Ok(d)) if d.len() as u64 <= 4 * MAX_TRACK => d,
+    // [Caps] size checked before reading
+    let data = match tokio::task::spawn_blocking(move || crate::caps::read_file(&path, "sound", 4 * MAX_TRACK)).await {
+        Ok(Ok(d)) => d,
         _ => return not_found(),
     };
     let ctype = if kind == "mp3" { "audio/mpeg" } else { "audio/wav" };

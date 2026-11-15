@@ -33,6 +33,9 @@ pub const STATUS_PY: &str = include_str!("webstatus.py");
 
 /// The service's own system user on the machine
 pub const USER: &str = "lonerstrike-status";
+/// [Caps] A status page answer is a few hundred bytes; the domain is one the person typed.
+const MAX_STATUS_ANSWER: u64 = 1 << 20;
+
 const SCRIPT: &str = "/opt/lonerstrike-status/status.py";
 const DATA: &str = "/var/lib/lonerstrike-status";
 /// Root-only folder for tunnel tokens on the machine
@@ -767,7 +770,7 @@ fn check(e: &Entry) -> Result<Value, String> {
     match res {
         Ok(resp) => {
             let code = resp.status().as_u16();
-            let text = resp.text().unwrap_or_default();
+            let text = crate::caps::text_up_to(resp, "status page", MAX_STATUS_ANSWER).unwrap_or_default(); // [Caps]
             let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
             if code == 200 && v.get("online").is_some() {
                 return Ok(v);
@@ -900,7 +903,7 @@ fn health(e: &Entry) -> Value {
         said(crate::control::agent::reachable(&url, s.tunnel()).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}", crate::control::VERSION)) }))
     });
     let fastdl = s.fastdl.then(|| {
-        let map = http.get(format!("https://{}/status", s.domain)).timeout(Duration::from_secs(6)).send().ok().and_then(|r| r.json::<Value>().ok()).and_then(|v| v["map"].as_str().map(String::from)).filter(|m| crate::control::common::safe_arg(m));
+        let map = http.get(format!("https://{}/status", s.domain)).timeout(Duration::from_secs(6)).send().ok().and_then(|r| crate::caps::read_up_to(r, "status page", MAX_STATUS_ANSWER).ok()).and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| v["map"].as_str().map(String::from)).filter(|m| crate::control::common::safe_arg(m)); // [Caps]
         said(match map {
             None => Err("the status page didn't say which map is on, so there's nothing to try. Start the server and check again".into()),
             Some(map) => match http.head(format!("{}/maps/{map}.bsp", fastdl_url(&s.domain))).timeout(Duration::from_secs(8)).send() {
@@ -1241,7 +1244,7 @@ mod tests {
         assert!(sh.contains("reload-or-restart caddy") && sh.contains("Is status.example.com already used"));
 
         let t = Settings { mode: "tunnel".into(), ..s };
-        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
+        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ=="; // gitleaks:allow (made-up test token)
         let sh = install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike");
         assert!(sh.contains("https://pkg.cloudflare.com/cloudflare-main.gpg") && sh.contains("https://pkg.cloudflare.com/cloudflared any main"));
         assert!(sh.contains(&format!("<<'LSTOKEN'\n{token}\nLSTOKEN\n")));
@@ -1266,7 +1269,7 @@ mod tests {
         }
         let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false, fastdl: false };
         let t = Settings { mode: "tunnel".into(), own_tunnel: true, ..s.clone() };
-        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
+        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ=="; // gitleaks:allow (made-up test token)
         for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, None, [None, None], "", "cstrike"),
                    install_sh("pub", &Settings { fastdl: true, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "czero"), off_sh("pub"), remove_sh("pub")] {
             use std::io::Write;

@@ -7,6 +7,9 @@
 #   scripts/fork-release.sh rehlds 3.15.0.896-ls1
 #
 # The build is the newest successful run on the branch (its commit is the release's target).
+# BRANCH=ls-next3 takes another branch's newest green build; RUN=<id> one run exactly.
+# BUILD_ONLY=1 makes the zip and prints its SHA-256 without publishing anything (to check it,
+# or to try it in the re-check before the release).
 set -euo pipefail
 
 kind=${1:?regamedll or rehlds}
@@ -17,11 +20,18 @@ case "$kind" in
   *) echo "regamedll or rehlds" >&2; exit 2 ;;
 esac
 
-run=$(gh run list -R "$repo" -b loner-strike --status success -L 1 --json databaseId,headSha -q '.[0].databaseId')
-sha=$(gh run list -R "$repo" -b loner-strike --status success -L 1 --json headSha -q '.[0].headSha')
-[ -n "$run" ] || { echo "no successful build on loner-strike" >&2; exit 1; }
+branch=${BRANCH:-loner-strike}
+if [ -n "${RUN:-}" ]; then
+  run=$RUN
+  [ "$(gh run view "$run" -R "$repo" --json conclusion -q .conclusion)" = success ] || { echo "run $run isn't green" >&2; exit 1; }
+  sha=$(gh run view "$run" -R "$repo" --json headSha -q .headSha)
+else
+  run=$(gh run list -R "$repo" -b "$branch" --status success -L 1 --json databaseId,headSha -q '.[0].databaseId')
+  sha=$(gh run list -R "$repo" -b "$branch" --status success -L 1 --json headSha -q '.[0].headSha')
+fi
+[ -n "$run" ] || { echo "no successful build on $branch" >&2; exit 1; }
 
-work=$(mktemp -d)
+work=${WORK:-$(mktemp -d)}
 gh run download "$run" -R "$repo" -n win32 -D "$work/win32"
 gh run download "$run" -R "$repo" -n linux32 -D "$work/linux32"
 mkdir -p "$work/pkg"
@@ -39,6 +49,11 @@ fi
 zip="$work/$name-bin-$version.zip"
 (cd "$work/pkg" && zip -qr -X "$zip" bin)
 
+if [ "${BUILD_ONLY:-0}" = 1 ]; then
+  echo "built (not published): $zip from $sha (CI run $run)"
+  echo "sha256: $(shasum -a 256 "$zip" | cut -d' ' -f1)"
+  exit 0
+fi
 if gh release view "$version" -R "$repo" >/dev/null 2>&1; then
   gh release upload "$version" "$zip" -R "$repo" --clobber
 else

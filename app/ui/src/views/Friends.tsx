@@ -5,6 +5,7 @@ import { useNav } from "../store";
 import { serverAddress, serverHost, type Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { TabLink } from "./goto";
+import { capName, NameLeft } from "../serverName";
 
 type Share = {
   installed: boolean;
@@ -48,7 +49,7 @@ const GAME = "Counter-Strike";
 const SHARE_LABEL: Record<string, string> = {
   connect: "Connecting to playit.gg…",
   disconnect: "Disconnecting from playit.gg…",
-  cancel: "Cancelling…",
+  cancel: "Canceling…",
   start: "Starting sharing…",
   stop: "Stopping sharing…",
   server: "Saving your server…",
@@ -295,7 +296,7 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
           ) : sh.claim?.step === "failed" ? (
             <><p className="err-text">{sh.claim.error}</p><BusyButton className="btn primary" busy={busy("connect")} label="Try again" busyLabel="Connecting…" onClick={() => act("connect")} /></>
           ) : sh.claim ? (
-            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? <><span className="spinner" aria-hidden="true" />Waiting for you to approve…</> : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Cancelling…" onClick={() => act("cancel")} /></>
+            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? <><span className="spinner" aria-hidden="true" />Waiting for you to approve…</> : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Canceling…" onClick={() => act("cancel")} /></>
           ) : (
             <BusyButton className="btn primary" busy={busy("connect")} label="Connect to playit.gg" busyLabel="Connecting…" onClick={async () => { const r = await act("connect"); if (r?.claim) window.open(r.claim.url, "_blank"); }} />
           )}
@@ -359,7 +360,8 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
       <h3>Your server</h3>
       <label className="field">
         <span>Server name<Info text="Shown in the server browser and on the scoreboard." /></span>
-        <input className="search" maxLength={48} placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
+        <input className="search" placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(capName(e.target.value))} />
+        <NameLeft name={serverName} />
       </label>
       <label className="field">
         <span>Join password<Info text="Everyone who joins needs this, however they connect. The invite message includes it." /></span>

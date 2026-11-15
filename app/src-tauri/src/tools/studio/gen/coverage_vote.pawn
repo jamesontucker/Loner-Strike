@@ -1,0 +1,88 @@
+// ---- Start Vote (EC): one vote at a time, never over the server's map or mode vote ----
+stock g_lsgEcVoteN[9], g_lsgEcVoteNode = -1, g_lsgEcVoteCtx[LSG_CTX], g_lsgEcVoteMenu = -1, g_lsgEcVoteOpts, bool:g_lsgEcVoted[33]
+
+// gm_pubserver's map/mode vote running now (0 when it isn't loaded)
+stock bool:lsg_ec_mapvote()
+{
+	if (callfunc_begin("gm_pubserver_voting", "gm_pubserver.amxx") != 1)
+		return false
+	return callfunc_end() != 0
+}
+
+stock bool:lsg_ec_vote_begin(k, const ctx[])
+{
+	if (g_lsgEcVoteMenu >= 0 || lsg_ec_mapvote())
+		return false
+	g_lsgEcVoteNode = k
+	for (new i = 0; i < LSG_CTX; i++)
+		g_lsgEcVoteCtx[i] = ctx[i]
+	arrayset(g_lsgEcVoteN, 0, sizeof g_lsgEcVoteN)
+	arrayset(g_lsgEcVoted, false, sizeof g_lsgEcVoted)
+	return true
+}
+
+// who: 0 everyone, 1 Terrorists, 2 Counter-Terrorists, 3 the living
+stock lsg_ec_vote_show(m, n, who, bool:bots, Float:secs)
+{
+	g_lsgEcVoteMenu = m
+	g_lsgEcVoteOpts = n
+	menu_setprop(m, MPROP_EXIT, MEXIT_NEVER)
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2) || (who == 3 && !is_user_alive(p)))
+			continue
+		if (is_user_bot(p))
+		{
+			if (bots)
+			{
+				g_lsgEcVoted[p] = true
+				g_lsgEcVoteN[random_num(1, n)]++
+				g_lsgEcVoteN[0]++
+			}
+			continue
+		}
+		// a menu already open (the server's own, a shop) isn't taken over
+		new old, nm
+		player_menu_info(p, old, nm)
+		if (old > 0 || nm >= 0)
+			continue
+		menu_display(p, m, 0, floatround(secs))
+	}
+	remove_task(LSG_TASK - 611)
+	set_task(secs, "lsg_ec_vote_end", LSG_TASK - 611)
+}
+
+public lsg_ec_vote_pick(id, menu, item)
+{
+	if (menu != g_lsgEcVoteMenu || item < 0 || item >= g_lsgEcVoteOpts || id < 1 || id > 32 || g_lsgEcVoted[id])
+		return PLUGIN_HANDLED
+	g_lsgEcVoted[id] = true
+	g_lsgEcVoteN[item + 1]++
+	g_lsgEcVoteN[0]++
+	return PLUGIN_HANDLED
+}
+
+// the result: the winner (1-8), -1 a tie, 0 no votes
+stock lsg_ec_vote_close()
+{
+	new m = g_lsgEcVoteMenu
+	g_lsgEcVoteMenu = -1
+	g_lsgEcVoteNode = -1
+	if (m >= 0)
+		menu_destroy(m)
+	new best = 0, w = 0, ties = 0
+	for (new i = 1; i <= g_lsgEcVoteOpts; i++)
+	{
+		if (g_lsgEcVoteN[i] > best)
+		{
+			best = g_lsgEcVoteN[i]
+			w = i
+			ties = 0
+		}
+		else if (best > 0 && g_lsgEcVoteN[i] == best)
+			ties++
+	}
+	if (!best)
+		return 0
+	return ties ? -1 : w
+}

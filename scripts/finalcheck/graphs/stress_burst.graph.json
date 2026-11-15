@@ -1,0 +1,386 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "fc_st_burst",
+  "name": "FC message burst",
+  "description": "Final check: 10,000 messages in one server frame"
+ },
+ "variables": [
+  {
+   "id": "lim_search_found",
+   "name": "Entities one search keeps",
+   "type": "number",
+   "scope": "mode",
+   "default": 2048,
+   "setting": {
+    "label": "Entities one search keeps",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 2048,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_free_spot_tries",
+   "name": "Tries finding a free spot",
+   "type": "number",
+   "scope": "mode",
+   "default": 1024,
+   "setting": {
+    "label": "Tries finding a free spot",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1024,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_aim_trace",
+   "name": "Aim Point's longest trace",
+   "type": "number",
+   "scope": "mode",
+   "default": 32768,
+   "setting": {
+    "label": "Aim Point's longest trace",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32768,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_tick_rate",
+   "name": "On Tick runs a second at most",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "On Tick runs a second at most",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_markers",
+   "name": "Objective markers at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Objective markers at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trails",
+   "name": "Trails at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trails at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_loop_sounds",
+   "name": "Loop sounds at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Loop sounds at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_attach",
+   "name": "Attached things at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Attached things at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_anim_loops",
+   "name": "Looping animations at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Looping animations at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_npc_moves",
+   "name": "NPC moves at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "NPC moves at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_ec_map_hooks",
+   "name": "Map entity kinds heard",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Map entity kinds heard",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_command_rate",
+   "name": "Player Command uses a second",
+   "type": "number",
+   "scope": "mode",
+   "default": 1000,
+   "setting": {
+    "label": "Player Command uses a second",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_top_players",
+   "name": "Top Players places",
+   "type": "number",
+   "scope": "mode",
+   "default": 100,
+   "setting": {
+    "label": "Top Players places",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 100,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_trigger_volumes",
+   "name": "Trigger volumes at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 256,
+   "setting": {
+    "label": "Trigger volumes at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 256,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_volume_members",
+   "name": "Things inside one trigger volu",
+   "type": "number",
+   "scope": "mode",
+   "default": 64,
+   "setting": {
+    "label": "Things inside one trigger volu",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 64,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_avoid_areas",
+   "name": "Areas bots avoid at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 32,
+   "setting": {
+    "label": "Areas bots avoid at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 32,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_projectiles",
+   "name": "Projectiles at once",
+   "type": "number",
+   "scope": "mode",
+   "default": 512,
+   "setting": {
+    "label": "Projectiles at once",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 512,
+    "step": 1,
+    "group": "Limits"
+   }
+  },
+  {
+   "id": "lim_messages",
+   "name": "Effect messages a frame",
+   "type": "number",
+   "scope": "mode",
+   "default": 160,
+   "setting": {
+    "label": "Effect messages a frame",
+    "help": "A comfort limit (final check: at its max).",
+    "min": 1,
+    "max": 160,
+    "step": 1,
+    "group": "Limits"
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": "n1",
+   "type": "event.round_started",
+   "pos": {
+    "x": 320,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "n2",
+   "type": "flow.for_loop",
+   "pos": {
+    "x": 640,
+    "y": 0
+   },
+   "params": {
+    "first": 0,
+    "last": 9999
+   }
+  },
+  {
+   "id": "n3",
+   "type": "msg.color_chat",
+   "pos": {
+    "x": 960,
+    "y": 0
+   },
+   "params": {
+    "text": "burst"
+   }
+  },
+  {
+   "id": "n4",
+   "type": "msg.big_hud",
+   "pos": {
+    "x": 1280,
+    "y": 0
+   },
+   "params": {
+    "text": "burst",
+    "seconds": 1
+   }
+  },
+  {
+   "id": "n5",
+   "type": "snd.play_2d",
+   "pos": {
+    "x": 1600,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "sound": "buttons/bell1.wav"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "n1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "n2",
+    "pin": "body"
+   },
+   "to": {
+    "node": "n3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "n3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "n4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": []
+}

@@ -1,0 +1,10 @@
+/* Parity A: the Shape tool's Preview popover */
+.pa-shape-wrap { position: relative; display: inline-flex; }
+.pa-shape-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; width: min(300px, 86vw); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel, #2f3527); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.pa-shape-head { font-weight: 600; color: var(--bone); }
+.pa-shape-wire { width: 100%; height: 150px; background: var(--panel-2, #262b20); border-radius: 3px; }
+.pa-shape-wire path { fill: none; stroke: #ffd84a; stroke-width: 1; stroke-linecap: round; }
+.pa-shape-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+.pa-shape-fields label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.pa-shape-fields input { width: 100%; box-sizing: border-box; }
+.pa-shape-note { margin: 0; font-size: 12px; }

@@ -1,0 +1,528 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Double Jump",
+ "description": "A second jump in the air (Boost 0: 320 up), once until the player lands again.",
+ "category": "Starter: movement",
+ "kind": "macro",
+ "root": "dj_jump",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "dj_jump",
+   "name": "Double Jump",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "boost",
+     "name": "Boost",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Jumped",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not now",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "dj_used",
+   "name": "Double jumped",
+   "type": "bool",
+   "scope": "player",
+   "default": false
+  }
+ ],
+ "nodes": [
+  {
+   "id": "dj_jump_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_tr",
+   "type": "player.transform",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_ground",
+   "type": "flow.branch",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_reset",
+   "type": "var.set",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "var": "dj_used",
+    "value": false
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_used",
+   "type": "var.get",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "var": "dj_used"
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_once",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost_d",
+   "type": "math.number",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "value": 320
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost",
+   "type": "logic.select",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_vb",
+   "type": "vec.break",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_nv",
+   "type": "vec.make",
+   "pos": {
+    "x": 2860,
+    "y": 540
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boostv",
+   "type": "player.set_velocity",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_mark",
+   "type": "var.set",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "var": "dj_used",
+    "value": true
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {
+    "sound": "player/pl_jump2.wav"
+   },
+   "graph": "dj_jump"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_tr",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "dj_jump_ground",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "dj_jump_tr",
+    "pin": "ground"
+   },
+   "to": {
+    "node": "dj_jump_ground",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "dj_jump_ground",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dj_jump_reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_reset",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "dj_jump_reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_used",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "dj_jump_ground",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dj_jump_once",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "dj_jump_used",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_once",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "dj_jump_once",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "boost"
+   },
+   "to": {
+    "node": "dj_jump_boost_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "dj_jump_boost_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "boost"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "dj_jump_boost_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "dj_jump_tr",
+    "pin": "vel"
+   },
+   "to": {
+    "node": "dj_jump_vb",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "dj_jump_vb",
+    "pin": "x"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "x"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "dj_jump_vb",
+    "pin": "y"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "y"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "dj_jump_boost",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "z"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "dj_jump_once",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "dj_jump_nv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "v"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "dj_jump_boostv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_mark",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "dj_jump_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "dj_jump_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "next"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "dj_jump",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Double Jump: Wire Player Pressed Button (Jump) in with the player. On the ground it only notes the jump; in the air it boosts once. Bots: Bot Wants Ability can fire it now and then while they chase or flee (call it from a Repeat for bots in the air)."
+  }
+ ]
+}
