@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 124
+#define LSG_N 126
 #define LSG_TASK 7310000
-#pragma dynamic 83456
+#pragma dynamic 84736
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -27,9 +27,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_VP 256
 #define LSG_RR 64
 #define LSG_RP 64
-#define LSG_RC 1
+#define LSG_RC 10
 #define LSG_RT 1
-#define LSG_AC 65
+#define LSG_AC 74
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
 #define LSG_O 31
@@ -3731,6 +3731,45 @@ stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", 
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
 // enum Spawn Failure
 stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
+// Transform's helpers: an entity's scale; an entity put where a Transform says
+stock Float:lsg_escale(e)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 1.0
+	new Float:s
+	pev(e, pev_scale, s)
+	return s > 0.0 ? s : 1.0
+}
+
+stock lsg_ent_transform(e, pos, rot, Float:scale, vel)
+{
+	if (e <= 0 || !pev_valid(e))
+		return
+	new Float:v[3]
+	lsg_vto(pos, v)
+	engfunc(EngFunc_SetOrigin, e, v)
+	lsg_vto(rot, v)
+	set_pev(e, e <= MaxClients ? pev_v_angle : pev_angles, v)
+	if (e <= MaxClients)
+	{
+		set_pev(e, pev_angles, v)
+		set_pev(e, pev_fixangle, 1)
+	}
+	else if (scale > 0.0)
+		set_pev(e, pev_scale, scale)
+	lsg_vto(vel, v)
+	set_pev(e, pev_velocity, v)
+}
+// struct Transform
+stock lsg_mks0(f0, f1, Float:f2, f3)
+{
+	new r = lsg_rnew()
+	lsg_rsetvec(r, 0, f0)
+	lsg_rsetvec(r, 3, f1)
+	g_lsgRec[r][6] = _:f2
+	lsg_rsetvec(r, 7, f3)
+	return r
+}
 // Data table: Guns
 #define LSG_DT0_N 2
 stock const Float:g_lsgDt0_0[2] = { 0.0, 1.0 }
@@ -5621,6 +5660,7 @@ public plugin_init()
 	register_event("TeamScore", "lsg_team_score", "a")
 	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
 	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
+	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_hurt_before", 0)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
@@ -5723,6 +5763,12 @@ stock lsg_stop_timers()
 public client_disconnected(id)
 {
 	lsg_fun_left(id)
+}
+
+public lsg_on_round_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n125(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -7198,5 +7244,18 @@ lsg_n123(ctx[])
 		if (is_user_connected(p))
 			lsg_eng_cd(p, 2, false)
 	#pragma unused ctx
+}
+
+// Set Entity Transform (tf_set)
+lsg_n124(ctx[])
+{
+	lsg_ent_transform(lsg_find("spot1"), lsg_rvec(lsg_mks0(lsg_vec(0.0, 0.0, 0.0), lsg_vec(0.0, 0.0, 0.0), 0.0, lsg_vec(0.0, 0.0, 0.0)), 0), lsg_rvec(lsg_mks0(lsg_vec(0.0, 0.0, 0.0), lsg_vec(0.0, 0.0, 0.0), 0.0, lsg_vec(0.0, 0.0, 0.0)), 3), Float:g_lsgRec[lsg_ri(lsg_mks0(lsg_vec(0.0, 0.0, 0.0), lsg_vec(0.0, 0.0, 0.0), 0.0, lsg_vec(0.0, 0.0, 0.0)))][6], lsg_rvec(lsg_mks0(lsg_vec(0.0, 0.0, 0.0), lsg_vec(0.0, 0.0, 0.0), 0.0, lsg_vec(0.0, 0.0, 0.0)), 7))
+	#pragma unused ctx
+}
+
+// Round Started (tf_ev)
+lsg_n125(ctx[])
+{
+	lsg_n124(ctx)
 }
 

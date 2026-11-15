@@ -5,7 +5,7 @@ import { ColorField } from "./ColorField";
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
-import { allEnums, isAssetType, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { allEnums, allStructs, isAssetType, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, orphanValues, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { Requirements } from "./Requirements";
@@ -107,12 +107,12 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
   if (p.kind === "tline") return pick((graph.timelines ?? []).map((t) => [t.id, t.name]), "Add a Timeline under My mode first");
   if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "Add a Custom Event with no inputs under My mode first" : "Add a Custom Event under My mode first");
   if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
-  if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");
+  if (p.kind === "struct") return pick(allStructs(graph).map((x) => [x.id, x.name]), "Add a struct under My mode first");
   if (p.kind === "enum") return pick(allEnums(graph).map((x) => [x.id, x.name]), "Add an enum under My mode first");
   if (p.kind === "marker") return pick((graph.markers ?? []).map((x) => [x.id, x.label]), "Add a map marker under My mode first");
   if (p.kind === "type") return <TypePicker graph={graph} value={itemTypeOk(graph, String(value), true) ? String(value) : "number"} onChange={onChange} containers={false} structs={!node.type.startsWith("map.")} label={p.label} />;
   if (p.kind === "field") {
-    const st = graph.structs?.find((x) => `struct:${x.id}` === nodeVar?.type);
+    const st = allStructs(graph).find((x) => `struct:${x.id}` === nodeVar?.type);
     return st ? pick(st.fields.map((f) => [f.id, `${f.name} (${typeLabel(graph, f.type)})`]), "") : <em className="st-muted">Pick a struct variable first</em>;
   }
   if (p.kind === "enumvalue") {

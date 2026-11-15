@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 124
+#define LSG_N 126
 #define LSG_TASK 7310000
-#pragma dynamic 83456
+#pragma dynamic 84736
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -28,9 +28,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_VP 256
 #define LSG_RR 64
 #define LSG_RP 64
-#define LSG_RC 1
+#define LSG_RC 10
 #define LSG_RT 1
-#define LSG_AC 65
+#define LSG_AC 74
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
 #define LSG_O 31
@@ -409,9 +409,9 @@ stock lsg_proj_vel(e)
 		ls_proj_velocity(e, v)
 	return lsg_vfrom(v)
 }
-#define LSD_N 124
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n12", "n25", "n26", "n27", "n28", "n30", "n32", "n34", "n36", "n38", "n40", "n42", "n44", "n46", "n48", "n50", "n52", "n54", "n56", "n58", "n60", "n62", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n102", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n129", "n130", "n131", "n132", "n133", "n139", "n141", "n142", "n143", "n144", "n145", "n146", "n147", "n148", "n149", "n152", "n153", "n154", "n155", "n156", "n162", "n163", "n164", "n165", "n168", "n169", "n170", "n171", "n172", "n173", "n176", "n180", "n186", "n187", "n188", "n189", "n190", "n191", "n192", "n193", "n194", "n195" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 126
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n12", "n25", "n26", "n27", "n28", "n30", "n32", "n34", "n36", "n38", "n40", "n42", "n44", "n46", "n48", "n50", "n52", "n54", "n56", "n58", "n60", "n62", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n102", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n129", "n130", "n131", "n132", "n133", "n139", "n141", "n142", "n143", "n144", "n145", "n146", "n147", "n148", "n149", "n152", "n153", "n154", "n155", "n156", "n162", "n163", "n164", "n165", "n168", "n169", "n170", "n171", "n172", "n173", "n176", "n180", "n186", "n187", "n188", "n189", "n190", "n191", "n192", "n193", "n194", "n195", "tf_set", "tf_ev" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -4420,6 +4420,45 @@ stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", 
 stock const g_lsgE1[][] = { "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None" }
 // enum Spawn Failure
 stock const g_lsgE2[][] = { "None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input" }
+// Transform's helpers: an entity's scale; an entity put where a Transform says
+stock Float:lsg_escale(e)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 1.0
+	new Float:s
+	pev(e, pev_scale, s)
+	return s > 0.0 ? s : 1.0
+}
+
+stock lsg_ent_transform(e, pos, rot, Float:scale, vel)
+{
+	if (e <= 0 || !pev_valid(e))
+		return
+	new Float:v[3]
+	lsg_vto(pos, v)
+	engfunc(EngFunc_SetOrigin, e, v)
+	lsg_vto(rot, v)
+	set_pev(e, e <= MaxClients ? pev_v_angle : pev_angles, v)
+	if (e <= MaxClients)
+	{
+		set_pev(e, pev_angles, v)
+		set_pev(e, pev_fixangle, 1)
+	}
+	else if (scale > 0.0)
+		set_pev(e, pev_scale, scale)
+	lsg_vto(vel, v)
+	set_pev(e, pev_velocity, v)
+}
+// struct Transform
+stock lsg_mks0(f0, f1, Float:f2, f3)
+{
+	new r = lsg_rnew()
+	lsg_rsetvec(r, 0, f0)
+	lsg_rsetvec(r, 3, f1)
+	g_lsgRec[r][6] = _:f2
+	lsg_rsetvec(r, 7, f3)
+	return r
+}
 // Data table: Guns
 #define LSG_DT0_N 2
 stock const Float:g_lsgDt0_0[2] = { 0.0, 1.0 }
@@ -6339,6 +6378,7 @@ public plugin_init()
 	register_event("TeamScore", "lsg_team_score", "a")
 	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
 	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
+	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_hurt_before", 0)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
@@ -6446,6 +6486,12 @@ stock lsg_stop_timers()
 public client_disconnected(id)
 {
 	lsg_fun_left(id)
+}
+
+public lsg_on_round_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n125(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -9192,6 +9238,35 @@ lsg_n123(ctx[])
 	lsd_exit(123, "playing")
 }
 
+// Set Entity Transform (tf_set)
+lsg_n124(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	new lsi1 = lsg_mks0(lsg_vec(0.0, 0.0, 0.0), lsg_vec(0.0, 0.0, 0.0), 0.0, lsg_vec(0.0, 0.0, 0.0))
+	if (lsd_want(124))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(124, ctx))
+		return
+	lsg_ent_transform(lsi0, lsg_rvec(lsi1, 0), lsg_rvec(lsi1, 3), Float:g_lsgRec[lsg_ri(lsi1)][6], lsg_rvec(lsi1, 7))
+	lsd_exit(124, "done")
+}
+
+// Round Started (tf_ev)
+lsg_n125(ctx[])
+{
+	if (lsd_want(125))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(125, ctx))
+		return
+	lsd_exit(125, "ran")
+	lsg_n124(ctx)
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -9323,5 +9398,7 @@ lsd_call(n, const data[])
 		case 121: lsg_n121(ctx)
 		case 122: lsg_n122(ctx)
 		case 123: lsg_n123(ctx)
+		case 124: lsg_n124(ctx)
+		case 125: lsg_n125(ctx)
 	}
 }

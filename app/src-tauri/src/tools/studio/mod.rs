@@ -1614,6 +1614,56 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// Transform: the app's own struct, put in only when used; the transform nodes' Transform pins
+    /// (the separate pins win), a Transform variable that keeps where someone was, Make / Break
+    /// Transform, Set Entity Transform.
+    pub fn transform_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("sp", "event.player_spawned", json!({})),
+            n("get", "player.transform", json!({})),
+            n("keep", "var.set", json!({"var": "was"})),
+            n("d", "timer.delay", json!({"secs": 5})),
+            n("gv", "var.get", json!({"var": "was"})),
+            n("back", "player.set_transform", json!({})),
+            n("prop", "ent.spawn_prop", json!({"model": "models/w_c4.mdl"})),
+            n("mk", "struct.make", json!({"struct": "ls_transform"})),
+            n("place", "ent.set_transform", json!({})),
+            n("br", "struct.break", json!({"struct": "ls_transform"})),
+            n("pr", "debug.print", json!({"text": "was at", "chat": false})),
+            n("et", "ent.transform", json!({})),
+        ];
+        let edges = vec![
+            e(1, "sp", "then", "keep", "exec"), e(2, "sp", "player", "get", "player"), e(3, "get", "transform", "keep", "value"), e(4, "keep", "then", "d", "exec"),
+            e(5, "d", "then", "back", "exec"), e(6, "sp", "player", "back", "player"), e(7, "gv", "out", "back", "transform"),
+            e(8, "back", "then", "prop", "exec"), e(9, "sp", "player", "prop", "at"), e(10, "prop", "spawned", "place", "exec"), e(11, "prop", "out", "place", "in"),
+            e(12, "et", "transform", "br", "in"), e(13, "br", "pos", "mk", "pos"), e(14, "br", "rot", "mk", "rot"), e(15, "mk", "out", "place", "transform"),
+            e(16, "place", "then", "pr", "exec"), e(17, "prop", "out", "et", "in"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "transforms", "name": "Transforms"}, "nodes": nodes, "edges": edges,
+            "variables": [{"id": "was", "name": "Was at", "type": "struct:ls_transform", "scope": "mode"}]})).unwrap()
+    }
+
+    #[test]
+    fn transforms_keep_where_something_was() {
+        let g = transform_mode();
+        assert!(g.structs.iter().any(|s| s.id == "ls_transform" && s.builtin));
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level != "info").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in ["// struct Transform", "stock lsg_ent_transform(e, pos, rot, Float:scale, vel)", "lsg_escale(", "lsg_set_transform("] {
+            assert!(src.contains(want), "{want}");
+        }
+        // never saved with the mode, and not put in where it isn't used
+        assert!(!serde_json::to_string(&g).unwrap().contains("\"Transform\""));
+        assert!(!graph::parse(TEMPLATE).unwrap().structs.iter().any(|s| s.builtin));
+        // both wired: a warning, the separate pin wins
+        let mut both = g.clone();
+        both.edges.push(serde_json::from_value(json!({"id": "wb", "from": {"node": "get", "pin": "pos"}, "to": {"node": "back", "pin": "pos"}})).unwrap());
+        assert!(graph::validate(&both).iter().any(|p| p.level == "warning" && p.message.contains("Both Transform and Position")));
+    }
+
     /// Color: the Color nodes, a Color variable, and a wired Color winning over the old settings on
     /// Set Glow, Screen Fade, Beam, Trail, Effect Burst, Status Icon and Objective Marker.
     pub fn color_mode() -> Graph {
@@ -2064,6 +2114,7 @@ mod tests {
         graphs.push(("spawn_burst".into(), serde_json::to_string(&spawn_burst_mode()).unwrap()));
         graphs.push(("typed_enums".into(), serde_json::to_string(&typed_enums_mode()).unwrap()));
         graphs.push(("colors".into(), serde_json::to_string(&color_mode()).unwrap()));
+        graphs.push(("transforms".into(), serde_json::to_string(&transform_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));

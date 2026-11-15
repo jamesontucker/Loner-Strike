@@ -6,7 +6,7 @@ import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
 import { container, nodeDef, pinMeta, typeColor, type NodeDef, type ParamDef, type PinDef } from "./registry";
 import { outType, resizeComment, setCommentText, setParam, toggleBreakpoint } from "./graphOps";
-import { LABEL_CHARS } from "./schema";
+import { allStructs, LABEL_CHARS } from "./schema";
 import { allVariables, nodeTitle, typeLabel } from "./pins";
 import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
@@ -40,7 +40,7 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
       if (p.kind === "cases") return "";
       if (p.kind === "field") {
         const sv = vars.find((x) => x.id === n.params.var);
-        const st = g?.structs?.find((x) => `struct:${x.id}` === sv?.type);
+        const st = allStructs(g).find((x) => `struct:${x.id}` === sv?.type);
         return `.${st?.fields.find((f) => f.id === v)?.name ?? "?"}`;
       }
       if (p.kind === "choice") return p.choices?.find(([k]) => k === v)?.[1] ?? String(v);

@@ -178,7 +178,7 @@ pub struct Graph {
     pub comments: Vec<Comment>,
     #[serde(default, skip_serializing_if = "no_user_enums", serialize_with = "user_enums_only")]
     pub enums: Vec<EnumDef>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "no_user_structs", serialize_with = "user_structs_only")]
     pub structs: Vec<StructDef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub functions: Vec<Function>,
@@ -655,6 +655,30 @@ pub struct StructDef {
     pub fields: Vec<Member>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<LibFrom>,
+    /// the app's own (Transform): put in when the graph uses it, never saved
+    #[serde(skip)]
+    pub builtin: bool,
+}
+
+/// The app's own struct: Transform (where something is, which way it faces, its size, how it moves).
+pub const TRANSFORM: &str = "ls_transform";
+pub fn transform_struct() -> StructDef {
+    let f = |id: &str, name: &str, ty: &str| Member { id: id.into(), name: name.into(), ty: ty.into() };
+    StructDef { id: TRANSFORM.into(), name: "Transform".into(), fields: vec![f("pos", "Position", "vector"), f("rot", "Rotation", "vector"), f("scale", "Scale", "number"), f("vel", "Velocity", "vector")], from: None, builtin: true }
+}
+
+fn user_structs_only<S: serde::Serializer>(v: &[StructDef], s: S) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeSeq;
+    let mine: Vec<&StructDef> = v.iter().filter(|e| !e.builtin).collect();
+    let mut seq = s.serialize_seq(Some(mine.len()))?;
+    for e in mine {
+        seq.serialize_element(e)?;
+    }
+    seq.end()
+}
+
+fn no_user_structs(v: &[StructDef]) -> bool {
+    v.iter().all(|e| e.builtin)
 }
 
 /// A struct's field, or a Function's or Macro's input or output.
@@ -886,10 +910,21 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
     }
     let mut v = v;
     migrate(&mut v);
+    // (Transform, the app's own struct: only in a graph that uses it, so 1.0 plugins stay as they were)
+    let uses_transform = v.to_string().contains(TRANSFORM) || v.get("edges").and_then(Value::as_array).is_some_and(|es| {
+        let kind = |id: &str| v["nodes"].as_array().and_then(|ns| ns.iter().find(|n| n["id"] == id)).and_then(|n| n["type"].as_str()).map(str::to_string);
+        es.iter().any(|e| {
+            let ty = |end: &str, out: bool| kind(e[end]["node"].as_str().unwrap_or("")).and_then(|k| registry().get(&k)).and_then(|d| (if out { &d.outputs } else { &d.inputs }).iter().find(|p| Some(p.id.as_str()) == e[end]["pin"].as_str()).map(|p| p.ty.clone()));
+            ty("from", true).as_deref() == Some("struct:ls_transform") || ty("to", false).as_deref() == Some("struct:ls_transform")
+        })
+    });
     let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
     g.version = VERSION;
     proj_spawn_pins(&mut g);
     vol_spawn_pins(&mut g);
+    if uses_transform && !g.structs.iter().any(|s| s.id == TRANSFORM) {
+        g.structs.push(transform_struct());
+    }
     // (the app's own enums: there in every graph, after the mode's; a mode's own of the same id wins)
     for (id, name, values) in BUILTIN_ENUMS {
         if !g.enums.iter().any(|e| e.id == id) {
@@ -1068,7 +1103,7 @@ pub const HANDLES: [&str; 6] = ["npc", "creature", "projectile", "volume", "objm
 /// Entity, a Model or a Sprite is a "visual", a Weapon is its name).
 pub fn upcast(t: &str) -> Option<&'static str> {
     match t {
-        "player" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" => Some("entity"),
+        "player" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" | "soundloop" => Some("entity"),
         "model" | "sprite" => Some("visual"),
         "enum:ls_weapon" => Some("text"),
         _ => None,
@@ -1724,6 +1759,17 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     p.extend(bot_awareness(g, &View::new(g)));
     p.extend(w1_checks::problems(g, &View::new(g))); // W1
     p.extend(super::limits::problems(g));
+    // (a Transform and a separate pin both wired: the separate one wins)
+    for n in g.nodes.iter().filter(|n| n.kind == "player.set_transform") {
+        let wired = |pin: &str| g.edges.iter().any(|e| e.to.node == n.id && e.to.pin == pin);
+        if wired("transform") {
+            for (pin, label) in [("pos", "Position"), ("angles", "Angles"), ("vel", "Velocity")] {
+                if wired(pin) {
+                    p.push(Problem::warn(Some(&n.id), format!("Both Transform and {label} are wired: {label} wins.")).pin(pin));
+                }
+            }
+        }
+    }
     p
 }
 
@@ -3050,7 +3096,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 40] = ["model", "sprite", "sound", "decal", "color", "visual", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
+    const TYPES: [&str; 41] = ["struct:ls_transform", "model", "sprite", "sound", "decal", "color", "visual", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];

@@ -67,7 +67,7 @@ export function container(t: string): { kind: "array" | "map"; key?: string; ite
 
 /** What a value of this type goes into as it is, one step (graph.rs `upcast`). */
 export function upcast(t: PinType): PinType | undefined {
-  if (["player", "npc", "creature", "projectile", "volume", "objmarker", "component"].includes(t)) return "entity";
+  if (["player", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop"].includes(t)) return "entity";
   if (t === "model" || t === "sprite") return "visual";
   if (t === "enum:ls_weapon") return "text";
   return undefined;

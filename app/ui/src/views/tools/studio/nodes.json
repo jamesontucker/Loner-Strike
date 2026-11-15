@@ -10479,6 +10479,11 @@
      "id": "duck",
      "type": "bool",
      "label": "Ducking"
+    },
+    {
+     "id": "transform",
+     "type": "struct:ls_transform",
+     "label": "Transform"
     }
    ],
    "params": [],
@@ -10518,6 +10523,12 @@
      "id": "vel",
      "type": "vector",
      "label": "Velocity",
+     "optional": true
+    },
+    {
+     "id": "transform",
+     "type": "struct:ls_transform",
+     "label": "Transform (separate pins win)",
      "optional": true
     }
    ],
@@ -19455,6 +19466,11 @@
      "id": "ground",
      "type": "bool",
      "label": "On Ground"
+    },
+    {
+     "id": "transform",
+     "type": "struct:ls_transform",
+     "label": "Transform"
     }
    ],
    "params": [],
@@ -19703,7 +19719,16 @@
      "default": ""
     }
    ],
-   "pure": true
+   "pure": true,
+   "presets": [
+    {
+     "title": "Make Transform",
+     "params": {
+      "struct": "ls_transform"
+     },
+     "keywords": "transform position rotation scale velocity where facing"
+    }
+   ]
   },
   {
    "type": "struct.break",
@@ -19727,7 +19752,16 @@
      "default": ""
     }
    ],
-   "pure": true
+   "pure": true,
+   "presets": [
+    {
+     "title": "Break Transform",
+     "params": {
+      "struct": "ls_transform"
+     },
+     "keywords": "transform position rotation scale velocity split"
+    }
+   ]
   },
   {
    "type": "struct.set_field",
@@ -31049,6 +31083,40 @@
    ],
    "keywords": "language locale lang translate",
    "pure": true
+  },
+  {
+   "type": "ent.set_transform",
+   "title": "Set Entity Transform",
+   "category": "Entities",
+   "help": "Puts an entity where a Transform says: its Position, Rotation, Scale (props and sprites; players can't be resized) and Velocity.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "transform",
+     "type": "struct:ls_transform",
+     "label": "Transform",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "move teleport place restore position rotation scale"
   },
   {
    "type": "color.literal",

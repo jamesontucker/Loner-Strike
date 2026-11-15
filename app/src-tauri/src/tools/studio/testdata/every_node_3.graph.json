@@ -2005,6 +2005,35 @@
     "s": 1,
     "v": 1
    }
+  },
+  {
+   "id": "tf_mk",
+   "type": "struct.make",
+   "pos": {
+    "x": 0,
+    "y": 7120
+   },
+   "params": {
+    "struct": "ls_transform"
+   }
+  },
+  {
+   "id": "tf_set",
+   "type": "ent.set_transform",
+   "pos": {
+    "x": 0,
+    "y": 7120
+   },
+   "params": {}
+  },
+  {
+   "id": "tf_ev",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 5400
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -4371,6 +4400,39 @@
    "to": {
     "node": "col_mix",
     "pin": "b"
+   }
+  },
+  {
+   "id": "tf_e1",
+   "from": {
+    "node": "tf_mk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tf_set",
+    "pin": "transform"
+   }
+  },
+  {
+   "id": "tf_e2",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tf_set",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "tf_e3",
+   "from": {
+    "node": "tf_ev",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tf_set",
+    "pin": "exec"
    }
   }
  ],

@@ -346,6 +346,18 @@ export const BUILTIN_ENUMS: GEnum[] = [
   { id: "ls_dmgkind", name: "Damage Kind", values: ["other", "shot", "slash", "blast", "burn", "fall", "shock", "drown", "poison"] },
 ];
 
+/** The app's own struct, Transform (graph.rs transform_struct): offered everywhere, never saved. */
+export const BUILTIN_STRUCTS = [
+  { id: "ls_transform", name: "Transform", fields: [
+    { id: "pos", name: "Position", type: "vector" },
+    { id: "rot", name: "Rotation", type: "vector" },
+    { id: "scale", name: "Scale", type: "number" },
+    { id: "vel", name: "Velocity", type: "vector" },
+  ] },
+];
+/** The mode's structs and then the app's own. */
+export const allStructs = (g: Pick<Graph, "structs"> | null | undefined) => [...(g?.structs ?? []), ...BUILTIN_STRUCTS.filter((b) => !(g?.structs ?? []).some((s) => s.id === b.id))];
+
 /** The mode's enums and then the app's own (a mode's own of the same id wins). */
 export const allEnums = (g: Pick<Graph, "enums"> | null | undefined): GEnum[] => {
   const mine = g?.enums ?? [];

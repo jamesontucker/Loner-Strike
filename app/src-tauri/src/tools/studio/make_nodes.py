@@ -1277,6 +1277,23 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== types: transform (X) ====
+# Transform: the app's own struct (graph.rs transform_struct): Position, Rotation, Scale, Velocity.
+# Make and Break Transform are Make and Break Struct with it picked; the transform nodes gain a
+# Transform pin beside their separate ones (which win when both are wired)
+TR = "struct:ls_transform"
+for d in nodes:
+    if d["type"] == "struct.make":
+        d.setdefault("presets", []).append({"title": "Make Transform", "params": {"struct": "ls_transform"}, "keywords": "transform position rotation scale velocity where facing"})
+    if d["type"] == "struct.break":
+        d.setdefault("presets", []).append({"title": "Break Transform", "params": {"struct": "ls_transform"}, "keywords": "transform position rotation scale velocity split"})
+_add_out_t = lambda t, p: next(d for d in nodes if d["type"] == t)["outputs"].append(p)
+_add_out_t("player.transform", P("transform","struct:ls_transform","Transform"))
+_add_out_t("ent.transform", P("transform","struct:ls_transform","Transform"))
+next(d for d in nodes if d["type"] == "player.set_transform")["inputs"].append(P("transform","struct:ls_transform","Transform (separate pins win)",optional=True))
+node("ent.set_transform", "Set Entity Transform", "Entities", "Puts an entity where a Transform says: its Position, Rotation, Scale (props and sprites; players can't be resized) and Velocity.",
+     inputs=[X, P("in","entity","Entity",required=True), P("transform","struct:ls_transform","Transform",required=True)], outputs=[E()], keywords="move teleport place restore position rotation scale")
+
 # ==== types: color (X) ====
 # a Color is one value (red, green, blue, alpha); the nodes that took three numbers or a fixed
 # choice keep them and gain an optional Color pin that wins when wired

@@ -558,6 +558,14 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// A wired Transform's field (0 Position, 1 Rotation, 2 Scale, 3 Velocity).
+    fn transform_field(&self, node: &str, k: usize) -> String {
+        let r = self.need(node, "transform", "struct:ls_transform");
+        let i = self.struct_index(super::graph::TRANSFORM);
+        let ty = if k == 2 { "number" } else { "vector" };
+        field_read(ty, &r, self.layouts.get(i).and_then(|l| l.get(k)).copied().unwrap_or(0))
+    }
+
     /// A color input's red, green and blue (whole numbers): the wired Color when there is one,
     /// else the node's own (a setting, a choice: what it did before).
     fn rgb_or(&self, node: &str, own: (String, String, String)) -> (String, String, String) {
@@ -890,6 +898,7 @@ impl<'a> Gen<'a> {
                     "vel" => format!("lsg_vpev({p}, pev_velocity)"),
                     "ground" => format!("(lsg_ok({p}) && (pev({p}, pev_flags) & FL_ONGROUND) ? 1 : 0)"),
                     "duck" => format!("(lsg_ok({p}) && (pev({p}, pev_flags) & FL_DUCKING) ? 1 : 0)"),
+                    "transform" => format!("lsg_mks{}(lsg_vpev({p}, pev_origin), lsg_vpev({p}, pev_v_angle), 1.0, lsg_vpev({p}, pev_velocity))", self.struct_index(super::graph::TRANSFORM)),
                     _ => format!("lsg_vpev({p}, pev_origin)"),
                 }
             }
@@ -1047,6 +1056,7 @@ impl<'a> Gen<'a> {
                     "maxs" => format!("lsg_vpev({e}, pev_absmax)"),
                     "center" => format!("lsg_ecenter({e})"),
                     "ground" => format!("({e} > 0 && pev_valid({e}) && (pev({e}, pev_flags) & FL_ONGROUND) ? 1 : 0)"),
+                    "transform" => format!("lsg_mks{}(lsg_vent({e}), lsg_erot({e}), lsg_escale({e}), lsg_vpev({e}, pev_velocity))", self.struct_index(super::graph::TRANSFORM)),
                     _ => format!("lsg_vent({e})"),
                 }
             }
@@ -3122,7 +3132,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "game.change_map" | "game.restart_round" | "player.set_transform" | "player.set_rotation" | "player.look_at" | "player.slap" | "player.fade" | "player.shake" | "player.godmode" | "player.noclip" | "player.render"
         | "player.set_ammo" | "player.give_ammo" | "player.take_weapon" | "player.switch_weapon" | "player.set_frags" | "player.set_deaths" | "player.to_spectators" | "player.kick" | "player.mute" | "player.gag"
-        | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire"
+        | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_transform" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire"
         | "creature.go_to" | "creature.attack" | "creature.hold" | "creature.resume" | "creature.flee_to" | "creature.set_health" | "creature.remove" | "creature.set_speed" | "creature.set_tier" => {
             let p = || inp("player", "player");
             let num = |k: &str| float_lit(gen.num(n, def, k));
@@ -3131,7 +3141,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let call = match def.kind.as_str() {
                 "game.change_map" => format!("lsg_change_map({})", pawn_str(&name_text(gen.text(n, def, "map")))),
                 "game.restart_round" => "server_cmd(\"sv_restartround 1\")".into(),
-                "player.set_transform" => format!("lsg_set_transform({}, {}, {}, {})", p(), if wired("pos") { inp("pos", "vector") } else { "-1".into() }, if wired("angles") { inp("angles", "vector") } else { "-1".into() }, if wired("vel") { inp("vel", "vector") } else { "-1".into() }),
+                "player.set_transform" => {
+                    // (a Transform wired: its parts where the separate pins aren't)
+                    let tf = |k: usize, pin: &str| if wired(pin) { inp(pin, "vector") } else if wired("transform") { gen.transform_field(id, k) } else { "-1".into() };
+                    format!("lsg_set_transform({}, {}, {}, {})", p(), tf(0, "pos"), tf(1, "angles"), tf(3, "vel"))
+                }
                 "player.set_rotation" => format!("lsg_set_transform({}, -1, {}, -1)", p(), inp("angles", "vector")),
                 "player.look_at" => format!("lsg_look_at({}, {}, {})", p(), if wired("at") { inp("at", "entity") } else { "0".into() }, if wired("pos") { inp("pos", "vector") } else { "-1".into() }),
                 "player.slap" => format!("lsg_slap({}, floatround({}))", p(), inp("dmg", "number")),
@@ -3166,6 +3180,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 }
                 "ent.remove" => format!("lsg_remove({})", inp("in", "entity")),
                 "ent.set_position" => format!("lsg_ent_pos({}, {})", inp("in", "entity"), inp("pos", "vector")),
+                "ent.set_transform" => format!("lsg_ent_transform({}, {}, {}, {}, {})", inp("in", "entity"), gen.transform_field(id, 0), gen.transform_field(id, 1), gen.transform_field(id, 2), gen.transform_field(id, 3)),
                 "ent.set_angles" => format!("lsg_ent_angles({}, {})", inp("in", "entity"), inp("angles", "vector")),
                 "ent.set_visible" => format!("lsg_ent_visible({}, {})", inp("in", "entity"), on("on")),
                 "fx.explosion" => format!("lsg_explode({}, {}, {})", inp("pos", "vector"), inp("dmg", "number"), num("radius")),
@@ -4266,6 +4281,9 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
     }
     if used("ls_dmgkind") {
         o.line("// the damage bits as a Damage Kind (other, shot, slash, blast, burn, fall, shock, drown, poison)\nstock lsg_dmg_k(bits)\n{\n\tif (bits & DMG_FALL)\n\t\treturn 5\n\tif (bits & DMG_BLAST)\n\t\treturn 3\n\tif (bits & DMG_BURN)\n\t\treturn 4\n\tif (bits & DMG_BULLET)\n\t\treturn 1\n\tif (bits & DMG_SLASH)\n\t\treturn 2\n\tif (bits & DMG_SHOCK)\n\t\treturn 6\n\tif (bits & DMG_DROWN)\n\t\treturn 7\n\tif (bits & (DMG_POISON | DMG_NERVEGAS))\n\t\treturn 8\n\treturn 0\n}");
+    }
+    if g.structs.iter().any(|s| s.builtin && s.id == super::graph::TRANSFORM) {
+        o.line("// Transform's helpers: an entity's scale; an entity put where a Transform says\nstock Float:lsg_escale(e)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn 1.0\n\tnew Float:s\n\tpev(e, pev_scale, s)\n\treturn s > 0.0 ? s : 1.0\n}\n\nstock lsg_ent_transform(e, pos, rot, Float:scale, vel)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn\n\tnew Float:v[3]\n\tlsg_vto(pos, v)\n\tengfunc(EngFunc_SetOrigin, e, v)\n\tlsg_vto(rot, v)\n\tset_pev(e, e <= MaxClients ? pev_v_angle : pev_angles, v)\n\tif (e <= MaxClients)\n\t{\n\t\tset_pev(e, pev_angles, v)\n\t\tset_pev(e, pev_fixangle, 1)\n\t}\n\telse if (scale > 0.0)\n\t\tset_pev(e, pev_scale, scale)\n\tlsg_vto(vel, v)\n\tset_pev(e, pev_velocity, v)\n}");
     }
     for (k, st) in g.structs.iter().enumerate() {
         let params: Vec<String> = st.fields.iter().enumerate().map(|(j, f)| typed(&f.ty, &format!("f{j}"))).collect();

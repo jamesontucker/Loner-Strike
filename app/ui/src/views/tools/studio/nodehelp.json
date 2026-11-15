@@ -22023,6 +22023,11 @@
 "id":"duck",
 "dir":"out",
 "help":"Ducking: yes or no."
+},
+{
+"id":"transform",
+"dir":"out",
+"help":"Transform: struct:ls_transform."
 }
 ],
 "settings":[],
@@ -22131,6 +22136,11 @@
 "id":"vel",
 "dir":"in",
 "help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"transform",
+"dir":"in",
+"help":"Transform (separate pins win): struct:ls_transform. Optional."
 },
 {
 "id":"then",
@@ -39240,13 +39250,18 @@
 "id":"ground",
 "dir":"out",
 "help":"On Ground: yes or no."
+},
+{
+"id":"transform",
+"dir":"out",
+"help":"Transform: struct:ls_transform."
 }
 ],
 "settings":[],
 "related":[
+"ent.set_transform",
 "ent.position",
-"ent.rotation",
-"ent.distance"
+"ent.rotation"
 ],
 "example":{
 "caption":"When a round starts, Get Entity Transform is read and printed to the server console.",
@@ -57269,6 +57284,39 @@
 }
 ]
 }
+},
+"ent.set_transform":{
+"title":"Set Entity Transform",
+"category":"Entities",
+"what":"Puts an entity where a Transform says: its Position, Rotation, Scale (props and sprites; players can't be resized) and Velocity.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"transform",
+"dir":"in",
+"help":"Transform: struct:ls_transform. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"related":[
+"ent.transform",
+"ent.spawn_weapon",
+"ent.spawn_entity"
+]
 },
 "color.literal":{
 "title":"Color",

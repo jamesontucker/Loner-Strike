@@ -14,7 +14,7 @@ const BASE_NAMES: Record<string, string> = {
 /** The type menu in groups (StudioTypes.md): what most modes need first, the game's things, files,
  *  handles to something running, then the mode's own. */
 const GROUPS: [string, string[]][] = [
-  ["Basic", ["number", "bool", "text", "vector", "color"]],
+  ["Basic", ["number", "bool", "text", "vector", "color", "struct:ls_transform"]],
   ["Game", ["player", "team", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "entity", "npc", "creature", "projectile", "volume", "objmarker", "component"]],
   ["Files (loaded with the map)", ["model", "sprite", "sound", "decal"]],
   ["Handles", ["timer", "soundloop"]],
@@ -45,7 +45,7 @@ export function TypePicker({
   const item = value === "exec" ? "number" : c?.item ?? value;
   const key = c?.key ?? "text";
   const make = (s: string, it: string, k: string) => (s === "exec" ? "exec" : s === "array" ? `array<${it}>` : s === "map" ? `map<${k},${it.startsWith("struct:") ? "number" : it}>` : it);
-  const builtinName = (t: string) => BUILTIN_ENUMS.find((e) => `enum:${e.id}` === t)?.name;
+  const builtinName = (t: string) => BUILTIN_ENUMS.find((e) => `enum:${e.id}` === t)?.name ?? (t === "struct:ls_transform" ? "Transform" : undefined);
   const groups: [string, [string, string][]][] = GROUPS.map(([g, ts]) => [g, ts.filter((t) => (BASE_TYPES as readonly string[]).includes(t) || builtinName(t)).map((t): [string, string] => [t, BASE_NAMES[t] ?? builtinName(t) ?? t])]);
   groups.push(["Mine", [
     ...(graph.enums ?? []).map((e): [string, string] => [`enum:${e.id}`, `${e.name} (enum)`]),

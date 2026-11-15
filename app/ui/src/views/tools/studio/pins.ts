@@ -4,7 +4,7 @@
 // that count.
 
 import { container, nodeDef, PIN_TYPES, type NodeDef, type PinDef, type PinType } from "./registry";
-import { allEnums, type GMember, type GNode, type Graph } from "./schema";
+import { allEnums, allStructs, type GMember, type GNode, type Graph } from "./schema";
 import { tablePins } from "./tables";
 
 export const BASE_TYPES = [
@@ -18,7 +18,7 @@ export const KEY_TYPES = ["text", "number", "player"] as const;
 export function itemTypeOk(g: Graph, t: string, structs: boolean): boolean {
   if ((BASE_TYPES as readonly string[]).includes(t)) return true;
   if (t.startsWith("enum:")) return allEnums(g).some((e) => `enum:${e.id}` === t);
-  if (t.startsWith("struct:")) return structs && (g.structs ?? []).some((s) => `struct:${s.id}` === t);
+  if (t.startsWith("struct:")) return structs && allStructs(g).some((s) => `struct:${s.id}` === t);
   return false;
 }
 
@@ -35,7 +35,7 @@ export function typeLabel(g: Graph | null, t: string): string {
   const c = container(t);
   if (c) return c.kind === "array" ? `Array of ${typeLabel(g, c.item)}` : `Map of ${typeLabel(g, c.key ?? "text")} to ${typeLabel(g, c.item)}`;
   if (t.startsWith("enum:")) return allEnums(g).find((e) => `enum:${e.id}` === t)?.name ?? "Enum";
-  if (t.startsWith("struct:")) return g?.structs?.find((s) => `struct:${s.id}` === t)?.name ?? "Struct";
+  if (t.startsWith("struct:")) return allStructs(g).find((s) => `struct:${s.id}` === t)?.name ?? "Struct";
   return PIN_TYPES[t]?.label ?? t;
 }
 
@@ -62,7 +62,7 @@ export function switchCases(n: GNode, def: NodeDef): string[] {
 
 const fnOf = (g: Graph, id: unknown) => (g.functions ?? []).find((f) => f.id === id);
 const macroOf = (g: Graph, id: unknown) => (g.macros ?? []).find((m) => m.id === id);
-const structOf = (g: Graph, id: unknown) => (g.structs ?? []).find((s) => s.id === id);
+const structOf = (g: Graph, id: unknown) => allStructs(g).find((s) => s.id === id);
 const enumOf = (g: Graph, id: unknown) => allEnums(g).find((e) => e.id === id);
 /** every variable a node can name: the mode's and every Function's locals */
 export const allVariables = (g: Graph) => [...g.variables, ...(g.functions ?? []).flatMap((f) => f.locals ?? [])];
