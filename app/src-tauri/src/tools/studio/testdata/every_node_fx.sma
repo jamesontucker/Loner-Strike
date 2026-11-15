@@ -2849,6 +2849,28 @@ stock lsg_argstr(a, s[], len)
 // If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
 stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
 
+// (Retry: a timer with the flow's ctx, then the spot and the tries so far)
+stock lsg_xr_wait(i, const fn[], Float:every, const ctx[], const Float:o[3])
+{
+	new d[LSG_CTX + 4]
+	for (new k = 0; k < LSG_CTX; k++)
+		d[k] = ctx[k]
+	d[LSG_CTX] = _:o[0]
+	d[LSG_CTX + 1] = _:o[1]
+	d[LSG_CTX + 2] = _:o[2]
+	d[LSG_CTX + 3] = g_lsgXrN[i]
+	set_task(every, fn, LSG_TASK + 410000 + i, d, LSG_CTX + 4)
+}
+
+stock lsg_xr_back(i, const d[])
+{
+	g_lsgXrIn = i
+	g_lsgXrO[i][0] = Float:d[LSG_CTX]
+	g_lsgXrO[i][1] = Float:d[LSG_CTX + 1]
+	g_lsgXrO[i][2] = Float:d[LSG_CTX + 2]
+	g_lsgXrN[i] = d[LSG_CTX + 3]
+}
+
 // (Retry: the spot of the first try, kept)
 stock lsg_xr_put(i, ok, const Float:o[3])
 {
@@ -3784,7 +3806,7 @@ lsg_n36(ctx[])
 		lsgWhy = 4
 	new bool:lsgWait = !e && lsgWhy == 1 && (0 == 0 || ++g_lsgXrN[36] < 0)
 	if (lsgWait)
-		set_task(1.0, "lsg_xr36", LSG_TASK + 410000 + 36, ctx, LSG_CTX)
+		lsg_xr_wait(36, "lsg_xr36", 1.0, ctx, o)
 	else if (!e && lsgWhy == 1)
 		lsgWhy = 5
 	g_lsgOut[36] = e
@@ -3795,9 +3817,9 @@ lsg_n36(ctx[])
 	#pragma unused lsgWait
 }
 
-public lsg_xr36(ctx[])
+public lsg_xr36(d[])
 {
-	g_lsgXrIn = 36
-	lsg_n36(ctx)
+	lsg_xr_back(36, d)
+	lsg_n36(d)
 }
 
