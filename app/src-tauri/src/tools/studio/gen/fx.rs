@@ -632,7 +632,9 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
             let place = place(gen, id, "at_ent", &fallback);
             let kv = keys.iter().map(|(k, v)| format!("{}, {}", pawn_str(k), pawn_str(v))).collect::<Vec<_>>();
             // (the keys go in one call: a short helper with up to 32 pairs)
-            let create = format!("lsg_spawn_kv({}, o{}{})", pawn_str(c.0), if kv.is_empty() { "" } else { ", " }, kv.join(", "));
+            // (lsg_spawn_ev: the entity's own fields - draw mode, size, flags, names - set on it
+            // directly, the rest given to the game as keys)
+            let create = format!("lsg_spawn_ev({}, o{}{})", pawn_str(c.0), if kv.is_empty() { "" } else { ", " }, kv.join(", "));
             // (a sprite with no draw mode in its keys: the one its file is made for; an additive
             // glow drawn Normal shows its black background as a box)
             let create = match sprite_look(c.0, &keys) {
@@ -656,6 +658,110 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
 }
 
 /// The helpers and hooks (once, when a node here or a spawn node is used).
+/// Spawn Entity's maker (only in plugins with a Spawn Entity). It replaces lsg_spawn_kv, whose
+/// keys after the first were read by a helper (lsg_argstr) - but getarg reads the arguments of
+/// the function it's in, so every key after the first was garbage: rendermode=5 never arrived,
+/// and a glow sprite drew as a black box. The keys that are the entity's own
+/// fields (entvars: the engine reads those itself only for map entities, so for one made at run
+/// time they're set directly) - before it spawns (it may read its flags, name, size), and the
+/// draw ones again after (its Spawn may set its own). Every key also goes to the game's KeyValue.
+const SPAWN_EV: &str = r#"stock lsg_spawn_ev(const cls[], const Float:o[3], ...)
+{
+	new e = create_entity(cls)
+	if (e <= 0)
+		return 0
+	engfunc(EngFunc_SetOrigin, e, o)
+	// (the keys are read here: getarg reads the arguments of the function it's in, so a helper
+	// can't read these for it)
+	new n = numargs(), key[64], val[128], i
+	for (new a = 2; a + 1 < n; a += 2)
+	{
+		for (i = 0; i < charsmax(key); i++)
+		{
+			key[i] = getarg(a, i)
+			if (!key[i])
+				break
+		}
+		key[i] = 0
+		for (i = 0; i < charsmax(val); i++)
+		{
+			val[i] = getarg(a + 1, i)
+			if (!val[i])
+				break
+		}
+		val[i] = 0
+		if (!key[0])
+			continue
+		lsg_spawn_field(e, key, val, false)
+		DispatchKeyValue(e, key, val)
+	}
+	DispatchSpawn(e)
+	if (!pev_valid(e) || (pev(e, pev_flags) & FL_KILLME))
+		return 0
+	for (new a = 2; a + 1 < n; a += 2)
+	{
+		for (i = 0; i < charsmax(key); i++)
+		{
+			key[i] = getarg(a, i)
+			if (!key[i])
+				break
+		}
+		key[i] = 0
+		for (i = 0; i < charsmax(val); i++)
+		{
+			val[i] = getarg(a + 1, i)
+			if (!val[i])
+				break
+		}
+		val[i] = 0
+		lsg_spawn_field(e, key, val, true)
+	}
+	return e
+}
+
+// one of the entity's own fields from a key (drawn: only the draw ones, after it spawned)
+stock bool:lsg_spawn_field(e, const key[], const val[], bool:drawn)
+{
+	if (equali(key, "rendermode"))
+		set_pev(e, pev_rendermode, clamp(str_to_num(val), 0, 5))
+	else if (equali(key, "renderamt"))
+		set_pev(e, pev_renderamt, floatclamp(str_to_float(val), 0.0, 255.0))
+	else if (equali(key, "renderfx"))
+		set_pev(e, pev_renderfx, clamp(str_to_num(val), 0, 20))
+	else if (equali(key, "rendercolor"))
+	{
+		new p[3][12], Float:c[3]
+		parse(val, p[0], 11, p[1], 11, p[2], 11)
+		for (new i = 0; i < 3; i++)
+			c[i] = floatclamp(str_to_float(p[i]), 0.0, 255.0)
+		set_pev(e, pev_rendercolor, c)
+	}
+	else if (equali(key, "scale"))
+		set_pev(e, pev_scale, floatclamp(str_to_float(val), 0.0, 100.0))
+	else if (equali(key, "framerate"))
+		set_pev(e, pev_framerate, floatclamp(str_to_float(val), 0.0, 1000.0))
+	else if (drawn)
+		return false
+	else if (equali(key, "spawnflags"))
+		set_pev(e, pev_spawnflags, str_to_num(val))
+	else if (equali(key, "targetname"))
+		set_pev(e, pev_targetname, val)
+	else if (equali(key, "target"))
+		set_pev(e, pev_target, val)
+	else if (equali(key, "angles"))
+	{
+		new p[3][16], Float:v[3]
+		parse(val, p[0], 15, p[1], 15, p[2], 15)
+		for (new i = 0; i < 3; i++)
+			v[i] = str_to_float(p[i])
+		set_pev(e, pev_angles, v)
+	}
+	else
+		return false
+	return true
+}
+"#;
+
 /// lsg_spr_look: only in plugins that make a sprite with no draw mode (Spawn Entity).
 const SPR_LOOK: &str = r#"// ---- a sprite made with no draw mode: the one its file is made for (the .spr header's format at
 // byte 12: 0 normal, 1 additive, 2 indexalpha, 3 alphatest). An additive glow drawn Normal shows
@@ -685,6 +791,9 @@ stock lsg_spr_look(e, const spr[], glow, amt)
 "#;
 
 pub(super) fn blocks(g: &Graph, o: &mut Out) {
+    if g.nodes.iter().any(|n| n.kind == "ent.spawn_entity") {
+        o.line(SPAWN_EV);
+    }
     if g.nodes.iter().any(|n| n.kind == "ent.spawn_entity" && class_of(n).is_some_and(|c| sprite_look(c.0, &spawn_keys(s(n, "keys", ""))).is_some())) {
         o.line(SPR_LOOK);
     }
@@ -1498,7 +1607,15 @@ mod tests {
         let cc = c("cc");
         assert!(cc.contains("lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)"), "{cc}");
         // Spawn Entity only makes its class, with its keys, after checking its files
-        assert!(c("se").contains("lsg_spawn_kv(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\""), "{}", c("se"));
+        assert!(c("se").contains("lsg_spawn_ev(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\", \"rendermode\", \"5\""), "{}", c("se"));
+        // the entity's own fields are set on it, not only given as keys (the engine reads those
+        // itself only for map entities)
+        assert!(r.source.contains("set_pev(e, pev_rendermode, clamp(str_to_num(val), 0, 5))") && r.source.contains("lsg_spawn_field(e, key, val, true)"));
+        // every key is read in lsg_spawn_ev itself (getarg reads the function it's in: a helper
+        // reading them got garbage for every key after the first)
+        let ev = &r.source[r.source.find("stock lsg_spawn_ev(").unwrap()..];
+        let ev = &ev[..ev.find("\n}\n").unwrap()];
+        assert!(ev.contains("key[i] = getarg(a, i)") && ev.contains("val[i] = getarg(a + 1, i)") && !ev.contains("lsg_argstr"), "{ev}");
         assert!(c("se").contains("lsg_have(\"sprites/glow01.spr\")"), "{}", c("se"));
         assert!(c("se3").contains("lsg_have_snd(\"buttons/spark1.wav\")"), "{}", c("se3"));
         // and its files are loaded with the map
@@ -1570,7 +1687,7 @@ mod tests {
         let g = crate::tools::studio::graph::parse(&text).unwrap();
         let r = super::super::generate(&g, false);
         let c = code_of(&r.source, &r.spans, "se");
-        assert!(c.contains("lsg_spr_look(lsg_spawn_kv(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\"), \"sprites/glow01.spr\", 0, 0)"), "{c}");
+        assert!(c.contains("lsg_spr_look(lsg_spawn_ev(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\"), \"sprites/glow01.spr\", 0, 0)"), "{c}");
         assert!(r.source.contains("fseek(f, 12, SEEK_SET)"));
     }
 

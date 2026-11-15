@@ -3311,6 +3311,102 @@ lsd_graph_set(const vid[], who, const val[])
 	return false
 }
 
+stock lsg_spawn_ev(const cls[], const Float:o[3], ...)
+{
+	new e = create_entity(cls)
+	if (e <= 0)
+		return 0
+	engfunc(EngFunc_SetOrigin, e, o)
+	// (the keys are read here: getarg reads the arguments of the function it's in, so a helper
+	// can't read these for it)
+	new n = numargs(), key[64], val[128], i
+	for (new a = 2; a + 1 < n; a += 2)
+	{
+		for (i = 0; i < charsmax(key); i++)
+		{
+			key[i] = getarg(a, i)
+			if (!key[i])
+				break
+		}
+		key[i] = 0
+		for (i = 0; i < charsmax(val); i++)
+		{
+			val[i] = getarg(a + 1, i)
+			if (!val[i])
+				break
+		}
+		val[i] = 0
+		if (!key[0])
+			continue
+		lsg_spawn_field(e, key, val, false)
+		DispatchKeyValue(e, key, val)
+	}
+	DispatchSpawn(e)
+	if (!pev_valid(e) || (pev(e, pev_flags) & FL_KILLME))
+		return 0
+	for (new a = 2; a + 1 < n; a += 2)
+	{
+		for (i = 0; i < charsmax(key); i++)
+		{
+			key[i] = getarg(a, i)
+			if (!key[i])
+				break
+		}
+		key[i] = 0
+		for (i = 0; i < charsmax(val); i++)
+		{
+			val[i] = getarg(a + 1, i)
+			if (!val[i])
+				break
+		}
+		val[i] = 0
+		lsg_spawn_field(e, key, val, true)
+	}
+	return e
+}
+
+// one of the entity's own fields from a key (drawn: only the draw ones, after it spawned)
+stock bool:lsg_spawn_field(e, const key[], const val[], bool:drawn)
+{
+	if (equali(key, "rendermode"))
+		set_pev(e, pev_rendermode, clamp(str_to_num(val), 0, 5))
+	else if (equali(key, "renderamt"))
+		set_pev(e, pev_renderamt, floatclamp(str_to_float(val), 0.0, 255.0))
+	else if (equali(key, "renderfx"))
+		set_pev(e, pev_renderfx, clamp(str_to_num(val), 0, 20))
+	else if (equali(key, "rendercolor"))
+	{
+		new p[3][12], Float:c[3]
+		parse(val, p[0], 11, p[1], 11, p[2], 11)
+		for (new i = 0; i < 3; i++)
+			c[i] = floatclamp(str_to_float(p[i]), 0.0, 255.0)
+		set_pev(e, pev_rendercolor, c)
+	}
+	else if (equali(key, "scale"))
+		set_pev(e, pev_scale, floatclamp(str_to_float(val), 0.0, 100.0))
+	else if (equali(key, "framerate"))
+		set_pev(e, pev_framerate, floatclamp(str_to_float(val), 0.0, 1000.0))
+	else if (drawn)
+		return false
+	else if (equali(key, "spawnflags"))
+		set_pev(e, pev_spawnflags, str_to_num(val))
+	else if (equali(key, "targetname"))
+		set_pev(e, pev_targetname, val)
+	else if (equali(key, "target"))
+		set_pev(e, pev_target, val)
+	else if (equali(key, "angles"))
+	{
+		new p[3][16], Float:v[3]
+		parse(val, p[0], 15, p[1], 15, p[2], 15)
+		for (new i = 0; i < 3; i++)
+			v[i] = str_to_float(p[i])
+		set_pev(e, pev_angles, v)
+	}
+	else
+		return false
+	return true
+}
+
 // ---- effects, sounds and spawning (fx.rs) ----
 // the engine's crash points are gen.rs's shared guards: lsg_msg_room (effect messages a frame,
 // the mode's "messages" limit) and lsg_ent_room (entity slots with a reserve)
@@ -4501,7 +4597,7 @@ lsg_n17(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = lsg_vis_note(lsg_spawn_kv("env_sprite", o, "model", "sprites/glow01.spr", "rendermode", "5", "renderamt", "200"))))
+	else if (!(e = lsg_vis_note(lsg_spawn_ev("env_sprite", o, "model", "sprites/glow01.spr", "rendermode", "5", "renderamt", "200"))))
 		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, lsi4, lsi5, 2.0)
 	new bool:lsgWait = false
@@ -4559,7 +4655,7 @@ lsg_n18(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = lsg_vis_note(lsg_spawn_kv("env_beam", o, "texture", "sprites/laserbeam.spr", "LightningStart", "x", "renderamt", "200"))))
+	else if (!(e = lsg_vis_note(lsg_spawn_ev("env_beam", o, "texture", "sprites/laserbeam.spr", "LightningStart", "x", "renderamt", "200"))))
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[18] = e
@@ -4616,7 +4712,7 @@ lsg_n19(ctx[])
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
 		lsgWhy = 1
-	else if (!(e = lsg_vis_note(lsg_spawn_kv("env_spark", o, "MaxDelay", "1"))))
+	else if (!(e = lsg_vis_note(lsg_spawn_ev("env_spark", o, "MaxDelay", "1"))))
 		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, -1, -1, 1.0)
 	new bool:lsgWait = false
