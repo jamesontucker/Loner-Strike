@@ -22,10 +22,10 @@ Follow, Hostage Stop, Is Following, Add Bots, Remove Bots.
 - gm_pubserver: `public gm_pubserver_voting()` so Start Vote never opens over the map or mode vote.
 
 ## Limits
-Comfort limits are `#define`s in coverage.pawn / coverage_npc.pawn (attachments 64, looping animations 64, map entity
-kinds hooked 96, NPC moves waiting 32): past one the call is skipped, logged, and the debugger says why. When X's
-Limits registry lands they can become mode settings. Engine limit enforced: at most 24 Big HUD Texts / Colored Chat
-lines per server frame (the rest skipped, logged once).
+Comfort limits are mode settings in limits.rs / limits.ts (X's registry): Attached things at once (64), Looping
+animations at once (64), NPC moves at once (32), Map entity kinds heard (96); arrays hold the max, the value is read
+with limit_expr; past one the call is skipped, logged, and the debugger says why. Big HUD Text, Colored Chat and Play
+Radio go through the shared per-frame message budget (lsg_msg_room, the messages limit).
 
 ## Tutor box on CS 1.6 (feasibility only)
 The CS 1.6 client.dll has the tutor window classes and handles TutorText / TutorLine / TutorState / TutorClose, and
