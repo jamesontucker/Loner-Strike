@@ -434,7 +434,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 12] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap"];
+const STORE_KINDS: [&str; 14] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -813,6 +813,16 @@ impl<'a> Gen<'a> {
                 if pin == "found" { format!("({who} > 0 ? 1 : 0)") } else { who }
             }
             "player.is_supporter" => format!("(lsg_supporter({}) ? 1 : 0)", i("player", "player")),
+            "ent.kind_of" => format!("lsg_kind_of({})", i("in", "entity")),
+            "ent.comp_kind" => format!("lsg_comp_kind_of({})", i("in", "entity")),
+            "ent.is_npc" => format!("(lsg_kind_ok({}, \"ls_npc\") ? 1 : 0)", i("in", "entity")),
+            "ent.is_interactable" => format!("(lsg_kind_ok({}, \"ls_interactable\") ? 1 : 0)", i("in", "entity")),
+            "ent.is_component" => {
+                let k = self.choice(n, def, "kind");
+                // (one of the list, else any: never a typed name)
+                let k = if COMP_KINDS.contains(&k) { k } else { "" };
+                format!("(lsg_kind_ok({}, {}) ? 1 : 0)", i("in", "entity"), pawn_str(k))
+            }
             "fun.is_third" => format!("(lsg_ok({p}) && g_lsgCam[{p}] ? 1 : 0)", p = i("player", "player")),
             "player.by_index" => format!("lsg_slot_ok(floatround({}))", i("i", "number")),
             "player.gravity" => format!("lsg_pevf({}, pev_gravity)", i("player", "player")),
@@ -1176,7 +1186,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         || hit_creatures
         || !g.functions.is_empty()
         || !g.structs.is_empty()
-        || !g.enums.is_empty()
+        || g.enums.iter().any(|e| !e.builtin)
         || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
         || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))));
 
@@ -1310,6 +1320,13 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
 
     o.line(HELPERS);
+    // (the bigger node families' helpers only where they're used: a plugin's source stays short)
+    if ["msg.status_icon", "fx.marker", "fx.marker_remove", "msg.killfeed"].iter().any(|k| has(k)) {
+        o.line(UI_HELPERS);
+    }
+    if g.nodes.iter().any(|n| n.kind.starts_with("fun.")) {
+        o.line(FUN_HELPERS);
+    }
     o.line(&safe_cmd_stock());
     o.blank();
     if hit_players || hit_creatures {
@@ -1425,7 +1442,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let map_events = g.custom_events.iter().any(|c| c.map);
     let uses_spawn = has("creature.spawn");
     // creature control: the helpers, and the once-a-second watch (Idle For, Creature Idle, Go To then resume)
-    let cr_ctl = g.nodes.iter().any(|n| n.kind.starts_with("creature.") && !["creature.spawn", "creature.health", "creature.count", "creature.is", "creature.on_killed"].contains(&n.kind.as_str()));
+    let cr_ctl = g.nodes.iter().any(|n| (n.kind.starts_with("creature.") && !["creature.spawn", "creature.health", "creature.count", "creature.is", "creature.on_killed"].contains(&n.kind.as_str())) || n.kind == "cast.creature");
     let cr_watch = has("creature.on_idle") || pure_used(&gen, "creature.idle_for") || g.nodes.iter().any(|n| n.kind == "creature.go_to");
     if cr_ctl {
         o.line(CREATURE_CTL);
@@ -1464,11 +1481,12 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     props.extend(g.nodes.iter().filter(|n| n.kind == "fx.marker").map(|n| sprite_text(n.params.get("sprite").and_then(Value::as_str).unwrap_or(""))));
     let uses_mk = has("fx.marker");
     // the fun nodes: one 0.1 s task for fire, a drunk view and trails; death, spawn and leaving hooks
-    let fun_tick = has("fun.burn") || has("fun.drunk") || has("fun.trail");
-    let fun_dead = has("fun.burn") || has("fun.bury") || has("fun.camera") || has("fun.drunk");
+    let fun_tick = has("fun.burn") || has("fun.drunk") || has("fun.trail") || has("fun.view_from");
+    let fun_dead = has("fun.burn") || has("fun.bury") || has("fun.camera") || has("fun.drunk") || has("fun.view_from");
+    let fun_view = has("fun.view_from");
     let fun_spawn = has("fun.camera") || has("fun.trail") || has("fun.bury");
-    let fun_left = has("fun.burn") || has("fun.camera") || has("fun.drunk") || has("fun.bury") || has("fun.trail");
-    let fun_round = has("fun.burn") || has("fun.bury");
+    let fun_left = has("fun.burn") || has("fun.camera") || has("fun.drunk") || has("fun.bury") || has("fun.trail") || has("fun.view_from");
+    let fun_round = has("fun.burn") || has("fun.bury") || has("fun.view_from");
     let bursts: BTreeSet<&str> = g.nodes.iter().filter(|n| n.kind == "fun.burst").map(|n| n.params.get("kind").and_then(Value::as_str).unwrap_or("sparks")).collect();
     let uses_fire = has("fun.burn");
     let uses_smoke = bursts.contains("smoke");
@@ -1488,8 +1506,19 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_mute {
         o.line("stock lsg_mute(id, Float:secs)\n{\n\tif (!lsg_ok(id))\n\t\treturn\n\tset_speak(id, SPEAK_MUTED)\n\tremove_task(LSG_TASK - 300 - id)\n\tif (secs > 0.0)\n\t\tset_task(secs, \"lsg_unmute\", LSG_TASK - 300 - id)\n}\n\npublic lsg_unmute(task)\n{\n\tnew id = LSG_TASK - 300 - task\n\tif (lsg_ok(id))\n\t\tset_speak(id, SPEAK_NORMAL)\n}\n");
     }
+    if pure_used(&gen, "ent.kind_of") {
+        o.line("// Kind Of: the built-in Entity Kind enum's value (Player, Bot, Creature, NPC, Interactable,\n// Component, Prop, Map entity, None)\nstock lsg_kind_of(e)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn 8\n\tif (e <= MaxClients)\n\t\treturn is_user_connected(e) ? (is_user_bot(e) ? 1 : 0) : 8\n\tif (lsg_is_creature(e))\n\t\treturn 2\n\tif (lsg_kind_ok(e, \"ls_npc\"))\n\t\treturn 3\n\tif (lsg_kind_ok(e, \"ls_interactable\"))\n\t\treturn 4\n\tif (lsg_kind_ok(e, \"\"))\n\t\treturn 5\n\tnew c[24]\n\tpev(e, pev_classname, c, charsmax(c))\n\treturn equal(c, \"ls_studio_prop\") ? 6 : 7\n}\n");
+    }
+    // Component Kind Of: gm_components' kind, as the Component Kind enum's value (its order)
+    if pure_used(&gen, "ent.comp_kind") {
+        let names: Vec<String> = COMP_KINDS.iter().map(|k| pawn_str(k)).collect();
+        o.line(format!("stock const g_lsgCompKinds[][] = {{ {} }}\nstock lsg_comp_kind_of(e)\n{{\n\tnew k[24]\n\tif (e <= 0 || !ls_components_running() || !ls_comp_kind(e, k, charsmax(k)))\n\t\treturn {none}\n\tfor (new i = 0; i < sizeof g_lsgCompKinds; i++)\n\t\tif (equal(k, g_lsgCompKinds[i]))\n\t\t\treturn i\n\treturn {none}\n}}\n", names.join(", "), none = COMP_KINDS.len()));
+    }
     if fun_tick {
         o.line("// fire, a drunk view and trails, ten times a second (one task for all of them)\npublic lsg_fun_tick()\n\tlsg_fun_ticks()\n");
+    }
+    if fun_view {
+        o.line("// View From with Freeze: no shooting while viewing (moving is stopped by FL_FROZEN)\npublic lsg_view_cmd(id, uc, seed)\n{\n\tif (id < 1 || id > 32 || !g_lsgViewCam[id] || !g_lsgViewFreeze[id])\n\t\treturn FMRES_IGNORED\n\tset_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) & ~(IN_ATTACK | IN_ATTACK2 | IN_USE))\n\treturn FMRES_HANDLED\n}\n");
     }
     if fun_dead {
         o.line("// a death ends fire, burying, a drunk view, and third person when it's set to\npublic lsg_fun_dead(id)\n\tlsg_fun_died(id)\n");
@@ -1498,7 +1527,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("// a respawn: the trail again, third person again (or not), out of the ground\npublic lsg_fun_spawn(id)\n\tlsg_fun_spawned(id)\n\npublic lsg_cam_again(task)\n\tlsg_cam_reapply(task - (LSG_TASK - 480))\n");
     }
     if fun_round {
-        o.line("// a new round puts out fires and unburies\npublic lsg_fun_round()\n{\n\tfor (new p = 1; p <= MaxClients; p++)\n\t{\n\t\tlsg_burn_off(p)\n\t\tg_lsgBuried[p] = false\n\t}\n}\n");
+        o.line("// a new round puts out fires, unburies and gives views back\npublic lsg_fun_round()\n{\n\tfor (new p = 1; p <= MaxClients; p++)\n\t{\n\t\tlsg_burn_off(p)\n\t\tg_lsgBuried[p] = false\n\t\tlsg_view_back(p)\n\t}\n}\n");
     }
     if uses_mk {
         o.line("// Objective Markers follow what they're on, ten times a second (one task for all of them)\npublic lsg_mk_tick()\n\tlsg_mk_follow()\n");
@@ -1640,6 +1669,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if fun_tick {
         o.line("\tset_task(0.1, \"lsg_fun_tick\", LSG_TASK - 410, _, _, \"b\")");
+    }
+    if fun_view {
+        o.line("\tregister_forward(FM_CmdStart, \"lsg_view_cmd\", 0)");
     }
     if fun_dead {
         o.line("\tRegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)");
@@ -2947,6 +2979,73 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        "cast.player" | "cast.creature" => {
+            let e = inp("in", "entity");
+            let k = gen.out_index(id, "out");
+            let player = def.kind == "cast.player";
+            let test = if player { "lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE)" } else { "lsg_is_creature(lsgE)" };
+            let mut yes = vec![];
+            if let Some(k) = k {
+                yes.push(format!("\t\tg_lsgO[{k}] = lsgE"));
+            }
+            if !player {
+                if let Some(t) = gen.tout_index(id, "type") {
+                    yes.push(format!("\t\tcopy(g_lsgOT[{t}], 127, lsg_cr_type(lsgE))"));
+                }
+            }
+            let ex = exit("success");
+            if !ex.is_empty() {
+                yes.push(format!("\t{ex}"));
+            }
+            if let Some(c) = next("ok") {
+                yes.push(format!("\t\t{c}"));
+            }
+            let mut no = vec![];
+            if let Some(k) = k {
+                no.push(format!("\t\tg_lsgO[{k}] = 0"));
+            }
+            let ex = exit("failed");
+            if !ex.is_empty() {
+                no.push(format!("\t{ex}"));
+            }
+            if let Some(c) = next("fail") {
+                no.push(format!("\t\t{c}"));
+            }
+            b.line(format!("\tnew lsgE = {e}\n\tif ({test})\n\t{{\n{}\n\t}}\n\telse\n\t{{\n{}\n\t}}", if yes.is_empty() { "\t\t#pragma unused lsgE".into() } else { yes.join("\n") }, if no.is_empty() { "".into() } else { no.join("\n") }));
+        }
+        "fun.view_from" => {
+            let who = match gen.choice(n, def, "who") { "t" => 1, "ct" => 2, "all" => 3, _ => 0 };
+            let p = if who == 0 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            let from = if v.data_source(id, "from").is_some() { inp("from", "entity") } else { "0".into() };
+            let vec_in = |pin: &str, var: &str| if v.data_source(id, pin).is_some() { format!("\tlsg_vto({}, {var})\n", inp(pin, "vector")) } else { String::new() };
+            b.line(format!(
+                "\tnew Float:lsgA[3], Float:lsgAa[3], Float:lsgB[3], Float:lsgBa[3]\n{}{}{}{}\tlsg_view_from({who}, {p}, {from}, lsgA, lsgAa, {}, lsgB, lsgBa, {}, {}, {}, {}, {})",
+                vec_in("pos", "lsgA"),
+                vec_in("angles", "lsgAa"),
+                vec_in("to", "lsgB"),
+                vec_in("to_angles", "lsgBa"),
+                if v.data_source(id, "pos").is_some() { 1 } else { 0 },
+                if v.data_source(id, "to").is_some() { 1 } else { 0 },
+                float_lit(gen.num(n, def, "offset").clamp(-256.0, 512.0)),
+                float_lit(gen.num(n, def, "move").clamp(0.1, 60.0)),
+                float_lit(gen.num(n, def, "secs").clamp(0.0, 120.0)),
+                if gen.boolean(n, def, "freeze") { 1 } else { 0 }
+            ));
+            let e = exit("viewing");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "fun.view_return" => {
+            let p = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            b.line(format!("\tlsg_view_return({p})"));
+            let e = exit("returned");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
         "fun.trail" => {
             let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
             let call = format!(
@@ -3669,7 +3768,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
-    "creature.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
+    "creature.", "cast.", "fun.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "proj.", // T1fix
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
@@ -4983,6 +5082,11 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 pub const STATUS_ICONS: [&str; 25] = [
     "buyzone", "c4", "defuser", "rescue", "escape", "vipsafety", "stopwatch", "smallskull", "smallc4", "smallvip", "hostage", "dollar", "cross", "item_healthkit", "item_battery", "item_longjump", "dmg_poison", "dmg_bio", "dmg_chem", "dmg_drown", "dmg_gas", "dmg_cold", "dmg_heat", "dmg_rad", "dmg_shock",
 ];
+/// gm_components' component kinds (its classnames), for Is Component.
+pub const COMP_KINDS: [&str; 25] = [
+    "ls_capture_point", "ls_extraction_zone", "ls_checkpoint", "ls_shop", "ls_barricade", "ls_trigger_trap", "ls_loot_container", "ls_supply_drop", "ls_supply_crate", "ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_meeting_point", "ls_moving_platform", "ls_timed_door", "ls_wave_spawner", "ls_safe_zone", "ls_zone_shrinker", "ls_damage_zone", "ls_weapon_spawner", "ls_respawn_point", "ls_player_class", "ls_pickup", "ls_npc", "ls_interactable",
+];
+
 /// The kill feed's weapon icons (hud.txt's d_<name> sprites).
 pub const KILL_ICONS: [&str; 28] = [
     "knife", "ak47", "m4a1", "awp", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "scout", "g3sg1", "sg550", "sg552", "aug", "famas", "galil", "mp5navy", "tmp", "mac10", "ump45", "p90", "m3", "xm1014", "m249", "grenade", "skull", "tracktrain",
@@ -5020,607 +5124,6 @@ stock lsg_pre_sound(const p[])
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
 	return precache_sound(p)
-}
-
-// ---- Status Icon, Objective Marker, Kill Feed Line ----
-stock g_lsgIcon[33][16]
-stock lsg_icon_send(to, status, const name[], r, g, b)
-{
-	if (to && !is_user_connected(to))
-		return
-	static msg
-	if (!msg)
-		msg = get_user_msgid("StatusIcon")
-	message_begin(to ? MSG_ONE : MSG_ALL, msg, _, to)
-	write_byte(status)
-	write_string(name)
-	if (status)
-	{
-		write_byte(r)
-		write_byte(g)
-		write_byte(b)
-	}
-	message_end()
-}
-
-// to 0: everyone; death: noted, so it's taken away when they die
-stock lsg_icon(to, status, const name[], r, g, b, death)
-{
-	if (to && !lsg_ok(to))
-		return
-	lsg_icon_send(to, status, name, r, g, b)
-	if (!death)
-		return
-	for (new p = to ? to : 1; p <= (to ? to : MaxClients); p++)
-		if (is_user_connected(p))
-			copy(g_lsgIcon[p], 15, status ? name : "")
-}
-
-stock lsg_icon_clear(id)
-{
-	if (id < 1 || id > MaxClients || !g_lsgIcon[id][0])
-		return
-	lsg_icon_send(id, 0, g_lsgIcon[id], 0, 0, 0)
-	g_lsgIcon[id][0] = 0
-}
-
-// markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
-#define LSG_MKS 32
-stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
-
-stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
-{
-	// (a sprite that wasn't there when the map loaded: no marker)
-	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
-		return 0
-	new slot = -1
-	for (new k = 0; k < LSG_MKS; k++)
-	{
-		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
-			g_lsgMk[k] = 0
-		if (!g_lsgMk[k])
-		{
-			slot = k
-			break
-		}
-	}
-	if (slot < 0)
-		return 0
-	new e = create_entity("info_target")
-	if (e <= 0)
-		return 0
-	set_pev(e, pev_classname, "ls_studio_marker")
-	engfunc(EngFunc_SetModel, e, spr)
-	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
-	set_pev(e, pev_solid, SOLID_NOT)
-	set_pev(e, pev_rendermode, kRenderTransAdd)
-	set_pev(e, pev_renderamt, 255.0)
-	new Float:c[3]
-	c[0] = float(r)
-	c[1] = float(g)
-	c[2] = float(b)
-	set_pev(e, pev_rendercolor, c)
-	set_pev(e, pev_scale, scale)
-	if (pulse)
-		set_pev(e, pev_renderfx, kRenderFxPulseSlow)
-	new Float:o[3]
-	if (follow > 0)
-		pev(follow, pev_origin, o)
-	else
-		o = at
-	o[2] += h
-	engfunc(EngFunc_SetOrigin, e, o)
-	g_lsgMk[slot] = e
-	g_lsgMkF[slot] = follow
-	g_lsgMkH[slot] = h
-	g_lsgMkWho[e] = who
-	g_lsgMkFor[e] = forp
-	return e
-}
-
-stock lsg_mk_free(k)
-{
-	new e = g_lsgMk[k]
-	g_lsgMk[k] = 0
-	if (e > 0 && e < 2048)
-	{
-		g_lsgMkWho[e] = 0
-		g_lsgMkFor[e] = 0
-	}
-	if (e > 0 && pev_valid(e))
-		remove_entity(e)
-}
-
-stock lsg_mk_follow()
-{
-	for (new k = 0; k < LSG_MKS; k++)
-	{
-		new e = g_lsgMk[k], f = g_lsgMkF[k]
-		if (!e)
-			continue
-		if (!pev_valid(e))
-		{
-			g_lsgMk[k] = 0
-			continue
-		}
-		if (f <= 0)
-			continue
-		// what it was on is gone (or the player left): so is the marker
-		if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
-		{
-			lsg_mk_free(k)
-			continue
-		}
-		// (a dead player's marker waits, out of sight)
-		new fx = pev(e, pev_effects)
-		if (f <= MaxClients && !is_user_alive(f))
-		{
-			set_pev(e, pev_effects, fx | EF_NODRAW)
-			continue
-		}
-		set_pev(e, pev_effects, fx & ~EF_NODRAW)
-		new Float:o[3]
-		pev(f, pev_origin, o)
-		o[2] += g_lsgMkH[k]
-		engfunc(EngFunc_SetOrigin, e, o)
-	}
-}
-
-// 0 or a marker: that one, or all of them
-stock lsg_marker_remove(m)
-{
-	for (new k = 0; k < LSG_MKS; k++)
-		if (g_lsgMk[k] && (!m || g_lsgMk[k] == m))
-			lsg_mk_free(k)
-}
-
-stock bool:lsg_mk_sees(ent, host)
-{
-	new w = g_lsgMkWho[ent]
-	if (w == 3)
-		return host == g_lsgMkFor[ent]
-	return host >= 1 && host <= MaxClients && get_user_team(host) == w
-}
-
-// a line in the kill feed, to each person's game (one at a time: plugins that count deaths from
-// the game's own DeathMsg, the mode's Player Killed among them, don't see it as a death)
-stock lsg_killfeed(killer, victim, hs, const w[])
-{
-	if (!lsg_ok(victim))
-		return 0
-	if (!lsg_ok(killer))
-		killer = 0
-	static msg
-	if (!msg)
-		msg = get_user_msgid("DeathMsg")
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_connected(p) || is_user_bot(p))
-			continue
-		message_begin(MSG_ONE, msg, _, p)
-		write_byte(killer)
-		write_byte(victim)
-		write_byte(hs ? 1 : 0)
-		write_string(w)
-		message_end()
-	}
-	return 1
-}
-
-// ---- fun: fire, trails, bursts, swaps, burying, the camera, a drunk view ----
-stock g_lsgSprFire, g_lsgSprSmoke, g_lsgSprBlood, g_lsgSprSpray
-stock Float:g_lsgBurnTill[33], Float:g_lsgBurnDps[33], Float:g_lsgBurnNext[33], g_lsgBurnBy[33], g_lsgBurnFx[33]
-stock bool:g_lsgBuried[33], g_lsgCam[33], g_lsgCamKeep[33], Float:g_lsgDrunkTill[33], Float:g_lsgDrunk[33], g_lsgFunN
-stock g_lsgTrail[32], g_lsgTrailC[32][5], bool:g_lsgTrailStill[32]
-
-stock lsg_burn(id, by, Float:secs, Float:dps)
-{
-	if (!ls_alive(id))
-		return 0
-	new Float:now = get_gametime()
-	g_lsgBurnTill[id] = now + secs
-	g_lsgBurnDps[id] = dps
-	g_lsgBurnBy[id] = lsg_ok(by) ? by : 0
-	if (g_lsgBurnNext[id] < now)
-		g_lsgBurnNext[id] = now + 1.0
-	// flames on them: a sprite that rides along (the engine moves it: MOVETYPE_FOLLOW)
-	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])))
-	{
-		new e = create_entity("info_target")
-		if (e > 0)
-		{
-			set_pev(e, pev_classname, "ls_studio_fire")
-			engfunc(EngFunc_SetModel, e, "sprites/fire.spr")
-			set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
-			set_pev(e, pev_aiment, id)
-			set_pev(e, pev_solid, SOLID_NOT)
-			set_pev(e, pev_rendermode, kRenderTransAdd)
-			set_pev(e, pev_renderamt, 255.0)
-			g_lsgBurnFx[id] = e
-		}
-	}
-	return 1
-}
-
-stock lsg_burn_off(id)
-{
-	if (id < 1 || id > 32)
-		return
-	g_lsgBurnTill[id] = 0.0
-	if (g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id]))
-		remove_entity(g_lsgBurnFx[id])
-	g_lsgBurnFx[id] = 0
-}
-
-stock lsg_drunk(id, Float:secs, Float:strength)
-{
-	if (!ls_alive(id))
-		return 0
-	g_lsgDrunkTill[id] = get_gametime() + secs
-	g_lsgDrunk[id] = strength
-	return 1
-}
-
-stock lsg_drunk_off(id)
-{
-	if (g_lsgDrunkTill[id] > 0.0 && is_user_connected(id))
-		set_pev(id, pev_punchangle, Float:{0.0, 0.0, 0.0})
-	g_lsgDrunkTill[id] = 0.0
-}
-
-stock lsg_trail_send(k)
-{
-	new e = g_lsgTrail[k]
-	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-	write_byte(TE_KILLBEAM)
-	write_short(e)
-	message_end()
-	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-	write_byte(TE_BEAMFOLLOW)
-	write_short(e)
-	write_short(g_lsgSprBeam)
-	write_byte(g_lsgTrailC[k][4])
-	write_byte(g_lsgTrailC[k][3])
-	write_byte(g_lsgTrailC[k][0])
-	write_byte(g_lsgTrailC[k][1])
-	write_byte(g_lsgTrailC[k][2])
-	write_byte(200)
-	message_end()
-}
-
-stock lsg_trail(e, on, r, g, b, width, life)
-{
-	if (e <= 0 || !pev_valid(e))
-		return 0
-	new k = -1
-	for (new i = 0; i < 32; i++)
-		if (g_lsgTrail[i] == e)
-			k = i
-	if (!on)
-	{
-		if (k >= 0)
-		{
-			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-			write_byte(TE_KILLBEAM)
-			write_short(e)
-			message_end()
-			g_lsgTrail[k] = 0
-		}
-		return 1
-	}
-	for (new i = 0; i < 32 && k < 0; i++)
-		if (!g_lsgTrail[i] || !pev_valid(g_lsgTrail[i]))
-			k = i
-	if (k < 0)
-		return 0
-	g_lsgTrail[k] = e
-	g_lsgTrailC[k][0] = r
-	g_lsgTrailC[k][1] = g
-	g_lsgTrailC[k][2] = b
-	g_lsgTrailC[k][3] = width
-	g_lsgTrailC[k][4] = life
-	g_lsgTrailStill[k] = false
-	lsg_trail_send(k)
-	return 1
-}
-
-// a trail dies with a teleport, a respawn or a long stop: sent again when they move once more
-stock lsg_trail_check()
-{
-	for (new k = 0; k < 32; k++)
-	{
-		new e = g_lsgTrail[k]
-		if (!e)
-			continue
-		if (!pev_valid(e) || (e <= MaxClients && !is_user_connected(e)))
-		{
-			g_lsgTrail[k] = 0
-			continue
-		}
-		new Float:vel[3]
-		pev(e, pev_velocity, vel)
-		if (vector_length(vel) < 1.0)
-			g_lsgTrailStill[k] = true
-		else if (g_lsgTrailStill[k])
-		{
-			g_lsgTrailStill[k] = false
-			lsg_trail_send(k)
-		}
-	}
-}
-
-stock lsg_fun_ticks()
-{
-	new Float:now = get_gametime()
-	for (new id = 1; id <= MaxClients; id++)
-	{
-		if (g_lsgBurnTill[id] > 0.0)
-		{
-			if (!is_user_alive(id) || now >= g_lsgBurnTill[id] || pev(id, pev_waterlevel) >= 2)
-				lsg_burn_off(id)
-			else if (now >= g_lsgBurnNext[id])
-			{
-				g_lsgBurnNext[id] = now + 1.0
-				new by = g_lsgBurnBy[id]
-				if (by && !is_user_connected(by))
-					by = 0
-				if (g_lsgBurnDps[id] > 0.0)
-					ExecuteHamB(Ham_TakeDamage, id, by ? by : 0, by ? by : 0, g_lsgBurnDps[id], DMG_BURN)
-			}
-		}
-		if (g_lsgDrunkTill[id] > 0.0)
-		{
-			if (!is_user_alive(id) || now >= g_lsgDrunkTill[id])
-				lsg_drunk_off(id)
-			else
-			{
-				new Float:s = g_lsgDrunk[id], Float:pa[3]
-				pa[0] = floatsin(now * 2.3, radian) * s * 2.0
-				pa[1] = floatcos(now * 1.7, radian) * s * 2.0
-				pa[2] = floatsin(now * 1.1, radian) * s
-				set_pev(id, pev_punchangle, pa)
-			}
-		}
-	}
-	if (++g_lsgFunN >= 10)
-	{
-		g_lsgFunN = 0
-		lsg_trail_check()
-	}
-}
-
-// the hull a player has now fits at o (nothing solid there)
-stock bool:lsg_fits(id, const Float:o[3])
-{
-	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, (pev(id, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN, id, 0)
-	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
-}
-
-stock lsg_swap(a, b)
-{
-	if (!ls_alive(a) || !ls_alive(b) || a == b || g_lsgBuried[a] || g_lsgBuried[b])
-		return 0
-	new Float:oa[3], Float:ob[3], Float:aa[3], Float:ab[3], Float:va[3], Float:vb[3]
-	pev(a, pev_origin, oa)
-	pev(b, pev_origin, ob)
-	if (!lsg_fits(a, ob) || !lsg_fits(b, oa))
-		return 0
-	pev(a, pev_v_angle, aa)
-	pev(b, pev_v_angle, ab)
-	pev(a, pev_velocity, va)
-	pev(b, pev_velocity, vb)
-	engfunc(EngFunc_SetOrigin, a, ob)
-	engfunc(EngFunc_SetOrigin, b, oa)
-	set_pev(a, pev_angles, ab)
-	set_pev(a, pev_v_angle, ab)
-	set_pev(a, pev_fixangle, 1)
-	set_pev(b, pev_angles, aa)
-	set_pev(b, pev_v_angle, aa)
-	set_pev(b, pev_fixangle, 1)
-	set_pev(a, pev_velocity, vb)
-	set_pev(b, pev_velocity, va)
-	return 1
-}
-
-// chest deep: 30 units down, and no walking (they can still turn and shoot)
-stock lsg_bury(id)
-{
-	if (!ls_alive(id) || g_lsgBuried[id])
-		return 0
-	new Float:o[3]
-	pev(id, pev_origin, o)
-	o[2] -= 30.0
-	engfunc(EngFunc_SetOrigin, id, o)
-	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0})
-	set_pev(id, pev_movetype, MOVETYPE_NONE)
-	g_lsgBuried[id] = true
-	return 1
-}
-
-stock lsg_unbury(id)
-{
-	if (!lsg_ok(id) || !g_lsgBuried[id])
-		return 0
-	g_lsgBuried[id] = false
-	if (!is_user_alive(id))
-		return 1
-	set_pev(id, pev_movetype, MOVETYPE_WALK)
-	new Float:o[3]
-	pev(id, pev_origin, o)
-	o[2] += 30.0
-	// (onto the floor, never into a wall: a little higher until they fit)
-	for (new i = 0; i < 8 && !lsg_fits(id, o); i++)
-		o[2] += 8.0
-	engfunc(EngFunc_SetOrigin, id, o)
-	return 1
-}
-
-// view: 0 first person, 1 third person, 2 the other one; reset: back to first person at death/respawn
-stock lsg_camera(id, view, reset)
-{
-	if (!lsg_ok(id))
-		return 0
-	new third = view == 2 ? (g_lsgCam[id] ? 0 : 1) : view
-	set_view(id, third ? CAMERA_3RDPERSON : CAMERA_NONE)
-	g_lsgCam[id] = third
-	g_lsgCamKeep[id] = reset ? 0 : 1
-	return 1
-}
-
-stock lsg_cam_reapply(id)
-{
-	if (lsg_ok(id) && g_lsgCam[id])
-		set_view(id, CAMERA_3RDPERSON)
-}
-
-stock lsg_fun_died(id)
-{
-	if (id < 1 || id > MaxClients)
-		return
-	lsg_burn_off(id)
-	lsg_drunk_off(id)
-	g_lsgBuried[id] = false
-	if (g_lsgCam[id] && !g_lsgCamKeep[id])
-	{
-		set_view(id, CAMERA_NONE)
-		g_lsgCam[id] = 0
-	}
-}
-
-stock lsg_fun_spawned(id)
-{
-	if (id < 1 || id > MaxClients || !is_user_alive(id))
-		return
-	g_lsgBuried[id] = false
-	for (new k = 0; k < 32; k++)
-		if (g_lsgTrail[k] == id)
-			lsg_trail_send(k)
-	if (g_lsgCam[id])
-	{
-		// (kept: the game may put the view back as they spawn, so it's set again a moment later)
-		if (g_lsgCamKeep[id])
-			set_task(0.2, "lsg_cam_again", LSG_TASK - 480 + id)
-		else
-		{
-			set_view(id, CAMERA_NONE)
-			g_lsgCam[id] = 0
-		}
-	}
-}
-
-stock lsg_fun_left(id)
-{
-	if (id < 1 || id > MaxClients)
-		return
-	lsg_burn_off(id)
-	g_lsgDrunkTill[id] = 0.0
-	g_lsgBuried[id] = false
-	g_lsgCam[id] = 0
-	g_lsgCamKeep[id] = 0
-	remove_task(LSG_TASK - 480 + id)
-	for (new k = 0; k < 32; k++)
-		if (g_lsgTrail[k] == id)
-			g_lsgTrail[k] = 0
-}
-
-// effect: 0 sparks, 1 smoke, 2 blood, 3 firework, 4 implosion, 5 tar, 6 teleport, 7 lava, 8 a colored flash
-stock lsg_burst(kind, const Float:o[3], count, r, g, b)
-{
-	// (smoke and blood need their sprites: not there when the map loaded, no burst)
-	if ((kind == 1 && !g_lsgSprSmoke) || (kind == 2 && (!g_lsgSprBlood || !g_lsgSprSpray)))
-		return
-	for (new n = 0; n < count; n++)
-	{
-		message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-		switch (kind)
-		{
-			case 1:
-			{
-				write_byte(TE_SMOKE)
-				lsg_coords(o)
-				write_short(g_lsgSprSmoke)
-				write_byte(20)
-				write_byte(12)
-			}
-			case 2:
-			{
-				write_byte(TE_BLOODSPRITE)
-				lsg_coords(o)
-				write_short(g_lsgSprSpray)
-				write_short(g_lsgSprBlood)
-				write_byte(247)
-				write_byte(12)
-			}
-			case 3:
-			{
-				write_byte(TE_EXPLOSION2)
-				lsg_coords(o)
-				write_byte(random_num(0, 200))
-				write_byte(16)
-			}
-			case 4:
-			{
-				write_byte(TE_IMPLOSION)
-				lsg_coords(o)
-				write_byte(128)
-				write_byte(20)
-				write_byte(5)
-			}
-			case 5:
-			{
-				write_byte(TE_TAREXPLOSION)
-				lsg_coords(o)
-			}
-			case 6:
-			{
-				write_byte(TE_TELEPORT)
-				lsg_coords(o)
-			}
-			case 7:
-			{
-				write_byte(TE_LAVASPLASH)
-				lsg_coords(o)
-			}
-			case 8:
-			{
-				write_byte(TE_DLIGHT)
-				lsg_coords(o)
-				write_byte(30)
-				write_byte(r)
-				write_byte(g)
-				write_byte(b)
-				write_byte(8)
-				write_byte(30)
-			}
-			default:
-			{
-				write_byte(TE_SPARKS)
-				lsg_coords(o)
-			}
-		}
-		message_end()
-		// (a firework's light, in its color)
-		if (kind == 3)
-		{
-			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-			write_byte(TE_DLIGHT)
-			lsg_coords(o)
-			write_byte(25)
-			write_byte(r)
-			write_byte(g)
-			write_byte(b)
-			write_byte(6)
-			write_byte(20)
-			message_end()
-		}
-	}
-}
-
-stock lsg_coords(const Float:o[3])
-{
-	engfunc(EngFunc_WriteCoord, o[0])
-	engfunc(EngFunc_WriteCoord, o[1])
-	engfunc(EngFunc_WriteCoord, o[2])
 }
 
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
@@ -6641,6 +6144,755 @@ stock lsg_round_time(secs)
 	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
 	write_short(max(secs, 0))
 	message_end()
+}"##;
+
+/// Status Icon, Objective Marker and Kill Feed Line's helpers: only in a plugin that uses one
+const UI_HELPERS: &str = r##"// ---- Status Icon, Objective Marker, Kill Feed Line ----
+stock g_lsgIcon[33][16]
+stock lsg_icon_send(to, status, const name[], r, g, b)
+{
+	if (to && !is_user_connected(to))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("StatusIcon")
+	message_begin(to ? MSG_ONE : MSG_ALL, msg, _, to)
+	write_byte(status)
+	write_string(name)
+	if (status)
+	{
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+	}
+	message_end()
+}
+
+// to 0: everyone; death: noted, so it's taken away when they die
+stock lsg_icon(to, status, const name[], r, g, b, death)
+{
+	if (to && !lsg_ok(to))
+		return
+	lsg_icon_send(to, status, name, r, g, b)
+	if (!death)
+		return
+	for (new p = to ? to : 1; p <= (to ? to : MaxClients); p++)
+		if (is_user_connected(p))
+			copy(g_lsgIcon[p], 15, status ? name : "")
+}
+
+stock lsg_icon_clear(id)
+{
+	if (id < 1 || id > MaxClients || !g_lsgIcon[id][0])
+		return
+	lsg_icon_send(id, 0, g_lsgIcon[id], 0, 0, 0)
+	g_lsgIcon[id][0] = 0
+}
+
+// markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
+#define LSG_MKS 32
+stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
+
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+{
+	// (a sprite that wasn't there when the map loaded: no marker)
+	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
+		return 0
+	new slot = -1
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
+			g_lsgMk[k] = 0
+		if (!g_lsgMk[k])
+		{
+			slot = k
+			break
+		}
+	}
+	if (slot < 0)
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_marker")
+	engfunc(EngFunc_SetModel, e, spr)
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_rendermode, kRenderTransAdd)
+	set_pev(e, pev_renderamt, 255.0)
+	new Float:c[3]
+	c[0] = float(r)
+	c[1] = float(g)
+	c[2] = float(b)
+	set_pev(e, pev_rendercolor, c)
+	set_pev(e, pev_scale, scale)
+	if (pulse)
+		set_pev(e, pev_renderfx, kRenderFxPulseSlow)
+	new Float:o[3]
+	if (follow > 0)
+		pev(follow, pev_origin, o)
+	else
+		o = at
+	o[2] += h
+	engfunc(EngFunc_SetOrigin, e, o)
+	g_lsgMk[slot] = e
+	g_lsgMkF[slot] = follow
+	g_lsgMkH[slot] = h
+	g_lsgMkWho[e] = who
+	g_lsgMkFor[e] = forp
+	return e
+}
+
+stock lsg_mk_free(k)
+{
+	new e = g_lsgMk[k]
+	g_lsgMk[k] = 0
+	if (e > 0 && e < 2048)
+	{
+		g_lsgMkWho[e] = 0
+		g_lsgMkFor[e] = 0
+	}
+	if (e > 0 && pev_valid(e))
+		remove_entity(e)
+}
+
+stock lsg_mk_follow()
+{
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		new e = g_lsgMk[k], f = g_lsgMkF[k]
+		if (!e)
+			continue
+		if (!pev_valid(e))
+		{
+			g_lsgMk[k] = 0
+			continue
+		}
+		if (f <= 0)
+			continue
+		// what it was on is gone (or the player left): so is the marker
+		if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
+		{
+			lsg_mk_free(k)
+			continue
+		}
+		// (a dead player's marker waits, out of sight)
+		new fx = pev(e, pev_effects)
+		if (f <= MaxClients && !is_user_alive(f))
+		{
+			set_pev(e, pev_effects, fx | EF_NODRAW)
+			continue
+		}
+		set_pev(e, pev_effects, fx & ~EF_NODRAW)
+		new Float:o[3]
+		pev(f, pev_origin, o)
+		o[2] += g_lsgMkH[k]
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+// 0 or a marker: that one, or all of them
+stock lsg_marker_remove(m)
+{
+	for (new k = 0; k < LSG_MKS; k++)
+		if (g_lsgMk[k] && (!m || g_lsgMk[k] == m))
+			lsg_mk_free(k)
+}
+
+stock bool:lsg_mk_sees(ent, host)
+{
+	new w = g_lsgMkWho[ent]
+	if (w == 3)
+		return host == g_lsgMkFor[ent]
+	return host >= 1 && host <= MaxClients && get_user_team(host) == w
+}
+
+// a line in the kill feed, to each person's game (one at a time: plugins that count deaths from
+// the game's own DeathMsg, the mode's Player Killed among them, don't see it as a death)
+stock lsg_killfeed(killer, victim, hs, const w[])
+{
+	if (!lsg_ok(victim))
+		return 0
+	if (!lsg_ok(killer))
+		killer = 0
+	static msg
+	if (!msg)
+		msg = get_user_msgid("DeathMsg")
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		message_begin(MSG_ONE, msg, _, p)
+		write_byte(killer)
+		write_byte(victim)
+		write_byte(hs ? 1 : 0)
+		write_string(w)
+		message_end()
+	}
+	return 1
+}"##;
+
+/// The fun nodes' helpers (fire, trails, bursts, swaps, burying, the camera, a drunk view): only
+/// in a plugin that uses one
+const FUN_HELPERS: &str = r##"// ---- fun: fire, trails, bursts, swaps, burying, the camera, a drunk view ----
+stock g_lsgSprFire, g_lsgSprSmoke, g_lsgSprBlood, g_lsgSprSpray
+stock Float:g_lsgBurnTill[33], Float:g_lsgBurnDps[33], Float:g_lsgBurnNext[33], g_lsgBurnBy[33], g_lsgBurnFx[33]
+stock bool:g_lsgBuried[33], g_lsgCam[33], g_lsgCamKeep[33], Float:g_lsgDrunkTill[33], Float:g_lsgDrunk[33], g_lsgFunN
+stock g_lsgTrail[32], g_lsgTrailC[32][5], bool:g_lsgTrailStill[32]
+
+stock lsg_burn(id, by, Float:secs, Float:dps)
+{
+	if (!ls_alive(id))
+		return 0
+	new Float:now = get_gametime()
+	g_lsgBurnTill[id] = now + secs
+	g_lsgBurnDps[id] = dps
+	g_lsgBurnBy[id] = lsg_ok(by) ? by : 0
+	if (g_lsgBurnNext[id] < now)
+		g_lsgBurnNext[id] = now + 1.0
+	// flames on them: a sprite that rides along (the engine moves it: MOVETYPE_FOLLOW)
+	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])))
+	{
+		new e = create_entity("info_target")
+		if (e > 0)
+		{
+			set_pev(e, pev_classname, "ls_studio_fire")
+			engfunc(EngFunc_SetModel, e, "sprites/fire.spr")
+			set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
+			set_pev(e, pev_aiment, id)
+			set_pev(e, pev_solid, SOLID_NOT)
+			set_pev(e, pev_rendermode, kRenderTransAdd)
+			set_pev(e, pev_renderamt, 255.0)
+			g_lsgBurnFx[id] = e
+		}
+	}
+	return 1
+}
+
+stock lsg_burn_off(id)
+{
+	if (id < 1 || id > 32)
+		return
+	g_lsgBurnTill[id] = 0.0
+	if (g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id]))
+		remove_entity(g_lsgBurnFx[id])
+	g_lsgBurnFx[id] = 0
+}
+
+stock lsg_drunk(id, Float:secs, Float:strength)
+{
+	if (!ls_alive(id))
+		return 0
+	g_lsgDrunkTill[id] = get_gametime() + secs
+	g_lsgDrunk[id] = strength
+	return 1
+}
+
+stock lsg_drunk_off(id)
+{
+	if (g_lsgDrunkTill[id] > 0.0 && is_user_connected(id))
+		set_pev(id, pev_punchangle, Float:{0.0, 0.0, 0.0})
+	g_lsgDrunkTill[id] = 0.0
+}
+
+stock lsg_trail_send(k)
+{
+	new e = g_lsgTrail[k]
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_KILLBEAM)
+	write_short(e)
+	message_end()
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMFOLLOW)
+	write_short(e)
+	write_short(g_lsgSprBeam)
+	write_byte(g_lsgTrailC[k][4])
+	write_byte(g_lsgTrailC[k][3])
+	write_byte(g_lsgTrailC[k][0])
+	write_byte(g_lsgTrailC[k][1])
+	write_byte(g_lsgTrailC[k][2])
+	write_byte(200)
+	message_end()
+}
+
+stock lsg_trail(e, on, r, g, b, width, life)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 0
+	new k = -1
+	for (new i = 0; i < 32; i++)
+		if (g_lsgTrail[i] == e)
+			k = i
+	if (!on)
+	{
+		if (k >= 0)
+		{
+			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+			write_byte(TE_KILLBEAM)
+			write_short(e)
+			message_end()
+			g_lsgTrail[k] = 0
+		}
+		return 1
+	}
+	for (new i = 0; i < 32 && k < 0; i++)
+		if (!g_lsgTrail[i] || !pev_valid(g_lsgTrail[i]))
+			k = i
+	if (k < 0)
+		return 0
+	g_lsgTrail[k] = e
+	g_lsgTrailC[k][0] = r
+	g_lsgTrailC[k][1] = g
+	g_lsgTrailC[k][2] = b
+	g_lsgTrailC[k][3] = width
+	g_lsgTrailC[k][4] = life
+	g_lsgTrailStill[k] = false
+	lsg_trail_send(k)
+	return 1
+}
+
+// a trail dies with a teleport, a respawn or a long stop: sent again when they move once more
+stock lsg_trail_check()
+{
+	for (new k = 0; k < 32; k++)
+	{
+		new e = g_lsgTrail[k]
+		if (!e)
+			continue
+		if (!pev_valid(e) || (e <= MaxClients && !is_user_connected(e)))
+		{
+			g_lsgTrail[k] = 0
+			continue
+		}
+		new Float:vel[3]
+		pev(e, pev_velocity, vel)
+		if (vector_length(vel) < 1.0)
+			g_lsgTrailStill[k] = true
+		else if (g_lsgTrailStill[k])
+		{
+			g_lsgTrailStill[k] = false
+			lsg_trail_send(k)
+		}
+	}
+}
+
+stock lsg_fun_ticks()
+{
+	new Float:now = get_gametime()
+	lsg_view_tick(now)
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (g_lsgBurnTill[id] > 0.0)
+		{
+			if (!is_user_alive(id) || now >= g_lsgBurnTill[id] || pev(id, pev_waterlevel) >= 2)
+				lsg_burn_off(id)
+			else if (now >= g_lsgBurnNext[id])
+			{
+				g_lsgBurnNext[id] = now + 1.0
+				new by = g_lsgBurnBy[id]
+				if (by && !is_user_connected(by))
+					by = 0
+				if (g_lsgBurnDps[id] > 0.0)
+					ExecuteHamB(Ham_TakeDamage, id, by ? by : 0, by ? by : 0, g_lsgBurnDps[id], DMG_BURN)
+			}
+		}
+		if (g_lsgDrunkTill[id] > 0.0)
+		{
+			if (!is_user_alive(id) || now >= g_lsgDrunkTill[id])
+				lsg_drunk_off(id)
+			else
+			{
+				new Float:s = g_lsgDrunk[id], Float:pa[3]
+				pa[0] = floatsin(now * 2.3, radian) * s * 2.0
+				pa[1] = floatcos(now * 1.7, radian) * s * 2.0
+				pa[2] = floatsin(now * 1.1, radian) * s
+				set_pev(id, pev_punchangle, pa)
+			}
+		}
+	}
+	if (++g_lsgFunN >= 10)
+	{
+		g_lsgFunN = 0
+		lsg_trail_check()
+	}
+}
+
+// the hull a player has now fits at o (nothing solid there)
+stock bool:lsg_fits(id, const Float:o[3])
+{
+	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, (pev(id, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN, id, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+stock lsg_swap(a, b)
+{
+	if (!ls_alive(a) || !ls_alive(b) || a == b || g_lsgBuried[a] || g_lsgBuried[b])
+		return 0
+	new Float:oa[3], Float:ob[3], Float:aa[3], Float:ab[3], Float:va[3], Float:vb[3]
+	pev(a, pev_origin, oa)
+	pev(b, pev_origin, ob)
+	if (!lsg_fits(a, ob) || !lsg_fits(b, oa))
+		return 0
+	pev(a, pev_v_angle, aa)
+	pev(b, pev_v_angle, ab)
+	pev(a, pev_velocity, va)
+	pev(b, pev_velocity, vb)
+	engfunc(EngFunc_SetOrigin, a, ob)
+	engfunc(EngFunc_SetOrigin, b, oa)
+	set_pev(a, pev_angles, ab)
+	set_pev(a, pev_v_angle, ab)
+	set_pev(a, pev_fixangle, 1)
+	set_pev(b, pev_angles, aa)
+	set_pev(b, pev_v_angle, aa)
+	set_pev(b, pev_fixangle, 1)
+	set_pev(a, pev_velocity, vb)
+	set_pev(b, pev_velocity, va)
+	return 1
+}
+
+// chest deep: 30 units down, and no walking (they can still turn and shoot)
+stock lsg_bury(id)
+{
+	if (!ls_alive(id) || g_lsgBuried[id])
+		return 0
+	new Float:o[3]
+	pev(id, pev_origin, o)
+	o[2] -= 30.0
+	engfunc(EngFunc_SetOrigin, id, o)
+	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0})
+	set_pev(id, pev_movetype, MOVETYPE_NONE)
+	g_lsgBuried[id] = true
+	return 1
+}
+
+stock lsg_unbury(id)
+{
+	if (!lsg_ok(id) || !g_lsgBuried[id])
+		return 0
+	g_lsgBuried[id] = false
+	if (!is_user_alive(id))
+		return 1
+	set_pev(id, pev_movetype, MOVETYPE_WALK)
+	new Float:o[3]
+	pev(id, pev_origin, o)
+	o[2] += 30.0
+	// (onto the floor, never into a wall: a little higher until they fit)
+	for (new i = 0; i < 8 && !lsg_fits(id, o); i++)
+		o[2] += 8.0
+	engfunc(EngFunc_SetOrigin, id, o)
+	return 1
+}
+
+// view: 0 first person, 1 third person, 2 the other one; reset: back to first person at death/respawn
+stock lsg_camera(id, view, reset)
+{
+	if (!lsg_ok(id))
+		return 0
+	new third = view == 2 ? (g_lsgCam[id] ? 0 : 1) : view
+	set_view(id, third ? CAMERA_3RDPERSON : CAMERA_NONE)
+	g_lsgCam[id] = third
+	g_lsgCamKeep[id] = reset ? 0 : 1
+	return 1
+}
+
+stock lsg_cam_reapply(id)
+{
+	if (lsg_ok(id) && g_lsgCam[id])
+		set_view(id, CAMERA_3RDPERSON)
+}
+
+stock lsg_fun_died(id)
+{
+	if (id < 1 || id > MaxClients)
+		return
+	lsg_view_back(id)
+	lsg_burn_off(id)
+	lsg_drunk_off(id)
+	g_lsgBuried[id] = false
+	if (g_lsgCam[id] && !g_lsgCamKeep[id])
+	{
+		set_view(id, CAMERA_NONE)
+		g_lsgCam[id] = 0
+	}
+}
+
+stock lsg_fun_spawned(id)
+{
+	if (id < 1 || id > MaxClients || !is_user_alive(id))
+		return
+	g_lsgBuried[id] = false
+	for (new k = 0; k < 32; k++)
+		if (g_lsgTrail[k] == id)
+			lsg_trail_send(k)
+	if (g_lsgCam[id])
+	{
+		// (kept: the game may put the view back as they spawn, so it's set again a moment later)
+		if (g_lsgCamKeep[id])
+			set_task(0.2, "lsg_cam_again", LSG_TASK - 480 + id)
+		else
+		{
+			set_view(id, CAMERA_NONE)
+			g_lsgCam[id] = 0
+		}
+	}
+}
+
+stock lsg_fun_left(id)
+{
+	if (id < 1 || id > MaxClients)
+		return
+	lsg_view_back(id)
+	lsg_burn_off(id)
+	g_lsgDrunkTill[id] = 0.0
+	g_lsgBuried[id] = false
+	g_lsgCam[id] = 0
+	g_lsgCamKeep[id] = 0
+	remove_task(LSG_TASK - 480 + id)
+	for (new k = 0; k < 32; k++)
+		if (g_lsgTrail[k] == id)
+			g_lsgTrail[k] = 0
+}
+
+// effect: 0 sparks, 1 smoke, 2 blood, 3 firework, 4 implosion, 5 tar, 6 teleport, 7 lava, 8 a colored flash
+stock lsg_burst(kind, const Float:o[3], count, r, g, b)
+{
+	// (smoke and blood need their sprites: not there when the map loaded, no burst)
+	if ((kind == 1 && !g_lsgSprSmoke) || (kind == 2 && (!g_lsgSprBlood || !g_lsgSprSpray)))
+		return
+	for (new n = 0; n < count; n++)
+	{
+		message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+		switch (kind)
+		{
+			case 1:
+			{
+				write_byte(TE_SMOKE)
+				lsg_coords(o)
+				write_short(g_lsgSprSmoke)
+				write_byte(20)
+				write_byte(12)
+			}
+			case 2:
+			{
+				write_byte(TE_BLOODSPRITE)
+				lsg_coords(o)
+				write_short(g_lsgSprSpray)
+				write_short(g_lsgSprBlood)
+				write_byte(247)
+				write_byte(12)
+			}
+			case 3:
+			{
+				write_byte(TE_EXPLOSION2)
+				lsg_coords(o)
+				write_byte(random_num(0, 200))
+				write_byte(16)
+			}
+			case 4:
+			{
+				write_byte(TE_IMPLOSION)
+				lsg_coords(o)
+				write_byte(128)
+				write_byte(20)
+				write_byte(5)
+			}
+			case 5:
+			{
+				write_byte(TE_TAREXPLOSION)
+				lsg_coords(o)
+			}
+			case 6:
+			{
+				write_byte(TE_TELEPORT)
+				lsg_coords(o)
+			}
+			case 7:
+			{
+				write_byte(TE_LAVASPLASH)
+				lsg_coords(o)
+			}
+			case 8:
+			{
+				write_byte(TE_DLIGHT)
+				lsg_coords(o)
+				write_byte(30)
+				write_byte(r)
+				write_byte(g)
+				write_byte(b)
+				write_byte(8)
+				write_byte(30)
+			}
+			default:
+			{
+				write_byte(TE_SPARKS)
+				lsg_coords(o)
+			}
+		}
+		message_end()
+		// (a firework's light, in its color)
+		if (kind == 3)
+		{
+			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+			write_byte(TE_DLIGHT)
+			lsg_coords(o)
+			write_byte(25)
+			write_byte(r)
+			write_byte(g)
+			write_byte(b)
+			write_byte(6)
+			write_byte(20)
+			message_end()
+		}
+	}
+}
+
+stock lsg_coords(const Float:o[3])
+{
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+}
+
+// View From: a camera entity each shot; players see through it (set_view) until it ends
+stock g_lsgViewCam[33], Float:g_lsgViewTill[33], bool:g_lsgViewFreeze[33], g_lsgCamFollow[2048], Float:g_lsgCamOff[2048], Float:g_lsgCamStop[2048]
+
+stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, const Float:b[3], const Float:ba[3], hasB, Float:off, Float:move, Float:secs, freeze)
+{
+	if (from <= 0 && !hasA)
+		return 0
+	if (from > 0 && !pev_valid(from))
+		return 0
+	new cam = create_entity("info_target")
+	if (cam <= 0)
+		return 0
+	set_pev(cam, pev_classname, "ls_studio_cam")
+	engfunc(EngFunc_SetModel, cam, "models/w_c4.mdl")
+	set_pev(cam, pev_rendermode, kRenderTransTexture)
+	set_pev(cam, pev_renderamt, 0.0)
+	set_pev(cam, pev_solid, SOLID_NOT)
+	set_pev(cam, pev_movetype, MOVETYPE_NOCLIP)
+	new Float:o[3], Float:ang[3]
+	if (from > 0)
+	{
+		pev(from, pev_origin, o)
+		o[2] += off
+		pev(from, from <= MaxClients ? pev_v_angle : pev_angles, ang)
+		g_lsgCamFollow[cam] = from
+		g_lsgCamOff[cam] = off
+	}
+	else
+	{
+		o = a
+		ang = aa
+		g_lsgCamFollow[cam] = 0
+	}
+	engfunc(EngFunc_SetOrigin, cam, o)
+	set_pev(cam, pev_angles, ang)
+	set_pev(cam, pev_v_angle, ang)
+	g_lsgCamStop[cam] = 0.0
+	// a glide from A to B: the engine moves it (velocity, angular velocity); stopped when it's there
+	if (from <= 0 && hasB && move > 0.0)
+	{
+		new Float:vel[3], Float:av[3]
+		for (new k = 0; k < 3; k++)
+		{
+			vel[k] = (b[k] - a[k]) / move
+			av[k] = (ba[k] - aa[k]) / move
+		}
+		set_pev(cam, pev_velocity, vel)
+		set_pev(cam, pev_avelocity, av)
+		g_lsgCamStop[cam] = get_gametime() + move
+	}
+	new n = 0
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 0 && p != one) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2))
+			continue
+		lsg_view_back(p)
+		g_lsgViewCam[p] = cam
+		g_lsgViewTill[p] = secs > 0.0 ? get_gametime() + secs : 0.0
+		g_lsgViewFreeze[p] = freeze != 0
+		if (freeze)
+			set_pev(p, pev_flags, pev(p, pev_flags) | FL_FROZEN)
+		engfunc(EngFunc_SetView, p, cam)
+		n++
+	}
+	if (!n)
+		remove_entity(cam)
+	return n
+}
+
+// one player's view back: first or third person as Set Camera left it
+stock lsg_view_back(p)
+{
+	new cam = g_lsgViewCam[p]
+	if (!cam)
+		return
+	g_lsgViewCam[p] = 0
+	g_lsgViewTill[p] = 0.0
+	if (is_user_connected(p))
+	{
+		if (g_lsgViewFreeze[p])
+			set_pev(p, pev_flags, pev(p, pev_flags) & ~FL_FROZEN)
+		engfunc(EngFunc_SetView, p, p)
+		if (g_lsgCam[p])
+			set_view(p, CAMERA_3RDPERSON)
+	}
+	g_lsgViewFreeze[p] = false
+	// (the camera goes when nobody looks through it any more)
+	for (new q = 1; q <= MaxClients; q++)
+		if (g_lsgViewCam[q] == cam)
+			return
+	if (pev_valid(cam))
+		remove_entity(cam)
+}
+
+stock lsg_view_return(p)
+{
+	if (p)
+		lsg_view_back(p)
+	else
+		for (new q = 1; q <= MaxClients; q++)
+			lsg_view_back(q)
+}
+
+stock lsg_view_tick(Float:now)
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		new cam = g_lsgViewCam[p]
+		if (!cam)
+			continue
+		if (!pev_valid(cam) || (g_lsgViewTill[p] > 0.0 && now >= g_lsgViewTill[p]))
+		{
+			lsg_view_back(p)
+			continue
+		}
+		new f = g_lsgCamFollow[cam]
+		if (f > 0)
+		{
+			if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
+			{
+				lsg_view_back(p)
+				continue
+			}
+			new Float:o[3], Float:ang[3]
+			pev(f, pev_origin, o)
+			o[2] += g_lsgCamOff[cam]
+			pev(f, f <= MaxClients ? pev_v_angle : pev_angles, ang)
+			engfunc(EngFunc_SetOrigin, cam, o)
+			set_pev(cam, pev_angles, ang)
+			set_pev(cam, pev_v_angle, ang)
+		}
+		else if (g_lsgCamStop[cam] > 0.0 && now >= g_lsgCamStop[cam])
+		{
+			set_pev(cam, pev_velocity, Float:{0.0, 0.0, 0.0})
+			set_pev(cam, pev_avelocity, Float:{0.0, 0.0, 0.0})
+			g_lsgCamStop[cam] = 0.0
+		}
+	}
 }"##;
 
 /// Squads (also the "same side" a revive needs).

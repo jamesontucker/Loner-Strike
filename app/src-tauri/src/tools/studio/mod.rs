@@ -1419,7 +1419,10 @@ mod tests {
             n("cam1", "fun.camera", json!({"view": "toggle", "reset": reset})), n("drunk", "fun.drunk", json!({"secs": 4, "strength": 5})),
         ];
         nodes.push(n("cam0", "fun.camera", json!({"view": "first"})));
-        let chain = ["ps", "pk", "burn", "out", "trail", "b1", "b2", "b3", "swap", "pr", "bury", "up", "cam", "pr2", "cam1", "drunk", "cam0"];
+        nodes.push(n("vf", "fun.view_from", json!({"who": "player", "secs": 3, "move": 2, "freeze": true})));
+        nodes.push(n("vf2", "fun.view_from", json!({"who": "all", "secs": 0, "offset": 80})));
+        nodes.push(n("vr", "fun.view_return", json!({})));
+        let chain = ["ps", "pk", "burn", "out", "trail", "b1", "b2", "b3", "swap", "pr", "bury", "up", "cam", "pr2", "cam1", "drunk", "cam0", "vf", "vf2", "vr"];
         let mut edges: Vec<Value> = chain.windows(2).enumerate().map(|(i, w)| json!({"id": format!("c{i}"), "from": {"node": w[0], "pin": "then"}, "to": {"node": w[1], "pin": "exec"}})).collect();
         let mut wire = |a: &str, ap: &str, b: &str, bp: &str| {
             let id = format!("d{}", edges.len());
@@ -1438,6 +1441,10 @@ mod tests {
         wire("pk", "player", "swap", "b");
         wire("swap", "ok", "pr", "value");
         wire("third", "out", "pr2", "value");
+        wire("ps", "player", "vf", "player");
+        wire("vp", "out", "vf", "pos");
+        wire("vp", "out", "vf", "to");
+        wire("pk", "player", "vf2", "from");
         graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "fun_nodes", "name": "Fun nodes"}, "nodes": nodes, "edges": edges})).unwrap()
     }
 
@@ -1455,6 +1462,7 @@ mod tests {
                 "lsg_pre_model(\"sprites/fire.spr\")", "lsg_pre_model(\"sprites/steam1.spr\")", "lsg_pre_model(\"sprites/blood.spr\")", "g_lsgSprBeam = precache_model(\"sprites/laserbeam.spr\")",
                 "set_task(0.1, \"lsg_fun_tick\"", "RegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)", "RegisterHamPlayer(Ham_Spawn, \"lsg_fun_spawn\", 1)", "lsg_fun_left(id)",
                 "lsg_swap(", "lsg_bury(", "lsg_unbury(", "lsg_drunk(", "lsg_burst(1, lsgAt, 2", "lsg_burst(3, lsgAt, 1",
+                "lsg_view_from(0, ", "lsg_view_from(3, 0, ", "lsg_view_return(0)", "register_forward(FM_CmdStart, \"lsg_view_cmd\", 0)", "lsg_view_back(p)",
             ] {
                 assert!(src.contains(want), "{want}");
             }
@@ -1472,6 +1480,77 @@ mod tests {
         bad.edges.retain(|e| !(e.from.node == "b1" || e.to.node == "b2"));
         let p: Vec<String> = graph::validate(&bad).into_iter().map(|p| p.message).collect();
         assert!(p.iter().any(|m| m.contains("Effect Burst needs")), "{p:?}");
+    }
+
+    /// The casts: Find Component's entity As Player (Success prints its name, Failed says so),
+    /// As Creature (its type), and Is NPC / Is Interactable / Is Component (a kind and any).
+    pub fn cast_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "cast_nodes", "name": "Casts"},
+            "nodes": [n("rs", "event.round_started", json!({})), n("pe", "flow.pick_entity", json!({"by": "class", "name": "player"})),
+                      n("ap", "cast.player", json!({})), n("name", "player.get_name", json!({})), n("ok", "debug.print", json!({"text": "a player", "chat": false})), n("no", "debug.print", json!({"text": "not a player", "chat": false})),
+                      n("ac", "cast.creature", json!({})), n("ty", "debug.print", json!({"text": "creature", "chat": false})),
+                      n("npc", "ent.is_npc", json!({})), n("use", "ent.is_interactable", json!({})), n("shop", "ent.is_component", json!({"kind": "ls_shop"})), n("any", "ent.is_component", json!({"kind": "any"})),
+                      n("p1", "debug.print", json!({"text": "npc", "chat": false})), n("p2", "debug.print", json!({"text": "use", "chat": false})), n("p3", "debug.print", json!({"text": "shop", "chat": false})), n("p4", "debug.print", json!({"text": "any", "chat": false}))],
+            "edges": [e(1, "rs", "then", "pe", "exec"), e(2, "pe", "then", "ap", "exec"), e(3, "pe", "entity", "ap", "in"), e(4, "ap", "ok", "ok", "exec"), e(5, "ap", "out", "name", "player"), e(6, "name", "out", "ok", "value"),
+                      e(7, "ap", "fail", "no", "exec"), e(8, "ok", "then", "ac", "exec"), e(9, "pe", "entity", "ac", "in"), e(10, "ac", "ok", "ty", "exec"), e(11, "ac", "type", "ty", "value"),
+                      e(12, "ac", "fail", "p1", "exec"), e(13, "pe", "entity", "npc", "in"), e(14, "npc", "out", "p1", "value"), e(15, "p1", "then", "p2", "exec"), e(16, "pe", "entity", "use", "in"), e(17, "use", "out", "p2", "value"),
+                      e(18, "p2", "then", "p3", "exec"), e(19, "pe", "entity", "shop", "in"), e(20, "shop", "out", "p3", "value"), e(21, "p3", "then", "p4", "exec"), e(22, "pe", "entity", "any", "in"), e(23, "any", "out", "p4", "value")]})).unwrap()
+    }
+
+    /// As Player succeeds for a connected slot 1-32 (bots too) with its Player kept for what reads
+    /// it, else Failed; As Creature keeps the creature and its type; the Is checks ask gm_components
+    /// the entity's kind (a picked one, or any).
+    #[test]
+    fn casts_generate() {
+        let g = cast_mode();
+        let p = graph::validate(&g);
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, true).source;
+        for want in [
+            "if (lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE))", "lsd_exit(", "\"success\"", "\"failed\"", "if (lsg_is_creature(lsgE))", "copy(g_lsgOT[",
+            "lsg_cr_type(lsgE)", "lsg_kind_ok(", "\"ls_npc\") ? 1 : 0)", "\"ls_interactable\") ? 1 : 0)", "\"ls_shop\") ? 1 : 0)", "\"\") ? 1 : 0)",
+        ] {
+            assert!(src.contains(want), "{want}");
+        }
+        assert!(src.contains("g_lsgO[0] = lsgE") && src.contains("g_lsgO[0] = 0"), "the Player kept on Success, cleared on Failed");
+    }
+
+    /// Kind Of into Switch on Enum (the built-in Entity Kind: nine outputs, nothing typed) and
+    /// Select, and Component Kind Of into another Switch on Enum.
+    pub fn kind_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "kind_nodes", "name": "Kinds"},
+            "nodes": [n("ps", "event.player_spawned", json!({})), n("k", "ent.kind_of", json!({})), n("sw", "flow.switch_enum", json!({"enum": "ls_kind"})),
+                      n("pp", "debug.print", json!({"text": "a player", "chat": false})), n("pb", "debug.print", json!({"text": "a bot", "chat": false})),
+                      n("sel", "logic.select", json!({"of": "enum:ls_kind"})), n("k2", "ent.kind_of", json!({})), n("ps2", "debug.print", json!({"text": "kind", "chat": false})),
+                      n("pe", "flow.pick_entity", json!({"by": "class", "name": "ls_shop"})), n("ck", "ent.comp_kind", json!({})), n("sw2", "flow.switch_enum", json!({"enum": "ls_comp_kind"})), n("shop", "debug.print", json!({"text": "a shop", "chat": false})), n("bot", "player.is_bot", json!({}))],
+            "edges": [e(1, "ps", "then", "sw", "exec"), e(2, "ps", "player", "k", "in"), e(3, "k", "out", "sw", "in"), e(4, "sw", "v0", "pp", "exec"), e(5, "sw", "v1", "pb", "exec"),
+                      e(6, "pb", "then", "ps2", "exec"), e(7, "k", "out", "sel", "a"), e(8, "k2", "out", "sel", "b"), e(9, "sel", "out", "ps2", "value"),
+                      e(10, "ps2", "then", "pe", "exec"), e(11, "pe", "entity", "ck", "in"), e(12, "pe", "then", "sw2", "exec"), e(13, "ck", "out", "sw2", "in"), e(14, "sw2", "v3", "shop", "exec"), e(15, "ps", "player", "bot", "player"), e(16, "bot", "out", "sel", "cond")]})).unwrap()
+    }
+
+    /// The app's own enums are in every graph and never saved: Kind Of's Entity Kind gives Switch
+    /// on Enum its nine outputs and plugs into Select; Component Kind Of's follows gm_components'
+    /// kinds in order (None last); a saved graph doesn't carry them.
+    #[test]
+    fn builtin_enums_switch_and_select() {
+        let g = kind_mode();
+        let p = graph::validate(&g);
+        assert!(p.is_empty(), "{p:#?}");
+        let v = graph::View::new(&g);
+        let sw = v.outputs("sw").iter().map(|p| p.label.clone()).collect::<Vec<_>>();
+        assert_eq!(sw, ["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]);
+        assert_eq!(v.outputs("sw2").len(), gen::COMP_KINDS.len() + 1);
+        assert_eq!(graph::BUILTIN_ENUMS[1].2.len(), gen::COMP_KINDS.len() + 1, "a value per kind, and None");
+        let src = gen::generate(&g, false).source;
+        assert!(src.contains("stock lsg_kind_of(e)") && src.contains("stock lsg_comp_kind_of(e)") && src.contains("\"ls_shop\""), "the helpers");
+        assert!(src.contains("switch (lsg_kind_of("), "the switch on its value");
+        // saved: the app's own enums stay out of the file
+        let saved = serde_json::to_value(&g).unwrap();
+        assert!(saved.get("enums").is_none(), "{:?}", saved.get("enums"));
     }
 
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
@@ -1712,6 +1791,8 @@ mod tests {
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));
+        graphs.push(("cast_nodes".into(), serde_json::to_string(&cast_mode()).unwrap()));
+        graphs.push(("kind_nodes".into(), serde_json::to_string(&kind_mode()).unwrap()));
         // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
         // the node coverage sweep found it)
         graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},

@@ -159,7 +159,7 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     #[serde(default)]
     pub comments: Vec<Comment>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "no_user_enums", serialize_with = "user_enums_only")]
     pub enums: Vec<EnumDef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub structs: Vec<StructDef>,
@@ -581,6 +581,36 @@ pub struct EnumDef {
     pub values: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<LibFrom>,
+    /// one of the app's own (BUILTIN_ENUMS): every graph has it, it's never saved
+    #[serde(skip)]
+    pub builtin: bool,
+}
+
+/// The app's own enums, in every graph (never saved with it): what Kind Of and Component Kind Of
+/// give, so they plug into Switch on Enum (its cases fill from them) and Select like any enum.
+pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 2] = [
+    ("ls_kind", "Entity Kind", &["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]),
+    (
+        "ls_comp_kind",
+        "Component Kind",
+        &[
+            "Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None",
+        ],
+    ),
+];
+
+fn user_enums_only<S: serde::Serializer>(v: &[EnumDef], s: S) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeSeq;
+    let mine: Vec<&EnumDef> = v.iter().filter(|e| !e.builtin).collect();
+    let mut seq = s.serialize_seq(Some(mine.len()))?;
+    for e in mine {
+        seq.serialize_element(e)?;
+    }
+    seq.end()
+}
+
+fn no_user_enums(v: &[EnumDef]) -> bool {
+    v.iter().all(|e| e.builtin)
 }
 
 /// Where a Function, Macro, struct or enum came from: an item of the player's library and its
@@ -830,6 +860,12 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
     }
     let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
     g.version = VERSION;
+    // (the app's own enums: there in every graph, after the mode's; a mode's own of the same id wins)
+    for (id, name, values) in BUILTIN_ENUMS {
+        if !g.enums.iter().any(|e| e.id == id) {
+            g.enums.push(EnumDef { id: id.into(), name: name.into(), values: values.iter().map(|x| x.to_string()).collect(), from: None, builtin: true });
+        }
+    }
     Ok(g)
 }
 
@@ -1760,7 +1796,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
         p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires, {MAX_COMMENTS} comments and {MAX_VARIABLES} variables).")));
         return p;
     }
-    if g.functions.len() > MAX_FUNCTIONS || g.macros.len() > MAX_MACROS || g.enums.len() > MAX_ENUMS || g.structs.len() > MAX_STRUCTS {
+    if g.functions.len() > MAX_FUNCTIONS || g.macros.len() > MAX_MACROS || g.enums.iter().filter(|e| !e.builtin).count() > MAX_ENUMS || g.structs.len() > MAX_STRUCTS {
         p.push(Problem::err(None, format!("That graph has too many parts (at most {MAX_FUNCTIONS} Functions, {MAX_MACROS} Macros, {MAX_ENUMS} enums and {MAX_STRUCTS} structs).")));
         return p;
     }
@@ -2777,7 +2813,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 18] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>"];
+    const TYPES: [&str; 20] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];
@@ -2820,7 +2856,7 @@ mod tests {
         let g = parse(r#"{"schema":"loner-strike/graph","version":1,"mode":{"id":"abc","name":"ABC"}}"#).unwrap();
         assert!(g.nodes.is_empty() && g.version == 3 && g.variables.is_empty() && g.functions.is_empty());
         let g = parse(r#"{"schema":"loner-strike/graph","version":2,"mode":{"id":"abc","name":"ABC"},"variables":[]}"#).unwrap();
-        assert!(g.version == 3 && g.enums.is_empty() && g.structs.is_empty() && g.macros.is_empty());
+        assert!(g.version == 3 && g.enums.iter().all(|e| e.builtin) && g.structs.is_empty() && g.macros.is_empty());
         // and nothing new is written for them
         let back = serde_json::to_string(&g).unwrap();
         assert!(!back.contains("functions") && !back.contains("enums") && !back.contains("\"graph\""), "{back}");

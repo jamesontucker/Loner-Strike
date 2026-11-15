@@ -249,3 +249,21 @@ export const newUid = (): string =>
 export function emptyGraph(id: string, name: string): Graph {
   return { schema: SCHEMA, version: VERSION, mode: { id, uid: newUid(), name, description: "" }, variables: [], nodes: [], edges: [], comments: [] };
 }
+
+/** The app's own enums (graph.rs BUILTIN_ENUMS): in every mode, never saved with it. What Kind Of
+ *  and Component Kind Of give, so they plug into Switch on Enum (its cases fill from them) and
+ *  Select like any enum. */
+export const BUILTIN_ENUMS: GEnum[] = [
+  { id: "ls_kind", name: "Entity Kind", values: ["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"] },
+  {
+    id: "ls_comp_kind",
+    name: "Component Kind",
+    values: ["Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None"],
+  },
+];
+
+/** The mode's enums and then the app's own (a mode's own of the same id wins). */
+export const allEnums = (g: Pick<Graph, "enums"> | null | undefined): GEnum[] => {
+  const mine = g?.enums ?? [];
+  return [...mine, ...BUILTIN_ENUMS.filter((b) => !mine.some((e) => e.id === b.id))];
+};

@@ -25,6 +25,7 @@ import { collapse, insertSnippet, tabView, type Snippet } from "./graphOps";
 import { addComment, addNode, canConnect, connect, copy, insertReroute, inType, moveItems, outType, paste, remove, toggleBreakpoint } from "./graphOps";
 import { compatible, nodeDef, typeColor, type PinType } from "./registry";
 import { pinsOf } from "./pins";
+import { insertAsPlayer, wantsAsPlayer } from "./castOps";
 import { insertItem, type LibItem } from "./library";
 import { dropPlan, knownMake, type Make } from "./dropOps";
 import { READABLE, startView, align, distribute, linked, loadBookmarks, promotable, promoteToVariable, QUICK_ADD, saveBookmarks, type AlignHow, type Box } from "./tidyOps";
@@ -109,7 +110,7 @@ const NO_DATA = {};
  *  (window.__studioAll = true before the Studio opens draws everything, for comparing.) */
 const VISIBLE_ONLY = typeof window === "undefined" || !(window as unknown as { __studioAll?: boolean }).__studioAll;
 
-export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error?: boolean) => void; onApi?: (api: CanvasApi) => void; snippets: Snippet[] }) {
+export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error?: boolean, action?: { label: string; run: () => void }) => void; onApi?: (api: CanvasApi) => void; snippets: Snippet[] }) {
   const graph = useStudio((s) => s.graph)!;
   const tab = useStudio((s) => s.tab);
   const view = useMemo(() => tabView(graph, tab), [graph, tab]);
@@ -407,6 +408,19 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, state?: { isValid?: boolean | null; toHandle?: unknown; fromHandle?: { nodeId: string; id?: string | null; type: "source" | "target" } | null }) => {
       connecting.current = false;
+      // (dropped on a pin that refused it: an Entity into a Player pin gets "Insert As Player")
+      const th = state?.toHandle as { nodeId?: string; id?: string | null } | null | undefined;
+      if (state && !state.isValid && th?.nodeId && th.id && state.fromHandle?.id) {
+        const g0 = useStudio.getState().graph;
+        const src = state.fromHandle.type === "source";
+        const from = src ? { node: state.fromHandle.nodeId, pin: state.fromHandle.id } : { node: th.nodeId, pin: th.id };
+        const to = src ? { node: th.nodeId, pin: th.id } : { node: state.fromHandle.nodeId, pin: state.fromHandle.id };
+        if (g0 && wantsAsPlayer(g0, from, to)) {
+          const c = canConnect(g0, from, to);
+          toast(`${c.ok ? "" : c.error} An Entity becomes a Player with As Player (casting).`, true, { label: "Insert As Player", run: () => edit((g) => insertAsPlayer(g, from, to)) });
+        }
+        return;
+      }
       if (!state || state.isValid || state.toHandle || !state.fromHandle?.id) return;
       const target = event.target as HTMLElement | null;
       if (!target?.classList.contains("react-flow__pane")) return;
@@ -420,7 +434,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       // (the release also clicks the pane, which would close it again)
       paletteAt.current = Date.now();
     },
-    [openPalette],
+    [openPalette, toast, edit],
   );
 
   const pick = useCallback(

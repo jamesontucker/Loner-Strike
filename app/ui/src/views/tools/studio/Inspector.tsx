@@ -4,7 +4,7 @@
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
-import { LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { allEnums, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { Requirements } from "./Requirements";
@@ -60,7 +60,7 @@ function TextField({ value, max, allowed, onChange, fresh }: { value: string; ma
 function ValueField({ type, value, onChange, graph }: { type: GVariable["type"]; value: PV | undefined; onChange: (v: PV) => void; graph?: Graph }) {
   if (type === "number") return <NumberField value={typeof value === "number" ? value : 0} onChange={onChange} />;
   if (type.startsWith("enum:")) {
-    const e = graph?.enums?.find((x) => `enum:${x.id}` === type);
+    const e = allEnums(graph).find((x) => `enum:${x.id}` === type);
     return (
       <select className="st-field" value={String(typeof value === "number" ? value : 0)} onChange={(ev) => onChange(Number(ev.target.value))}>
         {(e?.values ?? []).map((v, i) => (
@@ -103,7 +103,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
   if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "Add a Custom Event with no inputs under My mode first" : "Add a Custom Event under My mode first");
   if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
   if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");
-  if (p.kind === "enum") return pick((graph.enums ?? []).map((x) => [x.id, x.name]), "Add an enum under My mode first");
+  if (p.kind === "enum") return pick(allEnums(graph).map((x) => [x.id, x.name]), "Add an enum under My mode first");
   if (p.kind === "marker") return pick((graph.markers ?? []).map((x) => [x.id, x.label]), "Add a map marker under My mode first");
   if (p.kind === "type") return <TypePicker graph={graph} value={itemTypeOk(graph, String(value), true) ? String(value) : "number"} onChange={onChange} containers={false} structs={!node.type.startsWith("map.")} label={p.label} />;
   if (p.kind === "field") {
@@ -111,7 +111,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
     return st ? pick(st.fields.map((f) => [f.id, `${f.name} (${typeLabel(graph, f.type)})`]), "") : <em className="st-muted">Pick a struct variable first</em>;
   }
   if (p.kind === "enumvalue") {
-    const en = graph.enums?.find((x) => x.id === node.params.enum);
+    const en = allEnums(graph).find((x) => x.id === node.params.enum);
     return en ? (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(Number(e.target.value))}>
         {en.values.map((v, i) => (
@@ -340,7 +340,7 @@ function PartDetails({ id, embedded = false }: { id: string; embedded?: boolean 
   const f = graph.functions?.find((x) => x.id === id);
   const m = graph.macros?.find((x) => x.id === id);
   const st = graph.structs?.find((x) => x.id === id);
-  const en = graph.enums?.find((x) => x.id === id);
+  const en = allEnums(graph).find((x) => x.id === id);
   const calls = graph.nodes.filter((n) => n.params.func === id || n.params.macro === id).length;
   const library = useStudio((s) => s.library);
   const from = (f ?? m ?? st ?? en)?.from;

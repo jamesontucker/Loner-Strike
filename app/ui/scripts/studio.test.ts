@@ -18,6 +18,8 @@ import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.j
 import royaleRaw from "../src/views/tools/studio/templates/battle-royale.graph.json?raw";
 import runDialogRaw from "../src/views/tools/studio/library/run_dialog.lib.json?raw";
 import { botFix, botFixLabel, isBotsNote, quietNode } from "../src/views/tools/studio/botNotes";
+import { insertAsPlayer, wantsAsPlayer } from "../src/views/tools/studio/castOps";
+import { allEnums } from "../src/views/tools/studio/schema";
 
 const template = (): Graph => {
   const r = parseGraph(JSON.parse(templateRaw));
@@ -51,7 +53,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>"].includes(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>", "enum:ls_kind", "enum:ls_comp_kind"].includes(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });
@@ -564,4 +566,33 @@ test("the bots note's fixes: Bots may use on, bots=1 in the keys, a Bots: Offer 
   assert.equal(q.nodes.find((x) => x.id === "lever")!.quiet, true);
   const back = parseGraph(JSON.parse(JSON.stringify(q)));
   assert.ok("graph" in back && back.graph.nodes.find((x) => x.id === "lever")!.quiet === true, "kept in the file");
+});
+
+test("casting: an Entity into a Player pin gets As Player put between, in the flow; Kind Of fills Switch on Enum's cases", () => {
+  const n = (id: string, type: string, params: Record<string, string | number | boolean> = {}) => ({ id, type, pos: { x: 400, y: 0 }, params });
+  const g0: Graph = {
+    ...emptyGraph("cast", "Cast"),
+    nodes: [n("rs", "event.round_started"), n("pe", "flow.pick_entity", { by: "class", name: "player" }), n("hp", "player.set_health")],
+    edges: [
+      { id: "w1", from: { node: "rs", pin: "then" }, to: { node: "pe", pin: "exec" } },
+      { id: "w2", from: { node: "pe", pin: "then" }, to: { node: "hp", pin: "exec" } },
+    ],
+  };
+  const from = { node: "pe", pin: "entity" };
+  const to = { node: "hp", pin: "player" };
+  assert.ok(!canConnect(g0, from, to).ok, "an Entity wire is refused by a Player pin");
+  assert.ok(wantsAsPlayer(g0, from, to));
+  const g1 = insertAsPlayer(g0, from, to);
+  const cast = g1.nodes.find((x) => x.type === "cast.player")!;
+  const wire = (a: string, ap: string, b: string, bp: string) => g1.edges.some((e) => e.from.node === a && e.from.pin === ap && e.to.node === b && e.to.pin === bp);
+  assert.ok(wire("pe", "entity", cast.id, "in") && wire(cast.id, "out", "hp", "player"), "the data through it");
+  assert.ok(wire("pe", "then", cast.id, "exec") && wire(cast.id, "ok", "hp", "exec") && !wire("pe", "then", "hp", "exec"), "and the flow: Success runs the node");
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(g1))));
+  // the app's own enums: there without being in the mode, and a Kind Of wire sets Switch on Enum
+  assert.ok(allEnums(g0).some((e) => e.id === "ls_kind") && !(g0.enums ?? []).some((e) => e.id === "ls_kind"));
+  const g2 = { ...g0, nodes: [...g0.nodes, n("k", "ent.kind_of"), n("sw", "flow.switch_enum")] };
+  const c = canConnect(g2, { node: "k", pin: "out" }, { node: "sw", pin: "in" });
+  assert.ok(c.ok && c.adapt?.patch.enum === "ls_kind", JSON.stringify(c));
+  const g3 = { ...g2, nodes: g2.nodes.map((x) => (x.id === "sw" ? { ...x, params: { enum: "ls_kind" } } : x)) };
+  assert.deepEqual(pinsOf(g3, g3.nodes.find((x) => x.id === "sw")!).outputs.map((p) => p.label), ["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]);
 });

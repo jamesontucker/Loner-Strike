@@ -4,7 +4,7 @@
 // that count.
 
 import { container, nodeDef, PIN_TYPES, type NodeDef, type PinDef, type PinType } from "./registry";
-import type { GMember, GNode, Graph } from "./schema";
+import { allEnums, type GMember, type GNode, type Graph } from "./schema";
 import { tablePins } from "./tables";
 
 export const BASE_TYPES = ["number", "bool", "text", "player", "entity", "team", "vector", "timer"] as const;
@@ -13,7 +13,7 @@ export const KEY_TYPES = ["text", "number", "player"] as const;
 /** A plain type, an enum or (with `structs`) a struct of this graph. */
 export function itemTypeOk(g: Graph, t: string, structs: boolean): boolean {
   if ((BASE_TYPES as readonly string[]).includes(t)) return true;
-  if (t.startsWith("enum:")) return (g.enums ?? []).some((e) => `enum:${e.id}` === t);
+  if (t.startsWith("enum:")) return allEnums(g).some((e) => `enum:${e.id}` === t);
   if (t.startsWith("struct:")) return structs && (g.structs ?? []).some((s) => `struct:${s.id}` === t);
   return false;
 }
@@ -30,7 +30,7 @@ export function typeOk(g: Graph, t: string): boolean {
 export function typeLabel(g: Graph | null, t: string): string {
   const c = container(t);
   if (c) return c.kind === "array" ? `Array of ${typeLabel(g, c.item)}` : `Map of ${typeLabel(g, c.key ?? "text")} to ${typeLabel(g, c.item)}`;
-  if (t.startsWith("enum:")) return g?.enums?.find((e) => `enum:${e.id}` === t)?.name ?? "Enum";
+  if (t.startsWith("enum:")) return allEnums(g).find((e) => `enum:${e.id}` === t)?.name ?? "Enum";
   if (t.startsWith("struct:")) return g?.structs?.find((s) => `struct:${s.id}` === t)?.name ?? "Struct";
   return PIN_TYPES[t]?.label ?? t;
 }
@@ -59,7 +59,7 @@ export function switchCases(n: GNode, def: NodeDef): string[] {
 const fnOf = (g: Graph, id: unknown) => (g.functions ?? []).find((f) => f.id === id);
 const macroOf = (g: Graph, id: unknown) => (g.macros ?? []).find((m) => m.id === id);
 const structOf = (g: Graph, id: unknown) => (g.structs ?? []).find((s) => s.id === id);
-const enumOf = (g: Graph, id: unknown) => (g.enums ?? []).find((e) => e.id === id);
+const enumOf = (g: Graph, id: unknown) => allEnums(g).find((e) => e.id === id);
 /** every variable a node can name: the mode's and every Function's locals */
 export const allVariables = (g: Graph) => [...g.variables, ...(g.functions ?? []).flatMap((f) => f.locals ?? [])];
 
@@ -218,6 +218,12 @@ export function rawPin(n: GNode, pin: string, dir: "in" | "out"): PinDef | undef
  *  null when it doesn't need any (or can't). */
 export function adaptTo(g: Graph, n: GNode, pin: string, dir: "in" | "out", wire: string): Record<string, string> | null {
   const raw = rawPin(n, pin, dir)?.type;
+  // an enum wire into Switch on Enum (or Enum To Number): the node takes that enum, so its cases
+  // fill by themselves (the app's own enums, Kind Of's, too)
+  if (raw === "$E" && wire.startsWith("enum:") && itemTypeOk(g, wire, false)) {
+    const id = wire.slice(5);
+    return n.params.enum !== id ? { enum: id } : null;
+  }
   if (!raw || !raw.includes("$T") || wire === "any" || wire === "exec") return null;
   let item: string | undefined;
   let key: string | undefined;
