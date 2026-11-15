@@ -33,7 +33,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 362
+    "y": 345
    },
    "params": {}
   },

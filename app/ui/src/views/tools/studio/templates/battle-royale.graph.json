@@ -145,7 +145,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1856
+    "y": 1900
    },
    "params": {}
   },
@@ -154,7 +154,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1908
+    "y": 1963
    },
    "params": {
     "var": "alive"
@@ -165,7 +165,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1959
+    "y": 2009
    },
    "params": {
     "text": "Squads left:",
@@ -178,7 +178,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 2177
+    "y": 2232
    },
    "params": {
     "op": "le",
@@ -190,7 +190,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 2039
+    "y": 2088
    },
    "params": {}
   },
@@ -199,7 +199,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 2017
+    "y": 2066
    },
    "params": {
     "which": "alive"
@@ -210,7 +210,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1839
+    "y": 1883
    },
    "params": {
     "text": "Winner:",
@@ -223,7 +223,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 3065,
-    "y": 1888
+    "y": 1932
    },
    "params": {
     "amount": 5
@@ -234,7 +234,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 2126
+    "y": 2181
    },
    "params": {}
   },
@@ -243,7 +243,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 2011
+    "y": 2061
    },
    "params": {}
   },
@@ -252,7 +252,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 2188
+    "y": 2243
    },
    "params": {
     "winner": "draw"
@@ -397,7 +397,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 65,
-    "y": 1554
+    "y": 1598
    },
    "params": {}
   },
@@ -406,7 +406,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 1508
+    "y": 1552
    },
    "params": {
     "which": "alive"
@@ -417,7 +417,7 @@
    "type": "player.strip",
    "pos": {
     "x": 1065,
-    "y": 1416
+    "y": 1460
    },
    "params": {
     "knife": true
@@ -428,7 +428,7 @@
    "type": "br.drop_in",
    "pos": {
     "x": 1565,
-    "y": 1461
+    "y": 1505
    },
    "params": {}
   },
@@ -437,7 +437,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 1065,
-    "y": 1620
+    "y": 1664
    },
    "params": {
     "text": "Loot up: the fight starts in 45 s"
@@ -448,7 +448,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 1565,
-    "y": 1620
+    "y": 1664
    },
    "params": {
     "secs": 45
@@ -459,7 +459,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 2065,
-    "y": 1620
+    "y": 1664
    },
    "params": {
     "phase": "fight"
@@ -470,7 +470,7 @@
    "type": "var.set",
    "pos": {
     "x": 2565,
-    "y": 1598
+    "y": 1642
    },
    "params": {
     "var": "looting",
@@ -482,7 +482,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 3065,
-    "y": 1620
+    "y": 1664
    },
    "params": {
     "text": ""
@@ -502,7 +502,7 @@
    "type": "var.get",
    "pos": {
     "x": 65,
-    "y": 1224
+    "y": 1268
    },
    "params": {
     "var": "looting"
@@ -513,7 +513,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 565,
-    "y": 1096
+    "y": 1118
    },
    "params": {}
   },
@@ -522,7 +522,7 @@
    "type": "dmg.block",
    "pos": {
     "x": 1065,
-    "y": 1120
+    "y": 1142
    },
    "params": {}
   },
@@ -531,7 +531,7 @@
    "type": "br.squads_alive",
    "pos": {
     "x": 65,
-    "y": 2185
+    "y": 2246
    },
    "params": {}
   }
@@ -1129,11 +1129,11 @@
    "text": "When one squad is left, a player of it is named the winner (5 points) and the round ends.",
    "pos": {
     "x": 41,
-    "y": 1793
+    "y": 1837
    },
    "size": {
     "w": 3778,
-    "h": 529
+    "h": 540
    }
   },
   {
@@ -1153,7 +1153,7 @@
    "text": "Lobby over: everyone drops in from the sky with a knife (the map's br_drop markers, no damage until landing). 45 s of looting with nobody hurt (bots too), then the fight.",
    "pos": {
     "x": 41,
-    "y": 1370
+    "y": 1414
    },
    "size": {
     "w": 3278,
@@ -1169,7 +1169,7 @@
    },
    "size": {
     "w": 1278,
-    "h": 416
+    "h": 460
    }
   }
  ]
