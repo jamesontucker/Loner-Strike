@@ -762,6 +762,15 @@ fn http_get(url: &str, limit: u64) -> Result<Vec<u8>, String> {
 static INDEX: Mutex<Option<(Instant, Index, Source)>> = Mutex::new(None);
 
 /// The index as last read (downloaded at most every 15 minutes), for the library's update checks.
+/// Parity A: the index the app already has (this run's, else the copy kept on disk), never fetched:
+/// for notes that mustn't add network calls (a remix's original updated, a map's remix choice).
+pub fn index_known() -> Index {
+    if let Some((_, idx, _)) = INDEX.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        return idx.clone();
+    }
+    std::fs::read(dir().join("index.json")).ok().and_then(|b| parse_index(&b).ok()).unwrap_or_default()
+}
+
 pub fn index_cached() -> Index {
     index(false).0
 }
@@ -2820,6 +2829,33 @@ fn source_projects(map: &str) -> Vec<Value> {
     list
 }
 
+/// Parity A: remixes whose original was updated in Community since: the editor's recent projects
+/// with a credit, against the list the app already has (never fetched for this). Each with the
+/// map name the project compiles to, for the Maps page.
+pub fn remix_updates(projects: &[PathBuf], idx: &Index) -> Vec<Value> {
+    projects
+        .iter()
+        .take(40)
+        .filter_map(|p| {
+            let credit = super::editor::load_file(p).ok().and_then(|(d, _)| d.editor.remix_of)?;
+            let it = idx.items.iter().find(|i| i.model == Model::Mod && i.gb == credit.gb)?;
+            (credit.updated > 0 && it.updated > credit.updated).then(|| {
+                let stem = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                json!({
+                    "project": p.to_string_lossy(), "map": super::compile::map_name(&stem),
+                    "original": credit.name, "author": credit.author, "gb": credit.gb,
+                    "url": format!("https://gamebanana.com/mods/{}", credit.gb), "updated": it.updated,
+                })
+            })
+        })
+        .collect()
+}
+
+async fn api_remix_updates() -> Response {
+    let list = tokio::task::spawn_blocking(|| remix_updates(&super::editor::recent_projects(), &index_known())).await.unwrap_or_default();
+    Json(json!({"updates": list})).into_response()
+}
+
 /// P5: "Remix this map": the map's editable source from its community package, saved as a new
 /// project (`<map>_remix`, with the credit) and opened in the editor.
 pub fn remix(st: &Shared, model: Model, id: i64) -> Result<Value, String> {
@@ -2843,7 +2879,7 @@ pub fn remix(st: &Shared, model: Model, id: i64) -> Result<Value, String> {
         }
         let (doc, wad) = super::mapsource::read_package(&src)?;
         let map = it.map.as_ref().map(|m| m.name.clone()).unwrap_or_else(|| "map".into());
-        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: id, uid: it.uid.clone(), name: it.name.clone(), author: it.author.clone() };
+        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: id, uid: it.uid.clone(), name: it.name.clone(), author: it.author.clone(), updated: it.updated };
         super::mapsource::save_remix(&super::editor::remix_dir(), &map, doc, wad, credit)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
@@ -3098,6 +3134,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/item/:model/:id", get(api_item))
         .route("/api/tools/community/try", post(api_try))
         .route("/api/tools/community/remix-map", post(api_remix)) // P5
+        .route("/api/tools/community/remix-updates", get(api_remix_updates))
         // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
@@ -3631,6 +3668,31 @@ mod tests {
     /// the .map and only the map's own textures; the manifest says so; the installer leaves
     /// source/ out of the game; a remix's project gives the package its credit.
     #[test]
+    fn a_remix_hears_when_its_original_was_updated() {
+        let root = std::env::temp_dir().join(format!("ls-remix-upd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let save = |name: &str, updated: u64| {
+            let mut doc = crate::editor::doc::MapDocument::default();
+            doc.editor.remix_of = Some(crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 4242, name: "Lonely".into(), author: "jam".into(), updated, ..Default::default() });
+            let p = root.join(format!("{name}.lsmap"));
+            std::fs::write(&p, doc.to_json()).unwrap();
+            p
+        };
+        let same = save("de_lonely_remix", 1000);
+        let older = save("de_lonely_remix2", 900);
+        let unknown = save("de_lonely_remix3", 0);
+        let mut idx = Index::default();
+        idx.items.push(Item { model: Model::Mod, gb: 4242, updated: 1000, ..Default::default() });
+        assert!(remix_updates(&[same.clone(), unknown.clone()], &idx).is_empty(), "not updated since; or remixed before this was kept");
+        let u = remix_updates(&[same, older, unknown], &idx);
+        assert_eq!(u.len(), 1);
+        assert_eq!(u[0]["map"], "de_lonely_remix2");
+        assert_eq!(u[0]["url"], "https://gamebanana.com/mods/4242");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn a_package_with_its_editable_source_and_a_remix_credit() {
         let (root, m) = game("src", "aim_qa");
         let (other_hl, project) = super::super::mapsource::fixture_project(&root.join("p"));
@@ -3661,7 +3723,7 @@ mod tests {
         assert!(!plain.item.source && plain.contents.iter().all(|c| !c.starts_with("source/")));
         // a remix's project: the package says what it came from (README, GameBanana text, manifest)
         let (mut doc, _) = super::super::editor::load_file(&project).unwrap();
-        doc.editor.remix_of = Some(crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 4242, uid: String::new(), name: "Original".into(), author: "someone".into() });
+        doc.editor.remix_of = Some(crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 4242, uid: String::new(), name: "Original".into(), author: "someone".into(), ..Default::default() });
         std::fs::write(&project, doc.to_json()).unwrap();
         let remix = build_package(&m, &r, &PublishReq { source: false, ..req }, &out).unwrap();
         assert_eq!(remix.item.remix_of.as_ref().map(|c| (c.gb, c.author.as_str())), Some((4242, "someone")));

@@ -245,6 +245,14 @@ pub struct RemixCredit {
     pub uid: String,
     pub name: String,
     pub author: String,
+    /// Parity A: the original's last update when it was remixed (the Community list's `updated`),
+    /// so the editor can say when the original changed since; 0 for older remixes
+    #[serde(skip_serializing_if = "is_zero")]
+    pub updated: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 /// P5: a new random UUID (version 4), as text.

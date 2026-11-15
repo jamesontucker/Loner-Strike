@@ -377,6 +377,8 @@ pub struct Plan {
     pub same: Vec<String>,
     /// the server has its own, different version: kept
     pub kept: Vec<String>,
+    /// the map's own files going in over older ones (`plan_with` replace)
+    pub replaced: Vec<String>,
     /// named by the map but not on this computer
     pub missing: Vec<String>,
     /// a Condition Zero map going to a CS 1.6 server
@@ -393,14 +395,26 @@ pub enum Skip {
 }
 
 pub fn plan(f: &Finder, hl: &Path, map: &str, t: &Target) -> Result<Plan, Skip> {
+    plan_with(f, hl, map, t, false)
+}
+
+/// `replace`: the map is your own and was copied there by Loner-Strike before, so its own files
+/// (maps/<map>.*: the .bsp, the bots' .nav and .lsv, its .res and .txt) go in over the server's
+/// older ones (Parity A: "Teach bots and send to my servers" after a compile). Nothing else is.
+pub fn plan_with(f: &Finder, hl: &Path, map: &str, t: &Target, replace: bool) -> Result<Plan, Skip> {
     let m = find_local(f, hl, map, &t.game).ok_or_else(|| Skip::Why("it isn't in your game any more".into()))?;
     if bsp_version(&m.bsp) != Some(BSP_VERSION) {
         return Err(Skip::Why("its map file isn't one Counter-Strike servers can load".into()));
     }
     let (files, missing) = needed_files(f, hl, &m);
     let mut p = Plan { map: m.name.clone(), missing, cz_only: m.cz_only, ..Plan::default() };
+    let own = format!("maps/{}.", m.name).to_lowercase();
     for (i, (rel, src)) in files.into_iter().enumerate() {
-        let there = on_server(f, t, &rel, &src);
+        let mut there = on_server(f, t, &rel, &src);
+        if replace && there == There::Different && rel.to_lowercase().starts_with(&own) {
+            there = There::Nothing;
+            p.replaced.push(rel.clone());
+        }
         // the map file itself decides: the server's own version stays, and nothing of
         // ours goes with it (its nav and textures belong to our version)
         if i == 0 {
@@ -436,6 +450,10 @@ pub fn apply(p: &Plan, t: &Target) -> Result<(), String> {
         let r = (|| {
             if let Some(d) = dest.parent() {
                 std::fs::create_dir_all(d)?;
+            }
+            // (an older copy of your own map's file going: the safety net keeps it first)
+            if dest.is_file() {
+                crate::safety::before("Maps", &format!("Replace {rel} with your newer one"), &dest);
             }
             crate::content::replace_with(src, &dest)
         })();
@@ -609,9 +627,16 @@ fn record_for(local: &Map<String, Value>, map: &str, fresh: &mut i64) -> (String
     (fresh.to_string(), json!({"name": map, "author": "", "url": null}))
 }
 
+/// Whether the server's map record says this map was copied there from your game.
+pub fn copied_before(rec: &Map<String, Value>, map: &str) -> bool {
+    rec.values().any(|r| r["file"] == "copied from your game" && r["maps"].as_array().into_iter().flatten().any(|m| m.as_str().is_some_and(|m| m.eq_ignore_ascii_case(map))))
+}
+
 /// Copies one map to one server and records it. Where it went in `out`.
-fn copy_one(f: &Finder, hl: &Path, map: &str, t: &Target, store: &MapStore, local: &Map<String, Value>, fresh: &mut i64, out: &mut Outcome) -> bool {
-    let p = match plan(f, hl, map, t) {
+fn copy_one(f: &Finder, hl: &Path, map: &str, t: &Target, store: &MapStore, local: &Map<String, Value>, fresh: &mut i64, out: &mut Outcome, update: &[String]) -> bool {
+    // (only a map this app copied there from your game before: never one the server got elsewhere)
+    let replace = update.iter().any(|u| u.eq_ignore_ascii_case(map)) && copied_before(&store.records(), map);
+    let p = match plan_with(f, hl, map, t, replace) {
         Ok(p) => p,
         Err(Skip::There) => {
             out.already.push((map.into(), t.name.clone()));
@@ -654,6 +679,11 @@ fn copy_one(f: &Finder, hl: &Path, map: &str, t: &Target, store: &MapStore, loca
 
 /// Starts copying `maps` from the game at `hl` to the servers `ids`. Returns the job id.
 pub fn start(hl: PathBuf, local: Map<String, Value>, maps: Vec<String>, ids: Vec<String>) -> Result<String, String> {
+    start_with(hl, local, maps, ids, Vec::new())
+}
+
+/// `start`, with `update`: maps whose own files replace older copies this app put on the servers.
+pub fn start_with(hl: PathBuf, local: Map<String, Value>, maps: Vec<String>, ids: Vec<String>, update: Vec<String>) -> Result<String, String> {
     let mut seen = HashSet::new();
     let maps: Vec<String> = maps.into_iter().filter(|m| servers::safe_map(m) && seen.insert(m.to_lowercase())).take(MAX_MAPS).collect();
     if maps.is_empty() {
@@ -706,7 +736,7 @@ pub fn start(hl: PathBuf, local: Map<String, Value>, maps: Vec<String>, ids: Vec
                     }
                     job.relabel(&id, format!("Copying {m} to {} ({} of {n})", e.name, k + 1));
                     job.fraction(k as f64 / weight);
-                    any |= copy_one(&finder, &hl, m, &t, &store, &local, &mut fresh, &mut out);
+                    any |= copy_one(&finder, &hl, m, &t, &store, &local, &mut fresh, &mut out, &update);
                 }
                 if any {
                     servers::mark_changed(&e.id);
@@ -836,6 +866,9 @@ const NO_GAME: &str = "Set up the game on this computer first.";
 struct CopyReq {
     maps: Vec<String>,
     servers: Vec<String>,
+    /// maps of yours to bring up to date where this app copied them before (their .bsp, .nav, .lsv)
+    #[serde(default)]
+    update: Vec<String>,
 }
 
 async fn api_copy(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<CopyReq>) -> (StatusCode, Json<Value>) {
@@ -843,7 +876,7 @@ async fn api_copy(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
         return forbidden();
     }
     let Some(game) = st.local_game() else { return answer(Err(NO_GAME.into())) };
-    let r = tokio::task::spawn_blocking(move || start(game.hl.clone(), game.store.records(), req.maps, req.servers).map(|job| json!({"ok": true, "job": job})))
+    let r = tokio::task::spawn_blocking(move || start_with(game.hl.clone(), game.store.records(), req.maps, req.servers, req.update).map(|job| json!({"ok": true, "job": job})))
         .await
         .unwrap_or_else(|_| Err(INTERNAL.into()));
     answer(r)
@@ -1032,6 +1065,35 @@ mod tests {
     }
 
     #[test]
+    fn your_own_map_updates_its_own_files_only_where_this_app_put_it() {
+        let root = temp("mapcopy-update-");
+        let hl = game_with_map(&root);
+        let srv = root.join("srv");
+        // an older de_test (map, nav) and someone's own sprite on the server
+        put(&srv, "cstrike/maps/de_test.bsp", &bsp("{\n\"classname\" \"worldspawn\"\n}\n"));
+        put(&srv, "cstrike/maps/de_test.nav", b"old nav");
+        put(&srv, "cstrike/sprites/myglow.spr", b"IDSP theirs");
+        let t = Target { name: "Alone Together".into(), game: "cstrike".into(), dir: srv.clone(), machine: None };
+        let f = Finder::default();
+        // without the update: the server's own map stays
+        assert!(matches!(plan(&f, &hl, "de_test", &t), Err(Skip::Why(_))));
+        // with it: the map's own files go in, the sprite stays the server's
+        let p = plan_with(&f, &hl, "de_test", &t, true).unwrap();
+        assert_eq!(p.replaced, ["maps/de_test.bsp", "maps/de_test.nav"]);
+        assert_eq!(p.kept, ["sprites/myglow.spr"]);
+        apply(&p, &t).unwrap();
+        assert_eq!(std::fs::read(srv.join("cstrike/maps/de_test.bsp")).unwrap(), std::fs::read(hl.join("cstrike/maps/de_test.bsp")).unwrap());
+        assert_eq!(std::fs::read(srv.join("cstrike/sprites/myglow.spr")).unwrap(), b"IDSP theirs");
+        // only where the server's record says this app copied it from your game
+        let mut rec = Map::new();
+        rec.insert("-1".into(), json!({"file": "copied from your game", "maps": ["DE_Test"]}));
+        rec.insert("77".into(), json!({"file": "de_other.zip", "maps": ["de_other"]}));
+        assert!(copied_before(&rec, "de_test"));
+        assert!(!copied_before(&rec, "de_other"), "a map the server got from GameBanana isn't replaced");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn skips_what_the_server_has_and_keeps_its_own() {
         let root = temp("mapcopy-plan-");
         let hl = game_with_map(&root);
@@ -1095,13 +1157,13 @@ mod tests {
         let mut out = Outcome::default();
         let mut fresh = -1000;
         let local: Map<String, Value> = serde_json::from_value(json!({"77": {"name": "Pack", "author": "Someone", "url": "u", "maps": ["de_czonly", "de_x"]}})).unwrap();
-        assert!(copy_one(&Finder::default(), &hl, "de_czonly", &t, &store, &local, &mut fresh, &mut out));
+        assert!(copy_one(&Finder::default(), &hl, "de_czonly", &t, &store, &local, &mut fresh, &mut out, &[]));
         let rec = store.records();
         assert_eq!(rec["77"]["author"], "Someone");
         assert_eq!(rec["77"]["maps"], json!(["de_czonly"]));
         assert!(rec["77"]["files"].as_array().unwrap().contains(&json!("cz_special.wad")));
         assert_eq!(out.cz, ["de_czonly"]);
-        assert!(!copy_one(&Finder::default(), &hl, "de_czonly", &t, &store, &local, &mut fresh, &mut out));
+        assert!(!copy_one(&Finder::default(), &hl, "de_czonly", &t, &store, &local, &mut fresh, &mut out, &[]));
         assert_eq!(out.already.len(), 1);
         store.uninstall_section("maps", 77).unwrap();
         assert!(!srv.join("cstrike/maps/de_czonly.bsp").exists() && !srv.join("cstrike/cz_special.wad").exists());

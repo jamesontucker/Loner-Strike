@@ -1268,6 +1268,28 @@ pub fn read_leak(base: &Path) -> Option<(Vec<[f64; 3]>, PathBuf)> {
 
 /// Copies a compiled map into the game's maps folder as `<name>.bsp`. A different map already
 /// there is backed up first (the newest few kept). Returns the backup's path, if one was made.
+/// Parity A: a map installed from Community is never written over by a compile (its updates
+/// would replace the changes): the message, when `name` is one.
+pub fn community_refusal(lib: &Path, name: &str) -> Option<String> {
+    super::communitylib::map_owner(lib, name).map(|_| format!("{name} came from Community. Its updates would replace your changes."))
+}
+
+/// Parity A: a free name for your own version of a Community map: `<name>_edit`, then `_edit2`...
+/// (never a stock map, another Community map, or a map already in the game's maps folder).
+pub fn edit_name(lib: &Path, maps: &Path, name: &str) -> String {
+    let base: String = name.chars().take(31 - "_edit99".len()).collect();
+    let taken = |n: &str| {
+        crate::maps::is_stock_file(&format!("maps/{n}.bsp")) || super::communitylib::map_owner(lib, n).is_some() || std::fs::read_dir(maps).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(&format!("{n}.bsp")))
+    };
+    let mut n = format!("{base}_edit");
+    let mut i = 2;
+    while taken(&n) && i < 100 {
+        n = format!("{base}_edit{i}");
+        i += 1;
+    }
+    n
+}
+
 pub fn install_bsp(src: &Path, maps: &Path, name: &str, backups: &Path) -> Result<Option<PathBuf>, String> {
     // P5: under test, never into the real game (the route checks first; this is the write)
     super::studio::guard_real_game(maps)?;
@@ -1276,6 +1298,9 @@ pub fn install_bsp(src: &Path, maps: &Path, name: &str, backups: &Path) -> Resul
     }
     if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
         return Err(format!("{name} is one of the game's own maps. Give your map another name."));
+    }
+    if let Some(why) = community_refusal(&super::communitylib::lib_dir(), name) {
+        return Err(why);
     }
     let bytes = std::fs::read(src).map_err(|e| format!("Couldn't read the compiled map ({e})."))?;
     let dest = maps.join(format!("{name}.bsp"));
@@ -1590,6 +1615,9 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
         if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
             return Err(format!("{name} is one of the game's own maps. Give your map another name."));
         }
+        if let Some(why) = community_refusal(&super::communitylib::lib_dir(), &name) {
+            return Err(why);
+        }
         // P5: under test (the dev server the browser tests use), never into the real game
         super::studio::guard_real_game(&game.dir)?;
         Some(game.dir.join("maps"))
@@ -1821,6 +1849,26 @@ fn start_compile(st: &Shared, req: StartReq) -> Result<Value, String> {
     if running() {
         return Err(BUSY.into());
     }
+    // Parity A: a Community map's name, refused with the two ways on (your own copy under
+    // another name, or a credited remix when the map was shared with its source)
+    if req.install {
+        let want = req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).or_else(|| super::editor::open_document().map(|(_, n)| map_name(&n)));
+        if let Some(want) = want {
+            let lib = super::communitylib::lib_dir();
+            if let Some(it) = super::communitylib::map_owner(&lib, &want) {
+                let maps = st.local_game().map(|g| g.dir.join("maps")).unwrap_or_default();
+                let known = super::community::index_known();
+                let remixable = known.items.iter().any(|i| i.model == it.model && i.gb == it.gb && i.source);
+                return Ok(json!({
+                    "error": community_refusal(&lib, &want).unwrap_or_default(),
+                    "community": {
+                        "map": want, "name": it.name, "author": it.author, "model": it.model, "gb": it.gb,
+                        "editName": edit_name(&lib, &maps, &want), "remixable": remixable,
+                    },
+                }));
+            }
+        }
+    }
     let p = plan(st, req)?;
     let name = p.name.clone();
     let id = begin("compile", "Getting ready…")?;
@@ -1911,8 +1959,40 @@ async fn api_cancel(h: HeaderMap) -> Response {
     answer(Ok(json!({"ok": true})))
 }
 
+/// Parity A: the last compile's map put in the game (a Final compile, before "Teach bots and send to
+/// my servers"): the same checks and backup as a playtest's install.
+fn install_last(st: &Shared) -> Result<Value, String> {
+    let (map, bsp) = with_job(|j| {
+        let r = j.result.as_ref().filter(|_| j.kind == "compile" && !j.running)?;
+        Some((r["map"].as_str()?.to_string(), PathBuf::from(r["bsp"].as_str()?)))
+    })
+    .flatten()
+    .ok_or("Compile the map first.")?;
+    if !bsp.is_file() {
+        return Err("The compiled map isn't there any more. Compile it again.".into());
+    }
+    let game = st.local_game().ok_or(NO_GAME)?;
+    super::studio::guard_real_game(&game.dir)?;
+    let maps = game.dir.join("maps");
+    let backup = install_bsp(&bsp, &maps, &map, &compile_dir().join("backups"))?;
+    with_job(|j| {
+        if let Some(r) = j.result.as_mut() {
+            r["installed"] = json!(true);
+        }
+    });
+    Ok(json!({"ok": true, "map": map, "backup": backup.map(|b| b.to_string_lossy().to_string())}))
+}
+
+async fn api_install(State(st): State<Shared>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || install_last(&st)).await
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
+        .route("/api/tools/compile/install", post(api_install))
         .route("/api/tools/compile/status", get(api_status))
         .route("/api/tools/compile/setup", post(api_setup))
         .route("/api/tools/compile/start", post(api_start))
@@ -1924,6 +2004,28 @@ pub fn routes() -> Router<Shared> {
 mod tests {
     use super::*;
     use crate::editor::doc::Entity;
+
+    /// Parity A: a Community map's name is refused (any case, the exact name only), and
+    /// `<name>_edit` is the next free name.
+    #[test]
+    fn community_maps_are_never_written_over() {
+        let root = std::env::temp_dir().join(format!("ls-compile-community-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let lib = root.join("community");
+        let maps = root.join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+        let it = super::super::communitylib::Installed { gb: 4242, name: "Lonely".into(), author: "jam".into(), maps: vec!["de_lonely".into()], ..Default::default() };
+        super::super::communitylib::save(&lib, &it).unwrap();
+        assert_eq!(community_refusal(&lib, "DE_Lonely").as_deref(), Some("DE_Lonely came from Community. Its updates would replace your changes."));
+        assert_eq!(community_refusal(&lib, "de_lonely2"), None, "only the exact name");
+        assert_eq!(community_refusal(&lib, "de_lone"), None);
+        assert_eq!(edit_name(&lib, &maps, "de_lonely"), "de_lonely_edit");
+        std::fs::write(maps.join("de_lonely_edit.bsp"), b"x").unwrap();
+        assert_eq!(edit_name(&lib, &maps, "de_lonely"), "de_lonely_edit2");
+        // a long name still fits the game's 31 characters
+        assert!(edit_name(&lib, &maps, "de_a_very_long_map_name_for_qa_x").len() <= 31);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     const LEAK_LOG: &str = include_str!("testdata/compile/leak_bsp.log");
     const TEX_LOG: &str = include_str!("testdata/compile/missing_texture_csg.log");
@@ -2641,7 +2743,7 @@ mod tests {
         }
         // remix: read back, saved with the credit, opened the same
         let (back, wad) = super::super::mapsource::read_package(&root.join("pkg")).unwrap();
-        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 1, uid: String::new(), name: "Source".into(), author: "qa".into() };
+        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 1, uid: String::new(), name: "Source".into(), author: "qa".into(), ..Default::default() };
         let path = super::super::mapsource::save_remix(&root.join("remixes"), "ls_remix_src", back, wad, credit).unwrap();
         let (opened, _) = super::super::editor::load_file(&path).unwrap();
         assert_eq!((opened.brushes.len(), opened.entities.len()), (doc.brushes.len(), doc.entities.len()));

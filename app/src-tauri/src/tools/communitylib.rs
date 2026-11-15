@@ -124,6 +124,16 @@ pub fn load_all(dir: &Path) -> Vec<Installed> {
     v
 }
 
+/// Parity A: the installed Community creation a map name belongs to (exact name, any case), so
+/// compiling never writes over it (its updates would replace the changes).
+pub fn map_owner(dir: &Path, map: &str) -> Option<Installed> {
+    let map = map.trim();
+    if map.is_empty() {
+        return None;
+    }
+    load_all(dir).into_iter().find(|i| i.maps.iter().any(|m| m.trim().eq_ignore_ascii_case(map)))
+}
+
 pub fn load(dir: &Path, model: Model, gb: i64) -> Option<Installed> {
     serde_json::from_slice(&std::fs::read(dir.join(dir_name(model, gb)).join("meta.json")).ok()?).ok()
 }

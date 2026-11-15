@@ -10,6 +10,7 @@ import type { RecentFile } from "./editorApi";
 import { fileHooks } from "./commands";
 import { afterJump, copyAssets, findAssets, getProject, projectAction, type ProjectFile, type ProjectInfo } from "./p5store";
 import { useEditor } from "./store";
+import { remixUpdates, type RemixUpdate } from "./compileApi"; // Parity A
 
 function size(n: number | null) {
   if (n == null) return "";
@@ -44,6 +45,8 @@ export function ProjectPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [n, setN] = useState(0);
+  // Parity A: this remix's original was updated in Community since (from the list the app has)
+  const [upd, setUpd] = useState<RemixUpdate[]>([]);
   const ask = useConfirm();
   const askText = useAskText();
   const notify = useEditor((s) => s.notify);
@@ -60,6 +63,7 @@ export function ProjectPanel() {
       }
     });
     void api.getRecent().then((r) => live && !r.error && setRecent(r.files ?? []));
+    void remixUpdates().then((r) => live && setUpd(r.updates ?? []));
     return () => {
       live = false;
     };
@@ -131,6 +135,17 @@ export function ProjectPanel() {
           {info.folder ? info.folder : "Not saved yet"} · compiles as <span className="mono">{info.map}.bsp</span>
         </span>
       </div>
+      {(() => {
+        const u = info.project ? upd.find((x) => x.project === info.project) : undefined;
+        return u ? (
+          <p className="small-note ed-remix-note" data-testid="remix-updated">
+            The original was updated.{" "}
+            <a href={u.url} target="_blank" rel="noreferrer" title={`${u.original} by ${u.author} on GameBanana. Your remix stays as it is.`}>
+              See what changed.
+            </a>
+          </p>
+        ) : null;
+      })()}
       {!info.project && (
         <div className="row wrap">
           <button type="button" className="btn small primary" onClick={() => void useEditor.getState().file("saveAs")}>

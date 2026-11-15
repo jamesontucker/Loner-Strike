@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { addFromFile, currentTarget, getJsonAt, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
 import { useAppInfo, useMaps, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
@@ -8,6 +8,7 @@ import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, us
 import { JobProgress } from "./JobProgress";
 import { CommunityChip, CommunityLink, communityMap, useCommunity, useOrigins } from "./tools/community/chip";
 import { CATS, CopyFromGame, CopyToServers } from "./MapCopy";
+import { remixUpdates, type RemixUpdate } from "./tools/editor/compileApi"; // Parity A
 
 /** Where a map came from and whether it's hidden or new to the bots: one menu, so the chips stay about map types. */
 const SHOW: [string, string][] = [
@@ -52,7 +53,7 @@ export function NoPicture({ name }: { name: string }) {
 
 /** A map's card. Memoised: the Maps page has hundreds of them, so the handlers take the
  *  map instead of being made per card, and a card only redraws when its own map changes. */
-export const MapCard = memo(function MapCard({ map, onClick, current, onFav, selected }: { map: MapInfo; onClick: (map: MapInfo) => void; current?: boolean; onFav?: (map: MapInfo) => void; selected?: boolean }) {
+export const MapCard = memo(function MapCard({ map, onClick, current, onFav, selected, originalUpdated }: { map: MapInfo; onClick: (map: MapInfo) => void; current?: boolean; onFav?: (map: MapInfo) => void; selected?: boolean; originalUpdated?: boolean }) {
   // the picture can fail while the app is still looking for one: a newer answer in the
   // map list (thumb changes) tries again, with ?v= so the browser doesn't reuse the 404
   const [brokenFor, setBrokenFor] = useState<MapInfo["thumb"] | undefined>(undefined);
@@ -70,6 +71,7 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
       {map.other && <span className="map-sub" title={otherNote(map)[1]}>{otherNote(map)[0]}</span>}
       {cm && <span className="map-sub" title={`From Community: ${cm.name}${cm.author ? ` by ${cm.author}` : ""}`}>Community{cm.author ? ` · ${cm.author}` : ""}</span>}
       {!cm && mine && <span className="map-sub" title="You made this map (compiled or published from Loner-Strike)">Made by me</span>}
+      {originalUpdated && <span className="map-sub" title="The map you remixed was updated in Community. Open the map to see what changed.">Original updated</span>}
     </button>
   );
   if (!onFav) return card;
@@ -117,6 +119,17 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const [cat, setCat] = useState("all");
   const [show, setShow] = useState("all");
   const community = useCommunity(); // (community: chips and the From Community filter)
+  // Parity A: your remixes whose original was updated in Community (the list the app has; your game only)
+  const [remixUpd, setRemixUpd] = useState<RemixUpdate[]>([]);
+  useEffect(() => {
+    if (currentTarget()) return;
+    let live = true;
+    void remixUpdates().then((r) => live && setRemixUpd(r.updates ?? []));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const updOf = (name: string) => remixUpd.find((u) => u.map.toLowerCase() === name.toLowerCase());
   const origins = useOrigins(); // (origin: the Made by me filter)
   const [q, setQ] = useState("");
   // typing stays quick: the list filters a moment behind the box
@@ -357,7 +370,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           {shown.slice(0, limit).map((m) => (
             picking
               ? <MapCard key={m.name} map={m} selected={chosen.has(m.name)} onClick={togglePick} />
-              : <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} />
+              : <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} originalUpdated={!!updOf(m.name)} />
           ))}
           {!shown.length && (maps.length ? <p className="muted">No maps match. <button type="button" className="link inline" onClick={() => { setQ(""); setCat("all"); setShow("all"); }}>Show all maps</button></p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
         </div>
@@ -387,6 +400,15 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
             </p>
             {picked.other && <p className="muted">{otherNote(picked)[1]}.</p>}
+            {(() => {
+              const u = updOf(picked.name);
+              return u ? (
+                <p className="muted" data-testid="remix-updated">
+                  A remix of {u.original}. The original was updated.{" "}
+                  <a href={u.url} target="_blank" rel="noreferrer">See what changed.</a> Your map stays as it is.
+                </p>
+              ) : null;
+            })()}
             {!live && currentTarget() && !cantLoad(picked) && <p className="muted">Start the server to play it.</p>}
             {!live && !currentTarget() && picked.hidden && <p className="muted">Show it again to start a game on it.</p>}
             <div className="row">

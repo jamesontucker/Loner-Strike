@@ -33,3 +33,9 @@
 /* Parity A (site screenshots): "Bots" and its box side by side, not the box pushed to the far edge
    (.editor-row .editor-field's "auto 70px" gave the spare room to the label) */
 .compile-panel .editor-field.compile-inline { justify-content: start; column-gap: 8px; }
+/* Parity A: a Community map's name refused, and the follow-up after a Final compile */
+.compile-clash { padding: 8px 10px; border-left: 3px solid var(--signal); background: var(--panel-2); box-shadow: var(--raised); border-radius: 2px; display: grid; gap: 6px; }
+.compile-clash p { font-size: 13px; color: var(--bone); }
+.compile-sendout { display: grid; gap: 6px; justify-items: start; }
+.compile-sendout-summary { margin: 0; padding-left: 18px; color: var(--bone-dim); }
+.compile-sendout-summary li + li { margin-top: 2px; }

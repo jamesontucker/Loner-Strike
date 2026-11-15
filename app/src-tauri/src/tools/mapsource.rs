@@ -386,7 +386,7 @@ mod tests {
         }
         let (doc, wad) = read_package(&pkg).unwrap();
         assert_eq!(wad.as_ref().unwrap().0, "aim_qa_custom.wad");
-        let credit = RemixCredit { model: "Mod".into(), gb: 777, uid: String::new(), name: "Aim QA".into(), author: "jam".into() };
+        let credit = RemixCredit { model: "Mod".into(), gb: 777, uid: String::new(), name: "Aim QA".into(), author: "jam".into(), ..Default::default() };
         let dir = root.join("remixes");
         let a = save_remix(&dir, "aim_qa", doc.clone(), wad.clone(), credit.clone()).unwrap();
         let b = save_remix(&dir, "aim_qa", doc.clone(), wad, credit.clone()).unwrap();

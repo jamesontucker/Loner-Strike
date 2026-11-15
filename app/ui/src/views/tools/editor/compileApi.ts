@@ -68,7 +68,11 @@ const post = <T,>(path: string, body: unknown = {}) => postJsonAt<T>(path, body,
 export const getStatus = () => get<CompileStatus>(`${C}/status`);
 export const setUpCompiler = () => post<{ ok?: boolean; error?: string; installed?: boolean }>(`${C}/setup`);
 export type CordonOptions = { seal: "sky" | "black"; keepLights: boolean; spawn: boolean; spawnAt?: Vec3 };
-export const startCompile = (b: { preset: Preset; name?: string; cordon?: Cordon; cordons?: Cordon[]; cordonOptions?: CordonOptions; install?: boolean; allCores?: boolean }) => post<{ ok?: boolean; error?: string; map?: string }>(`${C}/start`, b);
+/** Parity A: a map installed from Community, refused (its updates would replace your changes). */
+export type CommunityClash = { map: string; name: string; author: string; model: "Mod" | "Spray"; gb: number; editName: string; remixable: boolean };
+export const startCompile = (b: { preset: Preset; name?: string; cordon?: Cordon; cordons?: Cordon[]; cordonOptions?: CordonOptions; install?: boolean; allCores?: boolean }) => post<{ ok?: boolean; error?: string; map?: string; community?: CommunityClash }>(`${C}/start`, b);
+/** Parity A: the last compile's map into the game (after a Final compile). */
+export const installLast = () => post<{ ok?: boolean; error?: string; map?: string; backup?: string | null }>(`${C}/install`);
 export const getProgress = (from?: number) => get<Progress & { error?: string }>(`${C}/progress${from != null ? `?from=${from}` : ""}`);
 export const cancelCompile = () => post<{ ok?: boolean; error?: string }>(`${C}/cancel`);
 
@@ -79,6 +83,18 @@ export const getModes = () => get<{ modes?: Mode[]; mode?: string; error?: strin
 export const writeRes = (map: string) => post<{ ok?: boolean; error?: string }>(`/api/tools/doctor/${encodeURIComponent(map)}/res`);
 export const learnNav = (map: string) => post<{ ok?: boolean; error?: string }>("/api/navs/learn", { maps: [map], relearn: true });
 export const learnResult = () => get<{ result?: { message?: string; learned?: string[] } | null }>("/api/navs/learn");
+export const learnStop = () => post<{ ok?: boolean; error?: string }>("/api/navs/learn/stop");
+export type ServerChoice = { id: string; name: string; game: string; has?: boolean; missing?: boolean; czOnly?: boolean };
+export const copyServers = (map: string) => get<{ servers?: ServerChoice[]; error?: string }>(`/api/mapcopy/servers?map=${encodeURIComponent(map)}`);
+export const copyToServers = (map: string, servers: string[]) => post<{ ok?: boolean; job?: string; error?: string }>("/api/mapcopy", { maps: [map], servers, update: [map] });
+export type CopyOutcome = { message?: string; copied?: number; already?: number; failed?: { map: string; server: string; why: string }[]; skipped?: { map: string; server: string; why: string }[]; stopped?: boolean };
+export const copyResult = () => get<{ result?: CopyOutcome | null; error?: string }>("/api/mapcopy");
+export const copyStop = () => post<{ ok?: boolean; error?: string }>("/api/mapcopy/stop");
+export type SetupJob = { state: string; error?: string | null; label?: string };
+export const setupJob = () => get<SetupJob & { error?: string }>("/api/setup/job");
+/** Parity A: remixes whose original was updated in Community since (the list the app has). */
+export type RemixUpdate = { project: string; map: string; original: string; author: string; gb: number; url: string };
+export const remixUpdates = () => get<{ updates?: RemixUpdate[] }>("/api/tools/community/remix-updates");
 export const gameState = () => get<{ online?: boolean; game_open?: boolean; error?: string }>("/api/state");
 export const launchGame = (b: { map: string; bots: number; mode?: string; restart?: boolean }) => post<{ ok?: boolean; error?: string }>("/api/app/launch", b);
 
