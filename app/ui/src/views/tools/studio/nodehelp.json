@@ -6981,12 +6981,32 @@
 "flow.for_each_player":{
 "title":"For Each Player",
 "category":"Flow",
-"what":"Runs Each once for every player who fits, then Then.",
+"what":"Runs Each once for every player who fits, then Then. Who and Team can be wired (a variable, a Select); Only these goes through a list of players instead (Players In Radius...). Break stops early. For any list of your own, use Arrays > For Each.",
 "pins":[
 {
 "id":"exec",
 "dir":"in",
 "help":"Runs this node."
+},
+{
+"id":"break",
+"dir":"in",
+"help":"Stops the loop after the current player (Then still runs)."
+},
+{
+"id":"who",
+"dir":"in",
+"help":"Which players, as the built-in Who enum (wire a variable or a Select). Not wired: the Who setting."
+},
+{
+"id":"team",
+"dir":"in",
+"help":"Only this team's players (connected, alive or not). Wired, it decides instead of Who."
+},
+{
+"id":"only",
+"dir":"in",
+"help":"Go through these players instead of searching (from Players In Radius, a variable...). Players who left are skipped."
 },
 {
 "id":"each",
@@ -6997,6 +7017,11 @@
 "id":"player",
 "dir":"out",
 "help":"The player."
+},
+{
+"id":"index",
+"dir":"out",
+"help":"How many players came before this one (0 for the first)."
 },
 {
 "id":"then",
@@ -7010,11 +7035,11 @@
 "help":"Pick one: Everyone in the game, Everyone alive, Everyone dead, Terrorists, Counter-Terrorists, Living Terrorists, Living Counter-Terrorists, Bots, People (not bots)."
 }
 ],
-"more":"Runs Each once for every player that matches, then Then. The Player pin is the current one inside Each.",
+"more":"Runs Each once for every player that matches, then Then. The Player pin is the current one inside Each. Who is the setting until something is wired into it (a variable of the Who enum, a Select); Team, when wired, decides instead. For a list you made yourself, use Arrays > For Each.",
 "related":[
-"flow.for_each_entity",
+"flow.for_each_array",
 "flow.pick_player",
-"flow.pick_entity"
+"array.players"
 ],
 "cost":"At most 32 players, so it's cheap. Inside a Repeat that ticks often, it adds up.",
 "example":{
@@ -7093,12 +7118,27 @@
 "flow.for_each_entity":{
 "title":"For Each Entity",
 "category":"Flow",
-"what":"Runs Each once for every entity of a kind or with a name (at most 512), then Then.",
+"what":"Runs Each once for every entity of a kind or with a name (at most 512), then Then. The kind or name can be wired; Only these goes through a list of entities instead. Break stops early. For any list of your own, use Arrays > For Each.",
 "pins":[
 {
 "id":"exec",
 "dir":"in",
 "help":"Runs this node."
+},
+{
+"id":"break",
+"dir":"in",
+"help":"Stops the loop after the current entity (Then still runs)."
+},
+{
+"id":"name",
+"dir":"in",
+"help":"The kind (classname) or name to look for, by the Which setting. Not wired: the Kind or name setting."
+},
+{
+"id":"only",
+"dir":"in",
+"help":"Go through these entities instead of searching (from Find Entities, Entities In Radius...). Removed ones are skipped."
 },
 {
 "id":"each",
@@ -7109,6 +7149,11 @@
 "id":"entity",
 "dir":"out",
 "help":"The entity."
+},
+{
+"id":"index",
+"dir":"out",
+"help":"How many entities came before this one (0 for the first)."
 },
 {
 "id":"then",
@@ -7127,9 +7172,9 @@
 }
 ],
 "related":[
-"flow.for_each_player",
-"flow.pick_player",
-"flow.pick_entity"
+"flow.for_each_array",
+"flow.pick_entity",
+"ent.find_all"
 ],
 "cost":"Searches the whole map each time it runs. Fine at a round's start; in a fast Repeat it can slow the server.",
 "example":{
@@ -7209,12 +7254,27 @@
 "flow.pick_player":{
 "title":"Pick Random Player",
 "category":"Flow",
-"what":"Picks one player who fits at random (Found), or runs None.",
+"what":"Picks one player who fits at random (Found), or runs None. Who and Team can be wired; Only these picks from a list of players instead.",
 "pins":[
 {
 "id":"exec",
 "dir":"in",
 "help":"Runs this node."
+},
+{
+"id":"who",
+"dir":"in",
+"help":"Which players, as the built-in Who enum (wire a variable or a Select). Not wired: the Who setting."
+},
+{
+"id":"team",
+"dir":"in",
+"help":"Only this team's players. Wired, it decides instead of Who."
+},
+{
+"id":"only",
+"dir":"in",
+"help":"Pick from these players instead of searching (players who left are skipped)."
 },
 {
 "id":"then",
@@ -7319,12 +7379,22 @@
 "flow.pick_entity":{
 "title":"Pick Random Entity",
 "category":"Flow",
-"what":"Picks one entity of a kind or with a name at random (Found), or runs None.",
+"what":"Picks one entity of a kind or with a name at random (Found), or runs None. The kind or name can be wired; Only these picks from a list of entities instead.",
 "pins":[
 {
 "id":"exec",
 "dir":"in",
 "help":"Runs this node."
+},
+{
+"id":"name",
+"dir":"in",
+"help":"The kind (classname) or name to look for, by the Which setting. Not wired: the Kind or name setting."
+},
+{
+"id":"only",
+"dir":"in",
+"help":"Pick from these entities instead of searching."
 },
 {
 "id":"then",
@@ -32710,9 +32780,10 @@
 "settings":[
 {
 "id":"count",
-"help":"A number from 1 to 8."
+"help":"A number from 1 to 32."
 }
 ],
+"more":"Up to 32 outputs: press + Add pin on the node (or set Outputs in Details); the minus by it takes the last one off when nothing is wired to it.",
 "related":[
 "flow.do_once",
 "flow.do_n",
@@ -56060,7 +56131,7 @@
 "settings":[
 {
 "id":"count",
-"help":"A number from 1 to 8."
+"help":"A number from 1 to 32."
 },
 {
 "id":"random",
@@ -56075,6 +56146,7 @@
 "help":"A number from 0 to 7."
 }
 ],
+"more":"Up to 32 outputs: press + Add pin on the node (or set Outputs in Details); the minus by it takes the last one off when nothing is wired to it.",
 "related":[
 "flow.do_once_per_player",
 "flow.reroute",

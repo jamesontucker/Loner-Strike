@@ -445,7 +445,7 @@ const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 16] = ["vol.spawn", "save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
 /// Nodes with more than one flow input: one Pawn function each.
-const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
+const MULTI_IN: [&str; 8] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
 const VEC_RING: usize = 256;
 const REC_RING: usize = 64;
@@ -1129,6 +1129,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             continue;
         }
         for o in v.outputs(id).iter().filter(|o| o.ty != "exec") {
+            // (For Each Player / Entity's Index: a slot only when it's wired, so older modes keep theirs)
+            if o.id == "index" && matches!(d.kind.as_str(), "flow.for_each_player" | "flow.for_each_entity") && !g.edges.iter().any(|e| e.from.node == *id && e.from.pin == "index") {
+                continue;
+            }
             if o.ty == "text" {
                 touts.push((id, o.id.clone()));
             } else if ctx {
@@ -2037,7 +2041,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     // (in a Function's graph: compiled only when the Function is called; a node with several
     // flow inputs, as a Timeline's Play / Play from Start: its first input's function only when
     // something is wired into it, so no "never used" warning)
-    let stock = if v.graph_of(id).is_empty() && !MULTI_IN.contains(&def.kind.as_str()) && !w1::MULTI.contains(&def.kind.as_str()) { "" } else { "stock " };
+    // (For Each Player / Entity: a second entry, Break, only when it's wired: X2)
+    let multi = MULTI_IN.contains(&def.kind.as_str()) && (!matches!(def.kind.as_str(), "flow.for_each_player" | "flow.for_each_entity") || v.g.edges.iter().any(|e| e.to.node == id && e.to.pin == "break"));
+    let stock = if v.graph_of(id).is_empty() && !multi && !w1::MULTI.contains(&def.kind.as_str()) { "" } else { "stock " };
     o.line(format!("// {} ({})", comment_text(&def.title), gen.report_id(id)));
     o.line(format!("{stock}{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };
@@ -2388,22 +2394,32 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "flow.for_each_player" | "flow.for_each_entity" => {
-            let out = if def.kind == "flow.for_each_player" { "player" } else { "entity" };
+            // (X2: Who, Team, the kind or name and Only these can be wired; the settings when not.
+            // Index counts from 0; Break stops after the current one, as For Each with Break)
+            let player = def.kind == "flow.for_each_player";
+            let out = if player { "player" } else { "entity" };
             let k = gen.slot(id, out).unwrap_or(0);
             let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
             b.line("\tnew c[LSG_CTX], count");
-            if def.kind == "flow.for_each_player" {
-                let which = which_code(gen.choice(n, def, "which"));
-                b.line(format!("\tfor (new p = 1; p <= MaxClients; p++)\n\t{{\n\t\tif (!lsg_match(p, {which}))\n\t\t\tcontinue"));
-            } else {
-                let name = pawn_str(&name_text(gen.text(n, def, "name")));
-                let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
-                b.line(format!("\tnew p = -1\n\twhile (count < 512 && (p = {find}(p, {name})) > 0)\n\t{{"));
+            let breaks = each_breaks(gen, id);
+            if breaks {
+                b.line(format!("\tg_lsgLeft[{i}] = 0"));
+                after.push(multi_fn(gen, id, "break", &format!("\tg_lsgLeft[{i}] = 1")));
             }
+            b.line(each_head(gen, id, n, def, player, 512));
             b.line(format!("\t\tcount++\n\t\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tc[k] = ctx[k]\n\t\tc[{k}] = p"));
+            if let Some(s) = gen.slot(id, "index") {
+                b.line(format!("\t\tc[{s}] = _:float(count - 1)"));
+            }
             match body {
                 Some(c) => b.line(format!("\t\t{c}")),
                 None => b.line("\t\t#pragma unused c"),
+            }
+            if breaks {
+                b.line(format!("\t\tif (g_lsgLeft[{i}])\n\t\t\tbreak"));
+                if let Some(stop) = &fn_done {
+                    b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
+                }
             }
             b.line("\t}");
             if debug {
@@ -2507,7 +2523,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let out = if def.kind == "flow.pick_player" { "player" } else { "entity" };
             let k = gen.slot(id, out).unwrap_or(0);
             b.line("\tnew list[256], count");
-            if def.kind == "flow.pick_player" {
+            // (X2: the same search as For Each, its wired Who, Team, kind or name and Only these)
+            if each_wired(gen, id) {
+                b.line(each_head(gen, id, n, def, def.kind == "flow.pick_player", 256));
+                b.line("\t\tlist[count++] = p\n\t}");
+            } else if def.kind == "flow.pick_player" {
                 let which = which_code(gen.choice(n, def, "which"));
                 b.line(format!("\tfor (new p = 1; p <= MaxClients; p++)\n\t\tif (lsg_match(p, {which}))\n\t\t\tlist[count++] = p"));
             } else {
@@ -3669,13 +3689,15 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "flow.multi_gate" => {
             // (g_lsgLeft: a bit per output already used)
             let outs = v.exec_outs(id);
-            let cnt = outs.len().clamp(1, 8);
-            let all = (1u32 << cnt) - 1;
+            // (up to 32 outputs: a bit each in g_lsgLeft, X2)
+            let cnt = outs.len().clamp(1, 32);
+            let all = ((1u64 << cnt) - 1) as u32 as i32;
             let start = (gen.num(n, def, "start").round() as usize).min(cnt - 1);
             let refill = if gen.boolean(n, def, "loop") { format!("\t\tg_lsgLeft[{i}] = 0") } else { format!("\t{}\n\t\treturn", exit("all used")) };
             b.line(format!("\tif ((g_lsgLeft[{i}] & {all}) == {all})\n\t{{\n{refill}\n\t}}\n\tnew k = -1"));
             if gen.boolean(n, def, "random") {
-                b.line(format!("\tnew free[8], nf\n\tfor (new j = 0; j < {cnt}; j++)\n\t\tif (!(g_lsgLeft[{i}] & (1 << j)))\n\t\t\tfree[nf++] = j\n\tif (nf)\n\t\tk = free[random(nf)]"));
+                let fs = if cnt <= 8 { 8 } else { 32 }; // (free[8] as before, up to 8 outputs)
+                b.line(format!("\tnew free[{fs}], nf\n\tfor (new j = 0; j < {cnt}; j++)\n\t\tif (!(g_lsgLeft[{i}] & (1 << j)))\n\t\t\tfree[nf++] = j\n\tif (nf)\n\t\tk = free[random(nf)]"));
             } else {
                 b.line(format!("\tfor (new j = 0; j < {cnt}; j++)\n\t{{\n\t\tnew q = ({start} + j) % {cnt}\n\t\tif (!(g_lsgLeft[{i}] & (1 << q)))\n\t\t{{\n\t\t\tk = q\n\t\t\tbreak\n\t\t}}\n\t}}"));
             }
@@ -4098,7 +4120,12 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
         _ if ty == "number" => format!("Float:{name}"),
         _ => name.to_string(),
     };
+    // (the built-in Who enum's names only when something uses it: X2)
+    let who_used = serde_json::to_string(&(&g.nodes, &g.variables, &g.functions, &g.structs, &g.macros)).is_ok_and(|t| t.contains("ls_who")) || g.edges.iter().any(|e| e.to.pin == "who" && g.nodes.iter().any(|n| n.id == e.to.node && matches!(n.kind.as_str(), "flow.for_each_player" | "flow.pick_player")));
     for (k, e) in g.enums.iter().enumerate() {
+        if e.id == "ls_who" && !who_used {
+            continue;
+        }
         let names: Vec<String> = e.values.iter().map(|x| pawn_str(&safe_text(x, 30))).collect();
         o.line(format!("// enum {}\nstock const g_lsgE{k}[][] = {{ {} }}", comment_text(&e.name), if names.is_empty() { pawn_str("") } else { names.join(", ") }));
     }
@@ -5289,6 +5316,43 @@ fn which_code(w: &str) -> u8 {
         "humans" => 8,
         _ => 1,
     }
+}
+
+/// The loop head For Each Player / Entity and Pick Random Player / Entity share (X2): `p` each
+/// time round, `count` how many so far (the caller adds to it), at most `cap`. Only these wired:
+/// that list (players who are connected, entities that exist); else players by Team (wired) or
+/// Who (wired, else the setting), entities by their kind or name (wired, else the setting).
+fn each_head(gen: &Gen<'_>, id: &str, n: &Node, def: &'static NodeDef, player: bool, cap: usize) -> String {
+    let wired = |pin: &str| gen.v.data_source(id, pin).is_some();
+    if wired("only") {
+        let list = gen.input(id, "only").map(|x| x.expr).unwrap_or_else(|| "Array:0".into());
+        let ok = if player { "is_user_connected(p)" } else { "pev_valid(p)" };
+        return format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tlsg_acopy(snap, {list})\n\tnew size = lsg_alen(snap)\n\tfor (new j = 0; j < size && count < {cap}; j++)\n\t{{\n\t\tnew p = ArrayGetCell(Array:snap, j)\n\t\tif (!{ok})\n\t\t\tcontinue");
+    }
+    if player {
+        let test = if wired("team") {
+            format!("is_user_connected(p) && lsg_team(p) == {}", gen.input(id, "team").map(|x| x.expr).unwrap_or_else(|| "0".into()))
+        } else if wired("who") {
+            format!("lsg_match(p, {})", gen.input(id, "who").map(|x| x.expr).unwrap_or_else(|| "1".into()))
+        } else {
+            // (the setting: the same loop as before these could be wired)
+            return format!("\tfor (new p = 1; p <= MaxClients; p++)\n\t{{\n\t\tif (!lsg_match(p, {}))\n\t\t\tcontinue", which_code(gen.choice(n, def, "which")));
+        };
+        return format!("\tfor (new p = 1; p <= MaxClients && count < {cap}; p++)\n\t{{\n\t\tif (!({test}))\n\t\t\tcontinue");
+    }
+    let name = if wired("name") { gen.input(id, "name").map(|x| x.expr).unwrap_or_else(|| "\"\"".into()) } else { pawn_str(&name_text(gen.text(n, def, "name"))) };
+    let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
+    format!("\tnew p = -1\n\twhile (count < {cap} && (p = {find}(p, {name})) > 0)\n\t{{")
+}
+
+/// Is anything wired into For Each / Pick Random's Who, Team, kind or name or Only these? (X2)
+fn each_wired(gen: &Gen<'_>, id: &str) -> bool {
+    ["who", "team", "name", "only"].iter().any(|p| gen.v.data_source(id, p).is_some())
+}
+
+/// Is For Each Player / Entity's Break wired? (Not: no Break function, as before it had one.)
+fn each_breaks(gen: &Gen<'_>, id: &str) -> bool {
+    gen.v.g.edges.iter().any(|e| e.to.node == id && e.to.pin == "break")
 }
 
 /// A yes/no value as 0 or 1 (a literal stays a literal: no constant tests for the compiler).

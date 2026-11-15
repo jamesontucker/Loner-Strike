@@ -44,7 +44,7 @@
    "type": "event.map_started",
    "pos": {
     "x": 65,
-    "y": 2587
+    "y": 2614
    },
    "params": {}
   },
@@ -53,7 +53,7 @@
    "type": "comp.load_pack",
    "pos": {
     "x": 565,
-    "y": 2574
+    "y": 2601
    },
    "params": {
     "pack": "laststand"
@@ -64,7 +64,7 @@
    "type": "event.player_spawned",
    "pos": {
     "x": 3065,
-    "y": 375
+    "y": 380
    },
    "params": {}
   },
@@ -73,7 +73,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 3565,
-    "y": 122
+    "y": 116
    },
    "params": {
     "team": "t"
@@ -95,7 +95,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 4565,
-    "y": 111
+    "y": 105
    },
    "params": {
     "weapon": "m4a1",
@@ -272,7 +272,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 1257
+    "y": 1235
    },
    "params": {
     "which": "dead"
@@ -303,7 +303,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 2065,
-    "y": 1457
+    "y": 1446
    },
    "params": {
     "which": "alive_ct"
@@ -314,7 +314,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 1370
+    "y": 1381
    },
    "params": {
     "amount": 1500
@@ -325,7 +325,7 @@
    "type": "timer.countdown",
    "pos": {
     "x": 2565,
-    "y": 1544
+    "y": 1555
    },
    "params": {
     "secs": 15,
@@ -338,7 +338,7 @@
    "type": "comp.wave_start",
    "pos": {
     "x": 3065,
-    "y": 1263
+    "y": 1285
    },
    "params": {
     "wave": 0
@@ -349,7 +349,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 1619
+    "y": 1641
    },
    "params": {
     "text": "Wave cleared: +1500. Say !shop to buy."
@@ -360,7 +360,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 1565,
-    "y": 2119
+    "y": 2152
    },
    "params": {}
   },
@@ -369,7 +369,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 2065,
-    "y": 2172
+    "y": 2205
    },
    "params": {
     "team": "ct"
@@ -380,7 +380,7 @@
    "type": "game.count_alive",
    "pos": {
     "x": 1565,
-    "y": 2399
+    "y": 2432
    },
    "params": {
     "team": "ct"
@@ -391,7 +391,7 @@
    "type": "math.compare",
    "pos": {
     "x": 2065,
-    "y": 2388
+    "y": 2421
    },
    "params": {
     "op": "eq",
@@ -403,7 +403,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2565,
-    "y": 2299
+    "y": 2321
    },
    "params": {}
   },
@@ -412,7 +412,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 3065,
-    "y": 2299
+    "y": 2321
    },
    "params": {
     "text": "The base is overrun!",
@@ -424,7 +424,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 2299
+    "y": 2321
    },
    "params": {
     "winner": "t"
@@ -435,7 +435,7 @@
    "type": "kd.enable",
    "pos": {
     "x": 1065,
-    "y": 2574
+    "y": 2601
    },
    "params": {
     "on": true,
@@ -449,7 +449,7 @@
    "type": "marker.find",
    "pos": {
     "x": 3065,
-    "y": 505
+    "y": 506
    },
    "params": {
     "marker": "lst_shop",
@@ -461,7 +461,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 3565,
-    "y": 1471
+    "y": 1504
    },
    "params": {}
   },
@@ -470,7 +470,7 @@
    "type": "comp.create",
    "pos": {
     "x": 4065,
-    "y": 1427
+    "y": 1449
    },
    "params": {
     "kind": "ls_shop",
@@ -483,7 +483,7 @@
    "type": "var.set",
    "pos": {
     "x": 4565,
-    "y": 1449
+    "y": 1482
    },
    "params": {
     "var": "shop"
@@ -506,7 +506,7 @@
    "type": "comp.create",
    "pos": {
     "x": 4565,
-    "y": 1209
+    "y": 1220
    },
    "params": {
     "kind": "ls_shop",
@@ -519,7 +519,7 @@
    "type": "var.set",
    "pos": {
     "x": 5065,
-    "y": 1231
+    "y": 1253
    },
    "params": {
     "var": "shop"
@@ -530,7 +530,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 3065,
-    "y": 2523
+    "y": 2551
    },
    "params": {
     "command": "shop"
@@ -541,7 +541,7 @@
    "type": "var.get",
    "pos": {
     "x": 3065,
-    "y": 2896
+    "y": 2923
    },
    "params": {
     "var": "shop"
@@ -552,7 +552,7 @@
    "type": "shop.menu",
    "pos": {
     "x": 3565,
-    "y": 2554
+    "y": 2576
    },
    "params": {}
   },
@@ -561,7 +561,7 @@
    "type": "kd.on_up",
    "pos": {
     "x": 2565,
-    "y": 3061
+    "y": 3088
    },
    "params": {}
   },
@@ -570,7 +570,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 3065,
-    "y": 3048
+    "y": 3075
    },
    "params": {
     "amount": 200
@@ -581,7 +581,7 @@
    "type": "kd.on_down",
    "pos": {
     "x": 65,
-    "y": 3256
+    "y": 3283
    },
    "params": {}
   },
@@ -590,7 +590,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 565,
-    "y": 3254
+    "y": 3281
    },
    "params": {
     "secs": 0.1
@@ -601,7 +601,7 @@
    "type": "var.set",
    "pos": {
     "x": 1065,
-    "y": 3232
+    "y": 3259
    },
    "params": {
     "var": "standing",
@@ -613,7 +613,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 3243
+    "y": 3248
    },
    "params": {
     "which": "alive_ct"
@@ -624,7 +624,7 @@
    "type": "kd.is",
    "pos": {
     "x": 2065,
-    "y": 3291
+    "y": 3324
    },
    "params": {}
   },
@@ -633,7 +633,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2565,
-    "y": 3244
+    "y": 3271
    },
    "params": {}
   },
@@ -642,7 +642,7 @@
    "type": "var.add",
    "pos": {
     "x": 3065,
-    "y": 3222
+    "y": 3249
    },
    "params": {
     "var": "standing",
@@ -654,7 +654,7 @@
    "type": "var.get",
    "pos": {
     "x": 1065,
-    "y": 3428
+    "y": 3466
    },
    "params": {
     "var": "standing"
@@ -665,7 +665,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1565,
-    "y": 3428
+    "y": 3466
    },
    "params": {
     "op": "eq",
@@ -677,7 +677,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2065,
-    "y": 3428
+    "y": 3466
    },
    "params": {}
   },
@@ -686,7 +686,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 2565,
-    "y": 3600
+    "y": 3638
    },
    "params": {
     "text": "The base is overrun!",
@@ -698,7 +698,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3065,
-    "y": 3600
+    "y": 3638
    },
    "params": {
     "winner": "t"
@@ -709,7 +709,7 @@
    "type": "wave.table",
    "pos": {
     "x": 1565,
-    "y": 2574
+    "y": 2601
    },
    "params": {
     "section": "",
@@ -722,7 +722,7 @@
    "type": "wave.tiers",
    "pos": {
     "x": 2065,
-    "y": 2574
+    "y": 2601
    },
    "params": {
     "on": true
@@ -733,7 +733,7 @@
    "type": "turret.setup",
    "pos": {
     "x": 2565,
-    "y": 2574
+    "y": 2601
    },
    "params": {
     "price": 2500,
@@ -748,7 +748,7 @@
    "type": "bots.creature_enemies",
    "pos": {
     "x": 3065,
-    "y": 2724
+    "y": 2751
    },
    "params": {
     "on": true
@@ -770,7 +770,7 @@
    "type": "creature.on_killed",
    "pos": {
     "x": 65,
-    "y": 1874
+    "y": 1907
    },
    "params": {}
   },
@@ -779,7 +779,7 @@
    "type": "wave.type_pay",
    "pos": {
     "x": 565,
-    "y": 1899
+    "y": 1932
    },
    "params": {}
   },
@@ -788,7 +788,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1065,
-    "y": 1833
+    "y": 1866
    },
    "params": {}
   },
@@ -797,7 +797,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 1565,
-    "y": 1888
+    "y": 1910
    },
    "params": {
     "amount": 1
@@ -808,7 +808,7 @@
    "type": "player.respawn",
    "pos": {
     "x": 4565,
-    "y": 309
+    "y": 303
    },
    "params": {}
   }
@@ -1745,7 +1745,7 @@
    "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops), knocked down instead of dead for defenders, the round table with tiers, turrets (2500, bots buy them too), bots fight the creatures, the armory. The mode's settings (This mode): rounds only end when the mode says, no team balance.",
    "pos": {
     "x": 41,
-    "y": 2528
+    "y": 2555
    },
    "size": {
     "w": 778,
@@ -1785,7 +1785,7 @@
    },
    "size": {
     "w": 3278,
-    "h": 1072
+    "h": 1094
    }
   },
   {
@@ -1793,11 +1793,11 @@
    "text": "Deaths: a defender who'd die is knocked down instead and bleeds out over 25 s (a teammate holding USE for 4 s gets them up: +200 for the helper); the base falls when no defender is standing; each creature killed pays what the round table says, and a point.",
    "pos": {
     "x": 1541,
-    "y": 2073
+    "y": 2106
    },
    "size": {
     "w": 2278,
-    "h": 613
+    "h": 607
    }
   },
   {
@@ -1805,11 +1805,11 @@
    "text": "The armory: a real shop with a keeper at the map's Armory marker (else a defender spawn); walk up and press USE, or say !shop anywhere. It sells a turret kit (press USE where it should stand). Prices rise 5 % a wave; perks and the gun upgrade are on sale where the map has no machine or bench.",
    "pos": {
     "x": 41,
-    "y": 2850
+    "y": 2877
    },
    "size": {
     "w": 3278,
-    "h": 712
+    "h": 723
    }
   },
   {
@@ -1817,11 +1817,11 @@
    "text": "A creature killed: its pay goes to the killer, and a point.",
    "pos": {
     "x": 41,
-    "y": 1787
+    "y": 1820
    },
    "size": {
     "w": 1778,
-    "h": 257
+    "h": 246
    }
   }
  ],

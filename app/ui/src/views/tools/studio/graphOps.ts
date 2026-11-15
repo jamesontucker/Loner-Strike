@@ -59,7 +59,7 @@ export function inType(g: Graph, ref: PinRef, seen = new Set<string>()): PinType
 /** Flow into Reset, Open, Close, Toggle or Break only changes the node: it doesn't go on. */
 export function passes(g: Graph, node: string, pin: string): boolean {
   const t = findNode(g, node)?.type ?? "";
-  return pin === "exec" || !["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"].includes(t);
+  return pin === "exec" || !["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity"].includes(t);
 }
 
 /** Would the flow loop if `from` were wired to `to`? (Only flow wires can loop.) */

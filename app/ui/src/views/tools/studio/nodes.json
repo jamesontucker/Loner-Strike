@@ -3633,12 +3633,35 @@
    "type": "flow.for_each_player",
    "title": "For Each Player",
    "category": "Flow",
-   "help": "Runs Each once for every player who fits, then Then.",
+   "help": "Runs Each once for every player who fits, then Then. Who and Team can be wired (a variable, a Select); Only these goes through a list of players instead (Players In Radius...). Break stops early. For any list of your own, use Arrays > For Each.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "break",
+     "type": "exec",
+     "label": "Break"
+    },
+    {
+     "id": "who",
+     "type": "enum:ls_who",
+     "label": "Who",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team (overrides Who)",
+     "optional": true
+    },
+    {
+     "id": "only",
+     "type": "array<player>",
+     "label": "Only these",
+     "optional": true
     }
    ],
    "outputs": [
@@ -3651,6 +3674,11 @@
      "id": "player",
      "type": "player",
      "label": "Player"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
     },
     {
      "id": "then",
@@ -3709,12 +3737,29 @@
    "type": "flow.for_each_entity",
    "title": "For Each Entity",
    "category": "Flow",
-   "help": "Runs Each once for every entity of a kind or with a name (at most 512), then Then.",
+   "help": "Runs Each once for every entity of a kind or with a name (at most 512), then Then. The kind or name can be wired; Only these goes through a list of entities instead. Break stops early. For any list of your own, use Arrays > For Each.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "break",
+     "type": "exec",
+     "label": "Break"
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Kind or name",
+     "optional": true
+    },
+    {
+     "id": "only",
+     "type": "array<entity>",
+     "label": "Only these",
+     "optional": true
     }
    ],
    "outputs": [
@@ -3727,6 +3772,11 @@
      "id": "entity",
      "type": "entity",
      "label": "Entity"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
     },
     {
      "id": "then",
@@ -3763,12 +3813,30 @@
    "type": "flow.pick_player",
    "title": "Pick Random Player",
    "category": "Flow",
-   "help": "Picks one player who fits at random (Found), or runs None.",
+   "help": "Picks one player who fits at random (Found), or runs None. Who and Team can be wired; Only these picks from a list of players instead.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "who",
+     "type": "enum:ls_who",
+     "label": "Who",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team (overrides Who)",
+     "optional": true
+    },
+    {
+     "id": "only",
+     "type": "array<player>",
+     "label": "Only these",
+     "optional": true
     }
    ],
    "outputs": [
@@ -3839,12 +3907,24 @@
    "type": "flow.pick_entity",
    "title": "Pick Random Entity",
    "category": "Flow",
-   "help": "Picks one entity of a kind or with a name at random (Found), or runs None.",
+   "help": "Picks one entity of a kind or with a name at random (Found), or runs None. The kind or name can be wired; Only these picks from a list of entities instead.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Kind or name",
+     "optional": true
+    },
+    {
+     "id": "only",
+     "type": "array<entity>",
+     "label": "Only these",
+     "optional": true
     }
    ],
    "outputs": [
@@ -16241,7 +16321,7 @@
      "kind": "number",
      "default": 2,
      "min": 1,
-     "max": 8
+     "max": 32
     }
    ]
   },
@@ -30134,7 +30214,7 @@
      "kind": "number",
      "default": 3,
      "min": 1,
-     "max": 8
+     "max": 32
     },
     {
      "id": "random",

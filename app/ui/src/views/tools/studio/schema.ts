@@ -297,6 +297,8 @@ export const BUILTIN_ENUMS: GEnum[] = [
     values: ["Capture point", "Extraction zone", "Checkpoint", "Shop", "Barricade", "Trap", "Loot container", "Supply drop", "Supply crate", "Perk machine", "Upgrade bench", "Mystery box", "Meeting point", "Moving platform", "Timed door", "Wave spawner", "Safe zone", "Shrinking zone", "Damage zone", "Weapon spawner", "Respawn point", "Player class", "Pickup", "NPC", "Interactable", "None"],
   },
   { id: "ls_spawn_fail", name: "Spawn Failure", values: ["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"] },
+  // (For Each Player / Pick Random Player's Who, in the order of their setting: X2)
+  { id: "ls_who", name: "Who", values: ["Everyone in the game", "Everyone alive", "Everyone dead", "Terrorists", "Counter-Terrorists", "Living Terrorists", "Living Counter-Terrorists", "Bots", "People (not bots)"] },
 ];
 
 /** The mode's enums and then the app's own (a mode's own of the same id wins). */

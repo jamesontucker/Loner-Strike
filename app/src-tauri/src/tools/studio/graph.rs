@@ -588,7 +588,7 @@ pub struct EnumDef {
 
 /// The app's own enums, in every graph (never saved with it): what Kind Of and Component Kind Of
 /// give, so they plug into Switch on Enum (its cases fill from them) and Select like any enum.
-pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 3] = [
+pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 4] = [
     ("ls_kind", "Entity Kind", &["Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None"]),
     (
         "ls_comp_kind",
@@ -599,6 +599,8 @@ pub const BUILTIN_ENUMS: [(&str, &str, &[&str]); 3] = [
     ),
     // the spawn nodes' Failure Reason (gen/fx.rs WHY_*): the order is the numbers
     ("ls_spawn_fail", "Spawn Failure", &["None", "Blocked", "Out of entity slots", "Limit reached", "Missing file", "Retries used up", "Bad input"]),
+    // (For Each Player / Pick Random Player's Who, in the order of their setting: X2)
+    ("ls_who", "Who", &["Everyone in the game", "Everyone alive", "Everyone dead", "Terrorists", "Counter-Terrorists", "Living Terrorists", "Living Counter-Terrorists", "Bots", "People (not bots)"]),
 ];
 
 fn user_enums_only<S: serde::Serializer>(v: &[EnumDef], s: S) -> Result<S::Ok, S::Error> {
@@ -1275,11 +1277,11 @@ impl<'a> View<'a> {
                 p.outputs.push(exec_pin("default", "Default"));
             }
             "flow.sequence" => {
-                p.outputs = (0..count_param(n, def, "count", 8).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Then {i}"))).collect();
+                p.outputs = (0..count_param(n, def, "count", 32).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Then {i}"))).collect();
             }
             "flow.multi_gate" => {
                 // W1: Multi Gate's outputs, as many as its Outputs setting
-                p.outputs = (0..count_param(n, def, "count", 8).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Out {i}"))).collect();
+                p.outputs = (0..count_param(n, def, "count", 32).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Out {i}"))).collect();
             }
             "array.make" => {
                 let item = p.inputs.first().cloned();
@@ -1433,7 +1435,7 @@ impl<'a> View<'a> {
     /// Does flow coming into this pin go on through the node's outputs? Not into Reset, Open,
     /// Close, Toggle or Break: those only change the node.
     pub fn passes(&self, node: &str, pin: &str) -> bool {
-        pin == "exec" || !self.defs.get(node).is_some_and(|d| matches!(d.kind.as_str(), "flow.do_once" | "flow.do_n" | "flow.gate" | "flow.for_loop_break" | "flow.for_each_array"))
+        pin == "exec" || !self.defs.get(node).is_some_and(|d| matches!(d.kind.as_str(), "flow.do_once" | "flow.do_n" | "flow.gate" | "flow.for_loop_break" | "flow.for_each_array" | "flow.for_each_player" | "flow.for_each_entity"))
     }
 
     /// The nodes flow goes on to from a node's outputs, and whether each passes on.
@@ -2918,7 +2920,7 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 21] = ["enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind"];
+    const TYPES: [&str; 24] = ["enum:ls_spawn_fail", "exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_who", "array<player>", "array<entity>"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];

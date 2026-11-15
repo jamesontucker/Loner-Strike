@@ -148,11 +148,19 @@ node("event.chat_command", "Chat Command", "Events", "Runs when a player says /c
 node("func.define", "Function", "Functions", "A piece of graph you can run from anywhere with Call Function. It gets a Player and a Number from the call.", outputs=[E(), P("player","player","Player"), P("number","number","Number")], params=[prm("name","Name","name","my_function")], event=True)
 node("func.call", "Call Function", "Functions", "Runs a Function, giving it a Player and a Number, then carries on.", inputs=[X, P("player","player","Player",optional=True), P("number","number","Number",param="number")], outputs=[E()],
      params=[prm("func","Function","func",""), prm("number","Number","number",0,min=-100000,max=100000)])
-node("flow.for_each_player", "For Each Player", "Flow", "Runs Each once for every player who fits, then Then.", inputs=[X], outputs=[E("each","Each"), P("player","player","Player"), E("then","Then")], params=[prm("which","Who","choice","alive",choices=WHICH)])
-node("flow.for_each_entity", "For Each Entity", "Flow", "Runs Each once for every entity of a kind or with a name (at most 512), then Then.", inputs=[X], outputs=[E("each","Each"), P("entity","entity","Entity"), E("then","Then")],
+# (X2: Who, Team, the kind or name and Only these can be wired; the settings are what's used when
+# nothing is. For a list of your own, Arrays > For Each.)
+WHO_IN = P("who","enum:ls_who","Who",optional=True)
+TEAM_IN = P("team","team","Team (overrides Who)",optional=True)
+node("flow.for_each_player", "For Each Player", "Flow", "Runs Each once for every player who fits, then Then. Who and Team can be wired (a variable, a Select); Only these goes through a list of players instead (Players In Radius...). Break stops early. For any list of your own, use Arrays > For Each.",
+     inputs=[X, E("break","Break"), WHO_IN, TEAM_IN, P("only","array<player>","Only these",optional=True)], outputs=[E("each","Each"), P("player","player","Player"), P("index","number","Index"), E("then","Then")], params=[prm("which","Who","choice","alive",choices=WHICH)])
+node("flow.for_each_entity", "For Each Entity", "Flow", "Runs Each once for every entity of a kind or with a name (at most 512), then Then. The kind or name can be wired; Only these goes through a list of entities instead. Break stops early. For any list of your own, use Arrays > For Each.",
+     inputs=[X, E("break","Break"), P("name","text","Kind or name",optional=True), P("only","array<entity>","Only these",optional=True)], outputs=[E("each","Each"), P("entity","entity","Entity"), P("index","number","Index"), E("then","Then")],
      params=[prm("by","Which","choice","class",choices=BY), prm("name","Kind or name","name","ls_respawn_point")])
-node("flow.pick_player", "Pick Random Player", "Flow", "Picks one player who fits at random (Found), or runs None.", inputs=[X], outputs=[E("then","Found"), E("none","None"), P("player","player","Player")], params=[prm("which","Who","choice","alive",choices=WHICH)])
-node("flow.pick_entity", "Pick Random Entity", "Flow", "Picks one entity of a kind or with a name at random (Found), or runs None.", inputs=[X], outputs=[E("then","Found"), E("none","None"), P("entity","entity","Entity")],
+node("flow.pick_player", "Pick Random Player", "Flow", "Picks one player who fits at random (Found), or runs None. Who and Team can be wired; Only these picks from a list of players instead.",
+     inputs=[X, WHO_IN, TEAM_IN, P("only","array<player>","Only these",optional=True)], outputs=[E("then","Found"), E("none","None"), P("player","player","Player")], params=[prm("which","Who","choice","alive",choices=WHICH)])
+node("flow.pick_entity", "Pick Random Entity", "Flow", "Picks one entity of a kind or with a name at random (Found), or runs None. The kind or name can be wired; Only these picks from a list of entities instead.",
+     inputs=[X, P("name","text","Kind or name",optional=True), P("only","array<entity>","Only these",optional=True)], outputs=[E("then","Found"), E("none","None"), P("entity","entity","Entity")],
      params=[prm("by","Which","choice","class",choices=BY), prm("name","Kind or name","name","info_player_deathmatch")])
 node("text.equals", "Text Is", "Conditions", "Is the text the same as this (capitals don't matter)?", inputs=[P("a","text","Text",required=True), P("b","text","Same as",param="b")], outputs=[P("out","bool","Same")], params=[prm("b","Same as","text","",max=60)], pure=True)
 node("timer.stop", "Stop Timer", "Timers", "Stops one Delay, Repeat or Countdown.", inputs=[X], outputs=[E()], params=[prm("timer","Timer","timer","")])
@@ -514,7 +522,7 @@ node("macro.entry", "Macro Entry", "Macros", "Where a Macro starts: its inputs (
 node("macro.exit", "Macro Exit", "Macros", "Where a Macro ends: its outputs (flow and values).", inputs=[], outputs=[])
 node("macro.use", "Macro", "Macros", "A Macro's graph, copied in here when the mode is made.", inputs=[], outputs=[], params=[prm("macro","Macro","macro","")])
 # flow
-node("flow.sequence", "Sequence", "Flow", "Runs each output in turn, top to bottom.", inputs=[X], outputs=[E("then0","Then 0"), E("then1","Then 1")], params=[prm("count","Outputs","number",2,min=1,max=8)])
+node("flow.sequence", "Sequence", "Flow", "Runs each output in turn, top to bottom.", inputs=[X], outputs=[E("then0","Then 0"), E("then1","Then 1")], params=[prm("count","Outputs","number",2,min=1,max=32)])
 node("flow.do_once", "Do Once", "Flow", "Lets the flow through the first time only, until Reset.", inputs=[X, E("reset","Reset")], outputs=[E("then","Completed")], params=[prm("closed","Start closed","bool",False)])
 node("flow.do_n", "Do N", "Flow", "Lets the flow through N times, until Reset.", inputs=[X, E("reset","Reset"), P("n","number","N",param="n")], outputs=[E("then","Exit"), P("counter","number","Counter")], params=[prm("n","N","number",3,min=1,max=10000)])
 node("flow.gate", "Gate", "Flow", "Flow coming into Enter goes through only while the gate is open.", inputs=[E("exec","Enter"), E("open","Open"), E("close","Close"), E("toggle","Toggle")], outputs=[E("then","Exit")], params=[prm("closed","Start closed","bool",True)])
@@ -1190,7 +1198,7 @@ node("aim.point", "Aim Point", "Players", "What a player is aiming at, up to Max
 # flow
 node("flow.multi_gate", "Multi Gate", "Flow", "Each time flow comes in, goes out the next output (in order, or random); after the last it stops, or starts over with Loop. Reset starts again from Start index.",
      inputs=[X, E("reset","Reset")], outputs=[E("then0","Out 0"), E("then1","Out 1")],
-     params=[prm("count","Outputs","number",3,min=1,max=8), prm("random","Random","bool",False), prm("loop","Loop","bool",False), prm("start","Start index","number",0,min=0,max=7)], keywords="round robin cycle rotate sequence each")
+     params=[prm("count","Outputs","number",3,min=1,max=32), prm("random","Random","bool",False), prm("loop","Loop","bool",False), prm("start","Start index","number",0,min=0,max=7)], keywords="round robin cycle rotate sequence each")
 node("flow.do_once_per_player", "Do Once Per Player", "Flow", "Lets the flow through once for each player, until Reset (everyone) or Reset Player (the player wired in then).",
      inputs=[X, E("reset","Reset"), E("reset_player","Reset Player"), P("player","player","Player",required=True)], outputs=[E("then","Completed")], keywords="once each player first time")
 node("var.toggle", "Toggle Variable", "Variables", "Flips a yes/no variable (yes becomes no, no becomes yes); New Value is what it is now. A per-player one needs a Player, a per-team one a Team.",

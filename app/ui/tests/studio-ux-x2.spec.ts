@@ -224,3 +224,56 @@ test("QA4-B F6.5: Shift-click adds a node to the selection", async ({ page }) =>
   await b.click({ modifiers: ["Shift"] });
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(1);
 });
+
+// ---- "+ Add pin" (pinCountOps.ts) and a variable wired into For Each Player's Who
+async function seedNodes(page: Page, nodes: object[], edges: object[], variables: object[] = []) {
+  const tpl = { schema: "loner-strike/graph", version: 3, mode: { id: ID, name: "Pins check" }, variables, nodes, edges, comments: [] };
+  const r = await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H });
+  expect((await r.json()).ok, "seed saved").toBeTruthy();
+}
+const savedGraph = async (page: Page) => (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
+
+test("+ Add pin on a Sequence adds an output, − takes it off (not while wired), Undo puts it back", async ({ page }) => {
+  await seedNodes(page, [
+    { id: "rs", type: "event.round_started", pos: { x: 0, y: 0 }, params: {} },
+    { id: "seq", type: "flow.sequence", pos: { x: 300, y: 0 }, params: { count: 2 } },
+    { id: "p", type: "debug.print", pos: { x: 600, y: 0 }, params: { text: "x", chat: false } },
+  ], [{ id: "w1", from: { node: "rs", pin: "then" }, to: { node: "seq", pin: "exec" } }, { id: "w2", from: { node: "seq", pin: "then1" }, to: { node: "p", pin: "exec" } }]);
+  await openIt(page);
+  await page.locator(".react-flow__controls-fitview").click();
+  const seq = page.locator('.react-flow__node[data-id="seq"]');
+  const add = seq.getByRole("button", { name: "+ Add pin" });
+  // the last pin (Then 1) is wired: − is refused, with why
+  await seq.getByRole("button", { name: "Remove last pin" }).click();
+  await expect(seq.getByRole("status")).toContainText("has a wire");
+  await add.click();
+  await expect(seq.locator(".react-flow__handle[data-handleid='then2']")).toHaveCount(1);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(async () => (await savedGraph(page)).nodes.find((n: { id: string }) => n.id === "seq").params.count).toBe(3);
+  // the new last pin isn't wired: − takes it off; Undo brings it back
+  await seq.getByRole("button", { name: "Remove last pin" }).click();
+  await expect(seq.locator(".react-flow__handle[data-handleid='then2']")).toHaveCount(0);
+  await page.locator(".st-canvas").focus();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(seq.locator(".react-flow__handle[data-handleid='then2']")).toHaveCount(1);
+});
+
+test("a variable wired into For Each Player's Who: saved, and the quick check is clean", async ({ page }) => {
+  await seedNodes(page, [
+    { id: "rs", type: "event.round_started", pos: { x: 0, y: 0 }, params: {} },
+    { id: "who", type: "var.get", pos: { x: 0, y: 200 }, params: { var: "v_who" } },
+    { id: "fe", type: "flow.for_each_player", pos: { x: 320, y: 0 }, params: { which: "alive" } },
+    { id: "p", type: "debug.print", pos: { x: 640, y: 0 }, params: { text: "x", chat: false } },
+  ], [{ id: "w1", from: { node: "rs", pin: "then" }, to: { node: "fe", pin: "exec" } }, { id: "w2", from: { node: "fe", pin: "each" }, to: { node: "p", pin: "exec" } }],
+  [{ id: "v_who", name: "Who to count", type: "enum:ls_who", scope: "mode", default: 7 }]);
+  await openIt(page);
+  await page.locator(".react-flow__controls-fitview").click();
+  const from = page.locator('.react-flow__node[data-id="who"] .react-flow__handle.source').first();
+  const to = page.locator('.react-flow__node[data-id="fe"] .react-flow__handle[data-handleid="who"]');
+  await expect(to).toHaveCount(1);
+  await from.dragTo(to);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(async () => (await savedGraph(page)).edges.some((e: { from: { node: string }; to: { node: string; pin: string } }) => e.from.node === "who" && e.to.node === "fe" && e.to.pin === "who")).toBe(true);
+  await expect(page.getByTestId("studio-check-status")).toContainText("Quick check:");
+  await expect(page.locator(".st-results-list li.error")).toHaveCount(0);
+});

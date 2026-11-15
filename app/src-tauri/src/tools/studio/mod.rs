@@ -36,6 +36,8 @@ mod builtin_library;
 #[cfg(test)]
 mod starter_tests; // X2: the Starter library
 #[cfg(test)]
+mod x2_pins_tests; // X2: many pins, wireable For Each / Pick Random
+#[cfg(test)]
 mod help_tests;
 #[cfg(test)]
 mod examples_tests;

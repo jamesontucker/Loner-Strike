@@ -179,11 +179,11 @@ export function pinsOf(g: Graph, n: GNode): Pins {
       outputs = [...switchCases(n, def).map((c, i) => execPin(`c${i}`, c)), execPin("default", "Default")];
       break;
     case "flow.sequence":
-      outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 8)) }, (_, i) => execPin(`then${i}`, `Then ${i}`));
+      outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 32)) }, (_, i) => execPin(`then${i}`, `Then ${i}`));
       break;
     // W1: Multi Gate's outputs
     case "flow.multi_gate":
-      outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 8)) }, (_, i) => execPin(`then${i}`, `Out ${i}`));
+      outputs = Array.from({ length: Math.max(1, countParam(n, def, "count", 32)) }, (_, i) => execPin(`then${i}`, `Out ${i}`));
       break;
     case "array.make": {
       const item = def.inputs[0];

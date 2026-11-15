@@ -12,6 +12,7 @@ import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
 import { pinsFor, problemsFor, structureOf, watchKey, wiringOf } from "./nodeView";
 import { useMarks } from "./versionOps";
+import { addPin, countOf, countedOf, removePin } from "./pinCountOps";
 
 const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", "Map markers": "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
 
@@ -266,6 +267,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
           );
         })}
       </div>
+      {countedOf(n.type) && <AddPin id={id} />}
       {summary && <div className="st-node-params">{summary}</div>}
       {paused && <div className="st-node-run paused">Paused here</div>}
       {!paused && run && (
@@ -277,6 +279,49 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
     </div>
   );
 }, sameNode);
+
+/** "+ Add pin" and "−" under the pins of a node that counts them (pinCountOps.ts): one undo step
+ *  each; a refusal (the last pin wired, the most or least) says why for a moment. */
+function AddPin({ id }: { id: string }) {
+  const edit = useStudio((s) => s.edit);
+  // (as text: a new object each time would make the store think it changed on every render)
+  const key = useStudio((s) => {
+    const c = s.graph ? countOf(s.graph, id) : null;
+    return c ? `${c.n}/${c.min}/${c.max}` : "";
+  });
+  const [n, min, max] = key.split("/").map(Number);
+  const count = key ? { n, min, max } : null;
+  const [why, setWhy] = useState("");
+  useEffect(() => {
+    if (!why) return;
+    const t = setTimeout(() => setWhy(""), 3000);
+    return () => clearTimeout(t);
+  }, [why]);
+  const run = (f: typeof addPin) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const g = useStudio.getState().graph;
+    if (!g) return;
+    const r = f(g, id);
+    if ("error" in r) setWhy(r.error);
+    else edit(() => r.graph);
+  };
+  if (!count) return null;
+  return (
+    <div className="st-node-addpin nodrag" data-testid="studio-addpin">
+      <button type="button" className="st-addpin" onClick={run(addPin)} disabled={count.n >= count.max} title={`Add a pin (up to ${count.max})`}>
+        + Add pin
+      </button>
+      <button type="button" className="st-addpin st-addpin-x" onClick={run(removePin)} disabled={count.n <= count.min} title="Remove the last pin (only when nothing is wired to it)" aria-label="Remove last pin">
+        −
+      </button>
+      {why && (
+        <span className="st-addpin-why" role="status">
+          {why}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export const RerouteNode = memo(function RerouteNode({ id, selected }: NodeProps) {
   const graph = useStudio((s) => structureOf(s.graph));

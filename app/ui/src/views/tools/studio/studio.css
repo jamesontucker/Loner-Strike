@@ -535,3 +535,10 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 /* rows a CSV import refused, with why (TableEditor.tsx; QA4-B F5) */
 .st-table-refused { border: 1px solid var(--st-bad, #c55); border-radius: 6px; padding: 6px 10px; margin: 0 0 6px; font-size: 13px; background: color-mix(in srgb, var(--st-bad, #c55) 12%, transparent); }
 .st-table-refused ul { margin: 4px 0 0; padding-left: 18px; max-height: 140px; overflow-y: auto; }
+/* "+ Add pin" under a node that counts its pins (Nodes.tsx AddPin; pinCountOps.ts) */
+.st-node-addpin { display: flex; align-items: center; gap: 4px; padding: 2px 8px 6px; flex-wrap: wrap; }
+.st-addpin { background: none; border: 1px dashed var(--line); border-radius: 4px; color: var(--bone-dim, #9aa); font: inherit; font-size: 11.5px; padding: 1px 6px; cursor: pointer; }
+.st-addpin:hover:not(:disabled) { color: var(--text); border-color: var(--signal); }
+.st-addpin:disabled { opacity: .4; cursor: default; }
+.st-addpin-x { padding: 1px 7px; }
+.st-addpin-why { flex-basis: 100%; font-size: 11px; color: var(--st-warn, #e8c35a); }

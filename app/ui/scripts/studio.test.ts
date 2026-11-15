@@ -20,6 +20,7 @@ import runDialogRaw from "../src/views/tools/studio/library/run_dialog.lib.json?
 import { botFix, botFixLabel, isBotsNote, quietNode } from "../src/views/tools/studio/botNotes";
 import { insertAsPlayer, wantsAsPlayer } from "../src/views/tools/studio/castOps";
 import { narrowed } from "../src/views/tools/studio/panels";
+import { addPin, countOf, removePin } from "../src/views/tools/studio/pinCountOps"; // (X2)
 import { allEnums } from "../src/views/tools/studio/schema";
 
 const template = (): Graph => {
@@ -54,7 +55,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>", "array<vector>", "enum:ls_kind", "enum:ls_comp_kind"].includes(p.type) || /^array<(number|bool|text|player|entity|team|vector)>$/.test(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>", "array<vector>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_spawn_fail", "enum:ls_who"].includes(p.type) || /^array<(number|bool|text|player|entity|team|vector)>$/.test(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });
@@ -616,4 +617,35 @@ test("in a narrow window the side panels go one at a time (the canvas keeps its 
   assert.deepEqual(narrowed({ left: true, right: false }, { right: true }, false), { right: true }, "a wide window: both");
   assert.deepEqual(narrowed({ left: true, right: true }, { left: true, right: true }, true), { left: true, right: true }, "both at once (the tour): both");
   assert.deepEqual(narrowed({ left: true, right: true }, { minimap: true }, true), { minimap: true });
+});
+
+// ---- "+ Add pin" (pinCountOps.ts, X2)
+test("+ Add pin and − change a node's count or cases (Details stays in step), refused when wired or at the ends", () => {
+  const g0: Graph = { ...emptyGraph("t", "T"), nodes: [
+    { id: "s", type: "flow.sequence", pos: { x: 0, y: 0 }, params: { count: 31 } },
+    { id: "a", type: "array.make", pos: { x: 0, y: 0 }, params: {} },
+    { id: "n", type: "flow.switch_num", pos: { x: 0, y: 0 }, params: { cases: "1,2,5" } },
+    { id: "t", type: "flow.switch_text", pos: { x: 0, y: 0 }, params: { cases: "red" } },
+    { id: "p", type: "debug.print", pos: { x: 0, y: 0 }, params: {} },
+  ], edges: [{ id: "w", from: { node: "s", pin: "then31" }, to: { node: "p", pin: "exec" } }] };
+  const ok = (r: { graph: Graph } | { error: string }) => {
+    assert.ok("graph" in r, "error" in r ? r.error : "");
+    return (r as { graph: Graph }).graph;
+  };
+  // Sequence: up to 32; the 32nd output wired, so it can't be taken off
+  let g = ok(addPin(g0, "s"));
+  assert.equal(countOf(g, "s")!.n, 32);
+  assert.ok(pinsOf(g, g.nodes.find((x) => x.id === "s")!).outputs.some((o) => o.id === "then31"));
+  assert.match((addPin(g, "s") as { error: string }).error, /32 at most/);
+  assert.match((removePin({ ...g, edges: [...g.edges, { id: "w2", from: { node: "s", pin: "then31" }, to: { node: "p", pin: "exec" } }] }, "s") as { error: string }).error, /has a wire/);
+  // Make Array: the count from its default, one more input
+  const before = pinsOf(g0, g0.nodes.find((x) => x.id === "a")!).inputs.length;
+  g = ok(addPin(g0, "a"));
+  assert.equal(pinsOf(g, g.nodes.find((x) => x.id === "a")!).inputs.length, before + 1);
+  // Switch on Number: the next number after the highest; Switch on Text: case2; − takes the last one off
+  assert.equal(ok(addPin(g0, "n")).nodes.find((x) => x.id === "n")!.params.cases, "1,2,5,6");
+  assert.equal(ok(addPin(g0, "t")).nodes.find((x) => x.id === "t")!.params.cases, "red,case2");
+  assert.equal(ok(removePin(g0, "n")).nodes.find((x) => x.id === "n")!.params.cases, "1,2");
+  assert.match((removePin(g0, "t") as { error: string }).error, /at least 1/);
+  assert.equal(countOf(g0, "p"), null, "a node with fixed pins");
 });
