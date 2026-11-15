@@ -1793,8 +1793,7 @@ pub struct PublishReq {
     /// the publisher's GameBanana member id (their profile link's number): their shared creatures
     /// are named `gb<id>.<type>`; 0 = the one an earlier registration of theirs found
     pub member: i64,
-    /// "AI agents helped make this": the AI that did, for GameBanana's disclosure ("" = none)
-    pub ai: String,
+    // (an "ai" field from older versions is ignored: AI disclosure is done on GameBanana itself)
 }
 
 /// The namespace this publish names its creatures under (asked of the community list only when
@@ -2112,28 +2111,21 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
     Ok(pkg)
 }
 
-/// What to type into GameBanana's submit form, with the Authors module's credits and, when AI
-/// agents helped, the disclosure GameBanana asks for (its AI Generated Content Policy, wiki 2175).
-/// Never a Support Pack or donation line: GameBanana doesn't allow advertising.
-pub fn publish_form(p: &Package, ai: &str, member: i64) -> Value {
+/// What to type into GameBanana's submit form, with the Authors module's credits. Never a Support
+/// Pack or donation line: GameBanana doesn't allow advertising.
+pub fn publish_form(p: &Package, member: i64) -> Value {
     let own = super::creaturepack::namespace_of(publish_member(member, &p.item.author, &load_mine(&mine_path()))).unwrap_or_default();
     let lib = super::communitylib::load_all(&super::communitylib::lib_dir());
     let idx = index_cached();
     let maker = |id: i64| {
         lib.iter().find(|i| i.owner_id == id && !i.author.trim().is_empty()).map(|i| i.author.clone()).or_else(|| idx.items.iter().find(|i| i.owner_id == id && !i.author.trim().is_empty()).map(|i| i.author.clone()))
     };
-    with_credits(gamebanana_form(p), &p.item, ai, &own, &maker)
+    with_credits(gamebanana_form(p), &p.item, &own, &maker)
 }
 
-/// The form plus GameBanana's Authors block and the AI disclosure (publish_form, testable).
-pub fn with_credits(mut form: Value, it: &Item, ai: &str, own: &str, maker: &dyn Fn(i64) -> Option<String>) -> Value {
+/// The form plus GameBanana's Authors block (publish_form, testable).
+pub fn with_credits(mut form: Value, it: &Item, own: &str, maker: &dyn Fn(i64) -> Option<String>) -> Value {
     form["authors"] = json!(authors_block(it, own, maker));
-    let ai: String = ai.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(60).collect();
-    if !ai.is_empty() {
-        let text = format!("{}\n\nAI disclosure: AI agents helped make this ({ai}).", form["text"].as_str().unwrap_or("").trim_end());
-        form["text"] = json!(text);
-        form["ai"] = json!(ai);
-    }
     form
 }
 
@@ -2934,19 +2926,12 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
                 }
                 let r = readiness(&m, &crate::sys::app_dir().join("tools").join("health"));
                 let pkg = build_package(&m, &r, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
-                Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
+                Ok(json!({"package": pkg, "form": publish_form(&pkg, req.member)}))
             })
             .await
         }
     };
     json_answer(r)
-}
-
-/// Publish's "AI agents helped make this": ticked to start with when an agent changed `about` (a
-/// map, mode, prefab or creature name) through the AI connection this run, and the AI's name.
-async fn api_ai_use(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
-    let about = q.get("about").cloned().unwrap_or_default();
-    Json(json!({"touched": crate::mcp::agent_touched(&about), "agent": crate::mcp::last_agent()})).into_response()
 }
 
 async fn api_prefab_ready(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
@@ -2962,7 +2947,7 @@ async fn api_prefab_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id):
     json_answer(
         blocking(move || {
             let pkg = build_prefab_package(game.as_deref(), &id, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
-            Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
+            Ok(json!({"package": pkg, "form": publish_form(&pkg, req.member)}))
         })
         .await,
     )
@@ -3015,7 +3000,7 @@ async fn api_mode_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id): U
             let game = st.local_game();
             let at = game.as_ref().map(|g| (g.hl.clone(), g.name.clone()));
             let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir(), needs.as_ref(), at.as_ref().map(|(h, n)| (h.as_path(), n.as_str()))).map_err(|e| Fail::new(StatusCode::OK, e))?;
-            Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
+            Ok(json!({"package": pkg, "form": publish_form(&pkg, req.member)}))
         })
         .await,
     )
@@ -3152,7 +3137,6 @@ pub fn routes() -> Router<Shared> {
         // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
-        .route("/api/tools/community/ai-use", get(api_ai_use))
         .route("/api/tools/community/publish-prefab/:id", get(api_prefab_ready).post(api_prefab_publish))
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
@@ -3486,10 +3470,10 @@ mod tests {
     }
 
     /// GameBanana's Authors block: one line per person with their roles, the publisher first,
-    /// only people who made something in it; the AI disclosure only when asked, and never a
-    /// Support Pack or donation line (GameBanana's rules)
+    /// only people who made something in it, and never a Support Pack or donation line
+    /// (GameBanana's rules)
     #[test]
-    fn gamebanana_credits_and_ai_disclosure() {
+    fn gamebanana_credits() {
         use super::super::creaturepack::ItemCreature;
         use super::super::credits::{AssetCredit, Author};
         let names = |id: i64| (id == 77).then(|| "Zed".to_string());
@@ -3524,14 +3508,15 @@ mod tests {
         for (kind, what) in [(Kind::Map, "Map"), (Kind::Prefab, "Prefab"), (Kind::Spray, "Spray")] {
             assert_eq!(authors_block(&Item { kind, author: "jam".into(), ..Default::default() }, "", &names), [format!("jam — {what}")]);
         }
-        // the form: authors always, the disclosure only with an AI named
+        // the form: the authors, and the text as it was (no AI line: that's done on GameBanana)
         let form = json!({"text": "A mode.\n"});
-        let plain = with_credits(form.clone(), &mode, "  ", "gb42", &names);
-        assert_eq!(plain["authors"].as_array().unwrap().len(), 4);
-        assert!(!plain["text"].as_str().unwrap().contains("AI") && plain.get("ai").is_none());
-        let ai = with_credits(form, &mode, "Claude (Anthropic)", "gb42", &names);
-        assert_eq!(ai["text"], "A mode.\n\nAI disclosure: AI agents helped make this (Claude (Anthropic)).");
-        assert_eq!(ai["ai"], "Claude (Anthropic)");
+        let with = with_credits(form, &mode, "gb42", &names);
+        assert_eq!(with["authors"].as_array().unwrap().len(), 4);
+        assert_eq!(with["text"], "A mode.\n");
+        assert!(with.get("ai").is_none());
+        // a publish request saved by an older version, with its "ai" field, still reads
+        let old: PublishReq = serde_json::from_value(json!({"title": "Run", "author": "jam", "member": 5, "ai": "Claude (Anthropic)"})).unwrap();
+        assert_eq!((old.title.as_str(), old.member), ("Run", 5));
         // nothing commercial in GameBanana's text, for any kind
         let pkg = Package { item: mode.clone(), ..Default::default() };
         for f in [gamebanana_form(&pkg), gamebanana_form(&Package { item: Item { kind: Kind::Map, ..Default::default() }, ..Default::default() })] {

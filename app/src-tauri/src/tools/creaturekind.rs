@@ -284,7 +284,7 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
         blocking(move || {
             let g = own_game(&st)?;
             let pkg = build_package(&g.hl, &g.name, &super::communitylib::lib_dir(), &name, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
-            Ok(json!({"package": pkg, "form": super::community::publish_form(&pkg, &req.publish.ai, req.publish.member)}))
+            Ok(json!({"package": pkg, "form": super::community::publish_form(&pkg, req.publish.member)}))
         })
         .await,
     )

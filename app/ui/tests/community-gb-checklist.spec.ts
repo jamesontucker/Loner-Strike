@@ -38,7 +38,8 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
   await expect(list.getByRole("listitem")).toHaveCount(4);
   await expect(list.getByRole("listitem").nth(0)).toContainText("Upload king_of_the_hill.zip unchanged in the Counter-Strike 1.6 section");
   await expect(list.getByRole("listitem").nth(1)).toContainText("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save.");
-  await expect(list.getByRole("listitem").nth(2)).toContainText("AI Usage");
+  await expect(list.getByRole("listitem").nth(2)).toContainText("Paste the Authors credits");
+  await expect(list).not.toContainText("AI Usage");
   await expect(list.getByRole("listitem").nth(3)).toContainText("Add to Community");
   // one copy row for the tag: its value
   const row = page.locator(".cm-copy", { hasText: "Custom Tag value" });
