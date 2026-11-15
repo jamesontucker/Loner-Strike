@@ -2565,7 +2565,7 @@ pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<
         return Err("That page isn't in GameBanana's Counter-Strike 1.6 section.".into());
     }
     if !has_tag(&page["_aTags"]) {
-        return Err(format!("In the page's Tags, add a Custom Tag with the value {TAG_VALUE} (the title can stay empty). Then try again."));
+        return Err(format!("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value {TAG_VALUE} (the title can stay empty), then press + and save. Then try again."));
     }
     let files = files_of(page);
     let Some(f) = files.iter().find(|f| f["md5"].as_str() == Some(pkg.md5.as_str())) else {
@@ -3407,6 +3407,10 @@ mod tests {
         assert!(has_tag(&json!([": lonerstrike", "Tool: LONER-STRIKE"])));
         assert!(!has_tag(&json!([{"_sTitle": "", "_sValue": "Hammer"}])));
         assert!(!has_tag(&json!([{"_sTitle": "LonerStrike", "_sValue": "Hammer"}])), "the title doesn't count");
+        // exactly as GameBanana's API returns an untitled Custom Tag: no _sTitle key at all
+        assert!(has_tag(&json!([{"_sValue": "LonerStrike"}])));
+        assert!(has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "Hammer"}, {"_sValue": "LonerStrike"}])));
+        assert!(!has_tag(&json!([{"_sValue": "Hammer"}])));
         // another game
         let mut r = record("Mod", 300, "x", json!(["Software Used: Loner-Strike"]), "Maps", "", 1);
         r["_aGame"]["_idRow"] = json!(1);

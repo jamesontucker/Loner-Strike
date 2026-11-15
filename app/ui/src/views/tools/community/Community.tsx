@@ -176,7 +176,7 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
           text={
             q || kind !== "all"
               ? "Try other words, or All."
-              : <>Nobody has published with Loner-Strike yet. Be the first: Publish packages your map, and a Custom Tag with the value <code>LonerStrike</code> on its GameBanana page makes it show up here.</>
+              : <>Nobody has published with Loner-Strike yet. Be the first: Publish packages your map. On GameBanana's Technical tab, under Tags, add a Custom Tag with the value <code>LonerStrike</code> (the title can stay empty), then press + and save, and it shows up here.</>
           }
         />
       ) : (

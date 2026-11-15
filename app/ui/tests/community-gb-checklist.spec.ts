@@ -21,7 +21,7 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
     });
   });
   const answers = [
-    { error: "In the page's Tags, add a Custom Tag with the value LonerStrike (the title can stay empty). Then try again." },
+    { error: "On GameBanana's Technical tab, under Tags, add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save. Then try again." },
     { ok: true, state: "refused", error: "GameBanana is still checking the file. Try again in a few minutes.", copy: "" },
     { ok: true, state: "refused", error: "That page isn't in GameBanana's Counter-Strike 1.6 section.", copy: "" },
   ];
@@ -37,7 +37,7 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
   const list = page.getByRole("list", { name: "Getting it into Community" });
   await expect(list.getByRole("listitem")).toHaveCount(4);
   await expect(list.getByRole("listitem").nth(0)).toContainText("Upload king_of_the_hill.zip unchanged in the Counter-Strike 1.6 section");
-  await expect(list.getByRole("listitem").nth(1)).toContainText("add a Custom Tag with the value LonerStrike (the title can stay empty");
+  await expect(list.getByRole("listitem").nth(1)).toContainText("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save.");
   await expect(list.getByRole("listitem").nth(2)).toContainText("AI Usage");
   await expect(list.getByRole("listitem").nth(3)).toContainText("Add to Community");
   // one copy row for the tag: its value
@@ -48,14 +48,14 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
 
   // the link box says what the page needs
   const link = page.getByRole("textbox", { name: "GameBanana link" });
-  await expect(link).toHaveAccessibleDescription("Needs: Counter-Strike 1.6 section, a Custom Tag with the value LonerStrike, and GameBanana's file check done.");
+  await expect(link).toHaveAccessibleDescription("Needs: Counter-Strike 1.6 section, a Custom Tag with the value LonerStrike (Technical tab, Tags), and GameBanana's file check done.");
 
   // refusals: the reason, then what to do
   await link.fill("https://gamebanana.com/mods/123456");
   await page.getByRole("checkbox", { name: /I have the right to share this/ }).check();
   const add = page.getByRole("button", { name: "Add to Community" });
   await add.click();
-  await expect(page.getByTestId("refusal-fix")).toContainText("In the upload form's Tags, add a Custom Tag with the value LonerStrike (the title can stay empty).");
+  await expect(page.getByTestId("refusal-fix")).toContainText("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save.");
   await add.click();
   await expect(page.getByTestId("refusal-fix")).toContainText("Try again in a few minutes.");
   await add.click();
