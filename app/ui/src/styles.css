@@ -2019,3 +2019,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* the hosting guides' Docs button: at the right of their heading row */
 .where-to-host > summary a.btn.docs-link { margin-left: auto; align-self: center; }
 .server-top .row a.btn.docs-link { margin-left: 0; }
+/* Play with no game: a quiet Docs link in the banner's corner */
+.idle-hero { position: relative; }
+.idle-docs { position: absolute; top: 0; right: 0; }
+.idle-docs a.btn.docs-link { margin: 0; opacity: .75; }
+.idle-docs a.btn.docs-link:hover, .idle-docs a.btn.docs-link:focus-visible { opacity: 1; }
+@media (max-width: 640px) { .idle-docs { position: static; display: flex; justify-content: flex-end; margin-bottom: 6px; } .idle-docs a.btn.docs-link { min-height: 32px; padding: 4px 10px; } }

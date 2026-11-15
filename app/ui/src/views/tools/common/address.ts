@@ -109,6 +109,9 @@ export function useReportAddress(tool: string, address: string | null) {
   useEffect(() => () => reported.setState((s) => ({ byTool: { ...s.byTool, [tool]: null } })), [tool]);
 }
 
+/** What a tool page last said about where it is (null before it says). */
+export const useReportedAddress = (tool: string) => reported((s) => s.byTool[tool] ?? null);
+
 /** Where Tools is right now, as an address ("" on the overview). */
 export function currentAddress(): string {
   const tool = useToolPage.getState().tool;
