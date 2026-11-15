@@ -991,18 +991,15 @@ def has_tag(tags):
     def ours(v):
         return v.strip().lower() in (TAG_VALUE.lower(), TAG_ALSO.lower())
 
-    def want(t, v):
-        return t.strip().lower() == TAG_TITLE.lower() and any(ours(x) for x in v.split(","))
 
     for t in tags if isinstance(tags, list) else []:
         if isinstance(t, str):
             a, sep, b = t.partition(":")
-            if (want(a, b) if sep else ours(t)):
+            if any(ours(x) for x in (b if sep else t).split(",")):
                 return True
         elif isinstance(t, dict) and isinstance(t.get("_sValue"), str):
-            title = t.get("_sTitle") if isinstance(t.get("_sTitle"), str) else ""
-            # a Custom Tag's title is optional on GameBanana's form: "LonerStrike" alone counts too
-            if want(title, t["_sValue"]) if title.strip() else any(ours(x) for x in t["_sValue"].split(",")):
+            # the value is what counts (a GameBanana Custom Tag's title is optional)
+            if any(ours(x) for x in t["_sValue"].split(",")):
                 return True
     return False
 

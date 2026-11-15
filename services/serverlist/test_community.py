@@ -372,7 +372,7 @@ class Pages(unittest.TestCase):
         self.assertTrue(cm.has_tag([{"_sTitle": "Software Used", "_sValue": "Hammer, LonerStrike"}]))
         self.assertTrue(cm.has_tag(["Software Used: Loner-Strike"]))
         self.assertFalse(cm.has_tag(["Software Used: Hammer"]))
-        self.assertFalse(cm.has_tag([{"_sTitle": "Genre", "_sValue": "LonerStrike"}]))
+        self.assertTrue(cm.has_tag([{"_sTitle": "Genre", "_sValue": "LonerStrike"}]))  # the value is what counts
         self.assertFalse(cm.has_tag("Software Used: LonerStrike"))
         # a GameBanana Custom Tag with its optional title left empty
         self.assertTrue(cm.has_tag([{"_sTitle": "", "_sValue": "LonerStrike"}]))
