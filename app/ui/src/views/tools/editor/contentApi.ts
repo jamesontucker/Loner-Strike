@@ -46,6 +46,35 @@ export const soundInfo = (a: { folder: string; path: string }) => fetch(`${E}/so
 /** The editor's sound route plays the first one the game would find (the list's own). */
 export const soundPlayUrl = (path: string) => `/api/tools/editor/sound?path=${encodeURIComponent(path)}`;
 
+// ---- Import and Export (Parity A) ----------------------------------------------------------------
+
+export type ImportSummary = {
+  imported?: { name: string; path: string }[];
+  renamed?: { from: string; to: string }[];
+  taken?: { name: string; path: string; suggest: string }[];
+  refused?: { name: string; why: string }[];
+  message?: string;
+  needProject?: boolean;
+  error?: string;
+};
+const postJson = <T,>(url: string, body: unknown) =>
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify(body) })
+    .then((r) => r.json() as Promise<T>)
+    .catch(() => ({ error: "Couldn't reach the app. Try again." }) as T);
+export const importFiles = (files: { name: string; data: string; rename?: boolean }[]) => postJson<ImportSummary>(`${E}/import`, { files });
+export const showInFolder = (a: { folder: string; path: string }) => postJson<{ ok?: boolean; error?: string }>(`${E}/reveal`, { folder: a.folder, path: a.path });
+export const exportAsset = (a: { folder: string; path: string }) => postJson<{ ok?: boolean; files?: string[]; folder?: string; cancelled?: boolean; error?: string }>(`${E}/export`, { folder: a.folder, path: a.path });
+/** A dropped or picked file's bytes as base64 (for the import route). */
+export function fileData(f: File): Promise<string> {
+  return new Promise((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => fail(r.error);
+    r.readAsDataURL(f);
+  });
+}
+export const IMPORT_TYPES = ".mdl,.spr,.wav,.wad";
+
 // ---- credits and permission (T's data) --------------------------------------------------------
 
 export type Verdict = "ok" | "ask" | "no" | "stock" | "unknown";

@@ -7,12 +7,17 @@
 // the same browser over the bottom panels and closes on a click away.
 
 import { memo, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Skeleton } from "../../../ui";
+import { Skeleton, useConfirm } from "../../../ui";
 import {
   assetCredits,
   assetKey,
   assetList,
+  exportAsset,
+  fileData,
+  importFiles,
+  IMPORT_TYPES,
   keyValue,
+  showInFolder,
   sameAsset,
   soundInfo,
   spriteInfo,
@@ -24,6 +29,7 @@ import {
   type AssetKind,
   type AssetList,
   type Credits,
+  type ImportSummary,
   type SoundInfo,
   type SpriteInfo,
 } from "./contentApi";
@@ -36,6 +42,7 @@ import { PrefabPanel } from "./PrefabPanel";
 import { TextureBrowser } from "./Panels";
 import { keyOf, originOf, useEditor } from "./store";
 import { useTools } from "../../../stores/tools";
+import { useNav } from "../../../store";
 import type { Vec3 } from "../viewer/coords";
 import "./p5.css";
 
@@ -133,6 +140,13 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   const [sel, setSel] = useState<AssetItem | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; a: AssetItem } | null>(null);
   const [uses, setUses] = useState<AssetItem | null>(null);
+  // Parity A: Import (a button, or files dropped from Finder or Explorer) and Export
+  const [importing, setImporting] = useState(false);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [dropOver, setDropOver] = useState(false);
+  const [exporting, setExporting] = useState<AssetItem | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const ask = useConfirm();
   const favorites = useBrowser((s) => s.favorites);
   const recent = useBrowser((s) => s.recent);
   const reveal = useBrowser((s) => s.reveal);
@@ -204,9 +218,54 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   };
   const counts = (s: string) => (list?.items ?? []).filter((a) => a.source === s).length;
 
+  // Parity A: files into the project's folder; a name that's taken asks before taking a new one
+  const runImport = async (picked: File[]) => {
+    const files = picked.filter((f) => /\.(mdl|spr|wav|wad)$/i.test(f.name));
+    const skipped = picked.filter((f) => !files.includes(f)).map((f) => ({ name: f.name, why: "only .mdl, .spr, .wav and .wad files can be imported" }));
+    if (!files.length) return setSummary({ refused: skipped, message: "Nothing imported." });
+    setImporting(true);
+    setSummary(null);
+    try {
+      const data = await Promise.all(files.map(async (f) => ({ name: f.name, data: await fileData(f) })));
+      let r = await importFiles(data);
+      if (r.taken?.length && !r.error && !r.needProject) {
+        const names = r.taken.map((t) => `${t.path} (as ${t.suggest})`).join(", ");
+        if (await askRename(`${r.taken.length === 1 ? "This file is" : "These files are"} in the project already: ${names}. Import under the new name${r.taken.length === 1 ? "" : "s"}? Nothing there is replaced.`)) {
+          const again = await importFiles(data.filter((d) => r.taken!.some((t) => t.name === d.name)).map((d) => ({ ...d, rename: true })));
+          r = { ...r, imported: [...(r.imported ?? []), ...(again.imported ?? [])], renamed: [...(r.renamed ?? []), ...(again.renamed ?? [])], refused: [...(r.refused ?? []), ...(again.refused ?? [])], taken: again.taken ?? [] };
+        }
+      }
+      r.refused = [...(r.refused ?? []), ...skipped];
+      setSummary(r);
+      if (r.imported?.length) setRev((n) => n + 1);
+    } finally {
+      setImporting(false);
+    }
+  };
+  const askRename = (text: string) => ask(text, { ok: "Import under new names" });
+
   return (
-    <section className={`tools-panel p5-cb${drawer ? " in-drawer" : ""}`} aria-label="Content Browser">
+    <section
+      className={`tools-panel p5-cb${drawer ? " in-drawer" : ""}${dropOver ? " drop-over" : ""}`}
+      aria-label="Content Browser"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setDropOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOver(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files?.length) return;
+        e.preventDefault();
+        setDropOver(false);
+        void runImport([...e.dataTransfer.files]);
+      }}
+    >
       <div className="p5-cb-top">
+        <input ref={picker} type="file" accept={IMPORT_TYPES} multiple hidden data-testid="content-import-input" onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; void runImport(f); }} />
         <div className="seg" role="tablist" aria-label="Content">
           {SECTIONS.map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={section === s.id} aria-pressed={section === s.id} onClick={() => (setSection(s.id), setQ(""), setSource("all"))}>
@@ -249,9 +308,34 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
             <button type="button" className="btn small" title="Read the folders again" onClick={() => setRev((n) => n + 1)}>
               Refresh
             </button>
+            <button type="button" className="btn small" disabled={importing} title="Copy your own models, sprites, sounds or texture files (.mdl .spr .wav .wad) into the project's folder. You can also drop them here." onClick={() => picker.current?.click()}>
+              {importing ? <><span className="spinner" aria-hidden="true" /> Importing…</> : "Import…"}
+            </button>
           </>
         )}
       </div>
+      {summary && (
+        <div className="p5-cb-import" role="status" aria-live="polite">
+          <div className="row">
+            <strong className="small-note">{summary.error ?? summary.message}</strong>
+            <span className="push" />
+            <button type="button" className="btn small icon" aria-label="Close" onClick={() => setSummary(null)}>×</button>
+          </div>
+          {summary.needProject && (
+            <div className="row wrap">
+              <button type="button" className="btn small primary" onClick={() => void useEditor.getState().file("save")}>Save the project…</button>
+              <button type="button" className="btn small" onClick={() => useNav.getState().go("tools", "assets")}>Tools › Add your own</button>
+            </div>
+          )}
+          <ul className="small-note">
+            {(summary.imported ?? []).map((x) => <li key={`i${x.path}`}>Imported {x.path}</li>)}
+            {(summary.renamed ?? []).map((x) => <li key={`r${x.to}`}>{x.from} was taken: saved as {x.to}</li>)}
+            {(summary.taken ?? []).map((x) => <li key={`t${x.path}`}>Not imported: {x.path} is there already</li>)}
+            {(summary.refused ?? []).map((x) => <li key={`x${x.name}`} className="compile-bad">Refused {x.name}: {x.why}</li>)}
+          </ul>
+          {!!summary.imported?.length && <p className="small-note muted">They're under Mine, and go with Playtest and Publish. Publish asks who made each one unless you mark it as yours.</p>}
+        </div>
+      )}
       {section === "texture" && <TextureBrowser />}
       {section === "prefab" && <PrefabPanel />}
       {section === "gamebanana" && (
@@ -369,10 +453,70 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
               </button>
             </li>
           )}
+          <li role="none">
+            <button type="button" role="menuitem" onClick={() => { const a = menu.a; setMenu(null); void showInFolder(a).then((r) => r.error && setSummary({ error: r.error })); }}>
+              {/Win/i.test(navigator.platform) ? "Show in Explorer" : "Show in Finder"}
+            </button>
+          </li>
+          <li role="none">
+            <button type="button" role="menuitem" onClick={() => (setExporting(menu.a), setMenu(null))}>
+              Export…
+            </button>
+          </li>
         </ul>
       )}
+      {exporting && <ExportBox a={exporting} onClose={() => setExporting(null)} onDone={(m) => setSummary({ message: m })} />}
       {uses && <Uses a={uses} onClose={() => setUses(null)} />}
     </section>
+  );
+}
+
+/** Parity A: Export… asks first, with whose work it is (credits and the permission badge). */
+function ExportBox({ a, onClose, onDone }: { a: AssetItem; onClose: () => void; onDone: (message: string) => void }) {
+  const [c, setC] = useState<Credits | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void assetCredits(a).then((x) => live && setC(x));
+    return () => {
+      live = false;
+    };
+  }, [a]);
+  const badge = verdictBadge(c?.verdict);
+  const who = c?.authors?.map((x) => x.name).join(", ") || c?.submitter?.name || (c?.source === "mine" ? "you" : c?.source === "stock" ? "Valve (the game's own)" : "not known");
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    const r = await exportAsset(a);
+    setBusy(false);
+    if (r.error) return setErr(r.error);
+    if (r.cancelled) return;
+    onDone(`Exported ${r.files?.join(", ")} to ${r.folder}.`);
+    onClose();
+  };
+  return (
+    <div className="p5-cb-uses p5-cb-export" role="dialog" aria-label={`Export ${a.name}`}>
+      <strong>Export {a.path}</strong>
+      {a.kind === "model" && <p className="small-note muted">A model's texture (T) and sequence files beside it go too.</p>}
+      {c === undefined ? (
+        <p className="small-note muted"><span className="spinner" aria-hidden="true" /> Checking whose work it is…</p>
+      ) : (
+        <p className="small-note" data-testid="export-credits">
+          Made by: <b>{who}</b>
+          {c?.page?.url ? <> · <a href={c.page.url} target="_blank" rel="noreferrer">{c.page.name || "its page"}</a></> : null}{" "}
+          <span className={`p5-cb-badge ${badge.tone}`} title={c?.why ?? badge.tip}>{badge.label}</span>
+        </p>
+      )}
+      <p className="small-note muted">Credit its makers if you share it, and follow what its page allows.</p>
+      {err && <p className="small-note compile-bad">{err}</p>}
+      <div className="row">
+        <button type="button" className="btn small primary" disabled={busy} onClick={() => void go()}>
+          {busy ? <><span className="spinner" aria-hidden="true" /> Exporting…</> : "Choose a folder and export"}
+        </button>
+        <button type="button" className="btn small" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
   );
 }
 

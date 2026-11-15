@@ -490,3 +490,9 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-io-word { color: var(--bone-dim); min-width: 56px; }
 .p5-io-key { font-size: 11px; }
 .p5-io-link.broken { background: rgba(255, 95, 86, .08); border-radius: 2px; }
+/* Parity A: Import's summary, the drop target, Export's box */
+.p5-cb.drop-over { outline: 2px dashed var(--signal); outline-offset: -4px; }
+.p5-cb-import { margin: 6px 0; padding: 6px 10px; background: var(--panel-2); box-shadow: var(--raised); border-radius: 2px; }
+.p5-cb-import ul { margin: 4px 0 0; padding-left: 18px; }
+.p5-cb-export { display: grid; gap: 6px; }
+.p5-cb-export .p5-cb-badge { margin-left: 4px; }

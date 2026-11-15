@@ -2882,7 +2882,11 @@ pub fn remix(st: &Shared, model: Model, id: i64) -> Result<Value, String> {
         let (doc, wad) = super::mapsource::read_package(&src)?;
         let map = it.map.as_ref().map(|m| m.name.clone()).unwrap_or_else(|| "map".into());
         let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: id, uid: it.uid.clone(), name: it.name.clone(), author: it.author.clone(), updated: it.updated };
-        super::mapsource::save_remix(&super::editor::remix_dir(), &map, doc, wad, credit)
+        let path = super::mapsource::save_remix(&super::editor::remix_dir(), &map, doc, wad, credit)?;
+        // Parity A: its own models, sprites and sounds beside the remix
+        let game = if it.games.iter().any(|g| g == "czero") && !it.games.iter().any(|g| g == "cstrike") { "czero" } else { "cstrike" };
+        super::mapsource::copy_package_assets(&src, &super::editor::remix_dir(), game);
+        Ok(path)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
     let path = r?;
@@ -3574,6 +3578,98 @@ mod tests {
         let mut b = Vec::new();
         image::RgbImage::new(4, 4).write_to(&mut std::io::Cursor::new(&mut b), image::ImageFormat::Png).unwrap();
         format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(b))
+    }
+
+    /// Parity A round trip: a model and a sound imported into a project (the Content Browser's
+    /// Import), placed by the map's entities, go into the game with Playtest (and its .res), into
+    /// the published map package (its .res and the zip), are traced for credits (someone else's
+    /// work until you say: Publish asks), and land in a remix's folder from the package.
+    #[test]
+    fn imported_files_travel_with_the_map_and_its_remix() {
+        use super::super::editor::assets::{copy_to_game, locate, Named, Places, Status};
+        use super::super::editor::importexport::{import, Incoming};
+        let (root, m) = game("import-rt", "de_imp");
+        // the map's entities place them: a model and a looping sound
+        let mut bsp = fixture::build();
+        while bsp.len() % 4 != 0 {
+            bsp.push(0);
+        }
+        let at = bsp.len() as u32;
+        let mut text = b"{\n\"classname\" \"worldspawn\"\n\"wad\" \"test.wad\"\n}\n{\n\"classname\" \"cycler_sprite\"\n\"model\" \"models/qa_box.mdl\"\n}\n{\n\"classname\" \"ambient_generic\"\n\"message\" \"qa_hum.wav\"\n}\n".to_vec();
+        text.push(0);
+        bsp[4..8].copy_from_slice(&at.to_le_bytes());
+        bsp[8..12].copy_from_slice(&(text.len() as u32).to_le_bytes());
+        bsp.extend(text);
+        put(m.bsp.clone(), &bsp);
+        let n = nav::Nav { version: 5, bsp_size: bsp.len() as u32, places: vec!["Mid".into()], areas: vec![] };
+        put(m.hl.join("cstrike/maps/de_imp.nav"), &n.write());
+
+        // imported into the project
+        let proj = root.join("proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        let wav = b"RIFF\0\0\0\0WAVEfmt qa hum".to_vec();
+        let r = import(&proj, "cstrike", vec![
+            Incoming { name: "qa_box.mdl".into(), bytes: b"IDST qa box".to_vec(), rename: false },
+            Incoming { name: "qa_hum.wav".into(), bytes: wav.clone(), rename: false },
+        ]);
+        assert_eq!(r["imported"].as_array().unwrap().len(), 2, "{r}");
+        assert!(!super::super::doctor::is_stock("models/qa_box.mdl", "cstrike") && !super::super::doctor::is_stock("sound/qa_hum.wav", "cstrike"));
+
+        // beside the project, then into the game's download folder (Playtest), with a .res
+        let named = vec![
+            Named { rel: "models/qa_box.mdl".into(), kind: "model", users: vec![1], class: "cycler_sprite".into() },
+            Named { rel: "sound/qa_hum.wav".into(), kind: "sound", users: vec![2], class: "ambient_generic".into() },
+        ];
+        let places = Places { hl: Some(m.hl.clone()), game: "cstrike".into(), beside: vec![proj.clone()] };
+        let assets = locate(named.clone(), &places);
+        assert!(assets.iter().all(|a| matches!(a.status, Status::Beside(_))), "{:?}", assets.iter().map(|a| &a.status).collect::<Vec<_>>());
+        let copied = copy_to_game(&assets, &places).unwrap();
+        assert_eq!(copied.len(), 2);
+        assert!(m.hl.join("cstrike_downloads/models/qa_box.mdl").is_file() && m.hl.join("cstrike_downloads/sound/qa_hum.wav").is_file());
+        super::super::doctor::write_res(&m).unwrap();
+        let res = std::fs::read_to_string(m.hl.join("cstrike/maps/de_imp.res")).unwrap_or_default().to_lowercase();
+        assert!(res.contains("models/qa_box.mdl") && res.contains("sound/qa_hum.wav"), "the download list: {res}");
+
+        // the published package carries them (and its .res lists them)
+        let r = readiness(&m, &root.join("reports"));
+        assert!(r.files.iter().any(|f| f == "models/qa_box.mdl") && r.files.iter().any(|f| f == "sound/qa_hum.wav"), "{:?}", r.files);
+        let mut r = r;
+        r.blockers.clear();
+        let req = PublishReq { title: "Imported QA".into(), author: "jam".into(), ..Default::default() };
+        let out = root.join("packages");
+        let pkg = build_package(&m, &r, &req, &out).unwrap();
+        let bytes = std::fs::read(out.join(&pkg.file)).unwrap();
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+        assert!(z.by_name("models/qa_box.mdl").is_ok() && z.by_name("sound/qa_hum.wav").is_ok());
+        let mut zres = String::new();
+        z.by_name("maps/de_imp.res").unwrap().read_to_string(&mut zres).unwrap();
+        assert!(zres.to_lowercase().contains("models/qa_box.mdl") && zres.to_lowercase().contains("sound/qa_hum.wav"));
+        // whose work: not known yet, so Publish asks for a credit (or "it's mine")
+        let ctx = super::super::credits::Ctx::default();
+        let c = super::super::credits::resolve("models/qa_box.mdl", "abc", false, &ctx);
+        assert_eq!((c.source.as_str(), c.verdict.as_str()), ("unknown", "ask"));
+
+        // a remix from the package: the files land beside the remix project
+        let unz = root.join("unzipped");
+        for i in 0..z.len() {
+            let mut f = z.by_index(i).unwrap();
+            let name = f.name().unwrap().to_string();
+            if name.ends_with('/') {
+                continue;
+            }
+            let mut b = Vec::new();
+            f.read_to_end(&mut b).unwrap();
+            put(unz.join(&name), &b);
+        }
+        let remix = root.join("remixes");
+        let moved = super::super::mapsource::copy_package_assets(&unz, &remix, "cstrike");
+        assert_eq!(moved, ["models/qa_box.mdl", "sound/qa_hum.wav"]);
+        assert_eq!(std::fs::read(remix.join("sound/qa_hum.wav")).unwrap(), wav);
+        // and the remixer's project finds them beside it
+        let places = Places { hl: Some(m.hl.clone()), game: "cstrike".into(), beside: vec![remix.clone()] };
+        let _ = std::fs::remove_dir_all(m.hl.join("cstrike_downloads"));
+        assert!(locate(named, &places).iter().all(|a| matches!(a.status, Status::Beside(_))));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Shared creatures: a map's and a mode's custom creatures go in the package (creatures/creatures.ini

@@ -50,6 +50,7 @@ pub mod workspace; // P5: project files, undo history, find/replace, duplicate w
 pub mod heavy; // Checks: heavy views from the last compile's VIS data
 pub mod npcs; // NPC-editor: Checks for NPCs and interactables
 pub mod selection; // MCP: what's selected, for agents
+pub mod importexport; // Parity A: the Content Browser's Import and Export
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
@@ -1486,6 +1487,23 @@ enum Pick {
     Pointfile,
 }
 
+/// Parity A: a folder from the system dialog (Export…); None when cancelled. Test builds answer
+/// with LS_DEV_PICK_FOLDER.
+pub fn pick_folder(st: &Shared, title: &str) -> Result<Option<PathBuf>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    #[cfg(test)]
+    {
+        if let Ok(p) = std::env::var("LS_DEV_PICK_FOLDER") {
+            return Ok(Some(PathBuf::from(p)));
+        }
+    }
+    let app = st.app.get().cloned().ok_or(INTERNAL)?;
+    match app.dialog().file().set_title(title).blocking_pick_folder() {
+        None => Ok(None),
+        Some(p) => p.into_path().map(Some).map_err(|_| "That folder can't be used.".to_string()),
+    }
+}
+
 /// The system file dialog; None when cancelled.
 fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String> {
     use tauri_plugin_dialog::DialogExt;
@@ -2427,6 +2445,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(assets::routes()) // P5
         .merge(kits::routes()) // P5
         .merge(browser::routes()) // P5
+        .merge(importexport::routes()) // Parity A
         .merge(budget::routes()) // P5
         .merge(selection::routes()) // MCP
         .merge(leak::routes()) // P5

@@ -281,6 +281,36 @@ pub fn save_remix(dir: &Path, name: &str, mut doc: MapDocument, wad: Option<(Str
     Ok(path)
 }
 
+/// Parity A: a shared map package's own models, sprites and sounds (models/, sprites/, sound/: the
+/// map's files, never the game's own) copied into the remix's project folder, so the remix
+/// opens with them beside it (shown under Mine, sent with Playtest and Publish). A file already
+/// there is kept. The paths copied.
+pub fn copy_package_assets(src: &Path, dest: &Path, game: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for p in crate::archive::walk(src) {
+        let Ok(rel) = p.strip_prefix(src) else { continue };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        let low = rel.to_ascii_lowercase();
+        if !(low.starts_with("models/") || low.starts_with("sprites/") || low.starts_with("sound/")) {
+            continue;
+        }
+        let Some(rel) = super::editor::assets::clean_rel(&rel) else { continue };
+        if super::doctor::is_stock(&rel, game) || dest.join(&rel).exists() {
+            continue;
+        }
+        let ext = rel.rsplit_once('.').map(|x| x.1.to_ascii_lowercase()).unwrap_or_default();
+        if !super::editor::assets::looks_right(&p, &ext) {
+            continue;
+        }
+        let to = dest.join(&rel);
+        if to.parent().map(std::fs::create_dir_all).is_some_and(|r| r.is_ok()) && std::fs::copy(&p, &to).is_ok() {
+            out.push(rel);
+        }
+    }
+    out.sort();
+    out
+}
+
 /// Tests here and in community.rs: a Half-Life folder with CS 1.6's cstrike.wad (holding "stockwall") and the mapper's own
 /// mine.wad (holding "brick"); a project in `proj/` using both, plus "lost" found nowhere.
 #[cfg(test)]

@@ -185,6 +185,11 @@ pub fn list(hl: &Path, game: &str, app: &Path, project: Option<&Path>, kind: Kin
     json!({"items": items, "downloads": groups, "capped": items.len() >= MAX_ITEMS})
 }
 
+/// `resolve`, for the Content Browser's Import and Export (importexport.rs).
+pub fn resolve_file(hl: &Path, game: &str, project: Option<&Path>, folder: &str, rel: &str) -> Option<PathBuf> {
+    resolve(hl, game, project, folder, rel)
+}
+
 /// The file a request names, vetted (clean path, in that folder, no links, its real type).
 fn resolve(hl: &Path, game: &str, project: Option<&Path>, folder: &str, rel: &str) -> Option<PathBuf> {
     let rel = clean_rel(rel)?;

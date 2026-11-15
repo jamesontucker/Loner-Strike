@@ -481,6 +481,11 @@ struct Action {
     name: String,
 }
 
+/// Shows a file in Finder (Explorer on Windows): for the Content Browser too.
+pub fn reveal_path(p: &Path) -> Result<(), String> {
+    reveal(p)
+}
+
 fn reveal(p: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let r = std::process::Command::new("open").arg("-R").arg(p).spawn().map(crate::sys::reap);
