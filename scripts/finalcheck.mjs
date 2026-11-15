@@ -324,7 +324,9 @@ function amxxpc(src, includes, out) {
 }
 function graphFiles(prefix) {
   const only = opt("--graphs", "") ? opt("--graphs", "").split(",") : null;
-  return readdirSync(GRAPHS).filter((f) => f.startsWith(prefix) && f.endsWith(".graph.json") && (!only || only.some((o) => f.startsWith(o)))).sort();
+  // (--skip-graphs a,b: graphs a known crash is being fixed for, e.g. cover_3 and the rpgrocket precache)
+  const skip = opt("--skip-graphs", "") ? opt("--skip-graphs", "").split(",") : [];
+  return readdirSync(GRAPHS).filter((f) => f.startsWith(prefix) && f.endsWith(".graph.json") && (!only || only.some((o) => f.startsWith(o))) && !skip.some((o) => f.startsWith(o))).sort();
 }
 /** The Studio's own code writes each graph's plugin and mode entry (finalcheck_tests.rs); amxxpc builds it. */
 function installGraphs(files, debugIds) {
