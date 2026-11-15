@@ -14,7 +14,8 @@
 //   install  clone, compile, install the graphs (always runs first unless --reuse)
 //   cover    each cover_* mode (debugger build) with 16 bots: which of this round's node kinds ran,
 //            run-time errors, node errors
-//   perf     Classic, then each perf_*/cover mode (plain build), at each --bots count: server frame
+//   perf     Classic, then one heavy Studio mode (--perf-graphs, default perf_ls: the Last Stand
+//            template, plain build), one run at each --bots count: server frame
 //            time (from stats' FPS), the server's CPU (stats) and the hlds process's CPU (ps);
 //            the mode's cost is its numbers against Classic's
 //   stress   each stress_* mode with 16 bots, every limit at its max: the server must keep
@@ -448,7 +449,9 @@ async function install() {
 
 // ---- the steps -------------------------------------------------------------------------------
 const FORBID = ["Host_Error", "Segmentation fault", "FATAL ERROR", "no free edicts", "ED_Alloc"];
-const runtimeErrors = (text, plugin) => text.split("\n").filter((l) => /Run time error|\[AMXX\] Displaying debug trace/.test(l) || (plugin && l.includes(plugin) && /error/i.test(l) && !/0 errors/.test(l)));
+// the mode's own run-time errors (another plugin's, e.g. miscstats on a map change, are listed apart)
+const runtimeErrors = (text, plugin) => text.split("\n").filter((l) => /Run time error/.test(l) && (!plugin || l.includes(`"${plugin}.amxx"`)));
+const otherErrors = (text, plugin) => text.split("\n").filter((l) => /Run time error/.test(l) && plugin && !l.includes(`"${plugin}.amxx"`)).map((l) => l.replace(/^L [^:]+:[^:]+:[^:]+: /, ""));
 const newKinds = () => JSON.parse(readFileSync(join(GRAPHS, "new_kinds.json"), "utf8")).kinds;
 
 async function cover() {
@@ -483,7 +486,7 @@ async function cover() {
     for (const n of nodeRan) if (kinds.has(byId.get(n))) ran.add(byId.get(n));
     const errs = runtimeErrors(text, plugin);
     const bad = FORBID.filter((x) => text.includes(x));
-    const row = { mode: id, switched: sw.ok, switchWhy: sw.why, secs: Math.round((Date.now() - t) / 1000), nodesRan: nodeRan.size, nodes: g.nodes.length, runtimeErrors: errs.slice(0, 10), nodeErrors: [...nodeErrors].slice(0, 20), forbidden: bad, crashed: s.crashed || s2.crashed, kills: (text.match(/" killed "/g) ?? []).length };
+    const row = { mode: id, switched: sw.ok, switchWhy: sw.why, secs: Math.round((Date.now() - t) / 1000), nodesRan: nodeRan.size, nodes: g.nodes.length, runtimeErrors: errs.slice(0, 10), otherPluginErrors: [...new Set(otherErrors(text, plugin))].slice(0, 5), nodeErrors: [...nodeErrors].slice(0, 20), forbidden: bad, crashed: s.crashed || s2.crashed, kills: (text.match(/" killed "/g) ?? []).length };
     row.ok = sw.ok && !row.crashed && !errs.length && !bad.length;
     results.cover.push(row);
     writeFileSync(join(OUT, `cover-${id}.log`), text);
@@ -498,7 +501,9 @@ async function cover() {
 
 async function perf() {
   // the cost runs use the plain build of every mode (the cover modes were built with the debugger)
-  const files = [...graphFiles("perf_"), ...graphFiles("cover_")];
+  // (the trimmed check, 2026-11-14: Classic against one heavy Studio mode, one run at each bot count;
+  // --perf-graphs a,b for others)
+  const files = opt("--perf-graphs", "perf_ls").split(",").map((x) => `${x.replace(/\.graph\.json$/, "")}.graph.json`).filter((f) => existsSync(join(GRAPHS, f)));
   const lines = installGraphs(files, "");
   const modes = [["classic", null], ...lines.filter((l) => l.installed && l.compiled).map((l) => [l.id, l.plugin])];
   for (const bots of BOTS) {
@@ -537,7 +542,8 @@ async function stress() {
   for (const f of graphFiles("stress_").filter((x) => !x.startsWith("stress_precache170"))) {
     const g = JSON.parse(readFileSync(join(GRAPHS, f), "utf8"));
     const id = g.mode.id;
-    const maps = id === "fc_st_pre160" ? ["de_dust2", "cs_italy"] : ["de_dust2"];
+    // (one map each: the trimmed check skips multi-map runs; --stress-maps a,b for more)
+    const maps = opt("--stress-maps", "de_dust2").split(",");
     for (const map of maps) {
       await roomToRun(`stress ${id}`);
       if (!existsSync(join(GAMEDIR, "maps", `${map}.bsp`))) {
@@ -552,6 +558,10 @@ async function stress() {
       const text = logText(sw.from ?? 0);
       const caps = text.split("\n").filter((l) => l.includes(`[${id}]`) && CAP_LINES.test(l));
       const capKinds = [...new Set(caps.map((l) => l.replace(/.*\] \[[^\]]+\] /, "").replace(/\d+/g, "N").trim()))];
+      // a cap's message says so once in a while, not on every skipped run (a log written thousands
+      // of times a second is itself the lag: dry run 2026-11-14, 4 fps)
+      const runSecs = DRY ? 30 : 120;
+      const flood = capKinds.map((k) => [k, caps.filter((l) => l.replace(/.*\] \[[^\]]+\] /, "").replace(/\d+/g, "N").trim() === k).length / runSecs]).filter(([, r]) => r > 5);
       const bad = FORBID.filter((x) => text.includes(x));
       const overflow = text.split("\n").filter((l) => /overflow/i.test(l));
       const dropped = text.split("\n").filter((l) => /dropped|kicked|timed out/i.test(l) && !/skipped/.test(l));
@@ -564,6 +574,7 @@ async function stress() {
         overflow.length && `${overflow.length} overflow lines`,
         humans && after.humans < humans && "the person was dropped",
         before.bots - after.bots > 1 && `bots ${before.bots} -> ${after.bots}`,
+        ...flood.map(([k, r]) => `log flood: "${k}" ${r.toFixed(0)} a second`),
       ].filter(Boolean);
       const row = { mode: id, map, ok: problems.length === 0, problems, longestSilenceMs: s.longest, cost: costOf(s.rows), capLines: caps.length, capKinds: capKinds.slice(0, 12), dropped: dropped.slice(0, 5) };
       results.stress.push(row);

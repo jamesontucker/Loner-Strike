@@ -22,6 +22,34 @@ HEAD** (`--allow-old` exists only for testing the harness).
 
 The run's version table (component → commit, CI run or sha256) goes here once the real run starts.
 
+## Scope: what changed since the combined re-check (trimmed with the user, 2026-11-14)
+
+The combined re-check (3782f0ae, Recheck.md) passed for the rest of the app. This check covers only what
+changed since, in about 2 hours. It doesn't re-test areas untouched since 3782f0ae, and it skips
+multi-map runs and long repeated sims. The version table and the freshness check stay.
+
+| # | Part | How | About |
+|---|---|---|---|
+| 1 | All automated suites at HEAD | Rust (all: the Studio suites, `compat_tests` with the frozen v3 fixtures, the versioning fixtures in Compat.md, editor); the Studio and editor browser specs (Chromium + WebKit) | 50 min |
+| 2 | Every new node in a game | `finalcheck.mjs --steps cover`: the 7 `cover_*` v3 graphs once each (through the v4 migration), 16 bots | 30 min |
+| 3 | The janky set, limits at max | `--steps stress`: all of it, one map each (caps with a clear message, no crash, no kick, no overflow; `--human` for the overflow check) | 20 min |
+| 4 | Short cost run plus BR | `--steps perf,br`: Classic against one heavy Studio mode (`perf_ls`, the Last Stand template) at 16 and 24 bots, one run each; one br-squads16 run | 25 min |
+| 5 | Editor | its browser specs (in 1), plus one compile and playtest of a map with the new stock entities and effect entities (below) | 15 min |
+
+The game parts run in one harness call: `node scripts/finalcheck.mjs --steps install,cover,stress,perf,br`.
+
+**Item 5's map.**
+- Contents: a box room with one of each new stock point entity (`editor-stock-entities.spec.ts`
+  POINT), one tied brush entity of each SOLID kind that works without a setup (func_healthcharger,
+  func_recharge, momentary_door, button_target, game_zone_player), and the effect entities the editor
+  coverage agent added (env_sprite, env_beam, env_laser, env_shake, env_fade, ambient_generic).
+- Building it: in the editor dev page (New map, Entity tool) on the HEAD worktree's app. Save it in the
+  scratch folder.
+- Then Compile in the Compile panel, and Playtest it on the sim the way `editor-coverage-map.spec.ts`
+  does.
+- Pass: the compile has no errors, the map loads, Checks and Budget are clean, and the server log has
+  no missing-file or Host_Error lines.
+
 What the user asked for (feature freeze notes):
 - every node added this round working in a game;
 - realistic load, 16–24 bots: server frame time, CPU and plugin cost against Classic;
@@ -51,7 +79,7 @@ What the user asked for (feature freeze notes):
 | `stress_loop1` | `fc_st_loop1` | One For Loop at the cap on every tick (what people really make). |
 | `stress_fx` | `fc_st_fx` | Every tick, for every player: beam, debug line, light, ring, burst, sprite, tracer, color chat, big HUD, 2D sound, chat. Effect messages a frame at 160. |
 | `stress_burst` | `fc_st_burst` | 10,000 × (color chat, big HUD, 2D sound) in one frame at round start. |
-| `stress_precache160` | `fc_st_pre160` | 110 sounds and 50 models of its own: the most a mode may load. Played on de_dust2 and on cs_italy. |
+| `stress_precache160` | `fc_st_pre160` | 110 sounds and 50 models of its own: the most a mode may load. Played on de_dust2 (one map, the trimmed scope; `--stress-maps de_dust2,cs_italy` for a busy map). |
 | `stress_precache170` | `fc_st_pre170` | 170 files: the Studio must refuse it ("the most is 160"). It isn't installed. |
 | `big` | — | The cover graphs side by side, cut to the 400-node cap: 400 nodes, 536 wires. UI only, never compiled. A graph holds at most 400 nodes (graph.rs `MAX_NODES`, schema.ts), so "500+" isn't possible today; see the dry-run findings. |
 
@@ -73,7 +101,8 @@ Every stress graph has every comfort limit (`lim_*`, read from limits.rs) set to
 - Node errors (the debugger's warnings) are listed for the owner to read.
 
 **Cost against Classic** (`perf`), at 16 and 24 bots, maxplayers 32.
-- Classic first, then each `fc_perf_*` and `fc_cover_*` mode as a plain build.
+- Classic first, then one heavy Studio mode (`--perf-graphs`, default `perf_ls`, the Last Stand template)
+  as a plain build, one run each.
 - After the switch, 15 s to settle, then 120 s of samples every 2 s:
   - `stats` gives FPS, from which comes frame time (mean and p95), and the server's CPU;
   - `ps` gives the hlds process's CPU.
@@ -165,8 +194,7 @@ cd ~/loner-strike-tools
 cd app/src-tauri && nice cargo test -j 6 --bin loner-strike finalcheck_install -- --ignored --nocapture; cd -
 #    (with no LS_FC_GAME it stops at once; the full run below installs them for real)
 
-# 1. the game half, full length (about 2.5 h: install 10 min, cover 7 x 4 min, cost 2 bot counts x
-#    10 modes x 2.5 min, janky 8 x 2.5 min, BR up to 10 min)
+# 1. the game half (about 75 min: install 10, cover 7 x 4, janky 7 x 2.5, cost 2 x 2 x 2.5, BR up to 10)
 node scripts/finalcheck.mjs --out /tmp/ls-finalcheck
 #    --human           wait for a person to join before the janky runs (the overflow check)
 #    --brain newest|pinned|<mp.dll>   default newest: the newest green ls-next3 build (ls_mode_ver 4+)
@@ -195,4 +223,60 @@ cd ~/loner-strike-tools && git worktree remove $WT; git worktree prune
 
 ## Dry runs (2026-11-14)
 
-See the end of this file.
+The third dry run (`--dry`, short runs, 6 graphs) at 8d7a5d1d proved the harness from end to end.
+
+**Versions, all fresh:**
+- source 8d7a5d1d (worktree);
+- 161 plugins compiled from it;
+- live nav pack (list 3b25c9a32589): 9 maps match, 15 files fetched;
+- brain ls-next3 892b97a (CI 43669651332, the branch head), and the sim said `ls_mode_ver 4`;
+- 5 Studio plugins from HEAD's generator.
+
+**Results:**
+- `fc_st_pre170` was refused with the "the most is 160" message.
+- Classic against `fc_perf_ls` at 16 bots: 81 against 88 fps. That's noise at 20 s; the real run samples
+  120 s.
+- `fc_st_fx` hit the message cap ("Effect Burst skipped: too many effects this frame", once a second)
+  and the server held 76 fps.
+- `fc_st_spawn` hit every cap with clear messages and never crashed (longest RCON silence 3.1 s).
+  **But the server fell to 4 fps.** See finding 1.
+- BR: a game started with 16 bots. 60 s is too short for contact; the real run waits up to 8 minutes.
+- Cover: fc_cover_fx 37 of 41 nodes ran. P5's input, cooldown, weapon and save nodes didn't get to run
+  in the 40 s window, because the map changed at the start. The full run is 3.5 minutes.
+
+**Harness fixes from the dry runs (in the commit after 8d7a5d1d):**
+- RCON closed its socket twice and crashed the script;
+- AMXX lists a debug build as "debug", not "running";
+- a debug install blocked the next install of the same mode;
+- another plugin's run-time error (miscstats on a map change) counted against the mode;
+- caps that write the log thousands of times a second are now a stress failure ("log flood").
+
+**Findings for the owners (not fixed here):**
+1. **Cap messages flood the log.** In `fc_st_spawn`, 10,257 skip lines in 30 s, about 75 a second each:
+   - Spawn Trigger Volume (W2, `collide.rs`);
+   - Loop Sound (effects agent);
+   - "out of entity slots" from Spawn Entity, Spawn Prop and Spawn Projectile (gen.rs `lsg_ent_room`, X).
+
+   Only `lsg_msg_room` says its skip once a second. The log writing is the likely cause of the 4 fps.
+   The fix: the same once-a-second rule for every cap message.
+2. **"Things inside one trigger volume" is 32 letters** (limits.rs and limits.ts `volume_members`). A
+   mode setting's label holds 30, so the setting the Studio adds with Spawn Trigger Volume makes the graph
+   fail its own check ("needs a label (30)"). Every mode using Spawn Trigger Volume can't compile. Owner:
+   W2 or X (limits). The fix is a shorter label ("Things in one trigger volume") and a test that every
+   LIMITS label fits 30.
+3. **A graph over 400 nodes saves but won't open.** The save route accepted a 605-node graph and listed
+   it. Opening it says the file is damaged ("nodes: Array must contain at most 400"), while the cap is
+   graph.rs `MAX_NODES`. Owner: X. The save should refuse with the size message, or the cap should be
+   raised. Either way, the UI check runs at the 400-node cap.
+4. **every_node_3 isn't a valid mode as committed.** Its empty settings and its unwired Objective Marker
+   and Effect Burst fail the Studio's check. The cover copy fills them in (`make_graphs.py playable`).
+   Information for the node agents: the every-node graphs only prove the compile.
+
+**Studio UI at the cap (400 nodes, 536 wires; WebKit, dev UI):**
+- opens in 1.6 s;
+- a node drag takes 5 ms a step at zoom 1 (p50 17, p95 23) and 6 ms zoomed out (p95 37);
+- pan and wire drag 2–4 ms a step;
+- undo 47 ms;
+- no page errors.
+
+The connect step found no free input in view, so it was skipped; it isn't a failure.
