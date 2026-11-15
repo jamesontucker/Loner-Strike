@@ -1546,3 +1546,16 @@ Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small ma
   are counted in the next line)". It now says "up to Most a second (that setting's number of lines) from this node; the
   rest are counted in the next line." Same one line in make_nodes.py, nodes.json and nodehelp.json, committed from HEAD
   so none of your uncommitted work went in. The id and settings are unchanged; the goldens don't carry the help text.
+
+- **Parity A, 2026-11-15: two help-text slips the Types reference shows** (yours to fix, in node_help.py or make_nodes.py;
+  I changed nothing in the catalog):
+  1. "a list of the type set in **Holdss**" in 19 array pins (array.get and the rest): the setting's label "Holds" got an
+     extra s from the generic pin-help template.
+  2. 13 pins whose help is only the type's id: "Entity: component.", "Entity: npc.", "Marker: objmarker.",
+     "Handle: soundloop.", "Model or sprite: visual.", "A: color." (comp.create, creature.spawn, npc.spawn, npc.spawn_use,
+     proj.spawn, fx.marker, vol.spawn, snd.loop, cast.volume, cast.objmarker, color.lerp...). The template looks to fall
+     back to the raw type for the new types: something like "Entity: the NPC it made (an NPC handle)." would read well.
+  The node reference now has a Pin types page (site/reference/nodes/types.html) built from nodes.json pinTypes,
+  schema.ts's built-in enums and structs and graph.rs upcast(); `node scripts/gen-reference.mjs --check` fails on a pin
+  type without a color, a styled mark (file, rainbow) or an entry in TYPE_DOCS in that script. A new pin type or
+  built-in enum needs one line there: tell me, or add it.

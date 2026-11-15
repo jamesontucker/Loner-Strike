@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error (a plain .mjs script, no types)
-import { entities, missingHelp, nodes } from "../../../scripts/gen-reference.mjs";
+import { entities, missingHelp, nodes, typeProblems } from "../../../scripts/gen-reference.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HELP = JSON.parse(readFileSync(join(here, "../src/views/tools/studio/nodehelp.json"), "utf8")).help;
@@ -149,4 +149,37 @@ test("a search typed while the index is still loading runs as soon as it arrives
   await page.locator("#ref-q").fill("door");
   await page.locator("#ref-q").fill("ladder");
   await expect(page.locator("#ref-results li").first()).toContainText(/ladder/i, { timeout: 8000 });
+});
+
+test("every pin type has a look and a Types entry (add one when you add a type)", () => {
+  expect(typeProblems(), "pin types without a color, a styled mark or a Types entry").toEqual([]);
+});
+
+test("the Types page: a card per type with its pin, upcasts and casts; pins link to it; enum values; # marks; search", async ({ page }) => {
+  await page.goto("/reference/nodes/types.html");
+  const data = nodes();
+  for (const k of Object.keys(data.pinTypes)) await expect(page.locator(`#t-${k.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`), k).toHaveCount(1);
+  const npc = page.locator("#t-npc");
+  await expect(npc.locator(".pbadge")).toHaveText("N");
+  await expect(npc).toContainText("Goes into");
+  await expect(npc.locator("a", { hasText: "Entity" }).first()).toHaveAttribute("href", "#t-entity");
+  await expect(npc.locator(".chip", { hasText: "As NPC" }).first()).toBeVisible();
+  await expect(page.locator("#t-entity")).toContainText("Creature");
+  await expect(page.locator("#t-enum-ls-hitzone")).toContainText("left leg");
+  await expect(page.locator("#t-enum-ls-weapon")).toContainText("Text");
+  await expect(page.locator("#t-color .pin.rainbow")).toHaveCount(1);
+  await expect(page.locator("#t-model .pin.file")).toHaveCount(1);
+  await expect(page.locator(".ref-main a", { hasText: "Types and casting guide" })).toHaveCount(1);
+  // a node card: its pins' types link to the page, an enum pin lists its values
+  await page.goto("/reference/nodes/events.html");
+  const hurt = page.locator("#n-event-player-hurt");
+  await hurt.locator("summary", { hasText: "Outputs" }).click();
+  await expect(hurt.locator("dd", { hasText: "Values: generic, head" })).toBeVisible();
+  await expect(hurt.locator("a.ty", { hasText: "Hit Zone" })).toHaveAttribute("href", "types.html#t-enum-ls-hitzone");
+  await page.goto("/reference/nodes/enums.html");
+  await expect(page.locator("#n-flow-switch-enum p.note")).toContainText("one output per value");
+  expect(await page.request.get("/reference/nodes/arrays.html").then((r) => r.text())).toContain('class="pwhole"');
+  // search: types are in the index
+  await page.locator("#ref-q").fill("hit zone");
+  await expect(page.locator("#ref-results li", { hasText: "Pin type" }).first()).toBeVisible();
 });
