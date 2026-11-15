@@ -96,9 +96,17 @@ pub fn wanted(rel: &str, _game: &str) -> bool {
     safe_path(rel) && crate::extras::downloadable(rel) && !valves(rel)
 }
 
-/// On any of Valve's lists (stock_valve, stock_cstrike, stock_czero; doctor::is_stock for both games).
+/// On any of Valve's lists (stock_valve, stock_cstrike, stock_czero; doctor::is_stock for both
+/// games), or a texture file with Valve's Condition Zero naming (czcs_*.wad, czde_*.wad), listed
+/// or not.
 pub fn valves(rel: &str) -> bool {
-    crate::tools::doctor::is_stock(rel, "cstrike") || crate::tools::doctor::is_stock(rel, "czero")
+    crate::tools::doctor::is_stock(rel, "cstrike") || crate::tools::doctor::is_stock(rel, "czero") || cz_named(rel)
+}
+
+/// czcs_*.wad / czde_*.wad (any folder, any case): Valve's Condition Zero texture naming.
+fn cz_named(rel: &str) -> bool {
+    let name = rel.rsplit('/').next().unwrap_or(rel).to_lowercase();
+    name.ends_with(".wad") && (name.starts_with("czcs_") || name.starts_with("czde_"))
 }
 
 /// The custom maps that name a file only Condition Zero has (its textures, sky or sounds): on a
@@ -107,7 +115,7 @@ pub fn needs_czero(maps: &BTreeMap<String, MapNeeds>, game: &str) -> Vec<String>
     if game.eq_ignore_ascii_case("czero") {
         return Vec::new();
     }
-    let cz_only = |rel: &str| crate::tools::doctor::is_stock(rel, "czero") && !crate::tools::doctor::is_stock(rel, "cstrike");
+    let cz_only = |rel: &str| cz_named(rel) || (crate::tools::doctor::is_stock(rel, "czero") && !crate::tools::doctor::is_stock(rel, "cstrike"));
     maps.iter()
         .filter(|(_, n)| {
             let (wads, sky) = worldspawn_of(&n.ent);
@@ -796,11 +804,17 @@ mod tests {
         // Valve's files for either game never go up, whichever game the server runs
         assert!(!wanted("czcs_italy.wad", "cstrike"), "Condition Zero's own texture file on a CS 1.6 server");
         assert!(!wanted("czcs_italy.wad", "czero"));
+        // Condition Zero's naming, even off the lists
+        for n in ["czcs_miami.wad", "czde_quarry.wad", "CZDE_Quarry.WAD", "maps/czcs_x.wad"] {
+            assert!(!wanted(n, "cstrike"), "{n}");
+        }
+        assert!(wanted("my_czcs_miami.wad", "cstrike") && wanted("czcs.wad", "cstrike"));
         let cz = BTreeMap::from([
             ("cz_map".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\czcs_italy.wad;\\\\x\\\\mine.wad\"\n}".into(), res: String::new() }),
             ("plain".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\halflife.wad\"\n}".into(), res: String::new() }),
+            ("miami".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\czcs_miami.wad\"\n}".into(), res: String::new() }),
         ]);
-        assert_eq!(needs_czero(&cz, "cstrike"), ["cz_map"]);
+        assert_eq!(needs_czero(&cz, "cstrike"), ["cz_map", "miami"]);
         assert!(needs_czero(&cz, "czero").is_empty());
     }
 
