@@ -1489,13 +1489,15 @@ pub fn deferred(kind: &str, pin: &str) -> bool {
         "msg.menu" => pin != "then",
         // (the replies come later; it has no Then)
         "npc.choose" => true,
+        // (T1fix: a projectile's On Hit and On Expired come later, for that projectile)
+        "proj.spawn" => pin == "on_hit" || pin == "on_expire",
         _ => false,
     }
 }
 
 /// Nodes that wait (or run their flow later): not inside a Function.
 pub fn latent(kind: &str) -> bool {
-    matches!(kind, "timer.delay" | "timer.retrigger" | "timer.repeat" | "timer.countdown" | "msg.menu" | "npc.choose")
+    matches!(kind, "timer.delay" | "timer.retrigger" | "timer.repeat" | "timer.countdown" | "msg.menu" | "npc.choose" | "proj.spawn")
 }
 
 /// Pin ids a Function's or Macro's own pins can't have (the flow pins' ids).

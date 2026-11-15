@@ -12803,6 +12803,718 @@
 ]
 }
 },
+"proj.spawn":{
+"title":"Spawn Projectile",
+"category":"Projectiles",
+"what":"Fires a model or sprite (loaded with the map). Where from: Position, else At entity (a player's eyes) moved by the offsets along its facing, else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"owner",
+"dir":"in",
+"help":"Owner: a player. Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"The position. Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"dir",
+"dir":"in",
+"help":"Direction: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"rot_off",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"speed",
+"dir":"in",
+"help":"Speed: a number. Leave it empty to use the setting."
+},
+{
+"id":"damage",
+"dir":"in",
+"help":"Damage: a number. Leave it empty to use the setting."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Projectile: an entity (a thing in the map)."
+},
+{
+"id":"on_hit",
+"dir":"out",
+"help":"Runs on On Hit."
+},
+{
+"id":"on_expire",
+"dir":"out",
+"help":"Runs on On Expired."
+},
+{
+"id":"hit_pos",
+"dir":"out",
+"help":"Hit Position: a position or direction (X, Y, Z)."
+},
+{
+"id":"hit_normal",
+"dir":"out",
+"help":"Hit Normal: a position or direction (X, Y, Z)."
+},
+{
+"id":"hit_player",
+"dir":"out",
+"help":"Hit Player: a player."
+},
+{
+"id":"hit_ent",
+"dir":"out",
+"help":"Hit Entity: an entity (a thing in the map)."
+},
+{
+"id":"hit_world",
+"dir":"out",
+"help":"Hit World: yes or no."
+},
+{
+"id":"hit_zone",
+"dir":"out",
+"help":"Hit Zone: a number."
+},
+{
+"id":"hit_owner",
+"dir":"out",
+"help":"Owner: a player."
+}
+],
+"settings":[
+{
+"id":"model",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"off_f",
+"help":"A number from -512 to 512."
+},
+{
+"id":"off_r",
+"help":"A number from -512 to 512."
+},
+{
+"id":"off_u",
+"help":"A number from -512 to 512."
+},
+{
+"id":"speed",
+"help":"A number from 1 to 5000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 4. A wire into the pin of the same name is used instead."
+},
+{
+"id":"gravity",
+"help":"A number from 0 to 4."
+},
+{
+"id":"life",
+"help":"A number from 0.1 to 60."
+},
+{
+"id":"bounce",
+"help":"A number from 0 to 10."
+},
+{
+"id":"damage",
+"help":"A number from 0 to 5000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"radius",
+"help":"A number from 0 to 2000."
+},
+{
+"id":"falloff",
+"help":"On or off."
+},
+{
+"id":"explode",
+"help":"On or off."
+},
+{
+"id":"trail",
+"help":"On or off."
+},
+{
+"id":"spin",
+"help":"On or off."
+},
+{
+"id":"dangerous",
+"help":"On or off."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"proj.on_hit",
+"proj.remove",
+"proj.velocity"
+],
+"example":{
+"caption":"When a round starts, Spawn Projectile runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"proj.spawn",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"model":"models/w_hegrenade.mdl",
+"off_f":16,
+"off_r":0,
+"off_u":0,
+"speed":1000,
+"scale":1,
+"gravity":0,
+"life":5,
+"bounce":0,
+"damage":0,
+"radius":0,
+"falloff":true,
+"explode":false,
+"trail":false,
+"spin":false,
+"dangerous":false
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Projectile:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"proj.on_hit":{
+"title":"Projectile Hit",
+"category":"Projectiles",
+"what":"Runs when a projectile hits something: where, the surface's normal there, what it hit (World: a wall or the floor), and a player's hitgroup (1 head, 2 chest, 3 stomach, 4-5 arms, 6-7 legs; 0 unknown).",
+"pins":[
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"proj",
+"dir":"out",
+"help":"Projectile: an entity (a thing in the map)."
+},
+{
+"id":"owner",
+"dir":"out",
+"help":"Owner: a player."
+},
+{
+"id":"pos",
+"dir":"out",
+"help":"Hit position: a position or direction (X, Y, Z)."
+},
+{
+"id":"normal",
+"dir":"out",
+"help":"Normal: a position or direction (X, Y, Z)."
+},
+{
+"id":"hit",
+"dir":"out",
+"help":"Hit: an entity (a thing in the map)."
+},
+{
+"id":"world",
+"dir":"out",
+"help":"World: yes or no."
+},
+{
+"id":"hitgroup",
+"dir":"out",
+"help":"Hitgroup: a number."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"proj.spawn",
+"proj.remove",
+"proj.velocity"
+],
+"example":{
+"caption":"Projectile Hit prints what it gives to the server console.",
+"nodes":[
+{
+"id":"it",
+"type":"proj.on_hit",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"text":"Projectile:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"it",
+"pin":"proj"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"proj.remove":{
+"title":"Remove Projectile",
+"category":"Projectiles",
+"what":"Takes a projectile away at once (no hit, no damage).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"proj",
+"dir":"in",
+"help":"Projectile: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"proj.on_hit",
+"proj.velocity",
+"proj.spawn"
+],
+"example":{
+"caption":"When a round starts, Remove Projectile runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"proj.remove",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"proj"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"proj.velocity":{
+"title":"Projectile Velocity",
+"category":"Projectiles",
+"what":"How fast and which way a projectile flies (units a second).",
+"pins":[
+{
+"id":"proj",
+"dir":"in",
+"help":"Projectile: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Velocity: a position or direction (X, Y, Z)."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"proj.set_velocity",
+"proj.remove",
+"proj.on_hit"
+],
+"example":{
+"caption":"When a round starts, Projectile Velocity is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"proj.velocity",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"comp.find",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"name":"spot1"
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Velocity:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"proj"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"proj.set_velocity":{
+"title":"Set Projectile Velocity",
+"category":"Projectiles",
+"what":"Sends a projectile off at a new velocity (its facing follows).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"proj",
+"dir":"in",
+"help":"Projectile: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"proj.velocity",
+"proj.remove",
+"proj.on_hit"
+],
+"example":{
+"caption":"When a round starts, Set Projectile Velocity runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"proj.set_velocity",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+},
+{
+"id":"vec",
+"type":"vec.make",
+"pos":{
+"x":0,
+"y":280
+},
+"params":{
+"x":0,
+"y":0,
+"z":64
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"proj"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"vel"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
 "br.heal_give":{
 "title":"Give Healing Item",
 "category":"Battle Royale",

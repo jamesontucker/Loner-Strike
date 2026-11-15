@@ -36,6 +36,8 @@ mod help_tests;
 mod examples_tests;
 #[cfg(test)]
 mod timeline_tests;
+#[cfg(test)]
+mod proj_tests; // T1fix: projectiles
 
 use crate::server::Shared;
 use axum::extract::{Path as UrlPath, Query, State};

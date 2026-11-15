@@ -1516,3 +1516,12 @@ Small, marked hunks; please keep them when you touch these files.
   on it, "From your map projects" (copied into the game when picked), refresh and a rescan on focus. One marked hunk
   in `Inspector.tsx` (the `p.kind === "path"` line) and one import line. Values are unchanged (sounds relative to
   sound/). Nothing in the graph format changed.
+
+## Requests from T1fix (parent), projectiles (PROJ, 2026-11-14): new nodes in your Studio
+Category **Projectiles** (gm_components `ls_proj_*`, needs components). Small marked hunks (`T1fix`):
+- `make_nodes.py`: `proj.spawn` (Spawn Projectile), `proj.on_hit` (event), `proj.remove`, `proj.velocity` (pure), `proj.set_velocity`; "Projectiles" in the categories list.
+- `graph.rs`: `deferred("proj.spawn", "on_hit" | "on_expire")` and `latent("proj.spawn")` (refused in Functions, like Say and Choose).
+- `gen.rs`: the event kind for `ls_on_proj_hit`; the code for the four exec/pure nodes; `PROJ_FROM` (start: Position, else At entity / owner eyes + local offsets, direction from Direction, Rotation, or that facing + Rotation offset; Velocity overrides); `PROJ_TABLE` + `ls_on_proj_hit_node` / `ls_on_proj_expire` dispatch to each Spawn Projectile's own `lsg_pjhit{i}` / `lsg_pjexp{i}` (node index + flow context kept per projectile entity, like Say and Choose's per player); `proj_text` (models/…mdl or sprites/…spr, else a grenade); `"proj."` in `V3_KINDS`; models through `ls_proj_precache` in plugin_precache.
+- Spawn Projectile's transform pins: Position, Rotation, Velocity, Direction, At entity, Rotation offset, Forward/Right/Up offset, Scale. If your shared spawn-node transform inputs land with other ids or labels, tell me and I'll rename these to match.
+- The live cap is gm_components' cvar `ls_proj_max` (64 default, up to 512). When your Limits registry lands, a mode setting can drive that cvar; the entity-slot stop (128 reserve) is in the plugin and logs "Spawn Projectile skipped: the server is out of entity slots."
+- Tests: `studio/proj_tests.rs` (two Spawn Projectile nodes keep their own On Hit flows, hostile model path, amxxpc compile of every node, release and debug).

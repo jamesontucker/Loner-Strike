@@ -141,6 +141,20 @@ fn sprite_text(s: &str) -> String {
     if t.starts_with("sprites/") && t.ends_with(".spr") && !t.contains("..") { t } else { "sprites/arrow1.spr".into() }
 }
 
+/// Spawn Projectile's start (T1fix): an entity's place (a player's eyes) moved by a local
+/// offset along its facing (turned by a rotation offset), and that facing as the direction.
+const PROJ_FROM: &str = "\nstock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, Float:o[3], Float:d[3])\n{\n\tif (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))\n\t\treturn false\n\tnew Float:a[3], Float:fw[3], Float:rt[3], Float:up[3]\n\tpev(e, pev_origin, o)\n\tif (e <= MaxClients)\n\t{\n\t\tnew Float:vo[3]\n\t\tpev(e, pev_view_ofs, vo)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\to[k] += vo[k]\n\t\tpev(e, pev_v_angle, a)\n\t}\n\telse\n\t\tpev(e, pev_angles, a)\n\tif (rot >= 0)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\ta[k] += lsg_vc(rot, k)\n\tangle_vector(a, ANGLEVECTOR_FORWARD, fw)\n\tangle_vector(a, ANGLEVECTOR_RIGHT, rt)\n\tangle_vector(a, ANGLEVECTOR_UP, up)\n\tfor (new k = 0; k < 3; k++)\n\t{\n\t\to[k] += fw[k] * f + rt[k] * r + up[k] * u\n\t\td[k] = fw[k]\n\t}\n\treturn true\n}";
+
+/// Live projectiles a Spawn Projectile made (T1fix): which node, and the flow's context, by the
+/// projectile's entity; a note for an entity already in the table replaces it (a reused index).
+const PROJ_TABLE: &str = "\n#define LSG_PJ 64\nstock g_lsgPjEnt[LSG_PJ], g_lsgPjNode[LSG_PJ], g_lsgPjCtx[LSG_PJ][LSG_CTX], g_lsgPjAt\n\nstock lsg_pj_find(e)\n{\n\tif (e <= 0)\n\t\treturn -1\n\tfor (new s = 0; s < LSG_PJ; s++)\n\t\tif (g_lsgPjEnt[s] == e)\n\t\t\treturn s\n\treturn -1\n}\n\nstock lsg_pj_note(e, node, const ctx[])\n{\n\tnew s = lsg_pj_find(e)\n\tif (s < 0)\n\t{\n\t\tfor (new k = 0; k < LSG_PJ && s < 0; k++)\n\t\t\tif (!g_lsgPjEnt[k] || !pev_valid(g_lsgPjEnt[k]))\n\t\t\t\ts = k\n\t\tif (s < 0)\n\t\t{\n\t\t\ts = g_lsgPjAt\n\t\t\tg_lsgPjAt = (g_lsgPjAt + 1) % LSG_PJ\n\t\t}\n\t}\n\tg_lsgPjEnt[s] = e\n\tg_lsgPjNode[s] = node\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tg_lsgPjCtx[s][k] = ctx[k]\n}\n";
+
+/// A projectile's model or sprite: models/....mdl or sprites/....spr, else a grenade (T1fix).
+fn proj_text(s: &str) -> String {
+    let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
+    if !t.contains("..") && ((t.starts_with("models/") && t.ends_with(".mdl")) || (t.starts_with("sprites/") && t.ends_with(".spr"))) { t } else { "models/w_hegrenade.mdl".into() }
+}
+
 /// A sound path (under sound/, .wav) for a string literal.
 fn sound_text(s: &str) -> String {
     let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
@@ -335,6 +349,8 @@ const EVENTS: &[EventKind] = &[
     // NPCs and interactables (gm_components ls_npc / ls_interactable)
     EventKind { kind: "npc.on_talk", sig: "public ls_on_npc_talk(id, npc)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("npc", "npc")], tail: "\treturn PLUGIN_CONTINUE", named: Some("npc") },
     EventKind { kind: "npc.on_use", sig: "public ls_on_interact(id, ent)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("entity", "ent")], tail: "\treturn PLUGIN_CONTINUE", named: Some("ent") },
+    // T1fix: projectiles (gm_components)
+    EventKind { kind: "proj.on_hit", sig: "public ls_on_proj_hit(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)", register: &[], prelude: "", guard: "\t#pragma unused pos\n\t#pragma unused normal", values: &[("proj", "proj"), ("owner", "owner"), ("pos", "lsg_vfrom(pos)"), ("normal", "lsg_vfrom(normal)"), ("hit", "hit"), ("world", "(hit == 0 ? 1 : 0)"), ("hitgroup", "_:float(hitgroup)")], tail: "", named: None },
     EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
     EventKind { kind: "turret.on_placed", sig: "public ls_on_turret(ent, owner)", register: &[], prelude: "", guard: "", values: &[("turret", "ent"), ("owner", "owner >= 1 && owner <= MaxClients ? owner : 0")], tail: "", named: None },
@@ -954,6 +970,7 @@ impl<'a> Gen<'a> {
                 format!("lsg_vplayer({}, {what})", i("player", "player"))
             }
             "vec.entity" | "ent.position" => format!("lsg_vent({})", i("in", "entity")),
+            "proj.velocity" => format!("lsg_proj_vel({})", i("proj", "entity")), // T1fix
             "ent.rotation" => format!("lsg_erot({})", i("in", "entity")),
             "ent.transform" => {
                 let e = i("in", "entity");
@@ -1259,6 +1276,25 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         d.push_str("\t}\n\treturn PLUGIN_CONTINUE\n}");
         o.line(d);
     }
+    if g.nodes.iter().any(|n| n.kind == "proj.spawn") {
+        o.line(PROJ_FROM); // T1fix
+        // which Spawn Projectile made each live projectile, and its flow's context
+        let spawns: Vec<usize> = gen.live.iter().filter(|id| v.defs[*id].kind == "proj.spawn").map(|id| gen.index(id)).collect();
+        let mut d = String::from(PROJ_TABLE);
+        d.push_str("\npublic ls_on_proj_hit_node(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)\n{\n\tnew s = lsg_pj_find(proj)\n\tif (s < 0)\n\t\treturn\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = g_lsgPjCtx[s][k]\n\tswitch (g_lsgPjNode[s])\n\t{\n");
+        for i in &spawns {
+            d.push_str(&format!("\t\tcase {}:\n\t\t\tlsg_pjhit{i}(ctx, owner, pos, normal, hit, hitgroup)\n", i + 1));
+        }
+        d.push_str("\t}\n}\n\npublic ls_on_proj_expire(proj, owner)\n{\n\t#pragma unused owner\n\tnew s = lsg_pj_find(proj)\n\tif (s < 0)\n\t\treturn\n\tnew ctx[LSG_CTX], k = g_lsgPjNode[s]\n\tfor (new c = 0; c < LSG_CTX; c++)\n\t\tctx[c] = g_lsgPjCtx[s][c]\n\tg_lsgPjEnt[s] = 0\n\tswitch (k)\n\t{\n");
+        for i in &spawns {
+            d.push_str(&format!("\t\tcase {}:\n\t\t\tlsg_pjexp{i}(ctx)\n", i + 1));
+        }
+        d.push_str("\t}\n}");
+        o.line(d);
+    }
+    if g.nodes.iter().any(|n| n.kind == "proj.velocity") {
+        o.line("\nstock lsg_proj_vel(e)\n{\n\tnew Float:v[3]\n\tif (e > 0)\n\t\tls_proj_velocity(e, v)\n\treturn lsg_vfrom(v)\n}"); // T1fix
+    }
     if gen.live.iter().any(|id| matches!(v.defs[*id].kind.as_str(), "npc.spawn" | "npc.spawn_use") && v.data_source(id, "pos").is_some()) {
         o.line("\nstock bool:lsg_npc_at(v, Float:o[3])\n{\n\tfor (new k = 0; k < 3; k++)\n\t\to[k] = lsg_vc(v, k)\n\treturn true\n}");
     }
@@ -1421,6 +1457,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_exp = has("fx.explosion");
     let uses_beam = has("fx.beam") || has("fun.trail");
     let npc_models: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "npc.spawn").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or("models/barney.mdl"))).collect();
+    // T1fix: a projectile's model or sprite, loaded with the map through gm_components
+    let proj_models: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "proj.spawn").map(|n| proj_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
     let mut props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop" || n.kind == "npc.spawn_use").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
     // an Objective Marker's sprite: loaded with the map, only when a marker is used (and there)
     props.extend(g.nodes.iter().filter(|n| n.kind == "fx.marker").map(|n| sprite_text(n.params.get("sprite").and_then(Value::as_str).unwrap_or(""))));
@@ -1480,8 +1518,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || engine::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
         let mut pre = String::from("public plugin_precache()\n{");
+        for m in &proj_models {
+            pre.push_str(&format!("\n\t// a projectile the mode fires: loaded with the map\n\tls_proj_precache({})", pawn_str(m)));
+        }
         for m in &npc_models {
             pre.push_str(&format!("\n\t// an NPC the mode makes: its model is loaded with the map\n\tls_npc_precache({})", pawn_str(m)));
         }
@@ -2410,6 +2451,64 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             } else {
                 b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = {call}"));
             }
+            then_line(&mut b, "then");
+        }
+        // T1fix: projectiles (gm_components ls_proj_*): graph text never reaches a command
+        "proj.spawn" => {
+            let wired = |k: &str| v.data_source(id, k).is_some();
+            let owner = if wired("owner") { inp("owner", "player") } else { "0".into() };
+            let model = pawn_str(&proj_text(gen.text(n, def, "model")));
+            let flag = |k: &str| if gen.boolean(n, def, k) { 1 } else { 0 };
+            let keys = format!("trail={} spin={} bounce={} radius={} falloff={} explode={} dangerous={}", flag("trail"), flag("spin"), gen.num(n, def, "bounce").clamp(0.0, 10.0).round(), gen.num(n, def, "radius").clamp(0.0, 2000.0).round(), flag("falloff"), flag("explode"), flag("dangerous"));
+            b.line("\tnew Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true");
+            // where from and which way: At entity (or the owner's eyes) with its offsets, then
+            // what's wired overrides (Position, Direction or Rotation)
+            let rot = if wired("rot_off") { inp("rot_off", "vector") } else { "-1".into() };
+            let base = if wired("at_ent") { inp("at_ent", "entity") } else { owner.clone() };
+            b.line(format!("\tlsgA = lsg_proj_from({base}, {}, {}, {}, {rot}, o, d)", float_lit(gen.num(n, def, "off_f").clamp(-512.0, 512.0)), float_lit(gen.num(n, def, "off_r").clamp(-512.0, 512.0)), float_lit(gen.num(n, def, "off_u").clamp(-512.0, 512.0))));
+            if wired("pos") {
+                b.line(format!("\tlsg_vto({}, o)\n\tlsgA = true", inp("pos", "vector")));
+            }
+            if wired("dir") {
+                b.line(format!("\tlsg_vto({}, d)", inp("dir", "vector")));
+            } else if wired("angles") {
+                b.line(format!("\tnew Float:pa[3]\n\tlsg_vto({}, pa)\n\tangle_vector(pa, ANGLEVECTOR_FORWARD, d)", inp("angles", "vector")));
+            }
+            b.line(format!("\tformatex(lsgK, charsmax(lsgK), \"{keys} damage=%.0f scale=%.2f\", floatclamp({}, 0.0, 5000.0), floatclamp({}, 0.05, 4.0))", inp("damage", "number"), inp("scale", "number")));
+            let call = format!("ls_proj_spawn({owner}, {model}, o, d, floatclamp({}, 1.0, 5000.0), {}, {}, lsgK)", inp("speed", "number"), float_lit(gen.num(n, def, "gravity").clamp(0.0, 4.0)), float_lit(gen.num(n, def, "life").clamp(0.1, 60.0)));
+            // Velocity, when wired, sets the motion outright
+            // (On Hit / On Expired come later, for this projectile only: its node and the flow's
+            // context are kept by the projectile's entity, cleared when it's gone or reused)
+            let note = format!("\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsg_pj_note(g_lsgOut[{i}], {}, ctx)", i + 1);
+            let vel = if wired("vel") { format!("\n\t\tif (g_lsgOut[{i}])\n\t\t{{\n\t\t\tnew Float:pv[3]\n\t\t\tlsg_vto({}, pv)\n\t\t\tls_proj_set_velocity(g_lsgOut[{i}], pv)\n\t\t}}", inp("vel", "vector")) } else { String::new() };
+            if debug {
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsgA)\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = {call}{vel}{note}\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("Not fired: no Position, and no At entity or living owner to fire from."), err("Spawn Projectile skipped: the server is out of entity slots.")));
+            } else {
+                b.line(format!("\tg_lsgOut[{i}] = 0\n\tif (!{comps} && lsgA)\n\t{{\n\t\tg_lsgOut[{i}] = {call}{vel}{note}\n\t}}"));
+            }
+            // the callbacks (stocks after the handlers, like Say and Choose's replies)
+            let mut set = String::new();
+            for (pin, val) in [("hit_pos", "lsg_vfrom(pos)"), ("hit_normal", "lsg_vfrom(normal)"), ("hit_player", "(hit >= 1 && hit <= MaxClients) ? hit : 0"), ("hit_ent", "(hit > MaxClients) ? hit : 0"), ("hit_world", "hit == 0 ? 1 : 0"), ("hit_zone", "_:float(hitgroup)"), ("hit_owner", "owner")] {
+                if let Some(k) = gen.out_index(id, pin) {
+                    set.push_str(&format!("\n\tg_lsgO[{k}] = {val}"));
+                }
+            }
+            let dbg_hit = if debug { format!("\n\tlsd_exit({i}, \"hit\")") } else { String::new() };
+            let dbg_exp = if debug { format!("\n\tlsd_exit({i}, \"expired\")") } else { String::new() };
+            let on_hit = next("on_hit").unwrap_or_else(|| "#pragma unused ctx".into());
+            let on_exp = next("on_expire").unwrap_or_else(|| "#pragma unused ctx".into());
+            let cb = format!("\n// {} ({}): its hits and its end\nstock lsg_pjhit{i}(ctx[], owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)\n{{\n\t#pragma unused owner\n\t#pragma unused pos\n\t#pragma unused normal\n\t#pragma unused hit\n\t#pragma unused hitgroup{set}{dbg_hit}\n\t{on_hit}\n}}\n\nstock lsg_pjexp{i}(ctx[])\n{{{dbg_exp}\n\t{on_exp}\n}}", comment_text(&def.title), id_text(id));
+            menus_after.push((i, cb));
+            then_line(&mut b, "then");
+        }
+        "proj.remove" => {
+            let p = inp("proj", "entity");
+            check(&mut b, &format!("{comps} || {p} <= 0"), "Not done: no projectile wired in (or gm_components isn't running).", &[format!("\tls_proj_remove({p})"), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "proj.set_velocity" => {
+            let p = inp("proj", "entity");
+            check(&mut b, &format!("{comps} || {p} <= 0"), "Not done: no projectile wired in (or gm_components isn't running).", &[format!("\tnew Float:pv[3]\n\t\tlsg_vto({}, pv)\n\t\tls_proj_set_velocity({p}, pv)", inp("vel", "vector")), exit("done")]);
             then_line(&mut b, "then");
         }
         "npc.choose" => {
@@ -3572,6 +3671,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 const V3_KINDS: &[&str] = &[
     "creature.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
+    "proj.", // T1fix
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
 ];

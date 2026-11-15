@@ -94,6 +94,7 @@
   "Battle Royale",
   "Creatures",
   "Data tables",
+  "Projectiles",
   "HUD & View"
  ],
  "nodes": [
@@ -6268,6 +6269,397 @@
     }
    ],
    "keywords": "interactable lever note terminal pickup usable create",
+   "needs": "components"
+  },
+  {
+   "type": "proj.spawn",
+   "title": "Spawn Projectile",
+   "category": "Projectiles",
+   "help": "Fires a model or sprite (loaded with the map). Where from: Position, else At entity (a player's eyes) moved by the offsets along its facing, else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "owner",
+     "type": "player",
+     "label": "Owner",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation",
+     "optional": true
+    },
+    {
+     "id": "vel",
+     "type": "vector",
+     "label": "Velocity",
+     "optional": true
+    },
+    {
+     "id": "dir",
+     "type": "vector",
+     "label": "Direction",
+     "optional": true
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At entity",
+     "optional": true
+    },
+    {
+     "id": "rot_off",
+     "type": "vector",
+     "label": "Rotation offset",
+     "optional": true
+    },
+    {
+     "id": "speed",
+     "type": "number",
+     "label": "Speed",
+     "param": "speed"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage",
+     "param": "damage"
+    },
+    {
+     "id": "scale",
+     "type": "number",
+     "label": "Scale",
+     "param": "scale"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Projectile"
+    },
+    {
+     "id": "on_hit",
+     "type": "exec",
+     "label": "On Hit"
+    },
+    {
+     "id": "on_expire",
+     "type": "exec",
+     "label": "On Expired"
+    },
+    {
+     "id": "hit_pos",
+     "type": "vector",
+     "label": "Hit Position"
+    },
+    {
+     "id": "hit_normal",
+     "type": "vector",
+     "label": "Hit Normal"
+    },
+    {
+     "id": "hit_player",
+     "type": "player",
+     "label": "Hit Player"
+    },
+    {
+     "id": "hit_ent",
+     "type": "entity",
+     "label": "Hit Entity"
+    },
+    {
+     "id": "hit_world",
+     "type": "bool",
+     "label": "Hit World"
+    },
+    {
+     "id": "hit_zone",
+     "type": "number",
+     "label": "Hit Zone"
+    },
+    {
+     "id": "hit_owner",
+     "type": "player",
+     "label": "Owner"
+    }
+   ],
+   "params": [
+    {
+     "id": "model",
+     "label": "Model or sprite",
+     "kind": "path",
+     "default": "models/w_hegrenade.mdl"
+    },
+    {
+     "id": "off_f",
+     "label": "Forward offset",
+     "kind": "number",
+     "default": 16,
+     "min": -512,
+     "max": 512
+    },
+    {
+     "id": "off_r",
+     "label": "Right offset",
+     "kind": "number",
+     "default": 0,
+     "min": -512,
+     "max": 512
+    },
+    {
+     "id": "off_u",
+     "label": "Up offset",
+     "kind": "number",
+     "default": 0,
+     "min": -512,
+     "max": 512
+    },
+    {
+     "id": "speed",
+     "label": "Speed",
+     "kind": "number",
+     "default": 1000,
+     "min": 1,
+     "max": 5000
+    },
+    {
+     "id": "scale",
+     "label": "Scale",
+     "kind": "number",
+     "default": 1,
+     "min": 0.05,
+     "max": 4
+    },
+    {
+     "id": "gravity",
+     "label": "Gravity",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 4
+    },
+    {
+     "id": "life",
+     "label": "Lifetime (seconds)",
+     "kind": "number",
+     "default": 5,
+     "min": 0.1,
+     "max": 60
+    },
+    {
+     "id": "bounce",
+     "label": "Bounces",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10
+    },
+    {
+     "id": "damage",
+     "label": "Damage",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 5000
+    },
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 2000
+    },
+    {
+     "id": "falloff",
+     "label": "Falloff",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "explode",
+     "label": "Explosion",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "trail",
+     "label": "Trail",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "spin",
+     "label": "Spin",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "dangerous",
+     "label": "Dangerous to bots",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "projectile rocket arrow fireball bullet throw shoot missile grenade",
+   "needs": "components"
+  },
+  {
+   "type": "proj.on_hit",
+   "title": "Projectile Hit",
+   "category": "Projectiles",
+   "help": "Runs when a projectile hits something: where, the surface's normal there, what it hit (World: a wall or the floor), and a player's hitgroup (1 head, 2 chest, 3 stomach, 4-5 arms, 6-7 legs; 0 unknown).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "proj",
+     "type": "entity",
+     "label": "Projectile"
+    },
+    {
+     "id": "owner",
+     "type": "player",
+     "label": "Owner"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Hit position"
+    },
+    {
+     "id": "normal",
+     "type": "vector",
+     "label": "Normal"
+    },
+    {
+     "id": "hit",
+     "type": "entity",
+     "label": "Hit"
+    },
+    {
+     "id": "world",
+     "type": "bool",
+     "label": "World"
+    },
+    {
+     "id": "hitgroup",
+     "type": "number",
+     "label": "Hitgroup"
+    }
+   ],
+   "params": [],
+   "keywords": "projectile impact collide hit headshot",
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "proj.remove",
+   "title": "Remove Projectile",
+   "category": "Projectiles",
+   "help": "Takes a projectile away at once (no hit, no damage).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "proj",
+     "type": "entity",
+     "label": "Projectile",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "projectile delete destroy",
+   "needs": "components"
+  },
+  {
+   "type": "proj.velocity",
+   "title": "Projectile Velocity",
+   "category": "Projectiles",
+   "help": "How fast and which way a projectile flies (units a second).",
+   "inputs": [
+    {
+     "id": "proj",
+     "type": "entity",
+     "label": "Projectile",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Velocity"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "proj.set_velocity",
+   "title": "Set Projectile Velocity",
+   "category": "Projectiles",
+   "help": "Sends a projectile off at a new velocity (its facing follows).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "proj",
+     "type": "entity",
+     "label": "Projectile",
+     "required": true
+    },
+    {
+     "id": "vel",
+     "type": "vector",
+     "label": "Velocity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "projectile speed direction redirect homing",
    "needs": "components"
   },
   {
