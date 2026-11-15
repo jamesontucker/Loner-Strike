@@ -1804,6 +1804,7 @@ mod tests {
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
+        graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));
         graphs.push(("cast_nodes".into(), serde_json::to_string(&cast_mode()).unwrap()));
         graphs.push(("kind_nodes".into(), serde_json::to_string(&kind_mode()).unwrap()));

@@ -72,6 +72,9 @@
   "Timers",
   "Round clock",
   "Players",
+  "Input",
+  "Cooldowns",
+  "Weapons",
   "Damage",
   "Squads",
   "Buying",
@@ -20713,6 +20716,995 @@
     }
    ],
    "keywords": "music soundtrack cd audio track mp3 cdaudio"
+  },
+  {
+   "type": "in.pressed",
+   "title": "Player Pressed Button",
+   "category": "Events",
+   "help": "Runs when a player presses (or lets go of) a button the game knows: fire, right click, use, jump, duck, reload, walk or a move key. It arrives with the player's ping, like everything they do. Only: wire a player (from a variable) to listen to one player only. Include bots: bots press buttons too.",
+   "inputs": [
+    {
+     "id": "only",
+     "type": "player",
+     "label": "Only this player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "button",
+     "type": "text",
+     "label": "Button"
+    }
+   ],
+   "params": [
+    {
+     "id": "button",
+     "label": "Button",
+     "kind": "choice",
+     "default": "use",
+     "choices": [
+      [
+       "attack",
+       "Attack (fire)"
+      ],
+      [
+       "attack2",
+       "Attack 2 (right click)"
+      ],
+      [
+       "use",
+       "Use (E)"
+      ],
+      [
+       "jump",
+       "Jump"
+      ],
+      [
+       "duck",
+       "Duck"
+      ],
+      [
+       "reload",
+       "Reload"
+      ],
+      [
+       "walk",
+       "Walk (Shift)"
+      ],
+      [
+       "forward",
+       "Forward"
+      ],
+      [
+       "back",
+       "Back"
+      ],
+      [
+       "left",
+       "Move left"
+      ],
+      [
+       "right",
+       "Move right"
+      ],
+      [
+       "any",
+       "Any of these"
+      ]
+     ]
+    },
+    {
+     "id": "when",
+     "label": "When",
+     "kind": "choice",
+     "default": "pressed",
+     "choices": [
+      [
+       "pressed",
+       "Pressed"
+      ],
+      [
+       "released",
+       "Released"
+      ]
+     ]
+    },
+    {
+     "id": "bots",
+     "label": "Include bots",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "key input press button bind attack jump use reload duck walk",
+   "event": true
+  },
+  {
+   "type": "in.holding",
+   "title": "Is Holding Button",
+   "category": "Input",
+   "help": "Is the player holding this button down right now? (What reached the server: it trails their screen by their ping.)",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Holding"
+    }
+   ],
+   "params": [
+    {
+     "id": "button",
+     "label": "Button",
+     "kind": "choice",
+     "default": "attack",
+     "choices": [
+      [
+       "attack",
+       "Attack (fire)"
+      ],
+      [
+       "attack2",
+       "Attack 2 (right click)"
+      ],
+      [
+       "use",
+       "Use (E)"
+      ],
+      [
+       "jump",
+       "Jump"
+      ],
+      [
+       "duck",
+       "Duck"
+      ],
+      [
+       "reload",
+       "Reload"
+      ],
+      [
+       "walk",
+       "Walk (Shift)"
+      ],
+      [
+       "forward",
+       "Forward"
+      ],
+      [
+       "back",
+       "Back"
+      ],
+      [
+       "left",
+       "Move left"
+      ],
+      [
+       "right",
+       "Move right"
+      ]
+     ]
+    }
+   ],
+   "keywords": "key input held down pressing",
+   "pure": true
+  },
+  {
+   "type": "in.command",
+   "title": "Player Command",
+   "category": "Events",
+   "help": "Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. At most Most per second for each player (a Limits setting you can raise).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "args",
+     "type": "text",
+     "label": "Arguments"
+    }
+   ],
+   "params": [
+    {
+     "id": "command",
+     "label": "Command (ls_...)",
+     "kind": "name",
+     "default": "ls_dash"
+    },
+    {
+     "id": "rate",
+     "label": "Most per second (each player)",
+     "kind": "number",
+     "default": 5,
+     "min": 1,
+     "max": 1000
+    }
+   ],
+   "keywords": "key bind console command keybind hotkey ability",
+   "event": true
+  },
+  {
+   "type": "in.tell_bind",
+   "title": "Tell Player To Bind",
+   "category": "Input",
+   "help": "Shows how to bind a key to a Player Command: the line to type in the console (bind f \"ls_dash\"). Nothing is bound for them: the game never lets a server change a player's keys.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Key",
+     "kind": "name",
+     "default": "f"
+    },
+    {
+     "id": "command",
+     "label": "Command (ls_...)",
+     "kind": "name",
+     "default": "ls_dash"
+    }
+   ],
+   "keywords": "bind key help console"
+  },
+  {
+   "type": "cd.start",
+   "title": "Start Cooldown",
+   "category": "Cooldowns",
+   "help": "Starts a cooldown by name (like dash) for Seconds: for each player, each team or everyone. Is Ready says no until it's over.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "optional": true
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Ability",
+     "kind": "name",
+     "default": "dash"
+    },
+    {
+     "id": "scope",
+     "label": "For",
+     "kind": "choice",
+     "default": "player",
+     "choices": [
+      [
+       "player",
+       "Each player"
+      ],
+      [
+       "team",
+       "Each team"
+      ],
+      [
+       "global",
+       "Everyone (one for all)"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 5,
+     "min": 0,
+     "max": 86400
+    }
+   ],
+   "keywords": "cooldown timer ability wait recharge"
+  },
+  {
+   "type": "cd.ready",
+   "title": "Is Ready",
+   "category": "Cooldowns",
+   "help": "Is this ability's cooldown over (or never started)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Ready"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Ability",
+     "kind": "name",
+     "default": "dash"
+    },
+    {
+     "id": "scope",
+     "label": "For",
+     "kind": "choice",
+     "default": "player",
+     "choices": [
+      [
+       "player",
+       "Each player"
+      ],
+      [
+       "team",
+       "Each team"
+      ],
+      [
+       "global",
+       "Everyone (one for all)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "cooldown ready available",
+   "pure": true
+  },
+  {
+   "type": "cd.left",
+   "title": "Cooldown Time Left",
+   "category": "Cooldowns",
+   "help": "Seconds until this ability's cooldown is over (0 when ready).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Ability",
+     "kind": "name",
+     "default": "dash"
+    },
+    {
+     "id": "scope",
+     "label": "For",
+     "kind": "choice",
+     "default": "player",
+     "choices": [
+      [
+       "player",
+       "Each player"
+      ],
+      [
+       "team",
+       "Each team"
+      ],
+      [
+       "global",
+       "Everyone (one for all)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "cooldown remaining left",
+   "pure": true
+  },
+  {
+   "type": "cd.reset",
+   "title": "Reset Cooldown",
+   "category": "Cooldowns",
+   "help": "Ends a cooldown now (the ability is ready again).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Ability",
+     "kind": "name",
+     "default": "dash"
+    },
+    {
+     "id": "scope",
+     "label": "For",
+     "kind": "choice",
+     "default": "player",
+     "choices": [
+      [
+       "player",
+       "Each player"
+      ],
+      [
+       "team",
+       "Each team"
+      ],
+      [
+       "global",
+       "Everyone (one for all)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "cooldown reset clear refresh"
+  },
+  {
+   "type": "item.picked_up",
+   "title": "Picked Up",
+   "category": "Events",
+   "help": "Runs when a player picks a weapon or an item up from the ground (not when they buy one or the mode gives it). Item is its short name: ak47, kevlar, hegrenade...",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "item",
+     "type": "text",
+     "label": "Item"
+    }
+   ],
+   "params": [],
+   "keywords": "pickup pick up take weapon ground loot",
+   "event": true
+  },
+  {
+   "type": "item.dropped",
+   "title": "Dropped",
+   "category": "Events",
+   "help": "Runs when a player drops a weapon (G, or the mode makes them). On death: also when a dying player's weapon falls.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
+    }
+   ],
+   "params": [
+    {
+     "id": "death",
+     "label": "Also on death",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "drop throw weapon",
+   "event": true
+  },
+  {
+   "type": "wpn.infinite_ammo",
+   "title": "Infinite Ammo",
+   "category": "Weapons",
+   "help": "Keeps a player's ammo full: the clip (no reloading), the spare ammo, or both. Reset on death: back to normal when they die.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "what",
+     "label": "Keep full",
+     "kind": "choice",
+     "default": "both",
+     "choices": [
+      [
+       "clip",
+       "The clip"
+      ],
+      [
+       "reserve",
+       "Spare ammo"
+      ],
+      [
+       "both",
+       "Both"
+      ]
+     ]
+    },
+    {
+     "id": "reset",
+     "label": "Reset on death",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "ammo unlimited bullets clip reload"
+  },
+  {
+   "type": "wpn.fire_rate",
+   "title": "Fire Rate",
+   "category": "Weapons",
+   "help": "Makes a player's guns fire faster (2 = twice as fast) or slower (0.5 = half). 1 is normal. Reset on death: back to 1 when they die.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "mult",
+     "type": "number",
+     "label": "Multiplier",
+     "param": "mult"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mult",
+     "label": "Multiplier",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 10
+    },
+    {
+     "id": "reset",
+     "label": "Reset on death",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "rate of fire speed shoot faster rapid"
+  },
+  {
+   "type": "wpn.recoil",
+   "title": "Recoil",
+   "category": "Weapons",
+   "help": "Scales how much a player's view kicks when they fire: 0 none, 0.5 half, 1 normal, 2 double. Reset on death: back to 1 when they die.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "mult",
+     "type": "number",
+     "label": "Multiplier",
+     "param": "mult"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mult",
+     "label": "Multiplier",
+     "kind": "number",
+     "default": 0.5,
+     "min": 0,
+     "max": 5
+    },
+    {
+     "id": "reset",
+     "label": "Reset on death",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "recoil kick punch spray accuracy"
+  },
+  {
+   "type": "save.text_get",
+   "title": "Saved Text",
+   "category": "Saved",
+   "help": "Text kept for this player across maps, restarts and crashes (empty until set). Each mode has its own file.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "title"
+    }
+   ],
+   "keywords": "save load text string persistent",
+   "pure": true
+  },
+  {
+   "type": "save.text_set",
+   "title": "Save Text",
+   "category": "Saved",
+   "help": "Keeps text for this player across maps and restarts (up to 63 letters).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text",
+     "param": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "title"
+    },
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "",
+     "max": 63
+    }
+   ],
+   "keywords": "save text string persistent"
+  },
+  {
+   "type": "save.server_get",
+   "title": "Server Value",
+   "category": "Saved",
+   "help": "A value kept for the whole server (not per player) across maps and restarts: a number and a text (each 0 or empty until set).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Number"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "record"
+    }
+   ],
+   "keywords": "server global saved world record persistent",
+   "pure": true
+  },
+  {
+   "type": "save.server_set",
+   "title": "Set Server Value",
+   "category": "Saved",
+   "help": "Keeps a number or a text for the whole server across maps and restarts.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Number",
+     "param": "value"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "record"
+    },
+    {
+     "id": "what",
+     "label": "Keep",
+     "kind": "choice",
+     "default": "number",
+     "choices": [
+      [
+       "number",
+       "The number"
+      ],
+      [
+       "text",
+       "The text"
+      ]
+     ]
+    },
+    {
+     "id": "value",
+     "label": "Number",
+     "kind": "number",
+     "default": 0,
+     "min": -100000000,
+     "max": 100000000
+    }
+   ],
+   "keywords": "server global save record persistent"
+  },
+  {
+   "type": "save.top",
+   "title": "Top Players",
+   "category": "Saved",
+   "help": "The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. At most Most places (a Limits setting you can raise).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "rank",
+     "type": "number",
+     "label": "Rank"
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Name"
+    },
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Value"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Saved value",
+     "kind": "name",
+     "default": "wins"
+    },
+    {
+     "id": "order",
+     "label": "Order",
+     "kind": "choice",
+     "default": "high",
+     "choices": [
+      [
+       "high",
+       "Highest first"
+      ],
+      [
+       "low",
+       "Lowest first"
+      ]
+     ]
+    },
+    {
+     "id": "count",
+     "label": "Most",
+     "kind": "number",
+     "default": 10,
+     "min": 1,
+     "max": 1000
+    }
+   ],
+   "keywords": "leaderboard top best ranking scores highscore"
   },
   {
    "type": "ent.bone_pos",

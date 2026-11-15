@@ -2357,6 +2357,7 @@ pub fn capabilities(g: &Graph) -> Vec<&'static str> {
 /// Checks for the advanced nodes: what they can't do (an error) and what they are (a note).
 fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
     super::gen::engine::problems(g, v, p);
+    super::gen::p5::problems(g, v, p); // P5
     super::gen::coverage::problems(g, v, p); // EC
     for n in &g.nodes {
         let Some(def) = v.defs.get(n.id.as_str()) else { continue };

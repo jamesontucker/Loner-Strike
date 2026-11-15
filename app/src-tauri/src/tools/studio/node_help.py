@@ -257,6 +257,36 @@ NOTES.update({
     "eng.soundtrack": {"more": "The tracks are the Half-Life soundtrack's, numbered as the game numbers them (2 is the first). It's the player's own music volume (MP3 volume in the options).", "related": ["fx.sound_to"]},
 })
 
+# P5: player input, cooldowns, pickups, weapon tuning, saving (gen/p5.rs)
+NOTES.update({
+    "in.pressed": {"more": "Works the same on your own game, a listen server and a dedicated Linux server: the server sees a button when the player's game sends it, so it arrives with their ping (a 100 ms player's press shows up about 100 ms after they pressed). Only buttons the game itself has: fire, right click, use, jump, duck, reload, walk and the move keys. For any other key, use Player Command (players bind the key to it). Include bots: bots press buttons too (on by default); untick it for something only people should set off.",
+        "pins": {"only": "A player to listen to (from a variable, set when they're picked): nobody else's presses run it. Not wired: everyone's.", "player": "Who pressed it.", "button": "Which button, by name: attack, attack2, use, jump, duck, reload, walk, forward, back, left, right."},
+        "cost": "A check of each player's buttons every server frame, only when a mode has this node; the flow runs only on a press.", "related": ["in.holding", "in.command", "cd.start"]},
+    "in.holding": {"more": "What reached the server, so it trails the player's screen by their ping. Use it inside a flow that's already running (a timer, On Tick) to ask whether fire or duck is held right now.", "related": ["in.pressed"]},
+    "in.command": {"more": "A key the game has no button for (F, G, a mouse button) can still start a flow: name a command (ls_ and letters, like ls_dash), and players bind a key to it in their console (bind f \"ls_dash\"); Tell Player To Bind shows them the line. Arguments is whatever came after the command, as text only: the mode can read it, but it's never run as a command. Most per second keeps a held or scripted key from flooding the server; it's a Limits setting you can raise (the checks warn above 20).",
+        "pins": {"player": "Who used the command.", "args": "The rest of the line, as text (empty when there was none)."},
+        "risk": "Safe by design: the command name can only be ls_ and letters (never one of the game's own), and the arguments are never run.", "related": ["in.tell_bind", "in.pressed", "event.chat_command"]},
+    "in.tell_bind": {"more": "The game never lets a server change a player's keys, so this only tells them what to type: it shows the line in chat. Nothing is bound for them.", "related": ["in.command"]},
+    "cd.start": {"more": "One cooldown per ability name: for each player, each team, or one for everyone. Start it when the ability is used, check Is Ready before letting it run again. A player's cooldowns start clean when they leave; a new map starts them all clean.",
+        "pins": {"player": "Whose cooldown (For: each player).", "team": "Which team's cooldown (For: each team).", "secs": "How long until it's ready again."}, "related": ["cd.ready", "cd.left", "cd.reset", "in.pressed"]},
+    "cd.ready": {"related": ["cd.start", "cd.left"]},
+    "cd.left": {"more": "Good for a HUD line (Dash ready in 3 s).", "related": ["cd.start", "cd.ready"]},
+    "cd.reset": {"related": ["cd.start"]},
+    "item.picked_up": {"more": "Weapons and grenades from the ground (dropped ones, or a map's armoury), and armor from a map's armoury. Not what's bought, given by the mode, or handed out at spawn.",
+        "pins": {"player": "Who picked it up.", "item": "Its short name: ak47, deagle, hegrenade, kevlar."}, "related": ["item.dropped", "player.give_weapon"]},
+    "item.dropped": {"pins": {"player": "Who dropped it.", "weapon": "Its short name: ak47, deagle, c4."}, "related": ["item.picked_up", "player.drop_weapon"]},
+    "wpn.infinite_ammo": {"more": "The clip: every shot puts the bullet back, so they never reload. Spare ammo: topped up to the most that gun can carry whenever it changes. Works with every gun; grenades aren't ammo.", "related": ["wpn.fire_rate", "wpn.recoil"]},
+    "wpn.fire_rate": {"more": "Changes the time between shots after each shot, so it follows every gun's own speed (2 makes an AK-47 fire twice as fast). Very high values can look odd: animations are the gun's own.", "cost": "A hook on each gun's fire, only when a mode has a weapon tuning node.", "related": ["wpn.recoil", "wpn.infinite_ammo"]},
+    "wpn.recoil": {"more": "Scales the view kick each shot gives. Spread (where bullets go) is the game's own and doesn't change.", "related": ["wpn.fire_rate"]},
+    "save.text_get": {"related": ["save.text_set", "save.get"]},
+    "save.text_set": {"more": "Kept in the mode's own file beside Saved Value's (written within 5 seconds, and at the map's end; a crash leaves one whole file). Players are known by their Steam ID; bots and LAN players by their name.", "related": ["save.text_get", "save.set"]},
+    "save.server_get": {"more": "For things that belong to the server, not a player: a record time and who set it, a counter of rounds played across maps.", "pins": {"out": "The saved number (0 until set).", "text": "The saved text (empty until set)."}, "related": ["save.server_set", "save.top"]},
+    "save.server_set": {"related": ["save.server_get"]},
+    "save.top": {"more": "Reads every player's value of one Saved Value (its name) from the save file, so players who aren't on the server count too, named as they were last seen. Each runs once per place, best first. Most is a Limits setting you can raise (the checks warn above 50).",
+        "pins": {"rank": "The place: 1 for the best.", "name": "Their name as last seen (bots and LAN players: the name they were saved by).", "value": "Their saved value."},
+        "cost": "Goes through the whole save file each time it runs: run it now and then (a round's start, a chat command), not every tick.", "related": ["save.get", "save.add", "save.set"]},
+})
+
 EXEC_OUT = {"then": "Goes on when it's done.", "true": "Runs when the answer is yes.", "false": "Runs when the answer is no.", "each": "Runs once for every item.", "body": "Runs once for every step.", "none": "Runs when nothing was found.", "tick": "Runs every time the timer fires.", "done": "Runs when it's over.", "default": "Runs when no case matches.", "valid": "Runs when it's there.", "invalid": "Runs when it isn't."}
 
 def pin_help(d, p, out, notes):

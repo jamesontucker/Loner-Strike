@@ -30,6 +30,7 @@ use std::collections::BTreeSet;
 // collision, overlap and hits (W2): collide.rs, a child of this file
 #[path = "collide.rs"]
 mod collide;
+pub(crate) mod p5; // P5: input, cooldowns, pickups, weapon tuning, saving (gen/p5.rs)
 
 // HUD & View: the engine nodes (Y), their own file
 pub(crate) mod engine;
@@ -440,7 +441,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 14] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
+const STORE_KINDS: [&str; 15] = ["save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -725,6 +726,9 @@ impl<'a> Gen<'a> {
         let item = self.v.in_type(node, "item").or_else(|| self.v.out_type(node, "out")).unwrap_or_default();
         let ik = kind_of(&item);
         // Get Bone / Attachment Position (engine.rs)
+        if let Some(e) = p5::pure_value(self, node, n, def, pin) {
+            return Val { expr: e, ty }; // P5
+        }
         if let Some(e) = engine::pure_value(self, node, n, def, pin) {
             return Val { expr: e, ty };
         }
@@ -1185,7 +1189,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_nofall = has("player.no_fall");
     let uses_pre = has("event.player_about_hurt") || uses_nofall || uses_squad;
     let uses_buy = any(&["buy.where", "buy.allow"]);
-    let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get");
+    let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get") || p5::uses_saved_numbers(g); // P5: server values, Top Players
     let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
     // mode settings: variables hosts can change (cvars, kept per server)
     let settings: Vec<&Variable> = g.variables.iter().filter(|x| x.setting.is_some() && x.scope == "mode" && matches!(x.ty.as_str(), "number" | "bool")).collect();
@@ -1215,7 +1219,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     ));
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <engine>\n#include <hamsandwich>\n#include <loner>");
-    if graph_uses(g, &["save.get", "save.set", "save.add"]) || uses_v3 {
+    if graph_uses(g, &["save.get", "save.set", "save.add"]) || p5::used(g) || uses_v3 {
         o.line("#include <celltrie>");
     }
     if uses_v3 {
@@ -1447,6 +1451,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.blank();
     }
     engine::blocks(g, &mut o);
+    p5::helpers(g, &mut o); // P5 (after the saved values it builds on)
     coverage::blocks(g, &mut o); // EC
     if uses_clock {
         o.line(CLOCK);
@@ -1699,6 +1704,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     // collision, overlap and hits (W2)
     collide::init(&gen, &mut o);
+    p5::init(&gen, &mut o); // P5
     if fun_dead {
         o.line("\tRegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)");
     }
@@ -1807,8 +1813,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         let cmd = pawn_str(&name_text(gen.text(v.nodes[id], v.defs[id], "command")));
         o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX], s[64], w[40]\n\tread_args(s, charsmax(s))\n\tremove_quotes(s)\n\ttrim(s)\n\tcopyc(w, charsmax(w), s, ' ')\n\tif ((w[0] != '/' && w[0] != '!') || !equali(w[1], {cmd}))\n\t\treturn PLUGIN_CONTINUE\n\tctx[0] = id // player\n\tcopy(g_lsgTxt[0], 63, s) // args\n\tlsg_after_word(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
     }
-    if debug || uses_save || uses_clock {
+    p5::handlers(&gen, &mut o); // P5
+    if debug || uses_save || uses_clock || p5::needs_end(g) {
         o.line("public plugin_end()\n{");
+        p5::end(g, &mut o); // P5
         if debug {
             o.line("\tlsd_end()");
         }
@@ -2092,6 +2100,13 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         // (collision, overlap and hits (W2): their handlers are collide.rs's)
+        k if p5::is_event(k) => {
+            let e = exit("ran");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
         k if collide::is_event(k) => {
             let e = exit("ran");
             if !e.is_empty() {
@@ -3806,6 +3821,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         k if engine::is_action(k) => {
             engine::action(gen, id, n, def, &mut b, &inp, &exit, &err);
+            then_line(&mut b, "then");
+        }
+        k if p5::is_action(k) => {
+            p5::action(gen, id, n, def, &mut b, &inp, &exit, &next);
             then_line(&mut b, "then");
         }
         _ => {}
@@ -7638,7 +7657,7 @@ mod tests {
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
         let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up", "event.on_tick"];
-        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind) && !coverage::is_event(&d.kind)) {
+        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str()) && !collide::is_event(&d.kind) && !coverage::is_event(&d.kind) && !p5::is_event(&d.kind)) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
     }
@@ -7969,6 +7988,9 @@ mod tests {
             used.insert(k);
         }
         for k in w1::PURE.iter().chain(w1::FLOW) {
+            used.insert(k);
+        }
+        for k in p5::kinds() {
             used.insert(k);
         }
         // EC: the engine coverage nodes are in every_node_ec.graph.json (gen/coverage/tests.rs tests it)

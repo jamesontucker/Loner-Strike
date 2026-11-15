@@ -732,6 +732,47 @@ node("eng.spectate", "Force Spectate", "HUD & View", "Makes a dead player or a s
 node("eng.soundtrack", "Play Soundtrack", "HUD & View", "Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do).",
      inputs=[X, PLO], outputs=[E()], params=[prm("do","Do","choice","play",choices=[["play","Play"],["stop","Stop"]]), prm("track","Track","choice","2",choices=CD_TRACKS), prm("loop","Loop","bool",False)], keywords="music soundtrack cd audio track mp3 cdaudio")
 
+# ---- P5: player input, cooldowns, pickups, weapon tuning, saving and leaderboards (gen/p5.rs).
+# Kept together, here: X, Y, W1 and W2 edit the rest of this file.
+BUTTONS = [["attack","Attack (fire)"],["attack2","Attack 2 (right click)"],["use","Use (E)"],["jump","Jump"],["duck","Duck"],["reload","Reload"],["walk","Walk (Shift)"],["forward","Forward"],["back","Back"],["left","Move left"],["right","Move right"],["any","Any of these"]]
+BUTTON1 = [b for b in BUTTONS if b[0] != "any"]
+CDSCOPE = [["player","Each player"],["team","Each team"],["global","Everyone (one for all)"]]
+node("in.pressed", "Player Pressed Button", "Events", "Runs when a player presses (or lets go of) a button the game knows: fire, right click, use, jump, duck, reload, walk or a move key. It arrives with the player's ping, like everything they do. Only: wire a player (from a variable) to listen to one player only. Include bots: bots press buttons too.",
+     inputs=[P("only","player","Only this player",optional=True)], outputs=[E(), P("player","player","Player"), P("button","text","Button")],
+     params=[prm("button","Button","choice","use",choices=BUTTONS), prm("when","When","choice","pressed",choices=[["pressed","Pressed"],["released","Released"]]), prm("bots","Include bots","bool",True)], keywords="key input press button bind attack jump use reload duck walk", **ev)
+node("in.holding", "Is Holding Button", "Input", "Is the player holding this button down right now? (What reached the server: it trails their screen by their ping.)", inputs=[PL], outputs=[P("out","bool","Holding")], params=[prm("button","Button","choice","attack",choices=BUTTON1)], keywords="key input held down pressing", pure=True)
+node("in.command", "Player Command", "Events", "Runs when a player uses a console command the mode names (ls_ and letters, like ls_dash): they can bind any key to it (bind f \"ls_dash\"). Arguments is the rest of the line, as text only: it's never run. At most Most per second for each player (a Limits setting you can raise).",
+     outputs=[E(), P("player","player","Player"), P("args","text","Arguments")], params=[prm("command","Command (ls_...)","name","ls_dash"), prm("rate","Most per second (each player)","number",5,min=1,max=1000)], keywords="key bind console command keybind hotkey ability", **ev)
+node("in.tell_bind", "Tell Player To Bind", "Input", "Shows how to bind a key to a Player Command: the line to type in the console (bind f \"ls_dash\"). Nothing is bound for them: the game never lets a server change a player's keys.",
+     inputs=[X, P("player","player","Player (empty: everyone)",optional=True)], outputs=[E()], params=[prm("key","Key","name","f"), prm("command","Command (ls_...)","name","ls_dash")], keywords="bind key help console")
+node("cd.start", "Start Cooldown", "Cooldowns", "Starts a cooldown by name (like dash) for Seconds: for each player, each team or everyone. Is Ready says no until it's over.",
+     inputs=[X, P("player","player","Player",optional=True), P("team","team","Team",optional=True), P("secs","number","Seconds",param="secs")], outputs=[E()],
+     params=[prm("name","Ability","name","dash"), prm("scope","For","choice","player",choices=CDSCOPE), prm("secs","Seconds","number",5,min=0,max=86400)], keywords="cooldown timer ability wait recharge")
+node("cd.ready", "Is Ready", "Cooldowns", "Is this ability's cooldown over (or never started)?", inputs=[P("player","player","Player",optional=True), P("team","team","Team",optional=True)], outputs=[P("out","bool","Ready")],
+     params=[prm("name","Ability","name","dash"), prm("scope","For","choice","player",choices=CDSCOPE)], keywords="cooldown ready available", pure=True)
+node("cd.left", "Cooldown Time Left", "Cooldowns", "Seconds until this ability's cooldown is over (0 when ready).", inputs=[P("player","player","Player",optional=True), P("team","team","Team",optional=True)], outputs=[P("out","number","Seconds")],
+     params=[prm("name","Ability","name","dash"), prm("scope","For","choice","player",choices=CDSCOPE)], keywords="cooldown remaining left", pure=True)
+node("cd.reset", "Reset Cooldown", "Cooldowns", "Ends a cooldown now (the ability is ready again).", inputs=[X, P("player","player","Player",optional=True), P("team","team","Team",optional=True)], outputs=[E()],
+     params=[prm("name","Ability","name","dash"), prm("scope","For","choice","player",choices=CDSCOPE)], keywords="cooldown reset clear refresh")
+node("item.picked_up", "Picked Up", "Events", "Runs when a player picks a weapon or an item up from the ground (not when they buy one or the mode gives it). Item is its short name: ak47, kevlar, hegrenade...",
+     outputs=[E(), P("player","player","Player"), P("item","text","Item")], keywords="pickup pick up take weapon ground loot", **ev)
+node("item.dropped", "Dropped", "Events", "Runs when a player drops a weapon (G, or the mode makes them). On death: also when a dying player's weapon falls.",
+     outputs=[E(), P("player","player","Player"), P("weapon","text","Weapon")], params=[prm("death","Also on death","bool",False)], keywords="drop throw weapon", **ev)
+node("wpn.infinite_ammo", "Infinite Ammo", "Weapons", "Keeps a player's ammo full: the clip (no reloading), the spare ammo, or both. Reset on death: back to normal when they die.",
+     inputs=[X, PL], outputs=[E()], params=[prm("on","On","bool",True), prm("what","Keep full","choice","both",choices=[["clip","The clip"],["reserve","Spare ammo"],["both","Both"]]), prm("reset","Reset on death","bool",True)], keywords="ammo unlimited bullets clip reload")
+node("wpn.fire_rate", "Fire Rate", "Weapons", "Makes a player's guns fire faster (2 = twice as fast) or slower (0.5 = half). 1 is normal. Reset on death: back to 1 when they die.",
+     inputs=[X, PL, P("mult","number","Multiplier",param="mult")], outputs=[E()], params=[prm("mult","Multiplier","number",2,min=0.1,max=10), prm("reset","Reset on death","bool",True)], keywords="rate of fire speed shoot faster rapid")
+node("wpn.recoil", "Recoil", "Weapons", "Scales how much a player's view kicks when they fire: 0 none, 0.5 half, 1 normal, 2 double. Reset on death: back to 1 when they die.",
+     inputs=[X, PL, P("mult","number","Multiplier",param="mult")], outputs=[E()], params=[prm("mult","Multiplier","number",0.5,min=0,max=5), prm("reset","Reset on death","bool",True)], keywords="recoil kick punch spray accuracy")
+node("save.text_get", "Saved Text", "Saved", "Text kept for this player across maps, restarts and crashes (empty until set). Each mode has its own file.", inputs=[P("player","player","Player",required=True)], outputs=[P("out","text","Text")], params=[prm("key","Name","name","title")], keywords="save load text string persistent", pure=True)
+node("save.text_set", "Save Text", "Saved", "Keeps text for this player across maps and restarts (up to 63 letters).", inputs=[X, P("player","player","Player",required=True), P("text","text","Text",param="text")], outputs=[E()], params=[prm("key","Name","name","title"), prm("text","Text","text","",max=63)], keywords="save text string persistent")
+node("save.server_get", "Server Value", "Saved", "A value kept for the whole server (not per player) across maps and restarts: a number and a text (each 0 or empty until set).", outputs=[P("out","number","Number"), P("text","text","Text")], params=[prm("key","Name","name","record")], keywords="server global saved world record persistent", pure=True)
+node("save.server_set", "Set Server Value", "Saved", "Keeps a number or a text for the whole server across maps and restarts.", inputs=[X, P("value","number","Number",param="value"), P("text","text","Text",optional=True)], outputs=[E()],
+     params=[prm("key","Name","name","record"), prm("what","Keep","choice","number",choices=[["number","The number"],["text","The text"]]), prm("value","Number","number",0,min=-100000000,max=100000000)], keywords="server global save record persistent")
+node("save.top", "Top Players", "Saved", "The best players by a saved value (Saved Value's name), highest first or lowest first, offline players too (the save file keeps their names): Each runs once per place with Rank, Name and Value, then Then. At most Most places (a Limits setting you can raise).",
+     inputs=[X], outputs=[E("each","Each"), P("rank","number","Rank"), P("name","text","Name"), P("value","number","Value"), E("then","Then")],
+     params=[prm("key","Saved value","name","wins"), prm("order","Order","choice","high",choices=[["high","Highest first"],["low","Lowest first"]]), prm("count","Most","number",10,min=1,max=1000)], keywords="leaderboard top best ranking scores highscore")
+
 # model points (Y): bones and attachments of an entity's model, read on the server
 node("ent.bone_pos", "Get Bone Position", "Entities", "Where a bone of a player's or any model entity's skeleton is now (like Bip01 R Hand or Bip01 Head), and which way it points. Model is only for the list of bones; the bone is looked up by name in the model the entity really has, and Found is No when it has no such bone. Positions follow the server's animation: close, not pixel-exact.",
      inputs=[P("ent","entity","Entity",required=True)], outputs=[P("pos","vector","Position"), P("angles","vector","Angles"), P("found","bool","Found")], params=[prm("model","Model (for the list)","path","models/player.mdl"), prm("bone","Bone","bone","Bip01 R Hand")], pure=True, keywords="bone skeleton hand head position bonepos")
@@ -1070,6 +1111,10 @@ for d in nodes:
 if "Spatial" not in data["categories"]:
     data["categories"].insert(data["categories"].index("Vectors") + 1, "Spatial")
 # ==== end W1 ====
+# ==== P5: categories for the input, cooldown and weapon nodes ====
+for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
+    if c not in data["categories"]:
+        data["categories"].insert(data["categories"].index(after) + 1, c)
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
 # the node help (X2's node_help.py), remade with the registry
