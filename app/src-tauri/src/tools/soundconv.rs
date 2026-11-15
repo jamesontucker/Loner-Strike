@@ -88,27 +88,18 @@ pub fn prepare(name: &str, bytes: Vec<u8>, opts: SoundOpts) -> Result<Prepared, 
             return Ok(Prepared { name: out_name, bytes, summary: None });
         }
     }
-    let d = decode(&bytes, ext).map_err(|e| format!("{file} couldn't be read as {label} ({e})"))?;
+    let d = decode(&bytes, ext, opts).map_err(|e| match e {
+        Refusal::Unreadable(why) => format!("{file} couldn't be read as {label} ({why})"),
+        Refusal::TooLong => format!("{file} is longer than {} seconds", MAX_SECONDS as u32),
+        Refusal::TooBig => format!("{file} is too big to convert: pick a lower rate, mono or 8-bit, or a shorter sound"),
+        Refusal::Rate(r) => format!("{file} has a sample rate the game can't use ({r} Hz)"),
+        Refusal::Channels(n) => format!("{file} has {n} channels: 8 at most"),
+    })?;
     if d.channels.is_empty() || d.channels[0].is_empty() || d.rate == 0 {
         return Err(format!("{file} has no sound in it"));
     }
-    if d.channels[0].len() as f64 / d.rate as f64 > MAX_SECONDS {
-        return Err(format!("{file} is longer than {} minutes", MAX_SECONDS as u32 / 60));
-    }
-    let in_channels = d.channels.len();
-    // channels: mono (the average), or the first two for "2D only"
-    let chans: Vec<Vec<f32>> = if opts.stereo && in_channels >= 2 {
-        d.channels[..2].to_vec()
-    } else {
-        let n = d.channels[0].len();
-        let mut m = vec![0f32; n];
-        for c in &d.channels {
-            for (i, v) in c.iter().enumerate().take(n) {
-                m[i] += v / in_channels as f32;
-            }
-        }
-        vec![m]
-    };
+    let in_channels = d.in_channels;
+    let chans = d.channels;
     let mut chans: Vec<Vec<f32>> = chans.iter().map(|c| resample(c, d.rate, opts.rate)).collect();
     // trim near-silence at the ends (keeping 10 ms), loop points moved with it
     let mut lead = 0usize;
@@ -194,11 +185,37 @@ fn channel_words(n: usize) -> String {
 
 struct Decoded {
     rate: u32,
-    /// samples per channel, -1..1
+    /// how many channels the file has
+    in_channels: usize,
+    /// the channels kept (mono, or two for "2D only"), mixed while decoding, -1..1
     channels: Vec<Vec<f32>>,
 }
 
-fn decode(bytes: &[u8], ext: &str) -> Result<Decoded, String> {
+/// Why a sound wasn't decoded. The limits stop decoding as soon as they're passed, so a small
+/// compressed file can't grow to gigabytes first.
+#[derive(Debug)]
+enum Refusal {
+    Unreadable(String),
+    TooLong,
+    TooBig,
+    Rate(u32),
+    Channels(usize),
+}
+
+/// The most frames that may be kept at `rate`: MAX_SECONDS of it, the output-size budget at the
+/// asked rate and channels, and a hard cap on samples kept in memory.
+fn frame_budget(rate: u32, keep: usize, opts: SoundOpts) -> (usize, usize) {
+    let by_time = (MAX_SECONDS * rate as f64) as usize;
+    let bytes_per = if opts.bits == 8 { 1 } else { 2 };
+    let by_output = (MAX_BYTES as f64 / (keep * bytes_per) as f64 * rate as f64 / opts.rate as f64) as usize;
+    let by_memory = MAX_SAMPLES / keep.max(1);
+    (by_time, by_output.min(by_memory))
+}
+
+/// At most this many decoded samples are kept in memory (192 MB of f32).
+const MAX_SAMPLES: usize = 48 << 20;
+
+fn decode(bytes: &[u8], ext: &str, opts: SoundOpts) -> Result<Decoded, Refusal> {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
     use symphonia::core::errors::Error;
@@ -206,24 +223,49 @@ fn decode(bytes: &[u8], ext: &str) -> Result<Decoded, String> {
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
     use symphonia::core::probe::Hint;
+    let bad = |s: &str| Refusal::Unreadable(s.to_string());
+    let rate_ok = |r: u32| (8_000..=192_000).contains(&r);
     let mss = MediaSourceStream::new(Box::new(std::io::Cursor::new(bytes.to_vec())), Default::default());
     let mut hint = Hint::new();
     hint.with_extension(ext);
-    let probed = symphonia::default::get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default()).map_err(|_| "not a sound it knows".to_string())?;
+    let probed = symphonia::default::get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default()).map_err(|_| bad("not a sound it knows"))?;
     let mut format = probed.format;
-    let track = format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL).ok_or("no sound in it")?;
+    let track = format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL).ok_or_else(|| bad("no sound in it"))?;
     let id = track.id;
-    let mut dec = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).map_err(|_| "a kind of sound it can't decode".to_string())?;
-    let mut rate = track.codec_params.sample_rate.unwrap_or(0);
+    let params = track.codec_params.clone();
+    // what the file says about itself is checked before anything is decoded
+    if let Some(r) = params.sample_rate {
+        if !rate_ok(r) {
+            return Err(Refusal::Rate(r));
+        }
+    }
+    if let Some(c) = params.channels.map(|c| c.count()) {
+        if c > 8 {
+            return Err(Refusal::Channels(c));
+        }
+    }
+    if let (Some(r), Some(n), Some(c)) = (params.sample_rate, params.n_frames, params.channels.map(|c| c.count())) {
+        let keep = if opts.stereo && c >= 2 { 2 } else { 1 };
+        let (by_time, by_size) = frame_budget(r, keep, opts);
+        if n as usize > by_time {
+            return Err(Refusal::TooLong);
+        }
+        if n as usize > by_size {
+            return Err(Refusal::TooBig);
+        }
+    }
+    let mut dec = symphonia::default::get_codecs().make(&params, &DecoderOptions::default()).map_err(|_| bad("a kind of sound it can't decode"))?;
+    let mut rate = 0u32;
+    let mut in_channels = 0usize;
     let mut channels: Vec<Vec<f32>> = Vec::new();
-    let max_frames = (MAX_SECONDS * 192_000.0) as usize;
+    let (mut by_time, mut by_size) = (0usize, 0usize);
     loop {
         let packet = match format.next_packet() {
             Ok(p) => p,
             Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(Error::ResetRequired) => break,
             Err(_) if !channels.is_empty() => break,
-            Err(e) => return Err(format!("{e}")),
+            Err(e) => return Err(Refusal::Unreadable(format!("{e}"))),
         };
         if packet.track_id() != id {
             continue;
@@ -231,28 +273,47 @@ fn decode(bytes: &[u8], ext: &str) -> Result<Decoded, String> {
         let buf = match dec.decode(&packet) {
             Ok(b) => b,
             Err(Error::DecodeError(_)) => continue,
-            Err(e) => return Err(format!("{e}")),
+            Err(e) => return Err(Refusal::Unreadable(format!("{e}"))),
         };
         let spec = *buf.spec();
-        if rate == 0 {
-            rate = spec.rate;
-        }
         let n = spec.channels.count().max(1);
         if channels.is_empty() {
-            channels = vec![Vec::new(); n.min(8)];
+            // the first buffer sets the rate and channels, and with them the limits
+            if !rate_ok(spec.rate) {
+                return Err(Refusal::Rate(spec.rate));
+            }
+            if n > 8 {
+                return Err(Refusal::Channels(n));
+            }
+            rate = spec.rate;
+            in_channels = n;
+            let keep = if opts.stereo && n >= 2 { 2 } else { 1 };
+            (by_time, by_size) = frame_budget(rate, keep, opts);
+            channels = vec![Vec::new(); keep];
+        } else if spec.rate != rate || n != in_channels {
+            return Err(bad("its format changes partway through"));
+        }
+        let frames = buf.frames();
+        let have = channels[0].len();
+        if have + frames > by_time {
+            return Err(Refusal::TooLong);
+        }
+        if have + frames > by_size {
+            return Err(Refusal::TooBig);
         }
         let mut sb = SampleBuffer::<f32>::new(buf.capacity() as u64, spec);
         sb.copy_interleaved_ref(buf);
+        // mixed down as it comes: only the kept channels are ever stored
         for frame in sb.samples().chunks(n) {
-            for (c, v) in channels.iter_mut().zip(frame) {
-                c.push(v.clamp(-1.0, 1.0));
+            if channels.len() == 2 {
+                channels[0].push(frame[0].clamp(-1.0, 1.0));
+                channels[1].push(frame.get(1).copied().unwrap_or(0.0).clamp(-1.0, 1.0));
+            } else {
+                channels[0].push((frame.iter().sum::<f32>() / n as f32).clamp(-1.0, 1.0));
             }
         }
-        if channels[0].len() > max_frames {
-            return Err("it's too long".into());
-        }
     }
-    Ok(Decoded { rate, channels })
+    Ok(Decoded { rate, in_channels, channels })
 }
 
 // ---- resampling: a windowed-sinc (Blackman) low-pass interpolator ---------------------------------
@@ -546,6 +607,49 @@ mod tests {
         let z = resample(&hi, 44100, 22050);
         let peak = z[200..z.len() - 200].iter().fold(0f32, |m, v| m.max(v.abs()));
         assert!(peak < 0.02, "aliasing left {peak}");
+    }
+
+    /// A WAV header that claims what the test wants, with a little real data after it.
+    fn crafted_wav(channels: u16, rate: u32, claimed_bytes: u32) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36 + claimed_bytes).to_le_bytes());
+        b.extend_from_slice(b"WAVEfmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&channels.to_le_bytes());
+        b.extend_from_slice(&rate.to_le_bytes());
+        b.extend_from_slice(&(rate * channels as u32 * 2).to_le_bytes());
+        b.extend_from_slice(&(channels * 2).to_le_bytes());
+        b.extend_from_slice(&16u16.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&claimed_bytes.to_le_bytes());
+        b.extend(std::iter::repeat_n(0u8, 4096));
+        b
+    }
+
+    /// Decoding stops at the limits, before a small file can grow: an hour claimed at a low
+    /// rate, 16 channels, an odd rate and an hour of output are refused at once.
+    #[test]
+    fn limits_stop_decoding_before_a_file_grows() {
+        let t = std::time::Instant::now();
+        // 8 kHz mono claiming ~4 hours (0xFFFF_0000 bytes): too long, from the header alone
+        let e = prepare("long.wav", crafted_wav(1, 8000, 0xFFFF_0000), SoundOpts::default()).unwrap_err();
+        assert!(e.contains("longer than 300 seconds"), "{e}");
+        // 16 channels
+        let e = prepare("wide.wav", crafted_wav(16, 22050, 64 << 10), SoundOpts::default()).unwrap_err();
+        assert!(e.contains("16 channels") || e.contains("couldn't be read"), "{e}");
+        // 4 kHz: not a rate to use
+        let e = prepare("low.wav", crafted_wav(1, 4000, 4096), SoundOpts::default()).unwrap_err();
+        assert!(e.contains("sample rate") && e.contains("4000 Hz"), "{e}");
+        // 250 s of 48 kHz stereo kept as 2D stereo at 44.1 kHz 16-bit would be ~44 MB of WAV: too big
+        let e = prepare("big.wav", crafted_wav(2, 48000, 250 * 48000 * 4), SoundOpts { rate: 44100, bits: 16, stereo: true, trim: false }).unwrap_err();
+        assert!(e.contains("too big to convert"), "{e}");
+        assert!(t.elapsed().as_secs_f32() < 2.0, "took {:?}", t.elapsed());
+        // the budget itself: 300 s, the output size at the asked rate, and memory
+        let (time, size) = frame_budget(48000, 1, SoundOpts::default());
+        assert_eq!(time, 300 * 48000);
+        assert!(size <= MAX_SAMPLES && size as f64 <= (MAX_BYTES / 2) as f64 * 48000.0 / 22050.0 + 1.0);
     }
 
     #[test]
