@@ -1112,7 +1112,7 @@ stock lsg_snd_at(at, pos, const snd[], Float:vol, Float:attn, pitch)
 		lsg_vto(pos, o)
 	else if (!lsg_ent_origin(at, o))
 		return 0
-	if (!snd[0] || !lsg_have_snd(snd))
+	if (!snd[0] || !lsg_have_snd(snd) || !lsg_msg_room("Play Sound At", 1, 0, 0, 16))
 		return 0
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
 	return 1
@@ -1121,7 +1121,7 @@ stock lsg_snd_at(at, pos, const snd[], Float:vol, Float:attn, pitch)
 // on an entity's channel: it follows the entity
 stock lsg_snd_on(e, chan, const snd[], Float:vol, Float:attn, pitch)
 {
-	if (e <= 0 || !pev_valid(e) || !snd[0] || !lsg_have_snd(snd))
+	if (e <= 0 || !pev_valid(e) || !snd[0] || !lsg_have_snd(snd) || !lsg_msg_room("Play Sound On", 1, 0, 0, 16))
 		return 0
 	emit_sound(e, chan, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
 	return 1

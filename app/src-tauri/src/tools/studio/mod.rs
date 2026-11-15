@@ -1991,7 +1991,7 @@ mod tests {
         for fps in [100.0_f64, 265.0, 1000.0] {
             for ur in [20.0_f64, 30.0, 60.0, 101.0] {
                 for rate in [2500.0_f64, 25000.0, 100000.0] {
-                    let full = rate.clamp(2500.0, 100000.0) * 0.4;
+                    let full = rate.clamp(2500.0, 100000.0) * 0.25;
                     let share = f64::min(1000.0, full / ur);
                     let fill = f64::min(full, 1000.0 * ur) * 0.5;
                     let cap = fill / ur;

@@ -94,7 +94,7 @@ stock lsg_pre_sound(const p[])
 // The message budget. Two limits, both must have room:
 //  - messages a server frame (the Effect messages a frame limit; a unicast counts against its
 //    player too, at half the budget)
-//  - bytes each client can take: every client has a bucket of unreliable bytes that fills at 40%
+//  - bytes each client can take: every client has a bucket of unreliable bytes that fills at 25%
 //    of its rate (bytes a second, capped by sv_maxrate; the rest is the game's own entities and
 //    sounds). A share is min(LSG_MSG_BURST, that / cl_updaterate): what one of the client's
 //    datagrams can take after the engine's own traffic. The datagram goes out cl_updaterate times
@@ -128,7 +128,7 @@ stock Float:lsg_msg_tokens(p, Float:now)
 		maxr = get_cvar_num("sv_maxrate")
 		if (maxr > 0 && rate > maxr)
 			rate = maxr
-		g_lsgMsgFill[p] = float(clamp(rate, 2500, 100000)) * 0.4
+		g_lsgMsgFill[p] = float(clamp(rate, 2500, 100000)) * 0.25
 		// (the client's datagram goes out cl_updaterate times a second, whatever the server's fps:
 		// what's let in between two of its sends is one share, so the bucket holds half of it and
 		// fills the other half in the gap: sv_minupdaterate / sv_maxupdaterate bound it)
@@ -2474,6 +2474,9 @@ stock lsg_explode(v, Float:dmg, Float:radius)
 {
 	new Float:o[3]
 	lsg_vto(v, o)
+	// (the blast's sprite through the message budget: the damage happens either way)
+	if (lsg_msg_room("Explosion", 1, 0, 0, 20))
+	{
 	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
 	write_byte(TE_EXPLOSION)
 	engfunc(EngFunc_WriteCoord, o[0])
@@ -2484,6 +2487,7 @@ stock lsg_explode(v, Float:dmg, Float:radius)
 	write_byte(15)
 	write_byte(0)
 	message_end()
+	}
 	if (dmg <= 0.0)
 		return
 	new Float:p[3]
@@ -2500,6 +2504,9 @@ stock lsg_explode(v, Float:dmg, Float:radius)
 
 stock lsg_beam(a, b, r, g, bl, Float:secs)
 {
+	// (TE_BEAMPOINTS, 28 bytes with its header, through the message budget like every effect)
+	if (!lsg_msg_room("Beam", 1, 0, 0, 30))
+		return
 	new Float:x[3], Float:y[3]
 	lsg_vto(a, x)
 	lsg_vto(b, y)
