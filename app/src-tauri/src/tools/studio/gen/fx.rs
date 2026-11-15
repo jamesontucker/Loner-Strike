@@ -432,6 +432,16 @@ pub(super) fn spawn_flow(
     }
 }
 
+/// A sprite class Spawn Entity makes with no draw mode in its keys: (its sprite, env_glow?, a
+/// see-through amount given?), so the plugin picks the draw mode its file is made for.
+pub(crate) fn sprite_look(class: &str, keys: &[(String, String)]) -> Option<(String, bool, bool)> {
+    if !matches!(class, "env_sprite" | "env_glow" | "cycler_sprite") || keys.iter().any(|(k, _)| k.eq_ignore_ascii_case("rendermode")) {
+        return None;
+    }
+    let spr = keys.iter().find(|(k, _)| k.eq_ignore_ascii_case("model")).map(|(_, v)| v.clone()).filter(|v| v.to_ascii_lowercase().ends_with(".spr"))?;
+    Some((spr, class == "env_glow", keys.iter().any(|(k, _)| k.eq_ignore_ascii_case("renderamt"))))
+}
+
 /// The older spawn nodes: saved graphs have no "Face the way At entity faces" setting, and for
 /// them it stays off (they make the same plugin as before); new ones get it on.
 const LEGACY_SPAWNERS: [&str; 5] = ["ent.spawn_prop", "creature.spawn", "npc.spawn", "npc.spawn_use", "comp.create"];
@@ -623,6 +633,12 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
             let kv = keys.iter().map(|(k, v)| format!("{}, {}", pawn_str(k), pawn_str(v))).collect::<Vec<_>>();
             // (the keys go in one call: a short helper with up to 32 pairs)
             let create = format!("lsg_spawn_kv({}, o{}{})", pawn_str(c.0), if kv.is_empty() { "" } else { ", " }, kv.join(", "));
+            // (a sprite with no draw mode in its keys: the one its file is made for; an additive
+            // glow drawn Normal shows its black background as a box)
+            let create = match sprite_look(c.0, &keys) {
+                Some((spr, glow, amt)) => format!("lsg_spr_look({create}, {}, {}, {})", pawn_str(&spr), glow as i32, amt as i32),
+                None => create,
+            };
             let pre = [(have, WHY_MISSING, "Not made: a file it needs isn't loaded with the map."), ("lsg_ent_room(\"Spawn Entity\")".to_string(), WHY_SLOTS, "Not made: the server is out of entity slots.")];
             spawn_flow(gen, id, n, def, b, &pre, &place, &create, (WHY_BAD, "The game didn't make it (its keys may be wrong for that class)."), apply(gen, n, def, id, "e", "at_ent", true, None), exit, err, next, after);
         }
@@ -640,7 +656,38 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
 }
 
 /// The helpers and hooks (once, when a node here or a spawn node is used).
+/// lsg_spr_look: only in plugins that make a sprite with no draw mode (Spawn Entity).
+const SPR_LOOK: &str = r#"// ---- a sprite made with no draw mode: the one its file is made for (the .spr header's format at
+// byte 12: 0 normal, 1 additive, 2 indexalpha, 3 alphatest). An additive glow drawn Normal shows
+// its black background as a box; additive draws Add (an env_glow: Glow), the cut-out kinds
+// draw Alpha; a file that can't be read: Add
+stock lsg_spr_look(e, const spr[], glow, amt)
+{
+	if (e <= 0)
+		return e
+	new mode = glow ? kRenderGlow : kRenderTransAdd, f = fopen(spr, "rb", true)
+	if (f)
+	{
+		new fmt = 1
+		fseek(f, 12, SEEK_SET)
+		fread(f, fmt, BLOCK_INT)
+		fclose(f)
+		if (fmt == 0)
+			mode = kRenderNormal
+		else if (fmt == 2 || fmt == 3)
+			mode = kRenderTransAlpha
+	}
+	set_pev(e, pev_rendermode, mode)
+	if (!amt)
+		set_pev(e, pev_renderamt, 255.0)
+	return e
+}
+"#;
+
 pub(super) fn blocks(g: &Graph, o: &mut Out) {
+    if g.nodes.iter().any(|n| n.kind == "ent.spawn_entity" && class_of(n).is_some_and(|c| sprite_look(c.0, &spawn_keys(s(n, "keys", ""))).is_some())) {
+        o.line(SPR_LOOK);
+    }
     if !g.nodes.iter().any(|n| is_action(&n.kind)) && !xf_used(g) {
         return;
     }
@@ -1507,6 +1554,24 @@ mod tests {
         assert!(code.contains("? 0 : lsgWhy"), "{code}");
         let p = crate::tools::studio::graph::validate_core(&g);
         assert!(p.is_empty(), "{p:#?}");
+    }
+
+    /// A sprite Spawn Entity makes with no draw mode: the plugin picks its file's (lsg_spr_look);
+    /// one with rendermode in its keys is made as given.
+    #[test]
+    fn sprites_without_a_draw_mode_get_their_files() {
+        let kv = |s: &str| spawn_keys(s);
+        assert_eq!(sprite_look("env_sprite", &kv("model=sprites/glow01.spr")), Some(("sprites/glow01.spr".into(), false, false)));
+        assert_eq!(sprite_look("env_glow", &kv("model=sprites/glow01.spr|renderamt=150")), Some(("sprites/glow01.spr".into(), true, true)));
+        assert_eq!(sprite_look("env_sprite", &kv("model=sprites/glow01.spr|rendermode=5")), None);
+        assert_eq!(sprite_look("cycler_sprite", &kv("model=models/can.mdl")), None);
+        assert_eq!(sprite_look("env_spark", &kv("model=sprites/glow01.spr")), None);
+        let text = include_str!("../testdata/every_node_fx.graph.json").replace("model=sprites/glow01.spr|rendermode=5|renderamt=200", "model=sprites/glow01.spr");
+        let g = crate::tools::studio::graph::parse(&text).unwrap();
+        let r = super::super::generate(&g, false);
+        let c = code_of(&r.source, &r.spans, "se");
+        assert!(c.contains("lsg_spr_look(lsg_spawn_kv(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\"), \"sprites/glow01.spr\", 0, 0)"), "{c}");
+        assert!(r.source.contains("fseek(f, 12, SEEK_SET)"));
     }
 
     /// A class off the list never becomes code; Problems lists what's allowed.

@@ -507,6 +507,10 @@ fn effects(doc: &MapDocument, out: &mut Vec<Issue>) {
             "env_shooter" if val(e, "shootmodel").or_else(|| val(e, "model")).is_none() => {
                 warn(Level::Error, "shooter-no-model", "env_shooter has nothing to throw: pick a model or sprite.".into());
             }
+            // (a sprite with no draw mode is drawn Normal: a glow's black background shows as a box)
+            "env_sprite" | "env_glow" if val(e, "rendermode").is_none_or(|m| m == "0") && val(e, "model").is_none_or(|m| m.to_ascii_lowercase().ends_with(".spr")) => {
+                warn(Level::Warning, "sprite-normal", format!("{cls}'s Draw mode is Normal: a glow or light sprite shows its black background as a box. Set Draw mode to {} (Normal is only for an opaque picture).", if cls == "env_glow" { "Glow" } else { "Additive" }));
+            }
             "env_message" if val(e, "message").is_none() => {
                 warn(Level::Warning, "message-empty", "env_message has no message name (from titles.txt), so it shows nothing.".into());
             }
@@ -541,6 +545,14 @@ mod tests {
         let v = run(&d, None);
         let of = |id: EntityId| v.iter().filter(|i| i.entity == Some(id.0)).map(|i| i.code).collect::<Vec<_>>();
         assert!(of(beam).contains(&"beam-no-sprite") && of(beam).contains(&"beam-end-missing"));
+        // a sprite with no draw mode (or Normal) shows a box; Additive / Glow doesn't
+        let bare = d.insert_entity(ent(&[("classname", "env_sprite"), ("origin", "0 0 0"), ("model", "sprites/glow01.spr")]));
+        let add = d.insert_entity(ent(&[("classname", "env_sprite"), ("origin", "0 0 0"), ("model", "sprites/glow01.spr"), ("rendermode", "5")]));
+        let glow = d.insert_entity(ent(&[("classname", "env_glow"), ("origin", "0 0 0"), ("model", "sprites/glow01.spr"), ("rendermode", "0")]));
+        let mut out2 = Vec::new();
+        effects(&d, &mut out2);
+        let of2 = |id: EntityId| out2.iter().filter(|i| i.entity == Some(id.0)).map(|i| i.code).collect::<Vec<_>>();
+        assert!(of2(bare).contains(&"sprite-normal") && of2(glow).contains(&"sprite-normal") && !of2(add).contains(&"sprite-normal"));
         assert!(!v.iter().any(|i| i.code == "dangling-target" && i.entity == Some(beam.0)), "said once, as the beam's warning");
         assert_eq!(of(laser), vec!["beam-no-end"]);
         assert!(of(shooter).contains(&"shooter-no-model") && of(shooter).contains(&"effect-unnamed"));

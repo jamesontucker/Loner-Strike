@@ -1297,6 +1297,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                     e.set(k, v);
                 }
             }
+            sprite_render_defaults(&mut e);
             created.1.push(history::cmd_add_entity(d, h, e).0);
         }
         Cmd::Tie { brushes, classname } => {
@@ -1469,6 +1470,23 @@ fn export_map(s: &Session, path: &Path) -> Result<(usize, Option<String>), Strin
 }
 
 /// What to say when entity text has characters the game can't show (written as ?).
+/// A sprite entity placed with no draw mode: the engine draws it Normal, and a glow or light
+/// sprite then shows its black background as a box. Placed sprites start Additive (env_glow:
+/// Glow), fully drawn, as the entity's form says by default.
+pub(crate) fn sprite_render_defaults(e: &mut crate::editor::doc::Entity) {
+    let glow = match e.classname() {
+        "env_sprite" => false,
+        "env_glow" => true,
+        _ => return,
+    };
+    if e.get("rendermode").is_none_or(|m| m.trim().is_empty()) {
+        e.set("rendermode", if glow { "3" } else { "5" });
+        if e.get("renderamt").is_none_or(|a| a.trim().is_empty()) {
+            e.set("renderamt", "255");
+        }
+    }
+}
+
 pub fn code_page_note(cp: mapfile::CodePage, lost: &[char]) -> Option<String> {
     (!lost.is_empty()).then(|| {
         let shown: String = lost.iter().take(12).collect();
@@ -2502,6 +2520,30 @@ pub fn routes_in(dir: PathBuf) -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A placed sprite starts Additive (env_glow: Glow) and fully drawn; one with a draw mode
+    /// given keeps it; other classes are left alone.
+    #[test]
+    fn placed_sprites_start_additive() {
+        let mut s = crate::editor::doc::Entity::new("env_sprite");
+        sprite_render_defaults(&mut s);
+        assert_eq!((s.get("rendermode"), s.get("renderamt")), (Some("5"), Some("255")));
+        let mut g = crate::editor::doc::Entity::new("env_glow");
+        sprite_render_defaults(&mut g);
+        assert_eq!(g.get("rendermode"), Some("3"));
+        let mut k = crate::editor::doc::Entity::new("env_sprite");
+        k.set("rendermode", "4");
+        k.set("renderamt", "200");
+        sprite_render_defaults(&mut k);
+        assert_eq!((k.get("rendermode"), k.get("renderamt")), (Some("4"), Some("200")));
+        let mut l = crate::editor::doc::Entity::new("light");
+        sprite_render_defaults(&mut l);
+        assert_eq!(l.get("rendermode"), None);
+        // the entity form says the same by default
+        let fgd = crate::editor::fgd::parse(include_str!("../editor/cstrike.fgd")).unwrap();
+        let dm = |c: &str| fgd.iter().find(|x| x.name == c).unwrap().keys.iter().find(|k| k.name == "rendermode").unwrap().default.clone();
+        assert_eq!((dm("env_sprite").as_str(), dm("env_glow").as_str()), ("5", "3"));
+    }
     use crate::server::AppState;
     use axum::body::Body;
     use axum::http::Request;

@@ -340,7 +340,16 @@
 @PointClass base(Targetname, RenderFields, Angles) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_sprite : "Shows a sprite (a flat picture, often glowing)."
 [
 	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The sprite it shows."
-	scale(float) : "Size" : 1 : "Prices go up by this much each wave."
+	rendermode(choices) : "Draw mode" : 5 : "Additive for a glow or light sprite (Normal shows its black background as a box); Solid for a cut-out picture; Normal only for an opaque one." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid (cut-out blue)"
+		5 : "Additive"
+	]
+	scale(float) : "Size" : 1 : "How big it's drawn (1 is the sprite's own size)."
 	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
 	spawnflags(flags) =
 	[
@@ -351,7 +360,16 @@
 @PointClass base(Targetname, RenderFields) size(-8 -8 -8, 8 8 8) color(30 100 255) = env_glow : "A glow sprite that fades out when you can't see its middle."
 [
 	model(sprite) : "Sprite" : "sprites/glow01.spr" : "The glow sprite."
-	scale(float) : "Size" : 1 : "Prices go up by this much each wave."
+	rendermode(choices) : "Draw mode" : 3 : "Glow (fades when you can't see its middle) or Additive; Normal shows the sprite's black background as a box." =
+	[
+		0 : "Normal"
+		1 : "Color"
+		2 : "Texture"
+		3 : "Glow"
+		4 : "Solid (cut-out blue)"
+		5 : "Additive"
+	]
+	scale(float) : "Size" : 1 : "How big it's drawn (1 is the sprite's own size)."
 ]
 @PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_explosion : "An explosion when set off."
 [
