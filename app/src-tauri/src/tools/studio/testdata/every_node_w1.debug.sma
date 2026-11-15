@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_w1"
 #define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 80
+#define LSG_N 90
 #define LSG_TASK 7310000
-#pragma dynamic 55296
+#pragma dynamic 61696
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -41,9 +41,9 @@ stock g_v0 = 0 // Flag (bool)
 stock g_pv1[33] // Player flag (bool, per player)
 stock g_tv2[4] = { 1, 1, 1, 1 } // Team flag (bool, per team)
 
-#define LSD_N 80
-new const g_lsdIds[LSD_N][] = { "ps", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15", "p16", "p17", "p18", "p19", "p20", "p21", "p22", "p23", "p24", "p25", "p26", "p27", "p28", "p29", "p30", "p31", "p32", "p33", "p34", "p35", "p36", "p37", "p38", "p39", "p40", "p41", "p42", "p43", "p44", "p45", "p46", "p47", "p48", "p49", "p50", "p51", "p52", "p53", "p54", "p55", "p56", "p57", "p58", "p59", "tg", "p60", "tgp", "tgt", "p61", "rev", "seq", "dopp", "mg", "mgp0", "mgp1", "mgp2", "mgr", "mgrp", "rs", "tick", "tp1", "tp2", "fast", "fp" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 90
+new const g_lsdIds[LSD_N][] = { "ps", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11", "p12", "p13", "p14", "p15", "p16", "p17", "p18", "p19", "p20", "p21", "p22", "p23", "p24", "p25", "p26", "p27", "p28", "p29", "p30", "p31", "p32", "p33", "p34", "p35", "p36", "p37", "p38", "p39", "p40", "p41", "p42", "p43", "p44", "p45", "p46", "p47", "p48", "p49", "p50", "p51", "p52", "p53", "p54", "p55", "p56", "p57", "p58", "p59", "p60", "p61", "p62", "p63", "p64", "p65", "dl", "db", "dp", "log", "tg", "p66", "tgp", "tgt", "p67", "rev", "seq", "dopp", "mg", "mgp0", "mgp1", "mgp2", "mgr", "mgrp", "rs", "tick", "tp1", "tp2", "fast", "fp" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -3483,6 +3483,176 @@ stock lsg_w1_aim(id, Float:maxd, what)
 	return lsg_vfrom(g_lsgW1AimPos[k])
 }
 
+// ---- testing: debug drawings (Playtest and Test run builds only: a release build has none; each
+// within the shared message budget, lsg_msg_room) and Log Line
+
+stock lsg_w1_te(kind, const Float:p[3], const Float:q[3], r, g, bl, Float:secs)
+{
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(kind)
+	for (new k = 0; k < 3; k++)
+		engfunc(EngFunc_WriteCoord, p[k])
+	for (new k = 0; k < 3; k++)
+		engfunc(EngFunc_WriteCoord, q[k])
+	write_short(clamp(floatround(secs * 10.0), 1, 600))
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	message_end()
+}
+
+stock lsg_w1_line(a, b, r, g, bl, Float:secs)
+{
+	new Float:p[3], Float:q[3]
+	lsg_vto(a, p)
+	lsg_vto(b, q)
+	lsg_w1_te(TE_LINE, p, q, r, g, bl, secs)
+}
+
+// a box between two corners (any two opposite ones), or round a point (half: its half size)
+stock lsg_w1_box(a, b, Float:half, r, g, bl, Float:secs)
+{
+	new Float:p[3], Float:q[3], Float:lo[3], Float:hi[3]
+	lsg_vto(a, p)
+	if (b >= 0)
+		lsg_vto(b, q)
+	for (new k = 0; k < 3; k++)
+	{
+		if (b < 0)
+		{
+			lo[k] = p[k] - half
+			hi[k] = p[k] + half
+		}
+		else
+		{
+			lo[k] = floatmin(p[k], q[k])
+			hi[k] = floatmax(p[k], q[k])
+		}
+	}
+	lsg_w1_te(TE_BOX, lo, hi, r, g, bl, secs)
+}
+
+stock Float:g_lsgW1LogT[64], g_lsgW1LogN[64], g_lsgW1LogSkip[64]
+// to the AMX Mod X log, at most `most` lines a second from one node (the rest counted, and the
+// count written with the next line that goes through)
+stock bool:lsg_w1_log(node, const s[], most)
+{
+	new k = node & 63
+	new Float:now = get_gametime()
+	if (now - g_lsgW1LogT[k] >= 1.0 || now < g_lsgW1LogT[k])
+	{
+		g_lsgW1LogT[k] = now
+		g_lsgW1LogN[k] = 0
+	}
+	if (++g_lsgW1LogN[k] > most)
+	{
+		g_lsgW1LogSkip[k]++
+		return false
+	}
+	if (g_lsgW1LogSkip[k])
+		log_amx("%s (%d lines skipped before this one: at most %d a second)", s, g_lsgW1LogSkip[k], most)
+	else
+		log_amx("%s", s)
+	g_lsgW1LogSkip[k] = 0
+	return true
+}
+
+// ---- whole-number bits: 0 and, 1 or, 2 xor, 3 not, 4 shift left, 5 shift right
+stock Float:lsg_w1_bits(Float:a, Float:b, op)
+{
+	new x = floatround(a, floatround_tozero), y = floatround(b, floatround_tozero), r
+	switch (op)
+	{
+		case 1: r = x | y
+		case 2: r = x ^ y
+		case 3: r = ~x
+		case 4: r = x << clamp(y, 0, 31)
+		case 5: r = x >> clamp(y, 0, 31)
+		default: r = x & y
+	}
+	return float(r)
+}
+
+// ---- a free spot near a point: the point, then rings round it, a hull trace at each, at most
+// `most` traces; one search per node per server frame (Found and Position agree). 0 Found, 1 position
+stock Float:g_lsgW1FsT[64], g_lsgW1FsOk[64], Float:g_lsgW1FsPos[64][3]
+stock bool:lsg_w1_fits(const Float:p[3], hull)
+{
+	engfunc(EngFunc_TraceHull, p, p, DONT_IGNORE_MONSTERS, hull, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid) && get_tr2(0, TR_InOpen)
+}
+
+stock lsg_w1_free(node, c, hull, Float:maxr, most, what)
+{
+	new k = node & 63
+	new Float:now = get_gametime()
+	if (g_lsgW1FsT[k] != now || now <= 0.0)
+	{
+		g_lsgW1FsT[k] = now
+		g_lsgW1FsOk[k] = 0
+		new Float:o[3], Float:p[3]
+		lsg_vto(c, o)
+		g_lsgW1FsPos[k] = o
+		new Float:step = hull == HULL_POINT ? 8.0 : (hull == HULL_LARGE ? 68.0 : 36.0)
+		new tries = 1
+		if (lsg_w1_fits(o, hull))
+			g_lsgW1FsOk[k] = 1
+		for (new ring = 1; !g_lsgW1FsOk[k] && float(ring) * step <= maxr && tries < most; ring++)
+		{
+			new n = min(8 * ring, 32)
+			for (new j = 0; j < n && tries < most; j++, tries++)
+			{
+				new Float:ang = 360.0 * float(j) / float(n), Float:d = float(ring) * step
+				p[0] = o[0] + d * floatcos(ang, degrees)
+				p[1] = o[1] + d * floatsin(ang, degrees)
+				p[2] = o[2]
+				if (lsg_w1_fits(p, hull))
+				{
+					g_lsgW1FsOk[k] = 1
+					g_lsgW1FsPos[k] = p
+					break
+				}
+			}
+		}
+	}
+	return what ? lsg_vfrom(g_lsgW1FsPos[k]) : g_lsgW1FsOk[k]
+}
+
+// ---- a player's language: AMX Mod X's (their "lang" setting, else the server's), or the game's
+// (cl_language, asked of their game once: empty until it answers, and for bots)
+stock g_lsgW1Lang[33][16], g_lsgW1LangUid[33]
+stock lsg_w1_lang(id, game)
+{
+	new t[16]
+	if (!lsg_ok(id))
+		return t
+	if (!game)
+	{
+		get_user_info(id, "lang", t, charsmax(t))
+		if (!t[0])
+			get_cvar_string("amx_language", t, charsmax(t))
+		return t
+	}
+	if (is_user_bot(id))
+		return t
+	new uid = get_user_userid(id)
+	if (g_lsgW1LangUid[id] != uid)
+	{
+		g_lsgW1LangUid[id] = uid
+		g_lsgW1Lang[id][0] = 0
+		query_client_cvar(id, "cl_language", "lsg_w1_langq")
+	}
+	copy(t, charsmax(t), g_lsgW1Lang[id])
+	return t
+}
+
+public lsg_w1_langq(id, const cvar[], const value[])
+{
+	if (id < 1 || id > 32 || containi(value, "Bad CVAR") >= 0)
+		return
+	copy(g_lsgW1Lang[id], charsmax(g_lsgW1Lang[]), value)
+}
+
 
 // enum Entity Kind
 stock const g_lsgE0[][] = { "Player", "Bot", "Creature", "NPC", "Interactable", "Component", "Prop", "Map entity", "None" }
@@ -3539,19 +3709,19 @@ public lsg_w1_frame()
 {
 	static Float:at[2]
 	new Float:now = get_gametime()
-	if (now < at[0] || now - at[0] >= 0.1)
+	if (now < at[0] || now - at[0] >= floatmax(0.1, 1.0 / float(100)))
 	{
 		new ctx[LSG_CTX]
-		ctx[0] = _:(at[0] > 0.0 && now > at[0] ? now - at[0] : 0.1)
+		ctx[0] = _:(at[0] > 0.0 && now > at[0] ? now - at[0] : floatmax(0.1, 1.0 / float(100)))
 		at[0] = now
-		lsg_n75(ctx)
+		lsg_n85(ctx)
 	}
-	if (now < at[1] || now - at[1] >= 0.02)
+	if (now < at[1] || now - at[1] >= floatmax(0.02, 1.0 / float(100)))
 	{
 		new ctx[LSG_CTX]
-		ctx[0] = _:(at[1] > 0.0 && now > at[1] ? now - at[1] : 0.02)
+		ctx[0] = _:(at[1] > 0.0 && now > at[1] ? now - at[1] : floatmax(0.02, 1.0 / float(100)))
 		at[1] = now
-		lsg_n78(ctx)
+		lsg_n88(ctx)
 	}
 	return FMRES_IGNORED
 }
@@ -3575,7 +3745,7 @@ public client_putinserver(id)
 public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
-	lsg_n74(ctx)
+	lsg_n84(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -4713,7 +4883,7 @@ lsg_n55(ctx[])
 // Print String (p56)
 lsg_n56(ctx[])
 {
-	new lsi0 = lsg_w1_aim(ctx[0], 2048.0, 0)
+	new lsi0 = lsg_w1_aim(ctx[0], floatmin(2048.0, float(8192)), 0)
 	if (lsd_want(56))
 	{
 	lsd_begin()
@@ -4733,7 +4903,7 @@ lsg_n56(ctx[])
 // Print String (p57)
 lsg_n57(ctx[])
 {
-	new lsi0 = lsg_w1_aim(ctx[0], 2048.0, 1)
+	new lsi0 = lsg_w1_aim(ctx[0], floatmin(2048.0, float(8192)), 1)
 	if (lsd_want(57))
 	{
 	lsd_begin()
@@ -4753,7 +4923,7 @@ lsg_n57(ctx[])
 // Print String (p58)
 lsg_n58(ctx[])
 {
-	new lsi0 = lsg_w1_aim(ctx[0], 2048.0, 2)
+	new lsi0 = lsg_w1_aim(ctx[0], floatmin(2048.0, float(8192)), 2)
 	if (lsd_want(58))
 	{
 	lsd_begin()
@@ -4773,7 +4943,7 @@ lsg_n58(ctx[])
 // Print String (p59)
 lsg_n59(ctx[])
 {
-	new lsi0 = lsg_w1_aim(ctx[0], 2048.0, 3)
+	new lsi0 = lsg_w1_aim(ctx[0], floatmin(2048.0, float(8192)), 3)
 	if (lsd_want(59))
 	{
 	lsd_begin()
@@ -4790,34 +4960,39 @@ lsg_n59(ctx[])
 	lsg_n60(ctx)
 }
 
-// Toggle Variable (tg)
+// Print String (p60)
 lsg_n60(ctx[])
 {
+	new Float:lsi0 = lsg_w1_bits(12.0, 2.0, 4)
 	if (lsd_want(60))
 	{
 	lsd_begin()
+	lsd_in_number("Value", lsi0)
 	}
 	if (lsd_enter(60, ctx))
 		return
-	g_v0 = !g_v0
-	g_lsgO[0] = g_v0 ? 1 : 0
-	lsd_exit(60, g_lsdBool[g_v0 ? 1 : 0])
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "[0]", lsg_ntext(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(60, esc)
 	lsg_n61(ctx)
 }
 
-// Print String (p60)
+// Print String (p61)
 lsg_n61(ctx[])
 {
-	new lsi0 = g_lsgO[0]
+	new Float:lsi0 = lsg_w1_bits(5.0, 3.0, 3)
 	if (lsd_want(61))
 	{
 	lsd_begin()
-	lsd_in_bool("Value", lsi0)
+	lsd_in_number("Value", lsi0)
 	}
 	if (lsd_enter(61, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "[0]", g_lsgYesNo[(lsi0) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "[0]", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4825,53 +5000,60 @@ lsg_n61(ctx[])
 	lsg_n62(ctx)
 }
 
-// Toggle Variable (tgp)
+// Print String (p62)
 lsg_n62(ctx[])
 {
-	new lsi0 = ctx[0]
+	new lsi0 = lsg_w1_free(119, lsg_vec(0.0, 0.0, 64.0), HULL_HUMAN, 256.0, 64, 0)
 	if (lsd_want(62))
-	{
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	}
-	if (lsd_enter(62, ctx))
-		return
-	g_pv1[lsg_slot(lsi0)] = !g_pv1[lsg_slot(lsi0)]
-	g_lsgO[1] = g_pv1[lsg_slot(lsi0)] ? 1 : 0
-	lsd_exit(62, g_lsdBool[g_pv1[lsg_slot(lsi0)] ? 1 : 0])
-	lsg_n63(ctx)
-}
-
-// Toggle Variable (tgt)
-lsg_n63(ctx[])
-{
-	new lsi1 = lsg_team(ctx[0])
-	if (lsd_want(63))
-	{
-	lsd_begin()
-	lsd_in_team("Team", lsi1)
-	}
-	if (lsd_enter(63, ctx))
-		return
-	g_tv2[clamp(lsi1, 0, 3)] = !g_tv2[clamp(lsi1, 0, 3)]
-	g_lsgO[2] = g_tv2[clamp(lsi1, 0, 3)] ? 1 : 0
-	lsd_exit(63, g_lsdBool[g_tv2[clamp(lsi1, 0, 3)] ? 1 : 0])
-	lsg_n64(ctx)
-}
-
-// Print String (p61)
-lsg_n64(ctx[])
-{
-	new lsi0 = g_lsgO[2]
-	if (lsd_want(64))
 	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
 	}
-	if (lsd_enter(64, ctx))
+	if (lsd_enter(62, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "[0]", g_lsgYesNo[(lsi0) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(62, esc)
+	lsg_n63(ctx)
+}
+
+// Print String (p63)
+lsg_n63(ctx[])
+{
+	new lsi0 = lsg_w1_free(119, lsg_vec(0.0, 0.0, 64.0), HULL_HUMAN, 256.0, 64, 1)
+	if (lsd_want(63))
+	{
+	lsd_begin()
+	lsd_in_text("Value", lsg_vtext(lsi0))
+	}
+	if (lsd_enter(63, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "[0]", lsg_vtext(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(63, esc)
+	lsg_n64(ctx)
+}
+
+// Print String (p64)
+lsg_n64(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, lsg_w1_lang(ctx[0], 1))
+	if (lsd_want(64))
+	{
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	}
+	if (lsd_enter(64, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "[0]", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4879,149 +5061,114 @@ lsg_n64(ctx[])
 	lsg_n65(ctx)
 }
 
-// Reverse (rev)
+// Print String (p65)
 lsg_n65(ctx[])
 {
-	new lsi0 = lsg_mka6(3.0, 1.0)
+	new lsi0[128]
+	copy(lsi0, 127, lsg_w1_lang(ctx[0], 0))
 	if (lsd_want(65))
 	{
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_text("Value", lsi0)
 	}
 	if (lsd_enter(65, ctx))
 		return
-	lsg_w1_areverse(lsi0)
-	lsd_exit(65, "reversed")
-	lsg_n66(ctx)
-}
-
-// Sequence (seq)
-lsg_n66(ctx[])
-{
-	if (lsd_want(66))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(66, ctx))
-		return
-	lsd_exit(66, "ran")
-	lsg_n67_reset(ctx)
-	lsg_n67_reset_player(ctx)
-	lsg_n67(ctx)
-}
-
-// Do Once Per Player (dopp)
-stock lsg_n67(ctx[])
-{
-	new lsi0 = ctx[0]
-	if (lsd_want(67))
-	{
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	}
-	if (lsd_enter(67, ctx))
-		return
-	new p = lsi0
-	if (p < 1 || p > 32)
-	{
-		lsd_exit(67, "no player")
-		return
-	}
-	if (g_lsgLeft[67] & (1 << (p - 1)))
-	{
-		lsd_exit(67, "done for this player")
-		return
-	}
-	g_lsgLeft[67] |= 1 << (p - 1)
-	lsd_exit(67, "through")
-	lsg_n68(ctx)
-}
-
-stock lsg_n67_reset(ctx[])
-{
-	#pragma unused ctx
-	g_lsgLeft[67] = 0
-}
-
-stock lsg_n67_reset_player(ctx[])
-{
-	#pragma unused ctx
-	new p = ctx[0]
-	if (p >= 1 && p <= 32)
-		g_lsgLeft[67] &= ~(1 << (p - 1))
-}
-
-// Multi Gate (mg)
-stock lsg_n68(ctx[])
-{
-	if (lsd_want(68))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(68, ctx))
-		return
-	if ((g_lsgLeft[68] & 7) == 7)
-	{
-		g_lsgLeft[68] = 0
-	}
-	new k = -1
-	for (new j = 0; j < 3; j++)
-	{
-		new q = (1 + j) % 3
-		if (!(g_lsgLeft[68] & (1 << q)))
-		{
-			k = q
-			break
-		}
-	}
-	if (k < 0)
-		return
-	g_lsgLeft[68] |= 1 << k
-	switch (k)
-	{
-		case 0:
-		{
-			lsd_exit(68, "Out 0")
-			lsg_n69(ctx)
-		}
-		case 1:
-		{
-			lsd_exit(68, "Out 1")
-			lsg_n70(ctx)
-		}
-		case 2:
-		{
-			lsd_exit(68, "Out 2")
-			lsg_n71(ctx)
-		}
-	}
-}
-
-stock lsg_n68_reset(ctx[])
-{
-	#pragma unused ctx
-	g_lsgLeft[68] = 0
-}
-
-// Print String (mgp0)
-lsg_n69(ctx[])
-{
-	if (lsd_want(69))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(69, ctx))
-		return
 	new t[192]
-	formatex(t, charsmax(t), "%s", "gate 0")
+	formatex(t, charsmax(t), "%s %s", "[0]", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(69, esc)
-	lsg_n72(ctx)
+	lsd_exit(65, esc)
+	lsg_n66(ctx)
 }
 
-// Print String (mgp1)
+// Draw Debug Line (dl)
+lsg_n66(ctx[])
+{
+	new lsi0 = lsg_vplayer(ctx[0], 1)
+	new lsi1 = lsg_w1_aim(ctx[0], floatmin(2048.0, float(8192)), 0)
+	if (lsd_want(66))
+	{
+	lsd_begin()
+	lsd_in_text("From", lsg_vtext(lsi0))
+	lsd_in_text("To", lsg_vtext(lsi1))
+	}
+	if (lsd_enter(66, ctx))
+		return
+	if (!lsg_msg_room("Draw Debug Line", 1, 0, 48))
+		lsd_error(66, "Skipped: too many effects this server frame (Effect messages a frame, Limits).")
+	else
+	{
+		lsg_w1_line(lsi0, lsi1, 0, 255, 0, 3.0)
+		lsd_exit(66, "drawn")
+	}
+	lsg_n67(ctx)
+}
+
+// Draw Debug Box (db)
+lsg_n67(ctx[])
+{
+	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
+	new lsi1 = lsg_vec(100.0, 50.0, 0.0)
+	if (lsd_want(67))
+	{
+	lsd_begin()
+	lsd_in_text("Corner", lsg_vtext(lsi0))
+	lsd_in_text("Opposite corner", lsg_vtext(lsi1))
+	}
+	if (lsd_enter(67, ctx))
+		return
+	if (!lsg_msg_room("Draw Debug Box", 1, 0, 48))
+		lsd_error(67, "Skipped: too many effects this server frame (Effect messages a frame, Limits).")
+	else
+	{
+		lsg_w1_box(lsi0, lsi1, 0.0, 255, 230, 0, 2.0)
+		lsd_exit(67, "drawn")
+	}
+	lsg_n68(ctx)
+}
+
+// Draw Debug Point (dp)
+lsg_n68(ctx[])
+{
+	new lsi0 = lsg_w1_free(119, lsg_vec(0.0, 0.0, 64.0), HULL_HUMAN, 256.0, 64, 1)
+	if (lsd_want(68))
+	{
+	lsd_begin()
+	lsd_in_text("Position", lsg_vtext(lsi0))
+	}
+	if (lsd_enter(68, ctx))
+		return
+	if (!lsg_msg_room("Draw Debug Point", 1, 0, 48))
+		lsd_error(68, "Skipped: too many effects this server frame (Effect messages a frame, Limits).")
+	else
+	{
+		lsg_w1_box(lsi0, -1, 8.0, 255, 40, 40, 2.0)
+		lsd_exit(68, "drawn")
+	}
+	lsg_n69(ctx)
+}
+
+// Log Line (log)
+lsg_n69(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, lsg_w1_lang(ctx[0], 1))
+	if (lsd_want(69))
+	{
+	lsd_begin()
+	lsd_in_text("Text", lsi0)
+	}
+	if (lsd_enter(69, ctx))
+		return
+	if (lsg_w1_log(69, lsi0, 5))
+		lsd_exit(69, "logged")
+	else
+		lsd_exit(69, "skipped: too many a second")
+	lsg_n70(ctx)
+}
+
+// Toggle Variable (tg)
 lsg_n70(ctx[])
 {
 	if (lsd_want(70))
@@ -5030,160 +5177,160 @@ lsg_n70(ctx[])
 	}
 	if (lsd_enter(70, ctx))
 		return
-	new t[192]
-	formatex(t, charsmax(t), "%s", "gate 1")
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(70, esc)
+	g_v0 = !g_v0
+	g_lsgO[0] = g_v0 ? 1 : 0
+	lsd_exit(70, g_lsdBool[g_v0 ? 1 : 0])
+	lsg_n71(ctx)
 }
 
-// Print String (mgp2)
+// Print String (p66)
 lsg_n71(ctx[])
 {
+	new lsi0 = g_lsgO[0]
 	if (lsd_want(71))
 	{
 	lsd_begin()
+	lsd_in_bool("Value", lsi0)
 	}
 	if (lsd_enter(71, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s", "gate 2")
+	formatex(t, charsmax(t), "%s %s", "[0]", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
 	lsd_exit(71, esc)
+	lsg_n72(ctx)
 }
 
-// Multi Gate (mgr)
-stock lsg_n72(ctx[])
+// Toggle Variable (tgp)
+lsg_n72(ctx[])
 {
+	new lsi0 = ctx[0]
 	if (lsd_want(72))
 	{
 	lsd_begin()
+	lsd_in_player("Player", lsi0)
 	}
 	if (lsd_enter(72, ctx))
 		return
-	if ((g_lsgLeft[72] & 3) == 3)
-	{
-		lsd_exit(72, "all used")
-		return
-	}
-	new k = -1
-	new free[8], nf
-	for (new j = 0; j < 2; j++)
-		if (!(g_lsgLeft[72] & (1 << j)))
-			free[nf++] = j
-	if (nf)
-		k = free[random(nf)]
-	if (k < 0)
-		return
-	g_lsgLeft[72] |= 1 << k
-	switch (k)
-	{
-		case 0:
-		{
-			lsd_exit(72, "Out 0")
-		}
-		case 1:
-		{
-			lsd_exit(72, "Out 1")
-			lsg_n73(ctx)
-		}
-	}
+	g_pv1[lsg_slot(lsi0)] = !g_pv1[lsg_slot(lsi0)]
+	g_lsgO[1] = g_pv1[lsg_slot(lsi0)] ? 1 : 0
+	lsd_exit(72, g_lsdBool[g_pv1[lsg_slot(lsi0)] ? 1 : 0])
+	lsg_n73(ctx)
 }
 
-stock lsg_n72_reset(ctx[])
-{
-	#pragma unused ctx
-	g_lsgLeft[72] = 0
-}
-
-// Print String (mgrp)
+// Toggle Variable (tgt)
 lsg_n73(ctx[])
 {
+	new lsi1 = lsg_team(ctx[0])
 	if (lsd_want(73))
 	{
 	lsd_begin()
+	lsd_in_team("Team", lsi1)
 	}
 	if (lsd_enter(73, ctx))
 		return
-	new t[192]
-	formatex(t, charsmax(t), "%s", "random gate")
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(73, esc)
+	g_tv2[clamp(lsi1, 0, 3)] = !g_tv2[clamp(lsi1, 0, 3)]
+	g_lsgO[2] = g_tv2[clamp(lsi1, 0, 3)] ? 1 : 0
+	lsd_exit(73, g_lsdBool[g_tv2[clamp(lsi1, 0, 3)] ? 1 : 0])
+	lsg_n74(ctx)
 }
 
-// Round Started (rs)
+// Print String (p67)
 lsg_n74(ctx[])
 {
+	new lsi0 = g_lsgO[2]
 	if (lsd_want(74))
 	{
 	lsd_begin()
+	lsd_in_bool("Value", lsi0)
 	}
 	if (lsd_enter(74, ctx))
 		return
-	lsd_exit(74, "ran")
-	lsg_n68_reset(ctx)
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "[0]", g_lsgYesNo[(lsi0) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(74, esc)
+	lsg_n75(ctx)
 }
 
-// On Tick (tick)
+// Reverse (rev)
 lsg_n75(ctx[])
 {
+	new lsi0 = lsg_mka6(3.0, 1.0)
 	if (lsd_want(75))
 	{
 	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	}
 	if (lsd_enter(75, ctx))
 		return
-	lsd_exit(75, "tick")
+	lsg_w1_areverse(lsi0)
+	lsd_exit(75, "reversed")
 	lsg_n76(ctx)
 }
 
-// Print String (tp1)
+// Sequence (seq)
 lsg_n76(ctx[])
 {
-	new lsi0 = lsg_w1_aim(lsg_w1_np(lsg_vec(0.0, 0.0, 64.0), 0, 8192.0, 1, 0, 0), 4096.0, 0)
 	if (lsd_want(76))
 	{
 	lsd_begin()
-	lsd_in_text("Value", lsg_vtext(lsi0))
 	}
 	if (lsd_enter(76, ctx))
 		return
-	new t[192]
-	formatex(t, charsmax(t), "%s %s", "tick [0]", lsg_vtext(lsi0))
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(76, esc)
+	lsd_exit(76, "ran")
+	lsg_n77_reset(ctx)
+	lsg_n77_reset_player(ctx)
 	lsg_n77(ctx)
 }
 
-// Print String (tp2)
-lsg_n77(ctx[])
+// Do Once Per Player (dopp)
+stock lsg_n77(ctx[])
 {
-	new lsi0[128]
-	copy(lsi0, 127, lsg_w1_time(Float:ctx[0], 2))
+	new lsi0 = ctx[0]
 	if (lsd_want(77))
 	{
 	lsd_begin()
-	lsd_in_text("Value", lsi0)
+	lsd_in_player("Player", lsi0)
 	}
 	if (lsd_enter(77, ctx))
 		return
-	new t[192]
-	formatex(t, charsmax(t), "%s %s", "delta [0]", lsi0)
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(77, esc)
+	new p = lsi0
+	if (p < 1 || p > 32)
+	{
+		lsd_exit(77, "no player")
+		return
+	}
+	if (g_lsgLeft[77] & (1 << (p - 1)))
+	{
+		lsd_exit(77, "done for this player")
+		return
+	}
+	g_lsgLeft[77] |= 1 << (p - 1)
+	lsd_exit(77, "through")
+	lsg_n78(ctx)
 }
 
-// On Tick (fast)
-lsg_n78(ctx[])
+stock lsg_n77_reset(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[77] = 0
+}
+
+stock lsg_n77_reset_player(ctx[])
+{
+	#pragma unused ctx
+	new p = ctx[0]
+	if (p >= 1 && p <= 32)
+		g_lsgLeft[77] &= ~(1 << (p - 1))
+}
+
+// Multi Gate (mg)
+stock lsg_n78(ctx[])
 {
 	if (lsd_want(78))
 	{
@@ -5191,27 +5338,258 @@ lsg_n78(ctx[])
 	}
 	if (lsd_enter(78, ctx))
 		return
-	lsd_exit(78, "tick")
-	lsg_n79(ctx)
+	if ((g_lsgLeft[78] & 7) == 7)
+	{
+		g_lsgLeft[78] = 0
+	}
+	new k = -1
+	for (new j = 0; j < 3; j++)
+	{
+		new q = (1 + j) % 3
+		if (!(g_lsgLeft[78] & (1 << q)))
+		{
+			k = q
+			break
+		}
+	}
+	if (k < 0)
+		return
+	g_lsgLeft[78] |= 1 << k
+	switch (k)
+	{
+		case 0:
+		{
+			lsd_exit(78, "Out 0")
+			lsg_n79(ctx)
+		}
+		case 1:
+		{
+			lsd_exit(78, "Out 1")
+			lsg_n80(ctx)
+		}
+		case 2:
+		{
+			lsd_exit(78, "Out 2")
+			lsg_n81(ctx)
+		}
+	}
+}
+
+stock lsg_n78_reset(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[78] = 0
+}
+
+// Print String (mgp0)
+lsg_n79(ctx[])
+{
+	if (lsd_want(79))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(79, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "gate 0")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(79, esc)
+	lsg_n82(ctx)
+}
+
+// Print String (mgp1)
+lsg_n80(ctx[])
+{
+	if (lsd_want(80))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(80, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "gate 1")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(80, esc)
+}
+
+// Print String (mgp2)
+lsg_n81(ctx[])
+{
+	if (lsd_want(81))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(81, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "gate 2")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(81, esc)
+}
+
+// Multi Gate (mgr)
+stock lsg_n82(ctx[])
+{
+	if (lsd_want(82))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(82, ctx))
+		return
+	if ((g_lsgLeft[82] & 3) == 3)
+	{
+		lsd_exit(82, "all used")
+		return
+	}
+	new k = -1
+	new free[8], nf
+	for (new j = 0; j < 2; j++)
+		if (!(g_lsgLeft[82] & (1 << j)))
+			free[nf++] = j
+	if (nf)
+		k = free[random(nf)]
+	if (k < 0)
+		return
+	g_lsgLeft[82] |= 1 << k
+	switch (k)
+	{
+		case 0:
+		{
+			lsd_exit(82, "Out 0")
+		}
+		case 1:
+		{
+			lsd_exit(82, "Out 1")
+			lsg_n83(ctx)
+		}
+	}
+}
+
+stock lsg_n82_reset(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[82] = 0
+}
+
+// Print String (mgrp)
+lsg_n83(ctx[])
+{
+	if (lsd_want(83))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(83, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "random gate")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(83, esc)
+}
+
+// Round Started (rs)
+lsg_n84(ctx[])
+{
+	if (lsd_want(84))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(84, ctx))
+		return
+	lsd_exit(84, "ran")
+	lsg_n78_reset(ctx)
+}
+
+// On Tick (tick)
+lsg_n85(ctx[])
+{
+	if (lsd_want(85))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(85, ctx))
+		return
+	lsd_exit(85, "tick")
+	lsg_n86(ctx)
+}
+
+// Print String (tp1)
+lsg_n86(ctx[])
+{
+	new lsi0 = lsg_w1_aim(lsg_w1_np(lsg_vec(0.0, 0.0, 64.0), 0, 8192.0, 1, 0, 0), floatmin(4096.0, float(8192)), 0)
+	if (lsd_want(86))
+	{
+	lsd_begin()
+	lsd_in_text("Value", lsg_vtext(lsi0))
+	}
+	if (lsd_enter(86, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "tick [0]", lsg_vtext(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(86, esc)
+	lsg_n87(ctx)
+}
+
+// Print String (tp2)
+lsg_n87(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, lsg_w1_time(Float:ctx[0], 2))
+	if (lsd_want(87))
+	{
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	}
+	if (lsd_enter(87, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "delta [0]", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(87, esc)
+}
+
+// On Tick (fast)
+lsg_n88(ctx[])
+{
+	if (lsd_want(88))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(88, ctx))
+		return
+	lsd_exit(88, "tick")
+	lsg_n89(ctx)
 }
 
 // Print String (fp)
-lsg_n79(ctx[])
+lsg_n89(ctx[])
 {
 	new lsi0 = lsg_w1_los(0, lsg_vec(0.0, 0.0, 64.0), 0, lsg_vec(100.0, 50.0, 0.0), 0)
-	if (lsd_want(79))
+	if (lsd_want(89))
 	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
 	}
-	if (lsd_enter(79, ctx))
+	if (lsd_enter(89, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "fast [0]", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(79, esc)
+	lsd_exit(89, esc)
 }
 
 lsd_call(n, const data[])
@@ -5301,5 +5679,15 @@ lsd_call(n, const data[])
 		case 77: lsg_n77(ctx)
 		case 78: lsg_n78(ctx)
 		case 79: lsg_n79(ctx)
+		case 80: lsg_n80(ctx)
+		case 81: lsg_n81(ctx)
+		case 82: lsg_n82(ctx)
+		case 83: lsg_n83(ctx)
+		case 84: lsg_n84(ctx)
+		case 85: lsg_n85(ctx)
+		case 86: lsg_n86(ctx)
+		case 87: lsg_n87(ctx)
+		case 88: lsg_n88(ctx)
+		case 89: lsg_n89(ctx)
 	}
 }

@@ -3610,6 +3610,29 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         // ---- W1: utility flow nodes
+        "debug.draw_line" | "debug.draw_box" | "debug.draw_point" => {
+            // (only while testing: a release build draws nothing and works nothing out)
+            if debug {
+                let (r, g, bl) = w1::rgb(gen.choice(n, def, "color"));
+                let secs = float_lit(gen.num(n, def, "secs"));
+                let call = match def.kind.as_str() {
+                    "debug.draw_line" => format!("lsg_w1_line({}, {}, {r}, {g}, {bl}, {secs})", inp("a", "vector"), inp("b", "vector")),
+                    "debug.draw_box" => format!("lsg_w1_box({}, {}, 0.0, {r}, {g}, {bl}, {secs})", inp("a", "vector"), inp("b", "vector")),
+                    _ => format!("lsg_w1_box({}, -1, {}, {r}, {g}, {bl}, {secs})", inp("pos", "vector"), float_lit(gen.num(n, def, "size") / 2.0)),
+                };
+                b.line(format!("\tif (!lsg_msg_room({}, 1, 0, {}))\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", pawn_str(&def.title), gen.limit_expr("messages"), err("Skipped: too many effects this server frame (Effect messages a frame, Limits)."), exit("drawn")));
+            }
+            then_line(&mut b, "then");
+        }
+        "debug.log_line" => {
+            let most = gen.num(n, def, "most").round().clamp(1.0, 100.0) as i64;
+            if debug {
+                b.line(format!("\tif (lsg_w1_log({i}, {}, {most}))\n\t{}\n\telse\n\t{}", inp("text", "text"), exit("logged"), exit("skipped: too many a second")));
+            } else {
+                b.line(format!("\tlsg_w1_log({i}, {}, {most})", inp("text", "text")));
+            }
+            then_line(&mut b, "then");
+        }
         "event.on_tick" => {
             let e = exit("tick");
             if !e.is_empty() {

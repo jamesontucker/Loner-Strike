@@ -32,9 +32,6 @@ pub(super) fn problems(g: &Graph, v: &View) -> Vec<Problem> {
                     (true, true) => p.push(Problem::warn(Some(id), "Both a point and an entity are wired in: the point is used (the entity is still left out of what's found).").pin("pos")),
                     _ => {}
                 }
-                if kind(id) == "spatial.entities_in_radius" && num(n, "most") > 256.0 {
-                    p.push(Problem::warn(Some(id), format!("Most found is {}: a big array every time this is worked out. Fine once in a while; in a fast flow keep it under 256.", num(n, "most").round())));
-                }
                 if kind(id) == "spatial.nearest_entity" && text(n, "class").trim().is_empty() {
                     p.push(Problem::err(Some(id), "Pick the class of entity to look for."));
                 }
@@ -47,8 +44,11 @@ pub(super) fn problems(g: &Graph, v: &View) -> Vec<Problem> {
                 }
             }
             // (comfort limits are settings: raised a lot, a note, never a block)
-            "aim.point" if num(n, "max") > 8192.0 => {
-                p.push(Problem::warn(Some(id), "Max distance is past 8192, the size of a whole map: the trace costs more and can't hit anything further."));
+            "debug.log_line" if num(n, "most") > 20.0 => {
+                p.push(Problem::warn(Some(id), format!("Up to {} log lines a second from this node: the log file grows fast. 5 is usually plenty.", num(n, "most").round())));
+            }
+            "math.bitwise" if !wired(id, "b") && matches!(n.params.get("op").and_then(Value::as_str), Some("shl" | "shr")) && !(0.0..=31.0).contains(&num(n, "b")) => {
+                p.push(Problem::warn(Some(id), "A shift of less than 0 or more than 31 bits: it's kept to 0..31.").pin("b"));
             }
             "random.weighted" => {
                 if wired(id, "items") && !wired(id, "weights") {

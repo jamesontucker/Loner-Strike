@@ -16,10 +16,11 @@ pub(super) const PURE: &[&str] = &[
     "vec.dot", "vec.cross", "vec.random_in_radius", "vec.rotate", "vec.lerp", "vec.to_angles", "vec.forward",
     "rel.to_local", "rel.to_world", "rel.position_of", "rel.angle_to", "rel.is_in_front", "rel.is_behind",
     "aim.eye_pos", "aim.dir", "aim.point",
+    "math.bitwise", "spatial.free_spot", "player.language",
 ];
 
 /// The flow node kinds (and the event) made in node_code.
-pub(super) const FLOW: &[&str] = &["array.reverse", "flow.multi_gate", "flow.do_once_per_player", "var.toggle", "event.on_tick"];
+pub(super) const FLOW: &[&str] = &["array.reverse", "flow.multi_gate", "flow.do_once_per_player", "var.toggle", "event.on_tick", "debug.draw_line", "debug.draw_box", "debug.draw_point", "debug.log_line"];
 
 /// Flow nodes whose outputs are kept (g_lsgO), and those with more than one flow input.
 pub(super) const STORE: &[&str] = &["var.toggle"];
@@ -71,7 +72,7 @@ pub(super) fn pure(gen: &Gen, node: &str, pin: &str) -> String {
         }
         "spatial.entities_in_radius" => {
             let (pos, ent) = around();
-            format!("lsg_w1_ein({pos}, {ent}, {}, {}, {})", i("radius", "number"), pawn_str(&ent_name_text(gen.text(n, def, "class"))), gen.num(n, def, "most").round() as i64)
+            format!("lsg_w1_ein({pos}, {ent}, {}, {}, {})", i("radius", "number"), pawn_str(&ent_name_text(gen.text(n, def, "class"))), gen.limit_expr("search_found"))
         }
         "spatial.nearest_entity" => {
             let (pos, ent) = around();
@@ -161,20 +162,55 @@ pub(super) fn pure(gen: &Gen, node: &str, pin: &str) -> String {
         "rel.is_in_front" | "rel.is_behind" => format!("(lsg_w1_cone({}, {}, {}, {}) ? 1 : 0)", i("a", "entity"), i("b", "entity"), num("cone"), if def.kind == "rel.is_behind" { 1 } else { 0 }),
         "aim.eye_pos" => format!("lsg_vplayer({}, 1)", i("player", "player")),
         "aim.dir" => format!("lsg_vplayer({}, 2)", i("player", "player")),
-        "aim.point" => format!("lsg_w1_aim({}, {}, {})", i("player", "player"), num("max"), match pin {
+        "aim.point" => format!("lsg_w1_aim({}, floatmin({}, float({})), {})", i("player", "player"), num("max"), gen.limit_expr("aim_trace"), match pin {
             "ent" => 1,
             "normal" => 2,
             "hit" => 3,
             _ => 0,
         }),
+        "math.bitwise" => {
+            let op = match gen.choice(n, def, "op") {
+                "or" => 1,
+                "xor" => 2,
+                "not" => 3,
+                "shl" => 4,
+                "shr" => 5,
+                _ => 0,
+            };
+            format!("lsg_w1_bits({}, {}, {op})", i("a", "number"), i("b", "number"))
+        }
+        "spatial.free_spot" => {
+            let hull = match gen.choice(n, def, "hull") {
+                "duck" => "HULL_HEAD",
+                "large" => "HULL_LARGE",
+                "point" => "HULL_POINT",
+                _ => "HULL_HUMAN",
+            };
+            let k = gen.v.g.nodes.iter().position(|x| x.id == node).unwrap_or(0);
+            format!("lsg_w1_free({k}, {}, {hull}, {}, {}, {})", i("pos", "vector"), num("max"), gen.limit_expr("free_spot_tries"), if pin == "out" { 1 } else { 0 })
+        }
+        "player.language" => format!("lsg_w1_lang({}, {})", i("player", "player"), if gen.choice(n, def, "source") == "game" { 1 } else { 0 }),
         _ => "0".into(),
     }
 }
 
-/// On Tick: its interval as a literal (0: every server frame).
+/// A debug drawing's color.
+pub(super) fn rgb(c: &str) -> (u8, u8, u8) {
+    match c {
+        "green" => (0, 255, 0),
+        "blue" => (60, 120, 255),
+        "yellow" => (255, 230, 0),
+        "white" => (255, 255, 255),
+        "orange" => (255, 140, 0),
+        "purple" => (190, 60, 255),
+        _ => (255, 40, 40),
+    }
+}
+
+/// On Tick: its interval, but no faster than the mode's Limits setting of runs a second.
 pub(super) fn tick_secs(gen: &Gen, id: &str) -> String {
     let (n, def) = gen.node(id);
-    float_lit(gen.num(n, def, "interval").max(0.0))
+    format!("floatmax({}, 1.0 / float({}))", float_lit(gen.num(n, def, "interval").max(0.0)), gen.limit_expr("tick_rate"))
 }
 
 #[cfg(test)]
@@ -221,18 +257,23 @@ mod tests {
         let src = generate(&g, false).source;
         // spatial: around a point (-1 entity 0) or an entity; the class quoted; caps in the helpers
         assert!(src.contains("lsg_w1_np(-1, ") && src.contains("lsg_w1_pin("), "nearest player around a point, players in radius");
-        assert!(src.contains("\"info_player_start\"") && src.contains("stock lsg_w1_ein(") && src.contains("n < most && looked++ < 4096"));
+        assert!(src.contains("\"info_player_start\"") && src.contains("stock lsg_w1_ein(") && src.contains("n < most && looked++ < 4096") && src.contains("\"info_player_start\", 64)"));
         // aim: one trace per player per frame, at most 8192 units
         assert!(src.contains("floatmax(maxd, 16.0)") && src.contains("lsg_w1_aim("));
         // On Tick: every frame, each one when its interval has gone by, Delta in ctx[0]
         assert!(src.contains("register_forward(FM_StartFrame, \"lsg_w1_frame\")") && src.contains("public lsg_w1_frame()"));
-        assert!(src.contains("now - at[0] >= 0.1") && src.contains("now - at[1] >= 0.02"), "intervals");
+        assert!(src.contains("now - at[0] >= floatmax(0.1, 1.0 / float(100))") && src.contains("now - at[1] >= floatmax(0.02, 1.0 / float(100))"), "intervals");
         // Multi Gate: a bit per output, Reset its own function; Do Once Per Player: a bit per player
         assert!(src.contains("g_lsgLeft[") && src.contains("_reset(ctx[])") && src.contains("_reset_player(ctx[])"));
         // Toggle Variable flips and keeps the new value
         assert!(src.contains(" = !g_v"));
         // Truncate: toward zero
         assert!(src.contains("floatround_tozero"));
+        // debug drawings only while testing; Log Line in both, rate-limited; bits, free spot, language
+        let dbg = generate(&g, true).source;
+        assert!(!src.contains("\tif (!lsg_msg_room(\"Draw Debug") && dbg.matches("\tif (!lsg_msg_room(\"Draw Debug").count() == 3 && dbg.contains("\t\tlsg_w1_line(lsi") && dbg.contains("lsg_msg_room(\"Draw Debug Line\", 1, 0, 48)"));
+        assert!(src.contains("lsg_w1_log(") && src.contains(", 5)") && src.contains("lsg_w1_bits(12.0, 2.0, 4)") && src.contains("HULL_HUMAN, 256.0, 64, 1)"));
+        assert!(src.contains("lsg_w1_lang(ctx[0], 1)") && src.contains("query_client_cvar(id, \"cl_language\""));
         // a mode without them has none of it
         let plain = generate(&parse(include_str!("testdata/markers.graph.json")).unwrap(), false).source;
         assert!(!plain.contains("lsg_w1_"));
@@ -251,10 +292,13 @@ mod tests {
                 {"id": "v", "type": "vec.make"},
                 {"id": "e", "type": "spatial.nearest_entity", "params": {"class": evil}},
                 {"id": "fmt", "type": "text.format_time", "params": {"style": evil}},
+                {"id": "lg", "type": "debug.log_line", "params": {"text": evil}},
+                {"id": "fs", "type": "spatial.free_spot", "params": {"hull": evil}},
                 {"id": "p1", "type": "debug.print", "params": {"text": "[0]"}},
                 {"id": "p2", "type": "debug.print", "params": {"text": "[0]"}},
                 {"id": "p3", "type": "debug.print", "params": {"text": "[0]"}},
-                {"id": "p4", "type": "debug.print", "params": {"text": "[0]"}}],
+                {"id": "p4", "type": "debug.print", "params": {"text": "[0]"}},
+                {"id": "p5", "type": "debug.print", "params": {"text": "[0]"}}],
             "edges": [{"id": "w1", "from": {"node": "t", "pin": "out"}, "to": {"node": "r", "pin": "a"}},
                 {"id": "w2", "from": {"node": "t", "pin": "out"}, "to": {"node": "s", "pin": "a"}},
                 {"id": "w3", "from": {"node": "s", "pin": "out"}, "to": {"node": "j", "pin": "array"}},
@@ -266,7 +310,11 @@ mod tests {
                 {"id": "w9", "from": {"node": "p2", "pin": "then"}, "to": {"node": "p3", "pin": "exec"}},
                 {"id": "w10", "from": {"node": "e", "pin": "out"}, "to": {"node": "p3", "pin": "value"}},
                 {"id": "w11", "from": {"node": "p3", "pin": "then"}, "to": {"node": "p4", "pin": "exec"}},
-                {"id": "w12", "from": {"node": "fmt", "pin": "out"}, "to": {"node": "p4", "pin": "value"}}]})).unwrap();
+                {"id": "w12", "from": {"node": "fmt", "pin": "out"}, "to": {"node": "p4", "pin": "value"}},
+                {"id": "w13", "from": {"node": "p4", "pin": "then"}, "to": {"node": "lg", "pin": "exec"}},
+                {"id": "w14", "from": {"node": "v", "pin": "out"}, "to": {"node": "fs", "pin": "pos"}},
+                {"id": "w15", "from": {"node": "lg", "pin": "then"}, "to": {"node": "p5", "pin": "exec"}},
+                {"id": "w16", "from": {"node": "fs", "pin": "out"}, "to": {"node": "p5", "pin": "value"}}]})).unwrap();
         for debug in [false, true] {
             let src = generate(&g, debug).source;
             assert!(!src.contains("server_cmd(\"quit"), "{src}");
@@ -274,7 +322,7 @@ mod tests {
                 assert_eq!(l.replace("^\"", "").replace("'\"'", "").matches('"').count() % 2, 0, "{l}");
             }
             // (a choice outside the registry's own is the default)
-            assert!(src.contains("lsg_w1_time(") && src.contains(", 0)"));
+            assert!(src.contains("lsg_w1_time(") && src.contains(", 0)") && src.contains("HULL_HUMAN"));
         }
     }
 

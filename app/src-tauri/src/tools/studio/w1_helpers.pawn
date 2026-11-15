@@ -523,3 +523,173 @@ stock lsg_w1_aim(id, Float:maxd, what)
 	}
 	return lsg_vfrom(g_lsgW1AimPos[k])
 }
+
+// ---- testing: debug drawings (Playtest and Test run builds only: a release build has none; each
+// within the shared message budget, lsg_msg_room) and Log Line
+
+stock lsg_w1_te(kind, const Float:p[3], const Float:q[3], r, g, bl, Float:secs)
+{
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(kind)
+	for (new k = 0; k < 3; k++)
+		engfunc(EngFunc_WriteCoord, p[k])
+	for (new k = 0; k < 3; k++)
+		engfunc(EngFunc_WriteCoord, q[k])
+	write_short(clamp(floatround(secs * 10.0), 1, 600))
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	message_end()
+}
+
+stock lsg_w1_line(a, b, r, g, bl, Float:secs)
+{
+	new Float:p[3], Float:q[3]
+	lsg_vto(a, p)
+	lsg_vto(b, q)
+	lsg_w1_te(TE_LINE, p, q, r, g, bl, secs)
+}
+
+// a box between two corners (any two opposite ones), or round a point (half: its half size)
+stock lsg_w1_box(a, b, Float:half, r, g, bl, Float:secs)
+{
+	new Float:p[3], Float:q[3], Float:lo[3], Float:hi[3]
+	lsg_vto(a, p)
+	if (b >= 0)
+		lsg_vto(b, q)
+	for (new k = 0; k < 3; k++)
+	{
+		if (b < 0)
+		{
+			lo[k] = p[k] - half
+			hi[k] = p[k] + half
+		}
+		else
+		{
+			lo[k] = floatmin(p[k], q[k])
+			hi[k] = floatmax(p[k], q[k])
+		}
+	}
+	lsg_w1_te(TE_BOX, lo, hi, r, g, bl, secs)
+}
+
+stock Float:g_lsgW1LogT[64], g_lsgW1LogN[64], g_lsgW1LogSkip[64]
+// to the AMX Mod X log, at most `most` lines a second from one node (the rest counted, and the
+// count written with the next line that goes through)
+stock bool:lsg_w1_log(node, const s[], most)
+{
+	new k = node & 63
+	new Float:now = get_gametime()
+	if (now - g_lsgW1LogT[k] >= 1.0 || now < g_lsgW1LogT[k])
+	{
+		g_lsgW1LogT[k] = now
+		g_lsgW1LogN[k] = 0
+	}
+	if (++g_lsgW1LogN[k] > most)
+	{
+		g_lsgW1LogSkip[k]++
+		return false
+	}
+	if (g_lsgW1LogSkip[k])
+		log_amx("%s (%d lines skipped before this one: at most %d a second)", s, g_lsgW1LogSkip[k], most)
+	else
+		log_amx("%s", s)
+	g_lsgW1LogSkip[k] = 0
+	return true
+}
+
+// ---- whole-number bits: 0 and, 1 or, 2 xor, 3 not, 4 shift left, 5 shift right
+stock Float:lsg_w1_bits(Float:a, Float:b, op)
+{
+	new x = floatround(a, floatround_tozero), y = floatround(b, floatround_tozero), r
+	switch (op)
+	{
+		case 1: r = x | y
+		case 2: r = x ^ y
+		case 3: r = ~x
+		case 4: r = x << clamp(y, 0, 31)
+		case 5: r = x >> clamp(y, 0, 31)
+		default: r = x & y
+	}
+	return float(r)
+}
+
+// ---- a free spot near a point: the point, then rings round it, a hull trace at each, at most
+// `most` traces; one search per node per server frame (Found and Position agree). 0 Found, 1 position
+stock Float:g_lsgW1FsT[64], g_lsgW1FsOk[64], Float:g_lsgW1FsPos[64][3]
+stock bool:lsg_w1_fits(const Float:p[3], hull)
+{
+	engfunc(EngFunc_TraceHull, p, p, DONT_IGNORE_MONSTERS, hull, 0, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid) && get_tr2(0, TR_InOpen)
+}
+
+stock lsg_w1_free(node, c, hull, Float:maxr, most, what)
+{
+	new k = node & 63
+	new Float:now = get_gametime()
+	if (g_lsgW1FsT[k] != now || now <= 0.0)
+	{
+		g_lsgW1FsT[k] = now
+		g_lsgW1FsOk[k] = 0
+		new Float:o[3], Float:p[3]
+		lsg_vto(c, o)
+		g_lsgW1FsPos[k] = o
+		new Float:step = hull == HULL_POINT ? 8.0 : (hull == HULL_LARGE ? 68.0 : 36.0)
+		new tries = 1
+		if (lsg_w1_fits(o, hull))
+			g_lsgW1FsOk[k] = 1
+		for (new ring = 1; !g_lsgW1FsOk[k] && float(ring) * step <= maxr && tries < most; ring++)
+		{
+			new n = min(8 * ring, 32)
+			for (new j = 0; j < n && tries < most; j++, tries++)
+			{
+				new Float:ang = 360.0 * float(j) / float(n), Float:d = float(ring) * step
+				p[0] = o[0] + d * floatcos(ang, degrees)
+				p[1] = o[1] + d * floatsin(ang, degrees)
+				p[2] = o[2]
+				if (lsg_w1_fits(p, hull))
+				{
+					g_lsgW1FsOk[k] = 1
+					g_lsgW1FsPos[k] = p
+					break
+				}
+			}
+		}
+	}
+	return what ? lsg_vfrom(g_lsgW1FsPos[k]) : g_lsgW1FsOk[k]
+}
+
+// ---- a player's language: AMX Mod X's (their "lang" setting, else the server's), or the game's
+// (cl_language, asked of their game once: empty until it answers, and for bots)
+stock g_lsgW1Lang[33][16], g_lsgW1LangUid[33]
+stock lsg_w1_lang(id, game)
+{
+	new t[16]
+	if (!lsg_ok(id))
+		return t
+	if (!game)
+	{
+		get_user_info(id, "lang", t, charsmax(t))
+		if (!t[0])
+			get_cvar_string("amx_language", t, charsmax(t))
+		return t
+	}
+	if (is_user_bot(id))
+		return t
+	new uid = get_user_userid(id)
+	if (g_lsgW1LangUid[id] != uid)
+	{
+		g_lsgW1LangUid[id] = uid
+		g_lsgW1Lang[id][0] = 0
+		query_client_cvar(id, "cl_language", "lsg_w1_langq")
+	}
+	copy(t, charsmax(t), g_lsgW1Lang[id])
+	return t
+}
+
+public lsg_w1_langq(id, const cvar[], const value[])
+{
+	if (id < 1 || id > 32 || containi(value, "Bad CVAR") >= 0)
+		return
+	copy(g_lsgW1Lang[id], charsmax(g_lsgW1Lang[]), value)
+}

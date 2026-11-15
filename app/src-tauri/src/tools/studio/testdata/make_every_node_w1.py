@@ -96,6 +96,11 @@ pure("behind", "rel.is_behind", {"cone": 120}, [(*PL, "a"), ("ent", "out", "b")]
 pure("eye", "aim.eye_pos", {}, [(*PL, "player")], ["out"])
 pure("dir", "aim.dir", {}, [(*PL, "player")], ["out"])
 pure("aim", "aim.point", {"max": 2048}, [(*PL, "player")], ["pos", "ent", "normal", "hit"])
+pure("bits", "math.bitwise", {"a": 12, "b": 2, "op": "shl"}, [], ["out"])
+pure("bnot", "math.bitwise", {"a": 5, "op": "not"}, [], ["out"])
+pure("free", "spatial.free_spot", {"hull": "stand", "max": 256}, [("vec", "out", "pos")], ["found", "out"])
+pure("lang", "player.language", {"source": "game"}, [(*PL, "player")], ["out"])
+pure("lang2", "player.language", {"source": "amxx"}, [(*PL, "player")], ["out"])
 
 # the flow nodes
 def flow(id, type, params, wires, x):
@@ -104,6 +109,10 @@ def flow(id, type, params, wires, x):
     for src, sp, pin in wires:
         W(src, sp, id, pin)
     last[:] = [id, "then"]
+flow("dl", "debug.draw_line", {"color": "green", "secs": 3}, [("eye", "out", "a"), ("aim", "pos", "b")], 0)
+flow("db", "debug.draw_box", {"color": "yellow"}, [("vec", "out", "a"), ("vec2", "out", "b")], 0)
+flow("dp", "debug.draw_point", {"size": 16}, [("free", "out", "pos")], 0)
+flow("log", "debug.log_line", {"text": "every node w1", "most": 5}, [("lang", "out", "text")], 0)
 flow("tg", "var.toggle", {"var": "flag"}, [], 1)
 show("tg", "value")
 flow("tgp", "var.toggle", {"var": "pflag"}, [(*PL, "player")], 2)

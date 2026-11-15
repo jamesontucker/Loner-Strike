@@ -25,6 +25,10 @@ pub struct Limit {
 }
 
 pub const LIMITS: &[Limit] = &[
+    Limit { id: "search_found", label: "Entities one search keeps", default: 64, lag_above: 256, max: 2048, kinds: &["spatial.entities_in_radius"] }, // W1
+    Limit { id: "free_spot_tries", label: "Tries finding a free spot", default: 64, lag_above: 256, max: 1024, kinds: &["spatial.free_spot"] }, // W1
+    Limit { id: "aim_trace", label: "Aim Point's longest trace", default: 8192, lag_above: 8192, max: 32768, kinds: &["aim.point"] }, // W1
+    Limit { id: "tick_rate", label: "On Tick runs a second at most", default: 100, lag_above: 100, max: 1000, kinds: &["event.on_tick"] }, // W1
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
     // the effects agent (gen/fx.rs)
@@ -44,7 +48,7 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
     // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
     // and kick players; gen.rs lsg_msg_room)
-    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
+    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
 ];
 
 /// A mode's own files (models, sounds, sprites) loaded with the map: the game holds 512 models and

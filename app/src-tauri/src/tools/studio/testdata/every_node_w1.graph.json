@@ -1347,6 +1347,183 @@
    }
   },
   {
+   "id": "bits",
+   "type": "math.bitwise",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "a": 12,
+    "b": 2,
+    "op": "shl"
+   }
+  },
+  {
+   "id": "p60",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "bnot",
+   "type": "math.bitwise",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "a": 5,
+    "op": "not"
+   }
+  },
+  {
+   "id": "p61",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "free",
+   "type": "spatial.free_spot",
+   "pos": {
+    "x": 260,
+    "y": 6380
+   },
+   "params": {
+    "hull": "stand",
+    "max": 256
+   }
+  },
+  {
+   "id": "p62",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "p63",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lang",
+   "type": "player.language",
+   "pos": {
+    "x": 260,
+    "y": 6600
+   },
+   "params": {
+    "source": "game"
+   }
+  },
+  {
+   "id": "p64",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "lang2",
+   "type": "player.language",
+   "pos": {
+    "x": 260,
+    "y": 6600
+   },
+   "params": {
+    "source": "amxx"
+   }
+  },
+  {
+   "id": "p65",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 1100
+   },
+   "params": {
+    "text": "[0]",
+    "chat": false
+   }
+  },
+  {
+   "id": "dl",
+   "type": "debug.draw_line",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "color": "green",
+    "secs": 3
+   }
+  },
+  {
+   "id": "db",
+   "type": "debug.draw_box",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "color": "yellow"
+   }
+  },
+  {
+   "id": "dp",
+   "type": "debug.draw_point",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "size": 16
+   }
+  },
+  {
+   "id": "log",
+   "type": "debug.log_line",
+   "pos": {
+    "x": 0,
+    "y": 8800
+   },
+   "params": {
+    "text": "every node w1",
+    "most": 5
+   }
+  },
+  {
    "id": "tg",
    "type": "var.toggle",
    "pos": {
@@ -1358,10 +1535,10 @@
    }
   },
   {
-   "id": "p60",
+   "id": "p66",
    "type": "debug.print",
    "pos": {
-    "x": 520,
+    "x": 2080,
     "y": 1100
    },
    "params": {
@@ -1392,10 +1569,10 @@
    }
   },
   {
-   "id": "p61",
+   "id": "p67",
    "type": "debug.print",
    "pos": {
-    "x": 780,
+    "x": 2340,
     "y": 1100
    },
    "params": {
@@ -3508,36 +3685,311 @@
     "pin": "then"
    },
    "to": {
-    "node": "tg",
+    "node": "p60",
     "pin": "exec"
    }
   },
   {
    "id": "w173",
    "from": {
-    "node": "tg",
-    "pin": "then"
+    "node": "bits",
+    "pin": "out"
    },
    "to": {
     "node": "p60",
-    "pin": "exec"
+    "pin": "value"
    }
   },
   {
    "id": "w174",
    "from": {
-    "node": "tg",
-    "pin": "value"
+    "node": "p60",
+    "pin": "then"
    },
    "to": {
-    "node": "p60",
-    "pin": "value"
+    "node": "p61",
+    "pin": "exec"
    }
   },
   {
    "id": "w175",
    "from": {
-    "node": "p60",
+    "node": "bnot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p61",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w176",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "free",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w177",
+   "from": {
+    "node": "p61",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p62",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w178",
+   "from": {
+    "node": "free",
+    "pin": "found"
+   },
+   "to": {
+    "node": "p62",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w179",
+   "from": {
+    "node": "p62",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p63",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w180",
+   "from": {
+    "node": "free",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p63",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w181",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lang",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w182",
+   "from": {
+    "node": "p63",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p64",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w183",
+   "from": {
+    "node": "lang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p64",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w184",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lang2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w185",
+   "from": {
+    "node": "p64",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p65",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w186",
+   "from": {
+    "node": "lang2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p65",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w187",
+   "from": {
+    "node": "p65",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w188",
+   "from": {
+    "node": "eye",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w189",
+   "from": {
+    "node": "aim",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "dl",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w190",
+   "from": {
+    "node": "dl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "db",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w191",
+   "from": {
+    "node": "vec",
+    "pin": "out"
+   },
+   "to": {
+    "node": "db",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w192",
+   "from": {
+    "node": "vec2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "db",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w193",
+   "from": {
+    "node": "db",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w194",
+   "from": {
+    "node": "free",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dp",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w195",
+   "from": {
+    "node": "dp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "log",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w196",
+   "from": {
+    "node": "lang",
+    "pin": "out"
+   },
+   "to": {
+    "node": "log",
+    "pin": "text"
+   }
+  },
+  {
+   "id": "w197",
+   "from": {
+    "node": "log",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w198",
+   "from": {
+    "node": "tg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p66",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w199",
+   "from": {
+    "node": "tg",
+    "pin": "value"
+   },
+   "to": {
+    "node": "p66",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w200",
+   "from": {
+    "node": "p66",
     "pin": "then"
    },
    "to": {
@@ -3546,7 +3998,7 @@
    }
   },
   {
-   "id": "w176",
+   "id": "w201",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -3557,7 +4009,7 @@
    }
   },
   {
-   "id": "w177",
+   "id": "w202",
    "from": {
     "node": "tgp",
     "pin": "then"
@@ -3568,7 +4020,7 @@
    }
   },
   {
-   "id": "w178",
+   "id": "w203",
    "from": {
     "node": "team",
     "pin": "out"
@@ -3579,31 +4031,31 @@
    }
   },
   {
-   "id": "w179",
+   "id": "w204",
    "from": {
     "node": "tgt",
     "pin": "then"
    },
    "to": {
-    "node": "p61",
+    "node": "p67",
     "pin": "exec"
    }
   },
   {
-   "id": "w180",
+   "id": "w205",
    "from": {
     "node": "tgt",
     "pin": "value"
    },
    "to": {
-    "node": "p61",
+    "node": "p67",
     "pin": "value"
    }
   },
   {
-   "id": "w181",
+   "id": "w206",
    "from": {
-    "node": "p61",
+    "node": "p67",
     "pin": "then"
    },
    "to": {
@@ -3612,7 +4064,7 @@
    }
   },
   {
-   "id": "w182",
+   "id": "w207",
    "from": {
     "node": "nums",
     "pin": "out"
@@ -3623,7 +4075,7 @@
    }
   },
   {
-   "id": "w183",
+   "id": "w208",
    "from": {
     "node": "rev",
     "pin": "then"
@@ -3634,7 +4086,7 @@
    }
   },
   {
-   "id": "w184",
+   "id": "w209",
    "from": {
     "node": "seq",
     "pin": "then0"
@@ -3645,7 +4097,7 @@
    }
   },
   {
-   "id": "w185",
+   "id": "w210",
    "from": {
     "node": "seq",
     "pin": "then1"
@@ -3656,7 +4108,7 @@
    }
   },
   {
-   "id": "w186",
+   "id": "w211",
    "from": {
     "node": "seq",
     "pin": "then2"
@@ -3667,7 +4119,7 @@
    }
   },
   {
-   "id": "w187",
+   "id": "w212",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -3678,7 +4130,7 @@
    }
   },
   {
-   "id": "w188",
+   "id": "w213",
    "from": {
     "node": "dopp",
     "pin": "then"
@@ -3689,7 +4141,7 @@
    }
   },
   {
-   "id": "w189",
+   "id": "w214",
    "from": {
     "node": "mg",
     "pin": "then0"
@@ -3700,7 +4152,7 @@
    }
   },
   {
-   "id": "w190",
+   "id": "w215",
    "from": {
     "node": "mg",
     "pin": "then1"
@@ -3711,7 +4163,7 @@
    }
   },
   {
-   "id": "w191",
+   "id": "w216",
    "from": {
     "node": "mg",
     "pin": "then2"
@@ -3722,7 +4174,7 @@
    }
   },
   {
-   "id": "w192",
+   "id": "w217",
    "from": {
     "node": "mgp0",
     "pin": "then"
@@ -3733,7 +4185,7 @@
    }
   },
   {
-   "id": "w193",
+   "id": "w218",
    "from": {
     "node": "mgr",
     "pin": "then1"
@@ -3744,7 +4196,7 @@
    }
   },
   {
-   "id": "w194",
+   "id": "w219",
    "from": {
     "node": "rs",
     "pin": "then"
@@ -3755,7 +4207,7 @@
    }
   },
   {
-   "id": "w195",
+   "id": "w220",
    "from": {
     "node": "vec",
     "pin": "out"
@@ -3766,7 +4218,7 @@
    }
   },
   {
-   "id": "w196",
+   "id": "w221",
    "from": {
     "node": "tnp",
     "pin": "out"
@@ -3777,7 +4229,7 @@
    }
   },
   {
-   "id": "w197",
+   "id": "w222",
    "from": {
     "node": "tick",
     "pin": "delta"
@@ -3788,7 +4240,7 @@
    }
   },
   {
-   "id": "w198",
+   "id": "w223",
    "from": {
     "node": "tick",
     "pin": "then"
@@ -3799,7 +4251,7 @@
    }
   },
   {
-   "id": "w199",
+   "id": "w224",
    "from": {
     "node": "taim",
     "pin": "pos"
@@ -3810,7 +4262,7 @@
    }
   },
   {
-   "id": "w200",
+   "id": "w225",
    "from": {
     "node": "tp1",
     "pin": "then"
@@ -3821,7 +4273,7 @@
    }
   },
   {
-   "id": "w201",
+   "id": "w226",
    "from": {
     "node": "tft",
     "pin": "out"
@@ -3832,7 +4284,7 @@
    }
   },
   {
-   "id": "w202",
+   "id": "w227",
    "from": {
     "node": "vec",
     "pin": "out"
@@ -3843,7 +4295,7 @@
    }
   },
   {
-   "id": "w203",
+   "id": "w228",
    "from": {
     "node": "vec2",
     "pin": "out"
@@ -3854,7 +4306,7 @@
    }
   },
   {
-   "id": "w204",
+   "id": "w229",
    "from": {
     "node": "fast",
     "pin": "then"
@@ -3865,7 +4317,7 @@
    }
   },
   {
-   "id": "w205",
+   "id": "w230",
    "from": {
     "node": "flos",
     "pin": "clear"

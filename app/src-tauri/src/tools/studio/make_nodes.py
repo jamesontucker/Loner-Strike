@@ -1081,9 +1081,9 @@ node("spatial.players_in_radius", "Players In Radius", "Spatial", "Every player 
 node("spatial.nearest_player", "Nearest Player", "Spatial", "The player nearest to a point or an entity (not the entity itself), within Max distance; nobody if none.",
      inputs=FROM_IN, outputs=[P("out","player","Player"), P("dist","number","Distance")],
      params=[prm("max","Max distance","number",8192,min=1,max=16384), prm("alive","Alive only","bool",True), TEAM_ANY, prm("bots","Who","choice","all",choices=[["all","Bots and people"],["humans","People only"],["bots","Bots only"]])], keywords="closest near target", **SP)
-node("spatial.entities_in_radius", "Entities In Radius", "Spatial", "Entities within Radius of a point or an entity, of a class or any (up to Most found), as an array. Players aren't listed (use Players In Radius).",
+node("spatial.entities_in_radius", "Entities In Radius", "Spatial", "Entities within Radius of a point or an entity, of a class or any, as an array (up to the mode's Limits setting, 64 at first). Players aren't listed (use Players In Radius).",
      inputs=FROM_IN + [P("radius","number","Radius",param="radius")], outputs=[P("out","array<entity>","Entities")],
-     params=[prm("radius","Radius","number",300,min=1,max=32768), prm("class","Class (empty: any)","entname",""), prm("most","Most found","number",64,min=1,max=2048)], keywords="near nearby around find sphere area props", **SP)
+     params=[prm("radius","Radius","number",300,min=1,max=32768), prm("class","Class (empty: any)","entname","")], keywords="near nearby around find sphere area props", **SP)
 node("spatial.nearest_entity", "Nearest Entity", "Spatial", "The entity of a class nearest to a point or an entity, within Max distance; nothing if none. Players aren't counted.",
      inputs=FROM_IN, outputs=[P("out","entity","Entity"), P("dist","number","Distance")],
      params=[prm("class","Class","entname","info_target"), prm("max","Max distance","number",2048,min=1,max=32768)], keywords="closest near find", **SP)
@@ -1174,9 +1174,32 @@ node("flow.do_once_per_player", "Do Once Per Player", "Flow", "Lets the flow thr
      inputs=[X, E("reset","Reset"), E("reset_player","Reset Player"), P("player","player","Player",required=True)], outputs=[E("then","Completed")], keywords="once each player first time")
 node("var.toggle", "Toggle Variable", "Variables", "Flips a yes/no variable (yes becomes no, no becomes yes); New Value is what it is now. A per-player one needs a Player, a per-team one a Team.",
      inputs=[X, P("player","player","Player",optional=True), P("team","team","Team",optional=True)], outputs=[E(), P("value","bool","New value")], params=[prm("var","Variable","var","",varType="bool")], keywords="flip switch invert not bool toggle")
-node("event.on_tick", "On Tick", "Events", "Runs again and again, every Interval seconds (0.1: ten times a second; 0: every server frame), all through the map. Delta is the seconds since the last time.",
+node("event.on_tick", "On Tick", "Events", "Runs again and again, every Interval seconds (0.1: ten times a second; 0: as often as the mode's Limits setting lets it, 100 a second at first), all through the map. Delta is the seconds since the last time.",
      outputs=[E(), P("delta","number","Delta")], params=[prm("interval","Interval (seconds)","number",0.1,min=0,max=60)], event=True, keywords="update frame loop every tick think interval")
 
+# testing: debug drawings, Log Line
+COLOR = prm("color","Color","choice","red",choices=[["red","Red"],["green","Green"],["blue","Blue"],["yellow","Yellow"],["white","White"],["orange","Orange"],["purple","Purple"]])
+SECS = prm("secs","Seconds","number",2,min=0.1,max=60)
+TESTONLY = " Shown only while testing (Playtest and Test run); a finished mode draws nothing."
+node("debug.draw_line", "Draw Debug Line", "Advanced", "Draws a line from A to B for some seconds, to see where things are." + TESTONLY,
+     inputs=[X, P("a","vector","From",required=True), P("b","vector","To",required=True)], outputs=[E()], params=[COLOR, SECS], keywords="debug draw line visualize show trace ray")
+node("debug.draw_box", "Draw Debug Box", "Advanced", "Draws a box between two opposite corners for some seconds." + TESTONLY,
+     inputs=[X, P("a","vector","Corner",required=True), P("b","vector","Opposite corner",required=True)], outputs=[E()], params=[COLOR, SECS], keywords="debug draw box area bounds visualize")
+node("debug.draw_point", "Draw Debug Point", "Advanced", "Draws a small box round a point for some seconds." + TESTONLY,
+     inputs=[X, P("pos","vector","Position",required=True)], outputs=[E()], params=[COLOR, SECS, prm("size","Size","number",8,min=1,max=256)], keywords="debug draw point marker dot visualize")
+node("debug.log_line", "Log Line", "Messages", "Writes a line to the AMX Mod X log (addons/amxmodx/logs), at most Most a second from this node (the rest are counted in the next line).",
+     inputs=[X, P("text","text","Text",param="text")], outputs=[E()], params=[prm("text","Text","text","Something happened",max=120), prm("most","Most a second","number",5,min=1,max=100)], keywords="log file write record amxx logs")
+node("math.bitwise", "Bitwise", "Numbers", "Bits of whole numbers (the fractions are dropped): And, Or, Xor, Not (of A), or A shifted left or right by B bits. Exact up to 16,777,216.",
+     inputs=[P("a","number","A",param="a"), P("b","number","B",param="b")], outputs=[P("out","number","Result")],
+     params=[prm("a","A","number",6,min=-100000,max=100000), prm("b","B","number",3,min=-100000,max=100000), prm("op","Do","choice","and",choices=[["and","And (&)"],["or","Or (|)"],["xor","Xor (^)"],["not","Not (~A)"],["shl","Shift left (<<)"],["shr","Shift right (>>)"]])],
+     keywords="bits bitwise and or xor not shift flags mask & | ^ ~ << >>", **SP)
+node("spatial.free_spot", "Find Free Spot Near", "Spatial", "A spot near a point where a player (or the hull you pick) fits: the point itself if it's free, else the nearest free one in rings round it, up to Max distance (at most the mode's Limits setting of tries, 64 at first). Found is no when there's none (Position is then the point).",
+     inputs=[P("pos","vector","Near",required=True)], outputs=[P("found","bool","Found"), P("out","vector","Position")],
+     params=[prm("hull","Size","choice","stand",choices=[["stand","Player standing"],["duck","Player ducking"],["large","Large (big creatures)"],["point","A point"]]), prm("max","Max distance","number",256,min=0,max=4096)],
+     keywords="free spot space spawn place teleport unstuck empty fits", **SP)
+node("player.language", "Player Language", "Players", "A player's language: AMX Mod X's for them (their lang setting, else the server's, like en), or their game's (cl_language, like english: empty for bots, and for a moment until their game answers).",
+     inputs=[P("player","player","Player",required=True)], outputs=[P("out","text","Language")],
+     params=[prm("source","From","choice","amxx",choices=[["amxx","AMX Mod X (en, de...)"],["game","The game (english...)"]])], keywords="language locale lang translate", **SP)
 # findable: what already exists under other words
 def _kw(t, words):
     for d in nodes:

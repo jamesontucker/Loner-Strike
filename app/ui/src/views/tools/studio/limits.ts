@@ -7,6 +7,11 @@ import type { GVariable, Graph } from "./schema";
 export type Limit = { id: string; label: string; default: number; lagAbove: number; max: number; kinds: string[] };
 
 export const LIMITS: Limit[] = [
+  // W1's utility nodes
+  { id: "search_found", label: "Entities one search keeps", default: 64, lagAbove: 256, max: 2048, kinds: ["spatial.entities_in_radius"] },
+  { id: "free_spot_tries", label: "Tries finding a free spot", default: 64, lagAbove: 256, max: 1024, kinds: ["spatial.free_spot"] },
+  { id: "aim_trace", label: "Aim Point's longest trace", default: 8192, lagAbove: 8192, max: 32768, kinds: ["aim.point"] },
+  { id: "tick_rate", label: "On Tick runs a second at most", default: 100, lagAbove: 100, max: 1000, kinds: ["event.on_tick"] },
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
   // the effects agent (gen/fx.rs)
@@ -23,7 +28,7 @@ export const LIMITS: Limit[] = [
   { id: "volume_members", label: "Things inside one trigger volume", default: 32, lagAbove: 48, max: 64, kinds: ["vol.spawn"] },
   { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lagAbove: 24, max: 32, kinds: ["bots.avoid"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
-  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
+  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["debug.draw_line", "debug.draw_box", "debug.draw_point", "fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d", "fx.beam_ents", "fx.icon_over", "fx.sprite_at", "fx.tracer", "hud.radar_blip", "hud.team_score", "world.weather", "world.fog", "eng.score_tag", "eng.score_color", "eng.soundtrack", "eng.flashlight", "eng.nightvision"] },
 ];
 
 export const limitVar = (l: Limit): GVariable =>

@@ -27682,7 +27682,7 @@
    "type": "spatial.entities_in_radius",
    "title": "Entities In Radius",
    "category": "Spatial",
-   "help": "Entities within Radius of a point or an entity, of a class or any (up to Most found), as an array. Players aren't listed (use Players In Radius).",
+   "help": "Entities within Radius of a point or an entity, of a class or any, as an array (up to the mode's Limits setting, 64 at first). Players aren't listed (use Players In Radius).",
    "inputs": [
     {
      "id": "pos",
@@ -27723,14 +27723,6 @@
      "label": "Class (empty: any)",
      "kind": "entname",
      "default": ""
-    },
-    {
-     "id": "most",
-     "label": "Most found",
-     "kind": "number",
-     "default": 64,
-     "min": 1,
-     "max": 2048
     }
    ],
    "keywords": "near nearby around find sphere area props",
@@ -29593,7 +29585,7 @@
    "type": "event.on_tick",
    "title": "On Tick",
    "category": "Events",
-   "help": "Runs again and again, every Interval seconds (0.1: ten times a second; 0: every server frame), all through the map. Delta is the seconds since the last time.",
+   "help": "Runs again and again, every Interval seconds (0.1: ten times a second; 0: as often as the mode's Limits setting lets it, 100 a second at first), all through the map. Delta is the seconds since the last time.",
    "inputs": [],
    "outputs": [
     {
@@ -29619,6 +29611,471 @@
    ],
    "event": true,
    "keywords": "update frame loop every tick think interval"
+  },
+  {
+   "type": "debug.draw_line",
+   "title": "Draw Debug Line",
+   "category": "Advanced",
+   "help": "Draws a line from A to B for some seconds, to see where things are. Shown only while testing (Playtest and Test run); a finished mode draws nothing.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "From",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "To",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "color",
+     "label": "Color",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "yellow",
+       "Yellow"
+      ],
+      [
+       "white",
+       "White"
+      ],
+      [
+       "orange",
+       "Orange"
+      ],
+      [
+       "purple",
+       "Purple"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 60
+    }
+   ],
+   "keywords": "debug draw line visualize show trace ray"
+  },
+  {
+   "type": "debug.draw_box",
+   "title": "Draw Debug Box",
+   "category": "Advanced",
+   "help": "Draws a box between two opposite corners for some seconds. Shown only while testing (Playtest and Test run); a finished mode draws nothing.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Corner",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "Opposite corner",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "color",
+     "label": "Color",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "yellow",
+       "Yellow"
+      ],
+      [
+       "white",
+       "White"
+      ],
+      [
+       "orange",
+       "Orange"
+      ],
+      [
+       "purple",
+       "Purple"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 60
+    }
+   ],
+   "keywords": "debug draw box area bounds visualize"
+  },
+  {
+   "type": "debug.draw_point",
+   "title": "Draw Debug Point",
+   "category": "Advanced",
+   "help": "Draws a small box round a point for some seconds. Shown only while testing (Playtest and Test run); a finished mode draws nothing.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "color",
+     "label": "Color",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "yellow",
+       "Yellow"
+      ],
+      [
+       "white",
+       "White"
+      ],
+      [
+       "orange",
+       "Orange"
+      ],
+      [
+       "purple",
+       "Purple"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 60
+    },
+    {
+     "id": "size",
+     "label": "Size",
+     "kind": "number",
+     "default": 8,
+     "min": 1,
+     "max": 256
+    }
+   ],
+   "keywords": "debug draw point marker dot visualize"
+  },
+  {
+   "type": "debug.log_line",
+   "title": "Log Line",
+   "category": "Messages",
+   "help": "Writes a line to the AMX Mod X log (addons/amxmodx/logs), at most Most a second from this node (the rest are counted in the next line).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text",
+     "param": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Something happened",
+     "max": 120
+    },
+    {
+     "id": "most",
+     "label": "Most a second",
+     "kind": "number",
+     "default": 5,
+     "min": 1,
+     "max": 100
+    }
+   ],
+   "keywords": "log file write record amxx logs"
+  },
+  {
+   "type": "math.bitwise",
+   "title": "Bitwise",
+   "category": "Numbers",
+   "help": "Bits of whole numbers (the fractions are dropped): And, Or, Xor, Not (of A), or A shifted left or right by B bits. Exact up to 16,777,216.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 6,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 3,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "and",
+     "choices": [
+      [
+       "and",
+       "And (&)"
+      ],
+      [
+       "or",
+       "Or (|)"
+      ],
+      [
+       "xor",
+       "Xor (^)"
+      ],
+      [
+       "not",
+       "Not (~A)"
+      ],
+      [
+       "shl",
+       "Shift left (<<)"
+      ],
+      [
+       "shr",
+       "Shift right (>>)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "bits bitwise and or xor not shift flags mask & | ^ ~ << >>",
+   "pure": true
+  },
+  {
+   "type": "spatial.free_spot",
+   "title": "Find Free Spot Near",
+   "category": "Spatial",
+   "help": "A spot near a point where a player (or the hull you pick) fits: the point itself if it's free, else the nearest free one in rings round it, up to Max distance (at most the mode's Limits setting of tries, 64 at first). Found is no when there's none (Position is then the point).",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Near",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    },
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Position"
+    }
+   ],
+   "params": [
+    {
+     "id": "hull",
+     "label": "Size",
+     "kind": "choice",
+     "default": "stand",
+     "choices": [
+      [
+       "stand",
+       "Player standing"
+      ],
+      [
+       "duck",
+       "Player ducking"
+      ],
+      [
+       "large",
+       "Large (big creatures)"
+      ],
+      [
+       "point",
+       "A point"
+      ]
+     ]
+    },
+    {
+     "id": "max",
+     "label": "Max distance",
+     "kind": "number",
+     "default": 256,
+     "min": 0,
+     "max": 4096
+    }
+   ],
+   "keywords": "free spot space spawn place teleport unstuck empty fits",
+   "pure": true
+  },
+  {
+   "type": "player.language",
+   "title": "Player Language",
+   "category": "Players",
+   "help": "A player's language: AMX Mod X's for them (their lang setting, else the server's, like en), or their game's (cl_language, like english: empty for bots, and for a moment until their game answers).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Language"
+    }
+   ],
+   "params": [
+    {
+     "id": "source",
+     "label": "From",
+     "kind": "choice",
+     "default": "amxx",
+     "choices": [
+      [
+       "amxx",
+       "AMX Mod X (en, de...)"
+      ],
+      [
+       "game",
+       "The game (english...)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "language locale lang translate",
+   "pure": true
   }
  ]
 }
