@@ -13345,6 +13345,18 @@ public bool:n_shop_at(plugin, params)
 
 new g_fwNpcTalk, g_fwInteract, g_fwNpcChoice;
 new g_npcFollow[MAX_COMP];
+/* scripted moves (EC, see npc_move_tick) */
+#define NPC_PTS   24
+#define NPC_LEG   32
+#define NM_LOOP   1
+#define NM_STAY   2
+#define NM_RUN    4
+new Float:g_nmPts[MAX_COMP][NPC_PTS][3];
+new g_nmN[MAX_COMP], g_nmAt[MAX_COMP], g_nmFlags[MAX_COMP], g_nmWas[MAX_COMP], g_nmTries[MAX_COMP];
+new Float:g_nmSpeed[MAX_COMP], Float:g_nmUntil[MAX_COMP];
+new Float:g_nmLeg[MAX_COMP][NPC_LEG][3];
+new g_nmLegN[MAX_COMP], g_nmLegAt[MAX_COMP];
+new g_fwNpcArrived, g_fwNpcFailed;
 new g_cvNpc[33];
 new bool:g_cvOpen[33];
 new g_cvSerial[33];
@@ -13384,6 +13396,10 @@ stock npc_natives()
 	register_native("ls_npc_talking", "n_npc_talking");
 	register_native("ls_interactable_offer", "n_interactable_offer");
 	register_native("ls_npc_targetable", "n_npc_targetable");
+	register_native("ls_npc_move", "n_npc_move"); /* EC */
+	register_native("ls_npc_move_path", "n_npc_move_path");
+	register_native("ls_npc_move_stop", "n_npc_move_stop");
+	register_native("ls_npc_moving", "n_npc_moving");
 }
 
 stock npc_init()
@@ -13391,6 +13407,7 @@ stock npc_init()
 	g_fwNpcTalk = CreateMultiForward("ls_on_npc_talk", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwInteract = CreateMultiForward("ls_on_interact", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwNpcChoice = CreateMultiForward("ls_on_npc_choice", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
+	npc_move_init(); /* EC */
 	register_forward(FM_PlayerPreThink, "npc_prethink");
 	RegisterHam(Ham_TakeDamage, "info_target", "npc_takedamage");
 	g_cFriendlyFire = get_cvar_pointer("mp_friendlyfire");
@@ -13516,6 +13533,7 @@ stock npc_comp_reset(s)
 	if (k == K_NPC)
 	{
 		g_aux[s] = 0;
+		g_nmN[s] = 0; /* EC: a reset ends a scripted move */
 		g_npcFollow[s] = 0;
 		g_pf[s][NP_PAUSE] = 0.0;
 		g_pf[s][NP_NEXTGOAL] = 0.0;
@@ -13620,6 +13638,10 @@ stock npc_stop(s)
 
 /* walks toward a spot (re-aimed 4 times a second); true once there */
 stock bool:npc_walk_to(s, const Float:goal[3], Float:near)
+	return npc_step(s, goal, near, NPC_SPEED) != 0;
+
+/* one step toward a spot: 1 there, -1 blocked (a wall, a drop, a step too high), 0 walking */
+stock npc_step(s, const Float:goal[3], Float:near, Float:speed, bool:run = false)
 {
 	new e = g_ent[s];
 	new Float:o[3];
@@ -13628,9 +13650,9 @@ stock bool:npc_walk_to(s, const Float:goal[3], Float:near)
 	if (d <= near)
 	{
 		npc_stop(s);
-		return true;
+		return 1;
 	}
-	new Float:step = floatmin(NPC_SPEED * 0.3, d);
+	new Float:step = floatmin(speed * 0.3, d);
 	new Float:nx[3];
 	nx[0] = o[0] + (goal[0] - o[0]) / d * step;
 	nx[1] = o[1] + (goal[1] - o[1]) / d * step;
@@ -13642,7 +13664,7 @@ stock bool:npc_walk_to(s, const Float:goal[3], Float:near)
 		/* blocked (a wall, a drop, a step too high): stop and pick another goal */
 		npc_stop(s);
 		g_pf[s][NP_NEXTGOAL] = 0.0;
-		return true;
+		return -1;
 	}
 	new Float:v[3];
 	v[0] = (nx[0] - o[0]) / 0.25;
@@ -13650,12 +13672,205 @@ stock bool:npc_walk_to(s, const Float:goal[3], Float:near)
 	v[2] = (nx[2] - o[2]) / 0.25;
 	set_pev(e, pev_velocity, v);
 	npc_face(e, goal, 30.0);
-	if (g_pf[s][NP_WALKING] == 0.0)
+	if (g_pf[s][NP_WALKING] != (run ? 2.0 : 1.0))
 	{
-		g_pf[s][NP_WALKING] = 1.0;
-		npc_play(e, "walk", "walk1");
+		g_pf[s][NP_WALKING] = run ? 2.0 : 1.0;
+		if (run)
+			npc_play(e, "run", "run1");
+		else
+			npc_play(e, "walk", "walk1");
 	}
-	return false;
+	return 0;
+}
+
+/* ---- scripted moves (Studio's NPC Move To / Follow Path / Stop, EC): ls_npc_move ----
+   Each point is reached along the bot navigation mesh's route when gm_botnav has one (the
+   route's turns walked one by one), straight otherwise. Blocked: routed again from where it
+   stands, twice; then (or past the time allowed) it fails. Behavior 4 while it moves; then
+   its old behavior, or it stands (NM_STAY). */
+
+stock npc_move_init()
+{
+	g_fwNpcArrived = CreateMultiForward("ls_on_npc_arrived", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
+	g_fwNpcFailed = CreateMultiForward("ls_on_npc_move_failed", ET_IGNORE, FP_CELL, FP_CELL);
+}
+
+/* the route to point g_nmAt (the mesh's, or straight) and the time it may take */
+stock npc_move_leg(s)
+{
+	new Float:o[3], Float:to[3];
+	pev(g_ent[s], pev_origin, o);
+	vcopy(g_nmPts[s][g_nmAt[s]], to);
+	new Float:buf[NPC_LEG * 3], n = 0;
+	if (callfunc_begin("botnav_route_cf", "gm_botnav.amxx") == 1)
+	{
+		callfunc_push_array(_:o, 3, false);
+		callfunc_push_array(_:to, 3, false);
+		callfunc_push_array(_:buf, NPC_LEG * 3, true);
+		callfunc_push_int(NPC_LEG);
+		n = callfunc_end();
+	}
+	if (n <= 0)
+	{
+		n = 1;
+		vcopy(to, g_nmLeg[s][0]);
+	}
+	else
+		for (new i = 0; i < n; i++)
+			for (new k = 0; k < 3; k++)
+				g_nmLeg[s][i][k] = buf[i * 3 + k];
+	g_nmLegN[s] = n;
+	g_nmLegAt[s] = 0;
+	new Float:len = 0.0, Float:a[3];
+	vcopy(o, a);
+	for (new i = 0; i < n; i++)
+	{
+		len += get_distance_f(a, g_nmLeg[s][i]);
+		vcopy(g_nmLeg[s][i], a);
+	}
+	g_nmUntil[s] = get_gametime() + 5.0 + len / floatmax(g_nmSpeed[s], 20.0) * 2.5;
+}
+
+stock npc_move_end(s, bool:failed)
+{
+	new e = g_ent[s], at = g_nmAt[s];
+	npc_stop(s);
+	g_nmN[s] = 0;
+	if ((g_nmFlags[s] & NM_STAY) && !failed)
+		g_val[s] = 0.0;
+	else
+		g_val[s] = float(g_nmWas[s]); /* (home stays home: wander and follow go back there) */
+	g_pf[s][NP_NEXTGOAL] = 0.0;
+	if (failed)
+	{
+		new r;
+		ExecuteForward(g_fwNpcFailed, r, e, at);
+	}
+}
+
+stock npc_move_tick(s)
+{
+	if (g_nmN[s] <= 0)
+	{
+		g_val[s] = float(g_nmWas[s]);
+		return;
+	}
+	if (g_now > g_nmUntil[s])
+	{
+		npc_move_end(s, true);
+		return;
+	}
+	new run = (g_nmFlags[s] & NM_RUN) != 0;
+	new last = g_nmLegAt[s] >= g_nmLegN[s] - 1;
+	new r = npc_step(s, g_nmLeg[s][g_nmLegAt[s]], last ? 20.0 : 28.0, g_nmSpeed[s], bool:run);
+	if (r < 0)
+	{
+		if (++g_nmTries[s] > 2)
+		{
+			npc_move_end(s, true);
+			return;
+		}
+		npc_move_leg(s);
+		return;
+	}
+	if (r == 0)
+		return;
+	if (!last)
+	{
+		g_nmLegAt[s]++;
+		return;
+	}
+	/* a point reached */
+	new e = g_ent[s], at = g_nmAt[s], ret;
+	new bool:done = at >= g_nmN[s] - 1 && !(g_nmFlags[s] & NM_LOOP);
+	g_nmTries[s] = 0;
+	if (done)
+		npc_move_end(s, false);
+	else
+	{
+		g_nmAt[s] = (at + 1) % g_nmN[s];
+		npc_move_leg(s);
+	}
+	ExecuteForward(g_fwNpcArrived, ret, e, at, done);
+}
+
+/* ls_npc_move(npc, const Float:pts[], n, Float:speed, flags) */
+public n_npc_move(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	new n = clamp(get_param(3), 0, NPC_PTS);
+	if (s < 0 || n <= 0 || !pev_valid(g_ent[s]) || pev(g_ent[s], pev_deadflag) != DEAD_NO)
+		return 0;
+	new Float:buf[NPC_PTS * 3];
+	get_array_f(2, buf, n * 3);
+	for (new i = 0; i < n; i++)
+		for (new k = 0; k < 3; k++)
+			g_nmPts[s][i][k] = buf[i * 3 + k];
+	return npc_move_start(s, n, get_param_f(4), get_param(5));
+}
+
+stock npc_move_start(s, n, Float:speed, flags)
+{
+	if (g_nmN[s] <= 0)
+		g_nmWas[s] = floatround(g_val[s]) == 4 ? 0 : floatround(g_val[s]);
+	g_nmN[s] = n;
+	g_nmAt[s] = 0;
+	g_nmTries[s] = 0;
+	g_nmFlags[s] = flags;
+	g_nmSpeed[s] = floatclamp(speed, 20.0, 320.0);
+	g_npcFollow[s] = 0;
+	g_pf[s][NP_PAUSE] = 0.0;
+	g_val[s] = 4.0;
+	npc_move_leg(s);
+	return 1;
+}
+
+/* ls_npc_move_path(npc, const first[], Float:speed, flags): a map's path_track chain (by
+   targetname, following target), up to 24 points; a chain back to its start loops if asked */
+public n_npc_move_path(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	if (s < 0 || !pev_valid(g_ent[s]) || pev(g_ent[s], pev_deadflag) != DEAD_NO)
+		return 0;
+	new name[32], first[32], n = 0;
+	get_string(2, first, charsmax(first));
+	copy(name, charsmax(name), first);
+	while (name[0] && n < NPC_PTS)
+	{
+		new e = engfunc(EngFunc_FindEntityByString, -1, "targetname", name);
+		if (e <= 0)
+			break;
+		pev(e, pev_origin, g_nmPts[s][n]);
+		n++;
+		pev(e, pev_target, name, charsmax(name));
+		if (equal(name, first))
+			break;
+	}
+	if (!n)
+		return 0;
+	return npc_move_start(s, n, get_param_f(3), get_param(4));
+}
+
+/* ls_npc_move_stop(npc, bool:stay): stops a scripted move (no forward) */
+public n_npc_move_stop(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	if (s < 0)
+		return 0;
+	if (g_nmN[s] > 0 || floatround(g_val[s]) == 4)
+	{
+		g_nmFlags[s] = get_param(2) ? NM_STAY : 0;
+		npc_move_end(s, false);
+		if (get_param(2))
+			g_val[s] = 0.0;
+	}
+	return 1;
+}
+
+public n_npc_moving(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	return s >= 0 && g_nmN[s] > 0;
 }
 
 /* the origin of the n-th patrol target (false: none) */
@@ -13730,6 +13945,7 @@ stock npc_tick_one(s)
 	}
 	switch (floatround(g_val[s]))
 	{
+		case 4: npc_move_tick(s); /* a scripted move (EC) */
 		case 0:
 		{
 			npc_stop(s);
@@ -14484,11 +14700,12 @@ public cmd_npc_pick()
 
 new g_pjEnt[PJ_MAX], g_pjOwner[PJ_MAX], g_pjBounce[PJ_MAX], Float:g_pjDmg[PJ_MAX], Float:g_pjRad[PJ_MAX];
 new bool:g_pjFall[PJ_MAX], bool:g_pjBoom[PJ_MAX], bool:g_pjTest[PJ_MAX], bool:g_pjDanger[PJ_MAX], Float:g_pjBorn[PJ_MAX];
-new g_fwProjHit, g_sprPjExplode, g_pjTrailSpr;
+new g_fwProjHit, g_fwProjHitNode, g_fwProjExpire, g_sprPjExplode, g_pjTrailSpr;
 
 stock proj_precache()
 {
 	register_cvar("ls_proj_models", "");
+	register_cvar("ls_proj_debug", "0"); /* 1: every hit printed (tests) */
 	precache_model_once(PJ_FALLBACK);
 	g_sprPjExplode = precache_model("sprites/zerogxplode.spr");
 	g_pjTrailSpr = g_sprBeam;
@@ -14520,6 +14737,9 @@ stock proj_natives()
 stock proj_init()
 {
 	g_fwProjHit = CreateMultiForward("ls_on_proj_hit", ET_IGNORE, FP_CELL, FP_CELL, FP_ARRAY, FP_ARRAY, FP_CELL, FP_CELL);
+	/* the same hit for Game Mode Studio's per-projectile On Hit (so a mode can have both) */
+	g_fwProjHitNode = CreateMultiForward("ls_on_proj_hit_node", ET_IGNORE, FP_CELL, FP_CELL, FP_ARRAY, FP_ARRAY, FP_CELL, FP_CELL);
+	g_fwProjExpire = CreateMultiForward("ls_on_proj_expire", ET_IGNORE, FP_CELL, FP_CELL);
 	register_touch(PJ_CLASS, "*", "proj_touch");
 	register_think(PJ_CLASS, "proj_think");
 	/* rcon tests without a person: ls_proj_test <owner> <x y z> <dx dy dz> <speed> <damage> [radius]
@@ -14567,7 +14787,7 @@ stock proj_round_reset()
 			proj_free(s);
 }
 
-/* key=value words (trail=1 spin=1 bounce=2 damage=50 radius=128 falloff=1 explode=1 dangerous=1 scale=0.5) */
+/* key=value words (trail=1 spin=1 bounce=2 damage=50 radius=128 falloff=1 explode=1 dangerous=1 scale=0.5: sprites and models) */
 stock Float:proj_key(const keys[], const key[], Float:def)
 {
 	new pat[24];
@@ -14614,9 +14834,10 @@ stock proj_spawn(owner, const model[], const Float:o[3], const Float:dir[3], Flo
 	{
 		set_pev(e, pev_rendermode, kRenderTransAdd);
 		set_pev(e, pev_renderamt, 255.0);
-		set_pev(e, pev_scale, floatclamp(proj_key(keys, "scale", 0.5), 0.05, 4.0));
 		set_pev(e, pev_framerate, 10.0);
 	}
+	/* (a sprite's size; a model's where the game draws it scaled) */
+	set_pev(e, pev_scale, floatclamp(proj_key(keys, "scale", spr ? 0.5 : 1.0), 0.05, 4.0));
 	new bounce = clamp(floatround(proj_key(keys, "bounce", 0.0)), 0, 10);
 	gravity = floatclamp(gravity, 0.0, 4.0);
 	set_pev(e, pev_movetype, bounce > 0 ? MOVETYPE_BOUNCE : (gravity > 0.0 ? MOVETYPE_TOSS : MOVETYPE_FLY));
@@ -14675,7 +14896,14 @@ public proj_think(e)
 {
 	new s = proj_slot(e);
 	if (s >= 0)
+	{
+		/* its time ran out with no hit */
+		new ret;
+		ExecuteForward(g_fwProjExpire, ret, e, g_pjOwner[s]);
+		if (g_pjTest[s])
+			server_print("ls_proj expired: proj %d owner %d", e, g_pjOwner[s]);
 		proj_free(s);
+	}
 	else if (pev_valid(e))
 		set_pev(e, pev_flags, pev(e, pev_flags) | FL_KILLME);
 }
@@ -14710,7 +14938,8 @@ public proj_touch(e, other)
 	new bool:damageable = hit > 0 && pev(hit, pev_takedamage) != DAMAGE_NO;
 	new ret;
 	ExecuteForward(g_fwProjHit, ret, e, owner, PrepareArray(_:o, 3), PrepareArray(_:n, 3), hit, group);
-	if (g_pjTest[s])
+	ExecuteForward(g_fwProjHitNode, ret, e, owner, PrepareArray(_:o, 3), PrepareArray(_:n, 3), hit, group);
+	if (g_pjTest[s] || get_cvar_num("ls_proj_debug"))
 	{
 		new what[32];
 		if (hit > 0)

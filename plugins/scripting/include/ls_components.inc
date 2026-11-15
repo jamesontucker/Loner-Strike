@@ -765,6 +765,22 @@ native bool:ls_interactable_offer(ent, bool:on);
  * key bots_attack=1 does the same. Players on its team side hurt it only with mp_friendlyfire.
  */
 native bool:ls_npc_targetable(npc, bool:on);
+/* Scripted moves (EC): the NPC walks (or runs) to each point in turn along the bot navigation
+ * mesh's route when gm_botnav is loaded with a mesh (straight otherwise), facing where it goes,
+ * then goes back to its behavior (or stands, NM_STAY). Up to 24 points; speed 20-320. */
+#define NM_LOOP 1
+#define NM_STAY 2
+#define NM_RUN  4
+native bool:ls_npc_move(npc, const Float:pts[], n, Float:speed = 90.0, flags = 0);
+/** The same along a map's path_track chain (first by targetname, then each one's target). */
+native bool:ls_npc_move_path(npc, const first[], Float:speed = 90.0, flags = 0);
+/** Stops a scripted move (no forward); stay: it stands instead of its old behavior. */
+native bool:ls_npc_move_stop(npc, bool:stay = false);
+native bool:ls_npc_moving(npc);
+/** A point of a scripted move reached (point: its index); last: the move is over. */
+forward ls_on_npc_arrived(npc, point, last);
+/** A scripted move gave up: no way there, blocked three times, or out of time. */
+forward ls_on_npc_move_failed(npc, point);
 /* ==== end NPCs and interactables ==== */
 
 /* ==== Projectiles (T1fix) ==== */
@@ -774,13 +790,17 @@ native bool:ls_npc_targetable(npc, bool:on);
  * explosion follow; it's removed after (unless it bounced off the world).
  */
 forward ls_on_proj_hit(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup);
+/** The same hit, for Game Mode Studio's per-projectile On Hit (a plugin uses ls_on_proj_hit). */
+forward ls_on_proj_hit_node(proj, owner, const Float:pos[3], const Float:normal[3], hit, hitgroup);
+/** A projectile's lifetime ran out with no hit (it's removed after). */
+forward ls_on_proj_expire(proj, owner);
 /** Loads a projectile's model or sprite with the map: call it from plugin_precache (models/...mdl or sprites/...spr). */
 native bool:ls_proj_precache(const model[]);
 /**
  * A projectile (0 if none could be made). model: loaded with the map (else a grenade flies);
  * dir needn't be normalized; gravity 0 flies straight, 1 falls like a grenade; life in seconds.
  * keys: trail=1 spin=1 bounce=N (bounces off the world) damage=N radius=N (0: only what it hits)
- * falloff=0|1 explode=1 dangerous=1 (noted for bots; they don't dodge yet) scale=N (a sprite's).
+ * falloff=0|1 explode=1 dangerous=1 (noted for bots; they don't dodge yet) scale=N (a sprite's or a model's size).
  * Kills go to owner. At most 64 fly at once (the oldest goes); all go at a new round.
  */
 native ls_proj_spawn(owner, const model[], const Float:origin[3], const Float:dir[3], Float:speed = 1000.0, Float:gravity = 0.0, Float:life = 5.0, const keys[] = "");
