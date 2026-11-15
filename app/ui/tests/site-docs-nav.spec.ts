@@ -111,10 +111,10 @@ test("Something's wrong? covers an upload that doesn't show in Community", async
   await page.goto("/docs.html#wrong-sharing");
   const item = page.locator("#something-wrong li", { hasText: "My upload doesn't show in Community" });
   await expect(item).toBeVisible();
-  for (const need of ["Counter-Strike 1.6", "Software Used: LonerStrike", "file check", "moderator", "daily re-check"]) await expect(item).toContainText(need);
+  for (const need of ["Counter-Strike 1.6", "Custom Tag with the value LonerStrike", "file check", "moderator", "daily re-check"]) await expect(item).toContainText(need);
   await item.getByRole("link", { name: "the publishing steps" }).click();
   await expect(page.locator("#publish-steps")).toBeInViewport();
-  await expect(page.locator("#publishing")).toContainText("add a Custom Tag with Title Software Used and Value LonerStrike");
+  await expect(page.locator("#publishing")).toContainText("add a Custom Tag with the value LonerStrike (the title can stay empty)");
   // and search finds it
   await page.locator("#q").fill("upload not showing community");
   await expect(page.locator("#results [role=option]").first()).toHaveAttribute("data-id", "wrong-sharing");

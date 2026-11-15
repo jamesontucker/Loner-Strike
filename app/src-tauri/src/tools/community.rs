@@ -832,12 +832,11 @@ fn s(v: &Value) -> String {
 
 /// Whether GameBanana's tags (strings "Title: Value" in lists, {_sTitle, _sValue} on pages)
 /// carry the Loner-Strike tag.
-/// LonerStrike isn't one of the presets in GameBanana's "Software Used" list, so uploaders add a
-/// Custom Tag, whose title is optional: a tag with no title and the value LonerStrike counts too
-/// (Parity A, as the list service does since eae6110d).
+/// Only the value counts (Parity A, as the list service does): uploaders add a Custom Tag whose value
+/// is LonerStrike (it isn't one of GameBanana's presets), with any title or none.
 pub fn has_tag(tags: &Value) -> bool {
     let ours = |v: &str| v.trim().eq_ignore_ascii_case(TAG_VALUE) || v.trim().eq_ignore_ascii_case(TAG_ALSO);
-    let want = |t: &str, v: &str| (t.trim().is_empty() || t.trim().eq_ignore_ascii_case(TAG_TITLE)) && v.split(',').any(ours);
+    let want = |_t: &str, v: &str| v.split(',').any(ours);
     tags.as_array().into_iter().flatten().any(|t| match t {
         Value::String(x) => match x.split_once(':') {
             Some((a, b)) => want(a, b),
@@ -2566,7 +2565,7 @@ pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<
         return Err("That page isn't in GameBanana's Counter-Strike 1.6 section.".into());
     }
     if !has_tag(&page["_aTags"]) {
-        return Err(format!("Add the tag to the page: Edit the page > Tags > Custom Tag: {TAG_TITLE} = {TAG_VALUE}. Then try again."));
+        return Err(format!("In the page's Tags, add a Custom Tag with the value {TAG_VALUE} (the title can stay empty). Then try again."));
     }
     let files = files_of(page);
     let Some(f) = files.iter().find(|f| f["md5"].as_str() == Some(pkg.md5.as_str())) else {
@@ -3398,15 +3397,16 @@ mod tests {
         assert!(has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "Loner-Strike"}])));
         assert!(!has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "Loner-Striker"}])));
         assert!(!has_tag(&json!(["cs: counter strike", "Software Used: Hammer"])), "what the search also finds");
-        // Parity A: a Custom Tag (LonerStrike isn't one of GameBanana's presets): its title is
-        // optional, so an untitled one counts; the search lists those as the bare value, or ": value"
+        // Parity A: only the value counts: a Custom Tag with any title or none (the search lists an
+        // untitled one as the bare value, or ": value")
         assert!(has_tag(&json!([{"_sTitle": "", "_sValue": "LonerStrike"}])));
         assert!(has_tag(&json!([{"_sTitle": " ", "_sValue": "Loner-Strike"}])));
+        assert!(has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "lonerstrike"}])));
+        assert!(has_tag(&json!([{"_sTitle": "Made with", "_sValue": "LonerStrike"}])), "any title");
         assert!(has_tag(&json!(["Halloween", "LonerStrike"])));
-        assert!(has_tag(&json!([": lonerstrike"])));
-        assert!(has_tag(&json!(["Software used: LonerStrike"])), "a custom title, any case");
+        assert!(has_tag(&json!([": lonerstrike", "Tool: LONER-STRIKE"])));
         assert!(!has_tag(&json!([{"_sTitle": "", "_sValue": "Hammer"}])));
-        assert!(!has_tag(&json!([{"_sTitle": "Made with", "_sValue": "LonerStrike"}])), "another title isn't ours");
+        assert!(!has_tag(&json!([{"_sTitle": "LonerStrike", "_sValue": "Hammer"}])), "the title doesn't count");
         // another game
         let mut r = record("Mod", 300, "x", json!(["Software Used: Loner-Strike"]), "Maps", "", 1);
         r["_aGame"]["_idRow"] = json!(1);
@@ -3827,7 +3827,7 @@ mod tests {
         // registering: the page must carry the tag and the package
         let mut page = json!({"_aGame": {"_idRow": 4254}, "_aTags": [], "_aSubmitter": {"_sName": "jamGB"},
                               "_aFiles": [{"_idRow": 77, "_sFile": "x.zip", "_sMd5Checksum": pkg.md5.to_uppercase(), "_sAvResult": "clean"}]});
-        assert!(check_page(&page, Model::Mod, 555, &pkg).unwrap_err().contains("Add the tag"));
+        assert!(check_page(&page, Model::Mod, 555, &pkg).unwrap_err().contains("add a Custom Tag with the value LonerStrike"));
         page["_aTags"] = json!([{"_sTitle": "Software Used", "_sValue": "Loner-Strike"}]);
         let it = check_page(&page, Model::Mod, 555, &pkg).unwrap();
         assert_eq!((it.gb, it.file, it.author.as_str()), (555, 77, "jamGB"));
