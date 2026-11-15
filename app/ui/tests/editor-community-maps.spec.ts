@@ -52,7 +52,7 @@ test("a Community map's name: refused with Save as <name>_edit and Remix it", as
   await box.getByRole("button", { name: "Save as de_lonely_edit" }).click();
   await expect.poll(() => starts.length).toBe(2);
   expect(starts[1]).toMatchObject({ name: "de_lonely_edit", install: true });
-  await expect(page.locator(".compile-panel input").first()).toHaveValue("de_lonely_edit");
+  await expect(page.locator(".compile-panel").getByRole("textbox", { name: /^Map name/ })).toHaveValue("de_lonely_edit");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
@@ -149,7 +149,7 @@ test("Save as <name>_edit is kept in the project: opened again, it compiles to t
   });
   await open(page);
   await dock(page, "Compile");
-  const nameBox = page.locator(".compile-panel input").first();
+  const nameBox = page.locator(".compile-panel").getByRole("textbox", { name: /^Map name/ });
   await expect(nameBox).toHaveValue("ls_newmap");
   await page.locator(".compile-playtest").getByRole("button", { name: "Playtest", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Save as ls_newmap_edit" }).click();
@@ -164,6 +164,6 @@ test("Save as <name>_edit is kept in the project: opened again, it compiles to t
   if (await back.waitFor({ timeout: 5000 }).then(() => true, () => false)) await back.click();
   await page.locator(".ed-pane").first().waitFor();
   await dock(page, "Compile");
-  await expect(page.locator(".compile-panel input").first()).toHaveValue("ls_newmap_edit");
+  await expect(page.locator(".compile-panel").getByRole("textbox", { name: /^Map name/ })).toHaveValue("ls_newmap_edit");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
