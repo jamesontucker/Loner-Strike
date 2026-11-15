@@ -1588,7 +1588,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
         let mut pre = String::from("public plugin_precache()\n{");
         for m in &proj_models {
-            pre.push_str(&format!("\n\t// a projectile the mode fires: loaded with the map\n\tls_proj_precache({})", pawn_str(m)));
+            // (through the mode's precache budget: a model that doesn't fit isn't loaded, and flies as the grenade)
+            pre.push_str(&format!("\n\t// a projectile the mode fires: loaded with the map\n\tif (lsg_pre_model({m}))\n\t\tls_proj_precache({m})", m = pawn_str(m)));
         }
         for m in &npc_models {
             pre.push_str(&format!("\n\t// an NPC the mode makes: its model is loaded with the map\n\tls_npc_precache({})", pawn_str(m)));
@@ -2647,7 +2648,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let owner = if wired("owner") { inp("owner", "player") } else { "0".into() };
             let model = pawn_str(&proj_text(gen.text(n, def, "model")));
             let flag = |k: &str| if gen.boolean(n, def, k) { 1 } else { 0 };
-            let keys = format!("trail={} spin={} bounce={} radius={} falloff={} explode={} dangerous={}", flag("trail"), flag("spin"), gen.num(n, def, "bounce").clamp(0.0, 10.0).round(), gen.num(n, def, "radius").clamp(0.0, 2000.0).round(), flag("falloff"), flag("explode"), flag("dangerous"));
+            // (a trail is a message: one more this frame only when the mode's message budget has room)
+            let trail = if flag("trail") == 1 { "%d" } else { "0" };
+            let keys = format!("trail={trail} spin={} bounce={} radius={} falloff={} explode={} dangerous={}", flag("spin"), gen.num(n, def, "bounce").clamp(0.0, 10.0).round(), gen.num(n, def, "radius").clamp(0.0, 2000.0).round(), flag("falloff"), flag("explode"), flag("dangerous"));
             b.line("\tnew Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true");
             // where from and which way: At entity (or the owner's eyes) with its offsets, then
             // what's wired overrides (Position, Direction or Rotation)
@@ -2662,7 +2665,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             } else if wired("angles") {
                 b.line(format!("\tnew Float:pa[3]\n\tlsg_vto({}, pa)\n\tangle_vector(pa, ANGLEVECTOR_FORWARD, d)", inp("angles", "vector")));
             }
-            b.line(format!("\tformatex(lsgK, charsmax(lsgK), \"{keys} damage=%.0f scale=%.2f\", floatclamp({}, 0.0, 5000.0), floatclamp({}, 0.05, 4.0))", inp("damage", "number"), inp("scale", "number")));
+            let trail_arg = if flag("trail") == 1 { format!("lsg_msg_room(\"Spawn Projectile\", 1, 0, {}) ? 1 : 0, ", gen.limit_expr("messages")) } else { String::new() };
+            b.line(format!("\tformatex(lsgK, charsmax(lsgK), \"{keys} damage=%.0f scale=%.2f\", {trail_arg}floatclamp({}, 0.0, 5000.0), floatclamp({}, 0.05, 4.0))", inp("damage", "number"), inp("scale", "number")));
             // how many fly at once is the mode's Limits setting (gm_components' ls_proj_max); the engine's
             // own ceiling, free entity slots, is checked first (the larger reserve wins: the plugin keeps 128)
             b.line(format!("\tif (get_cvar_num(\"ls_proj_max\") != {lim})\n\t\tset_cvar_num(\"ls_proj_max\", {lim})", lim = gen.limit_expr("projectiles")));

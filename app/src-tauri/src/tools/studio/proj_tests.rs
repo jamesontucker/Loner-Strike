@@ -70,6 +70,8 @@ fn projectiles_generate_with_their_own_callbacks() {
         // how many fly at once is the mode's Limits setting (the default without one); the engine's
         // entity slots are checked before each spawn
         assert!(src.contains("set_cvar_num(\"ls_proj_max\", 64)") && src.contains("lsg_ent_room(\"Spawn Projectile\")"), "{src}");
+        // a trail waits for room in the mode's message budget; the model goes through the precache budget
+        assert!(src.contains("lsg_msg_room(\"Spawn Projectile\", 1, 0, ") && src.contains("if (lsg_pre_model(\"models/rpgrocket.mdl\"))"), "{src}");
         // each Spawn Projectile keeps its own hit flow: the dispatch goes by the node that made it
         assert!(src.contains("public ls_on_proj_hit_node(") && src.contains("public ls_on_proj_expire(") && src.contains("public ls_on_proj_hit(proj, owner"));
         // (each node's hit stock: from its heading to the next stock or node; Show Message's code

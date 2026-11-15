@@ -30,7 +30,7 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
     // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
     // and kick players; gen.rs lsg_msg_room)
-    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon"] },
+    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn"] },
 ];
 
 /// A mode's own files (models, sounds, sprites) loaded with the map: the game holds 512 models and
