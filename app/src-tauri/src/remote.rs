@@ -518,6 +518,25 @@ pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
     })
 }
 
+/// W2 (fastdl.rs): `rel` under `root` is a plain file and no part of the way there is a link
+/// (SFTP lstat on each part), so a read of it can't be sent outside the folder.
+pub fn plain_file_under(r: &RemoteInfo, root: &str, rel: &str) -> Result<bool, String> {
+    with_session(r, |s| {
+        let sftp = s.sftp()?;
+        let parts: Vec<&str> = rel.split('/').collect();
+        let mut p = root.trim_end_matches('/').to_string();
+        for (i, part) in parts.iter().enumerate() {
+            p = format!("{p}/{part}");
+            let ft = sftp.lstat(Path::new(&p))?.file_type();
+            let last = i + 1 == parts.len();
+            if ft.is_symlink() || (last && !ft.is_file()) || (!last && !ft.is_dir()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    })
+}
+
 /// The files under `dir` on the machine (relative paths, "/" separated).
 pub fn list_files(r: &RemoteInfo, dir: &str) -> Result<std::collections::HashSet<String>, String> {
     let (code, out) = exec(r, &format!("cd {} 2>/dev/null && find . -type f -printf '%P\\n'", shell_quote(dir)))?;

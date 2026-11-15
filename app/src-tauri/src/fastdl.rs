@@ -98,18 +98,155 @@ fn hex(d: &[u8]) -> String {
     d.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn sha_file(p: &Path) -> Result<String, String> {
-    let mut f = std::fs::File::open(p).map_err(|e| format!("Couldn't read {} ({e}).", p.display()))?;
+/// Opens `rel` under `root` without following a link anywhere on the way: on Unix each folder
+/// is opened from the one before with O_NOFOLLOW (openat), so nothing swapped in between can
+/// send it outside the game folder; elsewhere every part is checked and the opened path must
+/// still be inside. Only a plain file opens.
+pub fn open_inside(root: &Path, rel: &str) -> Result<std::fs::File, String> {
+    let refuse = || format!("{rel} isn't a plain file in the game folder (a link, or outside it), so it isn't offered.");
+    if !safe_path(rel) {
+        return Err(refuse());
+    }
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::fd::FromRawFd;
+        use std::os::unix::ffi::OsStrExt;
+        let c = |s: &[u8]| CString::new(s).map_err(|_| refuse());
+        let root_c = c(root.as_os_str().as_bytes())?;
+        // SAFETY: plain libc calls on C strings we own; every fd opened here is closed or handed
+        // to a File exactly once
+        let mut dir = unsafe { libc::open(root_c.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC) };
+        if dir < 0 {
+            return Err(format!("Couldn't open the game folder ({}).", std::io::Error::last_os_error()));
+        }
+        let parts: Vec<&str> = rel.split('/').collect();
+        for (i, part) in parts.iter().enumerate() {
+            let name = c(part.as_bytes())?;
+            let last = i + 1 == parts.len();
+            let flags = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | if last { libc::O_NONBLOCK } else { libc::O_DIRECTORY };
+            let next = unsafe { libc::openat(dir, name.as_ptr(), flags) };
+            unsafe { libc::close(dir) };
+            if next < 0 {
+                return Err(refuse());
+            }
+            dir = next;
+        }
+        let f = unsafe { std::fs::File::from_raw_fd(dir) };
+        if !f.metadata().is_ok_and(|m| m.is_file()) {
+            return Err(refuse());
+        }
+        Ok(f)
+    }
+    #[cfg(not(unix))]
+    {
+        let mut p = root.to_path_buf();
+        for part in rel.split('/') {
+            p.push(part);
+            if std::fs::symlink_metadata(&p).map_or(true, |m| m.file_type().is_symlink()) {
+                return Err(refuse());
+            }
+        }
+        let f = std::fs::File::open(&p).map_err(|_| refuse())?;
+        let inside = match (std::fs::canonicalize(&p), std::fs::canonicalize(root)) {
+            (Ok(a), Ok(b)) => a.starts_with(b),
+            _ => false,
+        };
+        if !inside || !f.metadata().is_ok_and(|m| m.is_file()) {
+            return Err(refuse());
+        }
+        Ok(f)
+    }
+}
+
+/// A file's bytes and SHA-256, read through open_inside.
+fn read_inside(root: &Path, rel: &str) -> Result<(Vec<u8>, String), String> {
+    let mut f = open_inside(root, rel)?;
+    let mut data = Vec::new();
+    (&mut f).take(MAX_FILE + 1).read_to_end(&mut data).map_err(|e| format!("Couldn't read {rel} ({e})."))?;
+    if data.len() as u64 > MAX_FILE {
+        return Err(format!("{rel} is too big to offer."));
+    }
+    let sha = hex(&Sha256::digest(&data));
+    Ok((data, sha))
+}
+
+fn sha_inside(root: &Path, rel: &str) -> Result<(u64, String), String> {
+    let mut f = open_inside(root, rel)?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 16];
+    let mut n_all = 0u64;
     loop {
-        let n = f.read(&mut buf).map_err(|e| format!("Couldn't read {} ({e}).", p.display()))?;
+        let n = f.read(&mut buf).map_err(|e| format!("Couldn't read {rel} ({e})."))?;
         if n == 0 {
             break;
         }
+        n_all += n as u64;
         h.update(&buf[..n]);
     }
-    Ok(hex(&h.finalize()))
+    Ok((n_all, hex(&h.finalize())))
+}
+
+/// Run on the server's machine (in its game folder) with the wanted paths on stdin, NUL
+/// separated: each is opened folder by folder with O_NOFOLLOW (no link anywhere on the way, so
+/// nothing outside the folder), must be a plain file, and is hashed from that open file.
+/// Prints "size<TAB>sha256<TAB>path", or "refused<TAB>path".
+pub const HASH_PY: &str = r#"import os, sys, stat, hashlib
+root = os.open('.', os.O_RDONLY | os.O_DIRECTORY)
+for rel in sys.stdin.buffer.read().split(b'\0'):
+    if not rel:
+        continue
+    fd = None
+    try:
+        name = rel.decode('ascii')
+        parts = rel.split(b'/')
+        d = os.dup(root)
+        try:
+            for p in parts[:-1]:
+                if p in (b'', b'.', b'..'):
+                    raise OSError('bad path')
+                n = os.open(p, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=d)
+                os.close(d)
+                d = n
+            if parts[-1] in (b'', b'.', b'..'):
+                raise OSError('bad path')
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=d)
+        finally:
+            os.close(d)
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError('not a file')
+        h = hashlib.sha256()
+        f = os.fdopen(fd, 'rb')
+        fd = None
+        size = 0
+        with f:
+            for b in iter(lambda: f.read(65536), b''):
+                h.update(b)
+                size += len(b)
+        sys.stdout.write('%d\t%s\t%s\n' % (size, h.hexdigest(), name))
+    except (OSError, UnicodeDecodeError):
+        if fd is not None:
+            os.close(fd)
+        sys.stdout.write('refused\t%s\n' % rel.decode('ascii', 'replace'))
+"#;
+
+/// HASH_PY's answer for the paths asked about (anything else it printed is ignored).
+fn parse_hashes(out: &str, asked: &std::collections::BTreeSet<String>) -> (Vec<File>, usize) {
+    let (mut files, mut refused) = (Vec::new(), 0);
+    for l in out.lines() {
+        let f: Vec<&str> = l.splitn(3, '\t').collect();
+        match f.as_slice() {
+            ["refused", rel] if asked.contains(*rel) => refused += 1,
+            [size, sha, rel] if asked.contains(*rel) && sha.len() == 64 && sha.bytes().all(|c| c.is_ascii_hexdigit()) => {
+                if let Ok(size) = size.parse::<u64>() {
+                    files.push(File { path: rel.to_string(), size, sha256: sha.to_lowercase(), etag: String::new() });
+                }
+            }
+            _ => {}
+        }
+    }
+    (files, refused)
 }
 
 /// The files under a local game folder (relative, "/" separated), depth-limited.
@@ -129,8 +266,12 @@ fn walk_local(root: &Path) -> Vec<(String, u64)> {
         }
     }
     let mut out = Vec::new();
+    // (read_dir's entries say what they are without following links, so a linked file or
+    // folder is never listed or entered; the download folders themselves are checked too)
     for d in DIRS {
-        go(root, &root.join(d), 1, &mut out);
+        if std::fs::symlink_metadata(root.join(d)).is_ok_and(|m| m.is_dir()) {
+            go(root, &root.join(d), 1, &mut out);
+        }
     }
     for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
         let name = e.file_name().to_string_lossy().to_string();
@@ -149,15 +290,17 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
         None => {
             for (rel, size) in walk_local(&g.dir) {
                 if keep(&rel, size) {
-                    let sha256 = sha_file(&g.dir.join(&rel))?;
-                    files.push(File { path: rel, size, sha256, etag: String::new() });
+                    // a link swapped in since the listing is refused here, never followed
+                    if let Ok((size, sha256)) = sha_inside(&g.dir, &rel) {
+                        files.push(File { path: rel, size, sha256, etag: String::new() });
+                    }
                 }
             }
         }
         Some((r, dir)) => {
             let q = crate::remote::shell_quote(dir);
             let list = format!(
-                "cd {q} || exit 3; find {} -type f -printf '%p\\t%s\\n' 2>/dev/null; find . -maxdepth 1 -type f -iname '*.wad' -printf '%P\\t%s\\n'; true",
+                "cd {q} || exit 3; find -P {} -type f -printf '%p\\t%s\\n' 2>/dev/null; find -P . -maxdepth 1 -type f -iname '*.wad' -printf '%P\\t%s\\n'; true",
                 DIRS.join(" ")
             );
             let (code, out) = crate::remote::exec(r, &list)?;
@@ -167,6 +310,7 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
             let mut sizes = BTreeMap::new();
             for l in out.lines() {
                 if let Some((rel, size)) = l.split_once('\t') {
+                    let rel = rel.strip_prefix("./").unwrap_or(rel);
                     let size = size.trim().parse::<u64>().unwrap_or(0);
                     if keep(rel, size) {
                         sizes.insert(rel.to_string(), size);
@@ -176,23 +320,18 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
             if sizes.is_empty() {
                 return Ok(files);
             }
-            let input: Vec<u8> = sizes.keys().flat_map(|k| k.bytes().chain([0u8])).collect();
-            let mut sums = BTreeMap::new();
-            let code = crate::remote::exec_stream(r, &format!("cd {q} && xargs -0 sha256sum --"), &input, |l| {
-                if let Some((sha, rel)) = l.split_once("  ") {
-                    if sha.len() == 64 && sha.bytes().all(|c| c.is_ascii_hexdigit()) {
-                        sums.insert(rel.trim_end().to_string(), sha.to_lowercase());
-                    }
-                }
+            let asked: std::collections::BTreeSet<String> = sizes.into_keys().collect();
+            let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
+            let mut out = String::new();
+            let code = crate::remote::exec_stream(r, &format!("cd {q} && python3 -c {}", crate::remote::shell_quote(HASH_PY)), &input, |l| {
+                out.push_str(l);
+                out.push('\n');
             })?;
-            if code != 0 && sums.len() < sizes.len() {
-                return Err("Couldn't read all of the server's files on that machine.".into());
+            if code != 0 {
+                return Err("Couldn't read the server's files on that machine (it needs python3, which Loner-Strike's setup installs).".into());
             }
-            for (rel, size) in sizes {
-                if let Some(sha256) = sums.remove(&rel) {
-                    files.push(File { path: rel, size, sha256, etag: String::new() });
-                }
-            }
+            let (got, _refused) = parse_hashes(&out, &asked);
+            files.extend(got.into_iter().filter(|f| f.size > 0 && f.size <= MAX_FILE));
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -218,11 +357,20 @@ pub fn prepare(id: &str, g: &Game, game: &str) -> Result<Value, String> {
         if before.get(&f.path) == Some(&f.sha256) && std::fs::metadata(&dst).is_ok_and(|m| m.len() == f.size) {
             continue;
         }
+        if !wanted(&f.path, game) {
+            return Err(format!("{} isn't a file players download, so it isn't offered.", f.path));
+        }
         let data = match &g.remote {
-            None => std::fs::read(g.dir.join(&f.path)).map_err(|e| format!("Couldn't read {} ({e}).", f.path))?,
-            Some((r, rdir)) => crate::remote::read_file(r, &format!("{rdir}/{}", f.path))?,
+            None => read_inside(&g.dir, &f.path)?.0,
+            Some((r, rdir)) => {
+                if !crate::remote::plain_file_under(r, rdir, &f.path)? {
+                    return Err(format!("{} is a link or not a plain file on that machine, so it isn't offered.", f.path));
+                }
+                crate::remote::read_file(r, &format!("{rdir}/{}", f.path))?
+            }
         };
-        // changed while it was being copied: the next Prepare picks it up
+        // only the very bytes hashed from the game folder (opened without following links) go
+        // up: anything else read here (changed, or swapped for a link since) stops the prepare
         if hex(&Sha256::digest(&data)) != f.sha256 {
             return Err(format!("{} changed while it was being copied. Try again.", f.path));
         }
@@ -444,6 +592,78 @@ mod tests {
         assert!(!wanted("addons/amxmodx/plugins/x.amxx", "cstrike"));
         assert!(wanted("loner.wad", "cstrike"));
         assert!(!wanted("halflife.wad", "cstrike"));
+    }
+
+    /// A game folder with links pointing outside it (a secret next to it): (root, game dir).
+    #[cfg(unix)]
+    fn linked_folder(tag: &str) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::symlink;
+        let root = crate::sys::test_root().join(format!("fastdl-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("cstrike");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(dir.join("maps")).unwrap();
+        std::fs::create_dir_all(dir.join("sound")).unwrap();
+        std::fs::create_dir_all(outside.join("keys")).unwrap();
+        std::fs::write(outside.join("id_rsa.wav"), "SECRET").unwrap();
+        std::fs::write(outside.join("keys/k.mdl"), "SECRET").unwrap();
+        std::fs::write(outside.join("secret.wad"), "SECRET").unwrap();
+        std::fs::write(dir.join("maps/real_map.bsp"), "bsp").unwrap();
+        symlink(outside.join("id_rsa.wav"), dir.join("sound/linked.wav")).unwrap(); // a linked file
+        symlink(outside.join("keys"), dir.join("sound/linkdir")).unwrap(); // a linked folder
+        symlink(outside.join("keys"), dir.join("models")).unwrap(); // a download folder that's a link
+        symlink(outside.join("secret.wad"), dir.join("linked.wad")).unwrap();
+        (root, dir)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fastdl_refuses_links_out_of_the_folder_locally() {
+        let (root, dir) = linked_folder("local");
+        let g = Game::on_port(&root, "cstrike", 27098, true);
+        let got: Vec<String> = collect(&g, "cstrike").unwrap().into_iter().map(|f| f.path).collect();
+        assert_eq!(got, ["maps/real_map.bsp"], "only the real file, never a link");
+        for rel in ["sound/linked.wav", "sound/linkdir/k.mdl", "models/k.mdl", "linked.wad", "maps/../../outside/id_rsa.wav"] {
+            assert!(open_inside(&dir, rel).is_err(), "{rel} opened");
+        }
+        assert_eq!(read_inside(&dir, "maps/real_map.bsp").unwrap().0, b"bsp");
+        // a file swapped for a link after the listing: refused when it's read
+        let id = format!("fdlink{}", std::process::id());
+        std::fs::remove_file(dir.join("maps/real_map.bsp")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside/id_rsa.wav"), dir.join("maps/real_map.bsp")).unwrap();
+        assert!(open_inside(&dir, "maps/real_map.bsp").is_err());
+        let r = prepare(&id, &g, "cstrike").unwrap();
+        assert_eq!(r["files"], 0);
+        let staged = walk_all(&stage_dir(&id));
+        assert!(staged.iter().all(|(p, _)| p == "manifest.json"), "{staged:?}");
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(stage_dir(&id));
+    }
+
+    /// The remote side: HASH_PY (what runs on the server's machine) run here on a folder with
+    /// links, as the machine would; only the real file comes back.
+    #[cfg(unix)]
+    #[test]
+    fn fastdl_refuses_links_out_of_the_folder_remotely() {
+        use std::io::Write;
+        let (root, dir) = linked_folder("remote");
+        let asked: std::collections::BTreeSet<String> =
+            ["maps/real_map.bsp", "sound/linked.wav", "sound/linkdir/k.mdl", "models/k.mdl", "linked.wad", "maps/../../outside/id_rsa.wav"].iter().map(|s| s.to_string()).collect();
+        let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
+        let mut child = std::process::Command::new("python3").arg("-c").arg(HASH_PY).current_dir(&dir).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().expect("python3");
+        child.stdin.take().unwrap().write_all(&input).unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success());
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(!text.contains(&hex(&Sha256::digest(b"SECRET"))), "a secret was hashed: {text}");
+        let (files, refused) = parse_hashes(&text, &asked);
+        assert_eq!(files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), ["maps/real_map.bsp"]);
+        assert_eq!(files[0].sha256, hex(&Sha256::digest(b"bsp")));
+        assert_eq!(refused, 5);
+        // a line for a path it wasn't asked about is ignored
+        let (f2, _) = parse_hashes(&format!("3\t{}\tetc/passwd\n", "a".repeat(64)), &asked);
+        assert!(f2.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
