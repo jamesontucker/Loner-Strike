@@ -179,7 +179,7 @@ function cloneGame() {
   execFileSync("cp", ["-c", "-R", GAME, GAME_CLONE]);
 }
 /** What some specs expect of their game, written into the clone (never the real game):
- *  creature-picker.spec.ts wants your own type my_runner, jo.ghoul installed by a package
+ *  creature-picker.spec.ts wants your own type my_runner (creature-send.spec.ts qa_crawler), jo.ghoul installed by a package
  *  (mode-77) and Last Stand's waves using my_runner. */
 function specFixtures() {
   if (DRY) return;
@@ -191,7 +191,8 @@ function specFixtures() {
     // yours first, then the installed block at the end (as the app keeps them)
     const block = "; >>> from mode-77\n; types: jo.ghoul\n[jo.ghoul]\nbase = zombie\nname = Ghoul\nhp = 333\n; <<< end mode-77\n";
     const at = had.indexOf("; >>> from ");
-    const mine = "[my_runner]\nbase = runner\nname = My runner\nhp = 70\n";
+    // (creature-send.spec.ts wants qa_crawler, a type of the player's own, too)
+    const mine = "[my_runner]\nbase = runner\nname = My runner\nhp = 70\n[qa_crawler]\nbase = zombie\nname = QA crawler\nhp = 50\n";
     const text = at < 0 ? `${had.trimEnd()}\n${mine}${block}` : `${had.slice(0, at)}${mine}${had.slice(at)}${block}`;
     writeFileSync(ini, text, "latin1");
   }
@@ -204,7 +205,7 @@ function specFixtures() {
 }
 // Specs that need their own game state, run after the rest with it written into the clone (it
 // would change what other specs see: creatures-qa4 wants Last Stand's own lineup, no waves.ini)
-const FIXTURE_SPECS = ["creature-picker.spec.ts"];
+const FIXTURE_SPECS = ["creature-picker.spec.ts", "creature-send.spec.ts"];
 function ui() {
   cloneGame();
   rmSync(APP_DIR, { recursive: true, force: true });
