@@ -1789,6 +1789,13 @@ lsctl logs        the last 100 console lines</code></pre>
   <p>What players see on joining: pick a style or write your own HTML. <code>/welcome</code> shows it again.</p>
   <h2 id="rotation">Rotation and extras</h2>
   <p>Map rotation, adverts, AFK and high-ping kicks, join and leave messages, vote kick and vote ban, and what happens when it empties. The daily restart is on the Health tab; players are warned 5 minutes and 1 minute before.</p>
+  <h2 id="fast-downloads" data-keywords="fastdl sv_downloadurl sv_allowdownload download maps slow joining http">Fast downloads</h2>
+  <p>A player who doesn't have one of your server's custom maps, models or sounds downloads it when they join. From the game server itself that's slow (often minutes for one map). With <b>fast downloads</b> (FastDL) the game fetches the same files from a web address instead, in seconds. Turn it on under <b>Rotation &amp; extras</b>, <b>Fast downloads</b>:</p>
+  <ul>
+    <li><b>A server on a Linux machine</b>: turn on Fast downloads in its <a href="#website-status">Website status</a>. The machine serves the files itself and fills in the address. Nothing to upload.</li>
+    <li><b>Any other server</b>: <b>Copy files for your web server</b> puts the custom files (never the game's own) in a folder laid out like the game's. Upload that folder to any web host that serves plain files, and paste its address.</li>
+  </ul>
+  <p>The app sets <code>sv_downloadurl</code> and turns on <code>sv_allowdownload</code> for you. The address is used from the next map. Players without fast downloads still get the files from the game server.</p>
   <h2 id="hltv">Spectators and demos</h2>
   <p>HLTV lets people watch with a delay and records demos. Copy a demo to your game from the list, then <code>viewdemo &lt;name&gt;</code> in the console.</p>
   <h2 id="website-status">Website status</h2>

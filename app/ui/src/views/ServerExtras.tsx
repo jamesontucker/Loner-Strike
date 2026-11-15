@@ -6,6 +6,7 @@ import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { NeedsSetup, setupPlace } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { FastdlMirror } from "./FastdlMirror";
 import { openTab, takeSub, TabLink } from "./goto";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
@@ -884,6 +885,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           )}
         </div>
         {ON_THIS_COMPUTER && !bySt && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
+        {ON_THIS_COMPUTER && open && !isSharedId(open) && <FastdlMirror id={open} current={d.settings.fastdl} save={(u, done) => saveSettings({ fastdl: u }, done)} />}
         {bySt ? (
           <p className="muted small-note">
             This address was set by Fast downloads under the server's {remote ? <TabLink tab="webstatus">Website status</TabLink> : "Website status"}, which serves the files from the server itself. There's nothing to upload.
