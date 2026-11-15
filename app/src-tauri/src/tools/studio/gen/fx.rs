@@ -299,7 +299,7 @@ pub(super) fn apply(gen: &Gen, n: &Node, def: &'static NodeDef, id: &str, e: &st
 }
 
 /// The solid spawn nodes with "If the spot is blocked" (their Moved output needs its own slot).
-pub(crate) const STORE: [&str; 8] = ["ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon", "npc.spawn", "npc.spawn_use", "proj.spawn"];
+pub(crate) const STORE: [&str; 5] = ["ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon"];
 
 /// How big a solid spawn is for the free-spot check: 0 small (a weapon, an item), 1 medium (a
 /// prop, a component), 2 tall (a creature); -1 no check (it isn't solid).
@@ -308,10 +308,6 @@ pub(super) fn hull_size(n: &Node, def: &NodeDef) -> i64 {
         "ent.spawn_prop" if !n.params.get("solid").and_then(Value::as_bool).unwrap_or(true) => -1,
         "ent.spawn_prop" | "comp.create" => 1,
         "creature.spawn" => 2,
-        // T1fix: an NPC stands like a person; an interactable is small; a projectile isn't solid
-        "npc.spawn" => 2,
-        "npc.spawn_use" => 0,
-        "proj.spawn" => -1,
         "ent.spawn_weapon" => 0,
         "ent.spawn_entity" => match n.params.get("class").and_then(Value::as_str).unwrap_or("env_sprite") {
             "armoury_entity" | "item_healthkit" | "item_battery" | "env_beverage" => 0,
@@ -325,7 +321,6 @@ pub(super) fn hull_size(n: &Node, def: &NodeDef) -> i64 {
 /// Spawn Failure (graph.rs BUILTIN_ENUMS "ls_spawn_fail"): why a spawn node didn't make its thing.
 pub(crate) const WHY_BLOCKED: i64 = 1;
 pub(crate) const WHY_SLOTS: i64 = 2;
-pub(crate) const WHY_LIMIT: i64 = 3;
 pub(crate) const WHY_MISSING: i64 = 4;
 pub(crate) const WHY_RETRIES: i64 = 5;
 pub(crate) const WHY_BAD: i64 = 6;
@@ -388,8 +383,9 @@ pub(super) fn spawn_flow(
     if mode == 4 {
         let tries = gen.num(n, def, "retry_tries").round().clamp(0.0, 1000.0) as i64;
         let every = float_lit(gen.num(n, def, "retry_every").clamp(0.1, 60.0));
-        b.line(format!("\tnew bool:lsgWait = !e && lsgWhy == {WHY_BLOCKED} && ({tries} == 0 || ++g_lsgXrN[{i}] < {tries})\n\tif (lsgWait)\n\t\tset_task({every}, \"lsg_xr{i}\", LSG_TASK + 410000 + {i}, ctx, LSG_CTX)\n\telse if (!e && lsgWhy == {WHY_BLOCKED})\n\t\tlsgWhy = {WHY_RETRIES}"));
-        after.push(format!("public lsg_xr{i}(ctx[])\n{{\n\tg_lsgXrIn = {i}\n\t{}(ctx)\n}}", gen.pin_fname(id, "exec")));
+        b.line(format!("\tnew bool:lsgWait = !e && lsgWhy == {WHY_BLOCKED} && ({tries} == 0 || ++g_lsgXrN[{i}] < {tries})\n\tif (lsgWait)\n\t\tlsg_xr_wait({i}, \"lsg_xr{i}\", {every}, ctx, o)\n\telse if (!e && lsgWhy == {WHY_BLOCKED})\n\t\tlsgWhy = {WHY_RETRIES}"));
+        // (each wait carries its own spot and count: two bots blocking two spots never mix)
+        after.push(format!("public lsg_xr{i}(d[])\n{{\n\tlsg_xr_back({i}, d)\n\t{}(d)\n}}", gen.pin_fname(id, "exec")));
     } else {
         b.line("\tnew bool:lsgWait = false");
     }
@@ -1196,6 +1192,28 @@ stock lsg_argstr(a, s[], len)
 // If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
 stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
 
+// (Retry: a timer with the flow's ctx, then the spot and the tries so far)
+stock lsg_xr_wait(i, const fn[], Float:every, const ctx[], const Float:o[3])
+{
+	new d[LSG_CTX + 4]
+	for (new k = 0; k < LSG_CTX; k++)
+		d[k] = ctx[k]
+	d[LSG_CTX] = _:o[0]
+	d[LSG_CTX + 1] = _:o[1]
+	d[LSG_CTX + 2] = _:o[2]
+	d[LSG_CTX + 3] = g_lsgXrN[i]
+	set_task(every, fn, LSG_TASK + 410000 + i, d, LSG_CTX + 4)
+}
+
+stock lsg_xr_back(i, const d[])
+{
+	g_lsgXrIn = i
+	g_lsgXrO[i][0] = Float:d[LSG_CTX]
+	g_lsgXrO[i][1] = Float:d[LSG_CTX + 1]
+	g_lsgXrO[i][2] = Float:d[LSG_CTX + 2]
+	g_lsgXrN[i] = d[LSG_CTX + 3]
+}
+
 // (Retry: the spot of the first try, kept)
 stock lsg_xr_put(i, ok, const Float:o[3])
 {
@@ -1438,7 +1456,7 @@ mod tests {
         assert!(c("pfail").contains("lsg_xf_free(o, 1, 3, "), "{}", c("pfail"));
         let cr = c("cretry");
         assert!(cr.contains("lsg_xf_free(o, 2, 4, ") && cr.contains("(0 == 0 || ++g_lsgXrN[") && cr.contains("lsgWhy = 5"), "{cr}");
-        assert!(r.source.contains("public lsg_xr") && r.source.contains("set_task(1.0, \"lsg_xr"));
+        assert!(r.source.contains("public lsg_xr") && r.source.contains("lsg_xr_wait(") && r.source.contains("lsg_xr_back("));
         // Then isn't run again by a retry
         assert!(cr.contains("if (!lsgRe)"), "{cr}");
         // a retry waits for the first try's spot (not the entity's spot now)

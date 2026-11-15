@@ -863,6 +863,7 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
     let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
     g.version = VERSION;
     proj_spawn_pins(&mut g);
+    vol_spawn_pins(&mut g);
     // (the app's own enums: there in every graph, after the mode's; a mode's own of the same id wins)
     for (id, name, values) in BUILTIN_ENUMS {
         if !g.enums.iter().any(|e| e.id == id) {
@@ -2791,6 +2792,19 @@ pub fn param<'a>(n: &'a Node, def: &'a NodeDef, id: &str) -> Option<&'a Value> {
 /// settings off_f/off_r/off_u (16, 0, 0 by default). They read as `angles_offset` and a Local
 /// offset wired from a Make Vector next to the node, so a saved graph fires from the same spot;
 /// the default 16 forward needs no wire (an unwired Local offset is that).
+/// W2: Spawn Trigger Volume's outputs before the spawn outcome standard: Volume reads as Entity
+/// (`out`), and Success's first id `success` as `ok` (schema.ts volSpawnPins, the same rule).
+pub fn vol_spawn_pins(g: &mut Graph) {
+    let ids: std::collections::HashSet<String> = g.nodes.iter().filter(|n| n.kind == "vol.spawn").map(|n| n.id.clone()).collect();
+    for e in g.edges.iter_mut().filter(|e| ids.contains(&e.from.node)) {
+        match e.from.pin.as_str() {
+            "volume" => e.from.pin = "out".into(),
+            "success" => e.from.pin = "ok".into(),
+            _ => {}
+        }
+    }
+}
+
 pub fn proj_spawn_pins(g: &mut Graph) {
     let ids: Vec<String> = g.nodes.iter().filter(|n| n.kind == "proj.spawn").map(|n| n.id.clone()).collect();
     for id in ids {

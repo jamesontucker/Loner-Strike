@@ -205,15 +205,17 @@ stock lsg_vol_place(v)
 	}
 }
 
-// why the last Spawn Trigger Volume failed ("" when it made one): the spawn outcome's Failure Reason
-stock g_lsgVolWhy[24]
+// why the last Spawn Trigger Volume failed: the Spawn Failure enum (0 None, 2 Out of entity slots,
+// 3 Limit reached, 6 Bad input; gen/fx.rs WHY_*), and its words for the debugger
+stock g_lsgVolWhy
+stock const g_lsgVolWhyName[][] = { "", "Blocked", "Out of entity slots", "Limit reached: Trigger volumes at once (Limits)", "Missing file", "Retries used up", "Bad input: At entity is gone and there's no Position" }
 
 stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap, need_at)
 {
-	g_lsgVolWhy[0] = 0
+	g_lsgVolWhy = 0
 	if (need_at && !(at > 0 && pev_valid(at)))
 	{
-		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Bad input")
+		g_lsgVolWhy = 6
 		return 0
 	}
 	new v = -1
@@ -223,12 +225,12 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	if (v < 0)
 	{
 		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
-		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Limit reached")
+		g_lsgVolWhy = 3
 		return 0
 	}
 	if (!lsg_ent_room("Spawn Trigger Volume"))
 	{
-		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
+		g_lsgVolWhy = 2
 		return 0
 	}
 	if (!(at > 0 && pev_valid(at)))
@@ -243,7 +245,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	new e = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 	if (!e)
 	{
-		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
+		g_lsgVolWhy = 2
 		return 0
 	}
 	set_pev(e, pev_classname, "lsg_volume")
@@ -655,7 +657,7 @@ mod tests {
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
                 "if (lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
                 "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
-                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32, ", "copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Limit reached\")",
+                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32, ", "g_lsgVolWhy = 3",
             ] {
                 assert!(src.contains(want), "{want} (debug {debug})");
             }
@@ -682,9 +684,9 @@ mod tests {
         }
     }
 
-    /// The spawn outcome: Spawned or Failed runs, Entity / Success / Failure Reason are kept, and
-    /// At entity alone (no Position) must be there (Bad input). A saved graph's "then" wire is
-    /// Spawned.
+    /// The spawn outcome standard (FX.md): Spawned or Failed runs, then Then; Entity / Success /
+    /// Failure reason are kept, and At entity alone (no Position) must be there (Bad input). A
+    /// saved graph's older outputs (Volume, success) load as the standard ones (out, ok).
     #[test]
     fn vol_spawn_outcome() {
         let n = |id: &str, t: &str, p: serde_json::Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
@@ -692,20 +694,24 @@ mod tests {
         let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "vo", "name": "Outcome"},
             "nodes": [n("ps", "event.player_spawned", json!({})), n("vs", "vol.spawn", json!({"name": "zone"})),
                       n("ok", "debug.print", json!({"text": "made", "chat": false})), n("no", "debug.print", json!({"text": "failed", "chat": false})), n("br", "flow.branch", json!({}))],
-            "edges": [e(1, "ps", "then", "vs", "exec"), e(2, "ps", "player", "vs", "at_ent"), e(3, "vs", "then", "ok", "exec"), e(4, "vs", "volume", "ok", "value"),
-                      e(5, "vs", "failed", "no", "exec"), e(6, "vs", "reason", "no", "value"), e(7, "no", "then", "br", "exec"), e(8, "vs", "success", "br", "cond")]})).unwrap();
+            "edges": [e(1, "ps", "then", "vs", "exec"), e(2, "ps", "player", "vs", "at_ent"), e(3, "vs", "spawned", "ok", "exec"), e(4, "vs", "volume", "ok", "value"),
+                      e(5, "vs", "failed", "no", "exec"), e(6, "vs", "reason", "no", "value"), e(7, "vs", "then", "br", "exec"), e(8, "vs", "success", "br", "cond")]})).unwrap();
+        // (the older ids, as a graph saved before the standard has them)
+        assert!(g.edges.iter().any(|e| e.from.node == "vs" && e.from.pin == "out") && g.edges.iter().any(|e| e.from.node == "vs" && e.from.pin == "ok"));
+        assert!(!g.edges.iter().any(|e| e.from.node == "vs" && (e.from.pin == "volume" || e.from.pin == "success")));
         assert!(graph::validate(&g).is_empty(), "{:#?}", graph::validate(&g));
         for debug in [false, true] {
             let src = gen::generate(&g, debug).source;
             let call = src.lines().find(|l| l.contains("= lsg_vol_spawn(")).expect("the spawn");
             assert!(call.trim_end().ends_with(", 1)"), "At entity alone must be there: {call}");
-            assert!(src.contains("copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Bad input\")"));
-            assert!(src.contains("copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Out of entity slots\")"));
-            assert!(src.contains(", 127, g_lsgVolWhy)"), "Failure Reason kept");
+            assert!(src.contains("g_lsgVolWhy = 6") && src.contains("g_lsgVolWhy = 2"), "Bad input, Out of entity slots");
+            assert!(src.contains("] = g_lsgVolWhy\n"), "Failure reason kept");
             assert!(src.contains("] ? 1 : 0"), "Success kept");
             let i = src.find("= lsg_vol_spawn(").unwrap();
             let body = &src[i..i + src[i..].find("\n}").unwrap()];
             assert!(body.contains("\telse\n\t\t"), "Spawned and Failed both go somewhere: {body}");
+            let (sw, th) = (body.find("\telse\n\t\t").unwrap(), body.rfind("\n\tlsg_n").unwrap());
+            assert!(th > sw, "Then runs after Spawned / Failed: {body}");
         }
     }
 
