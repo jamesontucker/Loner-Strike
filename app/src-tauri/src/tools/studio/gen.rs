@@ -1584,6 +1584,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_mk = has("fx.marker");
     // the fun nodes: one 0.1 s task for fire, a drunk view and trails; death, spawn and leaving hooks
     let fun_tick = has("fun.burn") || has("fun.drunk") || has("fun.trail") || has("fun.view_from");
+    // set_view (third person, View From) needs its camera model loaded
+    let uses_cam = has("fun.camera") || has("fun.view_from");
     let fun_dead = has("fun.burn") || has("fun.bury") || has("fun.camera") || has("fun.drunk") || has("fun.view_from");
     let fun_view = has("fun.view_from");
     let fun_spawn = has("fun.camera") || has("fun.trail") || has("fun.bury");
@@ -1653,7 +1655,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || fx::needs_precache(g) || !assets::precache(g).is_empty() || uses_fire || uses_smoke || uses_blood {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || fx::needs_precache(g) || !assets::precache(g).is_empty() || uses_fire || uses_smoke || uses_blood || uses_cam {
         let mut pre = String::from("public plugin_precache()\n{");
         for m in &proj_models {
             // (through the mode's precache budget: a model that doesn't fit isn't loaded, and flies as the grenade)
@@ -1671,6 +1673,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         // (the fun nodes' sprites: only those a node uses)
         if uses_fire {
             pre.push_str("\n\tg_lsgSprFire = lsg_pre_model(\"sprites/fire.spr\")");
+        }
+        if uses_cam {
+            pre.push_str("\n\t// AMX Mod X's third-person camera is this model\n\tlsg_pre_model(\"models/rpgrocket.mdl\")");
         }
         if uses_smoke {
             pre.push_str("\n\tg_lsgSprSmoke = lsg_pre_model(\"sprites/steam1.spr\")");
@@ -5956,6 +5961,19 @@ stock lsg_ed_window()
 	}
 }
 
+// AMX Mod X's set_view makes its camera with models/rpgrocket.mdl: unless that was loaded with
+// the map, the server stops (PF_setmodel_I: no precache). Third person is skipped instead, said once.
+stock bool:lsg_set_view(id, mode)
+{
+	if (mode != CAMERA_NONE && !lsg_have("models/rpgrocket.mdl"))
+	{
+		lsg_skip_log("camera", "Third person", "Third person skipped: models/rpgrocket.mdl wasn't loaded with the map")
+		return false
+	}
+	set_view(id, mode)
+	return true
+}
+
 stock bool:lsg_ent_room(const what[])
 {
 	if (!g_lsgEdHooked)
@@ -7477,7 +7495,8 @@ stock lsg_camera(id, view, reset)
 	if (!lsg_ok(id))
 		return 0
 	new third = view == 2 ? (g_lsgCam[id] ? 0 : 1) : view
-	set_view(id, third ? CAMERA_3RDPERSON : CAMERA_NONE)
+	if (!lsg_set_view(id, third ? CAMERA_3RDPERSON : CAMERA_NONE))
+		return 0
 	g_lsgCam[id] = third
 	g_lsgCamKeep[id] = reset ? 0 : 1
 	return 1
@@ -7486,7 +7505,7 @@ stock lsg_camera(id, view, reset)
 stock lsg_cam_reapply(id)
 {
 	if (lsg_ok(id) && g_lsgCam[id])
-		set_view(id, CAMERA_3RDPERSON)
+		lsg_set_view(id, CAMERA_3RDPERSON)
 }
 
 stock lsg_fun_died(id)
@@ -7825,7 +7844,7 @@ stock lsg_view_back(p)
 			set_pev(p, pev_flags, pev(p, pev_flags) & ~FL_FROZEN)
 		engfunc(EngFunc_SetView, p, p)
 		if (g_lsgCam[p])
-			set_view(p, CAMERA_3RDPERSON)
+			lsg_set_view(p, CAMERA_3RDPERSON)
 	}
 	g_lsgViewFreeze[p] = false
 	// (the camera goes when nobody looks through it any more)

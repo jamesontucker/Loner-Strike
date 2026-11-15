@@ -318,6 +318,19 @@ stock lsg_ed_window()
 	}
 }
 
+// AMX Mod X's set_view makes its camera with models/rpgrocket.mdl: unless that was loaded with
+// the map, the server stops (PF_setmodel_I: no precache). Third person is skipped instead, said once.
+stock bool:lsg_set_view(id, mode)
+{
+	if (mode != CAMERA_NONE && !lsg_have("models/rpgrocket.mdl"))
+	{
+		lsg_skip_log("camera", "Third person", "Third person skipped: models/rpgrocket.mdl wasn't loaded with the map")
+		return false
+	}
+	set_view(id, mode)
+	return true
+}
+
 stock bool:lsg_ent_room(const what[])
 {
 	if (!g_lsgEdHooked)

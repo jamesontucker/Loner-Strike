@@ -221,3 +221,48 @@ fn projectiles_compile_with_amxxpc() {
     }
     let _ = std::fs::remove_dir_all(&work);
 }
+
+/// The final check's crash (PF_setmodel_I: no precache: models/rpgrocket.mdl): AMX Mod X's
+/// set_view makes its camera with that model. Every model a generated plugin sets is loaded in
+/// its plugin_precache (or checked with lsg_have first), and set_view only goes through
+/// lsg_set_view, which skips third person when the camera model isn't loaded.
+#[test]
+fn every_model_a_mode_sets_is_loaded_first() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tools/studio/testdata");
+    let mut checked = 0;
+    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        if !name.ends_with(".graph.json") {
+            continue;
+        }
+        let Ok(g) = graph::parse(&std::fs::read_to_string(&p).unwrap()) else { continue };
+        for debug in [false, true] {
+            let src = gen::generate(&g, debug).source;
+            // set_view only inside lsg_set_view
+            let body_at = src.find("stock bool:lsg_set_view(").unwrap_or(usize::MAX);
+            for (i, _) in src.match_indices("set_view(") {
+                let before = &src[i.saturating_sub(4)..i];
+                // (back to first person makes no camera)
+                let call = &src[i..src[i..].find(')').map_or(src.len(), |k| i + k + 1)];
+                if before.ends_with("lsg_") || before.ends_with("Set") || call.ends_with("CAMERA_NONE)") {
+                    continue;
+                }
+                assert!(i > body_at && i < body_at + 600, "{name}: a raw set_view outside lsg_set_view");
+            }
+            if src.contains("lsg_set_view(id, third") || src.contains("lsg_set_view(p, CAMERA_3RDPERSON)") {
+                assert!(src.contains("lsg_pre_model(\"models/rpgrocket.mdl\")"), "{name}: third person without its camera model loaded");
+            }
+            // a literal model handed to SetModel is loaded in plugin_precache
+            let pre = src.split("public plugin_precache()").nth(1).map(|s| s.split("\n}").next().unwrap_or("")).unwrap_or("");
+            for line in src.lines().filter(|l| l.contains("EngFunc_SetModel") && l.contains('"')) {
+                let lit = line.split('"').nth(1).unwrap();
+                // (CS's own weapon models, w_ / v_ / p_, are always loaded by the game)
+                let cs_own = ["models/w_", "models/v_", "models/p_"].iter().any(|k| lit.starts_with(k)) && !lit[9..].contains('/');
+                assert!(cs_own || pre.contains(&format!("\"{lit}\"")), "{name}: {lit} is set but not loaded in plugin_precache:\n{line}");
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked >= 10, "{checked}");
+}
