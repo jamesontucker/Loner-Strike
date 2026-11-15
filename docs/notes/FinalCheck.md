@@ -293,3 +293,85 @@ The third dry run (`--dry`, short runs, 6 graphs) at 8d7a5d1d proved the harness
 - no page errors.
 
 The connect step found no free input in view, so it was skipped; it isn't a failure.
+
+## Results (2026-11-15)
+
+### Versions
+- Source: tools HEAD at each step's start. Local game run e5c437a7; live sessions 035a652c, then
+  1488394e, then d94899f3; specs and Rust 21e1f0e1 and 02acf072.
+- Every plugin compiled from that commit (161). One exception: amxxpc crashed under wine once on
+  basebuilder.sma at d94899f3. It compiled clean twice when rerun, so it's flaky, not a source error.
+- Navs and map knowledge from the live pack (list 3b25c9a32589, 9 maps).
+- Brain: ls-next3 892b97a (CI 43669651332), `ls_mode_ver` 4, on the sims. Alone Together kept its own
+  live brain, which answers no `ls_*` cvars.
+
+### Every new node in a game (sim, 16 bots)
+| Mode | Result | Notes |
+|---|---|---|
+| fc_cover_w1 | ok | 90/154 nodes ran |
+| fc_cover_ec | ok | 65/101 ran, 10 node notes (no NPC wired, a bot can't see an info window...) |
+| fc_cover_fx | ok | 37/41 ran |
+| fc_cover_5 | ok | 25/36 ran |
+| fc_cover_p5 | ok | 4/26 ran: the input nodes skip bots by default, and the save and cooldown nodes hang off them. Covered by the earlier P5 sim with bots allowed |
+| fc_cover_4 | not measured | the switch fell on a dead server (the crash below); left for a rerun |
+| fc_cover_3 | FAIL, then fixed | crashed the sim twice: `Host_Error: PF_setmodel_I: no precache: models/rpgrocket.mdl` (fixed in 7a88f7ae). Live on Alone Together it ran with no crash, but its Change Map node reloads de_dust2 every ~11 s, so a person can't stay in. That's the test graph's doing |
+
+- Of this round's 163 kinds, 63 ran in a game. 70 of the rest are pure nodes, which the debugger
+  doesn't record as runs. 30 flow kinds never ran, each because it needs something bots don't do:
+  - a person: Player Command, Pressed Button, Tell Bind;
+  - a grenade or a map entity that de_dust2 doesn't have;
+  - fog and weather, which only change what a client sees.
+
+### The janky set, every limit at max
+| Graph | Local sim, user in (e5c437a7) | Live Alone Together, user in |
+|---|---|---|
+| message burst | ok, loss 1% | ok, loss 0% |
+| effects flood | 813 datagram overflows, loss 37% | 138, then 57 (1488394e), then **0 overflows, 0% loss, ping ≤ 101** (d94899f3); closed |
+| loop per tick | 34 fps | ok, 264 fps (the loop budget) |
+| precache 160 | ok | ok |
+| precache 170 | refused with the "most is 160" message | — |
+| spawn flood | 4 fps → 73 fps, 247 overflows, loss 65% | **ok: 0% loss, 266–272 fps**, caps clear |
+| nested loops | **hang**: the server froze, and froze again on restart (the saved mode) | **ok: 257 fps, no hang** (ee310575); the user rejoined, no issues |
+
+No crash on Alone Together in either session, and no kick. The safe-mode fallback (b0cf4564) landed
+for the restart freeze; the harness now restarts a hung sim in Classic.
+
+### Cost against Classic
+- Live, 16 bots: Classic 276 fps (3.6 ms, server CPU 11.9%), Last Stand template 272 fps (3.7 ms,
+  13.7%). That's +0.1 ms a frame.
+- Local (the load was over 20, so the numbers are noisy): +3.8 ms at 16 bots; at 24 bots the Classic
+  baseline itself was erratic (p95 250 ms).
+- The hlds process's CPU from `ps` is a lifetime average on Linux and doesn't mean anything there;
+  `stats` CPU is the number to read.
+
+### Battle Royale squads (16 bots, sim)
+PASS: the game started, then first contact, then an out and a kill, within 60 s.
+
+### Automated suites
+- **Rust**, all at 21e1f0e1: 1145 passed, 0 failed, 38 ignored. That includes the compat suite with
+  the frozen v3 fixtures and the versioning fixtures.
+- **Browser specs** (Studio, editor, NPC editor, sprite maker, creature picker; Chromium large and
+  WebKit) at 02acf072: 198 passed, 48 failed in the first pass.
+  - Most of those 48 were environment: two workers editing the shared editor document, and the game
+    clone being deleted mid-run.
+  - The rerun with one worker on a restored clone left **11 failures in 6 tests**:
+    - `studio-ux` H6 and `studio-npc`: the Studio palette's search box is never found (timeouts). Likely
+      the type-system palette change (X).
+    - `studio-ux-x2` F6.5: shift-click on a node times out (X / X2).
+    - `studio-v3` "library: Export all": the export has no `builtin_*` items (X2's starter library).
+    - `editor-stock-entities`: the inspector no longer shows "Target 16" on trigger_random (the editor
+      entities agent).
+    - `editor-community-maps` "Save as <name>_edit": the Compile panel's first input is now a checkbox
+      (the editor agent).
+  - Not counted: "templates are laid out" (known, X2).
+- **Editor map**: built through the editor's API.
+  - It has the 18 new stock point entities, 6 effect entities and 5 brush entities. Checks show only
+    the expected setup notes.
+  - The SDHLT CSG, BSP, VIS and RAD passes were all clean.
+  - On a sim in Classic with 8 bots it loaded and played (5 kills), with no Host_Error or missing file.
+
+### Restores of Alone Together
+Both sessions were restored and verified: the backups at `~/loner-strike/backups/finalcheck-20261115-*`
+are kept, and the touched folders match them byte for byte. AMXX writes the loaded plugins' commands
+into `configs/cmdaccess.ini`, so that file is put back again after the switch home. The server is back
+in Gun Game on cs_militia with 19 bots playing, and the status page says online.
