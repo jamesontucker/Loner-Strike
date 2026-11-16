@@ -1630,6 +1630,30 @@ mod tests {
         assert!(!graph::has_errors(&p));
     }
 
+    /// A struct's fields can be any of graph version 4's plain types (a Color, a file, a handle):
+    /// Make Struct packs them as cells like any other, Break Struct reads them back, and an array of
+    /// the struct holds them.
+    #[test]
+    fn struct_fields_take_the_new_types() {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "struct_types", "name": "Struct types"},
+            "structs": [{"id": "look", "name": "Look", "fields": [{"id": "col", "name": "Glow", "type": "color"}, {"id": "mdl", "name": "Hat", "type": "model"}, {"id": "who", "name": "Pet", "type": "creature"}, {"id": "lvl", "name": "Level", "type": "number"}]}],
+            "variables": [{"id": "looks", "name": "Looks", "type": "array<struct:look>", "scope": "mode"}],
+            "nodes": [n("sp", "event.player_spawned", json!({})), n("c", "color.literal", json!({"value": "#20c060"})), n("m", "asset.model", json!({"file": "models/w_c4.mdl"})),
+                      n("cs", "creature.spawn", json!({"kind": "zombie", "health": 100})), n("mk", "struct.make", json!({"struct": "look"})),
+                      n("br", "struct.break", json!({"struct": "look"})), n("glow", "player.set_glow", json!({"color": "red"}))],
+            "edges": [e(1, "sp", "then", "cs", "exec"), e(2, "sp", "player", "cs", "at_ent"), e(3, "c", "out", "mk", "col"), e(4, "m", "out", "mk", "mdl"), e(5, "cs", "out", "mk", "who"),
+                      e(6, "cs", "then", "glow", "exec"), e(7, "sp", "player", "glow", "player"), e(8, "mk", "out", "br", "in"), e(9, "br", "col", "glow", "color")]})).unwrap();
+        let errors: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level == "error").collect();
+        assert!(errors.is_empty(), "{errors:#?}");
+        let src = gen::generate(&g, false).source;
+        assert!(src.contains("// struct Look") && src.contains("lsg_col_r("), "Make and Break Struct carry a Color");
+        // saved and read again: the field types stay
+        let again = graph::parse(&serde_json::to_string(&g).unwrap()).unwrap();
+        assert_eq!(again.structs[0].fields.iter().map(|f| f.ty.as_str()).collect::<Vec<_>>(), ["color", "model", "creature", "number"]);
+    }
+
     /// The entity handles: typed outputs that still go into Entity pins, and the casts back
     /// (Success with the narrower kind, Failed otherwise), into variables of each kind.
     pub fn handles_mode() -> Graph {

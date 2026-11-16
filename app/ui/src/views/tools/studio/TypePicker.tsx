@@ -54,12 +54,15 @@ export function TypePicker({
   const items: [string, string][] = groups.flatMap(([, x]) => x);
   return (
     <span className="st-typepick">
-      <select className="st-field" aria-label={`${label}: one or many`} value={shape} onChange={(e) => onChange(make(e.target.value, item, key))}>
-        {exec && <option value="exec">Flow</option>}
-        <option value="single">One</option>
-        {containers && <option value="array">Array of</option>}
-        {containers && <option value="map">Map from</option>}
-      </select>
+      {/* (only when there's a choice: a struct's field is always one value) */}
+      {(containers || exec) && (
+        <select className="st-field" aria-label={`${label}: one or many`} value={shape} onChange={(e) => onChange(make(e.target.value, item, key))}>
+          {exec && <option value="exec">Flow</option>}
+          <option value="single">One</option>
+          {containers && <option value="array">Array of</option>}
+          {containers && <option value="map">Map from</option>}
+        </select>
+      )}
       {shape === "map" && (
         <>
           <select className="st-field" aria-label={`${label}: map keys`} value={key} onChange={(e) => onChange(make("map", item, e.target.value))}>

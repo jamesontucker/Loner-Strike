@@ -35,7 +35,7 @@
 <p>Every pin and variable in Game Mode Studio has a type, and a wire only connects pins whose types fit. Most of the time you don't think about it: drag from a pin and the node list shows only nodes that fit. This guide covers the types worth knowing, how a value goes from one type to another, and what an app update can leave behind.</p>
 
 <h2 id="types">The types</h2>
-<p>A variable's type menu (and a function's inputs, outputs and struct fields) groups them like this:</p>
+<p>A variable's type menu (and a function's inputs, outputs and struct fields) groups them like this. A struct field is always one value of these types (an Array or Map is for variables; for a list of structs, make an Array of the struct):</p>
 <div class="table"><table>
 <thead><tr><th>Group</th><th>Types</th><th>For</th></tr></thead>
 <tbody>
@@ -101,7 +101,7 @@
 
 <h2 id="updates">After an update: orphaned pins</h2>
 <p>Modes saved with 1.0 open as they are and make the same plugin. A file from a newer app says "That graph was made by a newer Loner-Strike (graph version N). Update the app to open it."</p>
-<p>If an update ever removes a pin you had wired, the wire stays on a red pin labeled <b>Orphaned: </b><i>its id</i>, and Problems says "This pin was removed in an update. Re-wire or delete it." Compile, Test and Publish wait until it's fixed; deleting the wire removes the orphan. A removed setting shows greyed in Details as "Orphaned: name = value", with Clear. View › <b>Refresh nodes</b> lists what an update left behind ("Nodes refreshed: 1 orphaned wire, …"). Saving keeps orphans as they are, so nothing is lost by opening a mode.</p>
+<p>If an update ever removes a pin you had wired, the wire stays on a red pin labeled <b>Orphaned: </b><i>its id</i>, and Problems says "This pin was removed in an update. Re-wire or delete it." Compile, Test and Publish wait until it's fixed; deleting the wire removes the orphan. A removed setting shows grayed in Details as "Orphaned: name = value", with Clear. View › <b>Refresh nodes</b> lists what an update left behind ("Nodes refreshed: 1 orphaned wire, …"). Saving keeps orphans as they are, so nothing is lost by opening a mode.</p>
 
 <h2 id="see-also" class="see">See also</h2>
 <ul>
