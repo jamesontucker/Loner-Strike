@@ -439,7 +439,7 @@ html { scroll-padding-top: 72px; }
 .server-addr code { color: var(--dim); user-select: all; white-space: nowrap; }
 .srv-actions { display: grid; gap: 8px; }
 .srv-list { display: grid; gap: 2px; }
-.srv-name .hy { font-family: var(--text); font-weight: 700; }
+.srv-name .hy, #creations h3 .hy { font-family: var(--text); font-weight: 700; }
 .srv-foot { display: flex; justify-content: flex-end; padding: 10px 18px; background: var(--panel); border-radius: 2px; margin-top: 2px; }
 .srv-actions .btn { min-height: 40px; font-size: 16px; }
 /* the server list: the app's Find servers on the site */
@@ -1382,7 +1382,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     const GAMES = { cstrike: "CS 1.6", czero: "Condition Zero" };
     const BOTS = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" }; // (the app's words, games.ts BOT_NOTE)
     const RISK = { server_commands: "Runs server commands", amx_commands: "Runs AMX Mod X commands", plugin_calls: "Calls other plugins", kicks_players: "Can kick players" };
-    const PAGE = 9;
+    const PAGE = 3, MORE = 6; // one row first, then two rows per Show more
     const section = document.getElementById("creations");
     const grid = document.getElementById("creations-grid");
     const msg = document.getElementById("creations-msg");
@@ -1428,7 +1428,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       const games = (it.games || []).map((g) => GAMES[g]).filter(Boolean).join(", ");
       if (games) k.append(" ", el("span", "", `· ${games}`));
       k.style.margin = "0";
-      body.append(k, el("h3", "", it.name || "Untitled"));
+      // the stencil font draws "-" as the logo's soldier: a plain dash in names
+      const h = el("h3", "");
+      (it.name || "Untitled").split("-").forEach((part, i) => {
+        if (i) { const hy = document.createElement("span"); hy.className = "hy"; hy.textContent = "-"; h.append(hy); }
+        h.append(part);
+      });
+      body.append(k, h);
       if (it.author) body.append(el("p", "cr-by", `by ${it.author}`));
       if (it.summary) body.append(el("p", "cr-sum", it.summary));
       const tags = el("ul", "cr-tags");
@@ -1530,7 +1536,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       for (const o of section.querySelectorAll("[data-sort]")) o.setAttribute("aria-pressed", String(o === b));
       draw();
     });
-    more.addEventListener("click", () => { shown += PAGE; draw(); });
+    more.addEventListener("click", () => { shown += MORE; draw(); });
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver((es) => {
         if (es.some((e) => e.isIntersecting)) { io.disconnect(); load(); }
