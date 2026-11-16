@@ -346,9 +346,13 @@ pub fn parse_cycle(text: &str) -> Vec<String> {
 /// The map cycle file the game uses: mapcyclefile from server.cfg / listenserver.cfg,
 /// else mapcycle.txt. Only a plain .txt path inside the game folder counts.
 pub fn cycle_name(game_dir: &Path) -> String {
+    cycle_name_in(&["listenserver.cfg", "server.cfg"].map(|cfg| crate::sys::read_latin1(&game_dir.join(cfg)).unwrap_or_default()))
+}
+
+/// cycle_name from the texts of listenserver.cfg and server.cfg (in that order).
+fn cycle_name_in(cfgs: &[String]) -> String {
     let mut name = "mapcycle.txt".to_string();
-    for cfg in ["listenserver.cfg", "server.cfg"] {
-        let text = crate::sys::read_latin1(&game_dir.join(cfg)).unwrap_or_default();
+    for text in cfgs {
         for line in text.lines() {
             let mut words = line.split_whitespace();
             if words.next().is_some_and(|w| w.eq_ignore_ascii_case("mapcyclefile")) {
@@ -365,6 +369,21 @@ pub fn cycle_name(game_dir: &Path) -> String {
         }
     }
     name
+}
+
+/// The main rotation as the server has it: (its file name, its maps). For a server on another
+/// machine that's the machine's map cycle (and server.cfg naming it): this computer's copy
+/// of the server's files doesn't carry them (Valve's server brings its own mapcycle.txt),
+/// so reading the copy here showed an empty list. A failed read is an error, never empty.
+fn main_rotation(g: &Game) -> Result<(String, Vec<String>), String> {
+    let Some((r, dir)) = &g.remote else {
+        let name = cycle_name(&g.dir);
+        return Ok((name.clone(), parse_cycle(&crate::sys::read_latin1(&g.dir.join(&name)).unwrap_or_default())));
+    };
+    let cfgs = crate::remote::cat_files(r, dir, &["listenserver.cfg", "server.cfg"])?;
+    let name = cycle_name_in(&cfgs.iter().map(|b| b.as_deref().map(crate::rcon::latin1).unwrap_or_default()).collect::<Vec<_>>());
+    let text = crate::remote::read_file_opt(r, &format!("{dir}/{name}"))?.map(|b| crate::rcon::latin1(&b)).unwrap_or_default();
+    Ok((name, parse_cycle(&text)))
 }
 
 fn rotation_path(g: &Game, mode: &str) -> PathBuf {
@@ -413,19 +432,37 @@ pub fn write_rotation(path: &Path, data: &Path, maps: &[String], main: bool) -> 
         };
     }
     let old = std::fs::read(path).ok();
-    if main {
-        let keep = data.join("mapcycle-original.txt");
-        if let (Some(old), false) = (&old, keep.exists()) {
-            let _ = std::fs::create_dir_all(data);
-            let _ = std::fs::write(&keep, old);
-        }
-    }
-    let nl = if old.as_ref().is_some_and(|o| o.windows(2).any(|w| w == b"\r\n")) { "\r\n" } else { "\n" };
-    let text: String = maps.iter().map(|m| format!("{m}{nl}")).collect();
+    let text = rotation_text(old.as_deref(), data, maps, main);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     std::fs::write(path, text).map_err(|e| format!("Couldn't write {} ({e}).", path.file_name().unwrap_or_default().to_string_lossy()))
+}
+
+/// A rotation file's new text: one map a line, in the line endings the old one had. For the
+/// main one, the game's original list is kept once in the data folder first.
+fn rotation_text(old: Option<&[u8]>, data: &Path, maps: &[String], main: bool) -> String {
+    if main {
+        let keep = data.join("mapcycle-original.txt");
+        if let (Some(old), false) = (old, keep.exists()) {
+            let _ = std::fs::create_dir_all(data);
+            let _ = std::fs::write(&keep, old);
+        }
+    }
+    let nl = if old.is_some_and(|o| o.windows(2).any(|w| w == b"\r\n")) { "\r\n" } else { "\n" };
+    maps.iter().map(|m| format!("{m}{nl}")).collect()
+}
+
+/// The main rotation written where the server has it (on the machine first, for a server
+/// there; this computer's copy kept the same).
+fn write_main_rotation(g: &Game, maps: &[String]) -> Result<(), String> {
+    if g.remote.is_none() {
+        return write_rotation(&rotation_path(g, ""), &g.data, maps, true);
+    }
+    let (name, _) = main_rotation(g)?;
+    let old = crate::remote::game_file(g, &name)?;
+    let text = rotation_text(old.as_deref(), &g.data, maps, true);
+    crate::remote::put_game_file(g, &name, text.as_bytes())
 }
 
 /// Game Mode Menu modes from modes.ini: (id, name).
@@ -484,9 +521,14 @@ fn listing(g: &Game) -> Value {
         }
     }
     let current = current_mode(g);
+    // (unread: the page says so instead of showing an empty list, and doesn't offer to save one)
+    let (file, main, main_error) = match main_rotation(g) {
+        Ok((file, maps)) => (file, maps, None),
+        Err(why) => (cycle_name(&g.dir), vec![], Some(format!("Couldn't read the main rotation from the server's machine ({why})."))),
+    };
     json!({
         "settings": load(&g.data),
-        "rotation": {"file": cycle_name(&g.dir), "main": read(rotation_path(g, "")), "modes": lists},
+        "rotation": {"file": file, "main": main, "main_error": main_error, "modes": lists},
         "modes": modes.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>(),
         "current_mode": current,
         "plugin": g.dir.join("addons/amxmodx/plugins/gm_extras.amxx").exists(),
@@ -767,7 +809,11 @@ async fn api_rotation(State(st): State<Shared>, headers: HeaderMap, helper: Opti
             }
             let maps = check_rotation(&req.maps, &installed_maps(g), mode.is_empty())?;
             let _l = LOCK.lock().unwrap();
-            write_rotation(&rotation_path(g, &mode), &g.data, &maps, mode.is_empty())?;
+            if mode.is_empty() {
+                write_main_rotation(g, &maps)?;
+            } else {
+                write_rotation(&rotation_path(g, &mode), &g.data, &maps, false)?;
+            }
             reload(g);
             Ok(for_helper(listing(g), helper))
         })

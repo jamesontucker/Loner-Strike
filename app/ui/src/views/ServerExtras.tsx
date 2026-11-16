@@ -27,7 +27,8 @@ type Settings = {
 };
 type Data = {
   settings: Settings;
-  rotation: { file: string; main: string[]; modes: Record<string, string[]> };
+  /** main_error: the main rotation couldn't be read (a server on another machine that didn't answer) */
+  rotation: { file: string; main: string[]; main_error?: string | null; modes: Record<string, string[]> };
   modes: { id: string; name: string }[];
   current_mode: string;
   plugin: boolean;
@@ -220,7 +221,8 @@ const OWN_MAP_MODES = new Set(["kreedz", "surf", "soccerjam", "basebuilder", "de
 function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings; onDirty: (v: boolean) => void }) {
   const ask = useConfirm();
   const { run, busy } = useActions();
-  const [scope, setScope] = useState("");
+  // opens on the mode being played when it has its own list (that's the one in use), else the main rotation
+  const [scope, setScope] = useState(() => (d.current_mode && d.rotation.modes[d.current_mode] ? d.current_mode : ""));
   const [draft, setDraft] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
   const dragFrom = useRef<number | null>(null);
@@ -295,7 +297,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
       <div className="panel stack-tight">
         <label className="field rot-scope">
           <span>Which rotation<Info text="The main rotation is used by modes played on everyday maps. Modes played on maps made for them, like Deathrun, Base Builder or Zombie Plague, go through those maps on their own. Any mode can also have its own list, which takes over while that mode is on." /></span>
-          <select value={scope} onChange={(e) => pickScope(e.target.value)}>
+          <select value={scope} onChange={(e) => pickScope(e.target.value)} aria-label="Which rotation">
             <option value="">Main rotation (every mode, {d.rotation.file})</option>
             {byName(d.modes).map((m) => (
               <option key={m.id} value={m.id}>
@@ -322,7 +324,9 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
           </div>
         ) : (
           <>
-            {list.length === 0 ? (
+            {!scope && d.rotation.main_error ? (
+              <p className="inline-error" role="alert" data-testid="rot-main-error">{d.rotation.main_error} Refresh the page to try again.</p>
+            ) : list.length === 0 ? (
               <p className="muted rot-empty">No maps yet. Add some below.</p>
             ) : (
               <ol className="rot-list" aria-label="Maps in the rotation">
@@ -395,7 +399,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
             )}
 
             <div className="row">
-              <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && list.length === 0)} label="Save rotation" busyLabel="Saving…" onClick={save} />
+              <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && (list.length === 0 || !!d.rotation.main_error))} label="Save rotation" busyLabel="Saving…" onClick={save} />
               <button className="btn" disabled={list.length < 2} onClick={shuffle}>Shuffle</button>
               {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
               {scope && own && <BusyButton className="btn danger push" busy={busy(rotKey("drop"))} disabled={rotBusy} label={OWN_MAP_MODES.has(scope) ? "Use the maps made for it" : "Use the main rotation"} busyLabel="Removing…" onClick={dropOwn} />}
