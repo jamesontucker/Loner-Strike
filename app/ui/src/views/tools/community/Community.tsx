@@ -288,7 +288,8 @@ function Badges({ list, trust, listed }: { list: Entry["badges"]; trust?: Trust;
       {list.map((b) => (
         <span key={b} className={`tag cm-badge cm-badge-${b}`} title={BADGE_LABEL[b].help}>{BADGE_LABEL[b].label}</span>
       ))}
-      {trust && (trust.level === "reviewed" || trust.level === "verified" || trust.level === "unreviewed") && (
+      {/* (no negative tag on a page that's only tagged on GameBanana: only the positive Checked) */}
+      {trust && (trust.level === "reviewed" || trust.level === "verified" || (trust.level === "unreviewed" && listed)) && (
         <span className={`tag cm-trust cm-trust-${trust.level}`} title={trust.note}>{trust.label}</span>
       )}
       {trust?.risks?.map((r) => (
@@ -574,7 +575,7 @@ function Creation({ d }: { d: Details }) {
             <p className="cm-ok">Installed.{d.kind === "spray" ? " Pick it in Get more > Sprays to use it." : ""}</p>
           ) : (
             <>
-              <button className="btn primary" disabled={!d.canTry || getting !== null} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : d.kind === "creature" ? "Get" : "Try it"}</button>
+              <button className="btn primary cm-tryit" disabled={!d.canTry || getting !== null} title={!d.canTry ? d.why || (d.trust.allowed ? undefined : d.trust.note) : undefined} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : d.kind === "creature" ? "Get" : "Try it"}</button>
               {d.kind === "map" && d.item?.source && <RemixButton model={d.model} id={d.id} name={d.name} />}
               {missingNeeds.length > 0 && (
                 <button className="btn" disabled={!d.canTry || getting !== null} onClick={() => void getEverything()} title="The mode plus the maps and content it needs, each through its own installer and checks">
@@ -688,6 +689,8 @@ function badgesOf(d: Details): Entry["badges"] {
 }
 
 function TrustNote({ trust, listed }: { trust: Trust; listed: boolean }) {
+  // a mode that's only tagged on GameBanana: the plain reason, no "Not checked" label
+  if (!listed && trust.level === "unreviewed") return <p className="muted small-note" data-testid="cm-not-listed">{trust.note}</p>;
   const tone = trust.level === "blocked" || trust.level === "unreviewed" ? "bad" : trust.level === "verified" ? "warn" : "ok";
   return (
     <p className={`cm-trustline ${tone}`}>

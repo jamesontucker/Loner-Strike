@@ -57,6 +57,7 @@ test("Checked badge on listed creations, Checked only, and a tag-only mode can't
     await expect(card(n).getByTestId("cm-checked")).toHaveAttribute("title", HELP);
   }
   for (const n of ["de_tagonly", "Tag-only Mode"]) await expect(card(n).getByTestId("cm-checked")).toHaveCount(0);
+  await expect(card("Tag-only Mode")).not.toContainText("Not checked");
   await expect(grid.getByRole("listitem").first()).toContainText("br_valley");
   if (dir) await page.screenshot({ path: `${dir}/browse-all-${w}.png`, fullPage: true });
 
@@ -84,13 +85,21 @@ test("Checked badge on listed creations, Checked only, and a tag-only mode can't
   await expect(page.getByRole("heading", { name: "de_tagonly" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("cm-checked")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Try it" })).toBeEnabled();
+  await expect(page.getByText("isn't in the Loner-Strike list yet", { exact: false })).toBeVisible();
+  await expect(page.getByText("Not checked", { exact: false })).toHaveCount(0);
+  if (dir) await page.screenshot({ path: `${dir}/detail-tag-only-map-${w}.png`, fullPage: true });
 
   // a tag-only mode: no badge, can't be tried, and says why
   await page.getByRole("button", { name: "Back to the list" }).click();
   await card("Tag-only Mode").getByRole("button").click();
   await expect(page.getByRole("heading", { name: "Tag-only Mode" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("cm-checked")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Try it" })).toBeDisabled();
-  await expect(page.getByText(MODE_NOTE)).toBeVisible();
+  const tryIt = page.getByRole("button", { name: "Try it" });
+  await expect(tryIt).toBeDisabled();
+  await expect(tryIt).toHaveAttribute("title", MODE_NOTE);
+  expect(Number(await tryIt.evaluate((e) => getComputedStyle(e).opacity))).toBeLessThan(0.6);
+  await expect(page.getByTestId("cm-not-listed")).toHaveText(MODE_NOTE);
+  // no negative label on a tag-only page: only the positive Checked exists
+  await expect(page.getByText("Not checked", { exact: false })).toHaveCount(0);
   if (dir) await page.screenshot({ path: `${dir}/detail-tag-only-mode-${w}.png`, fullPage: true });
 });

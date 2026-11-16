@@ -187,3 +187,6 @@ p.cm-line { display: block; width: auto; padding-top: 0; padding-bottom: 0; padd
 /* Editable source: the checkbox and the project picker each on a row of their own, with room between */
 .cm-source > label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cm-source > label > input[type="checkbox"] { margin: 0; }
+
+/* Try it when it can't be: clearly off (the global disabled primary is only dimmed a little) */
+.btn.primary.cm-tryit:disabled:not([aria-busy="true"]) { opacity: .45; cursor: not-allowed; }
