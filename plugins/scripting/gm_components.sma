@@ -1040,7 +1040,8 @@ stock comp_init(s)
 			set_model(ent, m, g_kind[s] == K_CRATE ? DEFAULT_CRATE : DEFAULT_BOX);
 			engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 24.0});
 			set_pev(ent, pev_movetype, MOVETYPE_NONE);
-			/* crates turn solid once nobody stands in them (solid_when_clear) */
+			/* never solid: loot and crates must not block a doorway or trap anyone (they're opened
+			   by looking at them with USE, and bots go by position, so nothing needs to touch them) */
 			set_pev(ent, pev_solid, SOLID_NOT);
 			g_aux[s] = g_kind[s] == K_LOOT ? 1 : 0;
 			if (g_kind[s] == K_LOOT)
@@ -2148,7 +2149,8 @@ stock tick_zone(s, bool:sec)
 			ExecuteForward(g_fwZoneTick, ret, g_ent[s], p, g_pf[s][Z_DMG]);
 			if (ret < PLUGIN_HANDLED)
 			{
-				fade(p, 200, 0, 0, 80, 0.4);
+				/* a faint red tint held until the next tick (it stays on while they're outside) */
+				fade_hold(p, 200, 0, 0, 60, 0.5, 0.8);
 				hurt(p, g_ent[s], g_pf[s][Z_DMG], DMG_GENERIC);
 			}
 		}
@@ -2180,6 +2182,12 @@ stock zone_shrink(s, const Float:c[3], Float:r, Float:secs)
 	g_pf[s][Z_T0] = g_now;
 	g_pf[s][Z_T1] = g_now + floatmax(secs, 0.1);
 	pulse(g_va[s], g_pf[s][Z_FROMR]);
+	/* a horn as it starts closing (the game's own sound, played on each player's computer: nothing
+	   to load or download) */
+	if (secs >= 1.0)
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_connected(p) && !g_bot[p])
+				client_cmd(p, "spk ambience/rd_shipshorn");
 	hint_comp(s);
 }
 
@@ -2648,7 +2656,6 @@ stock loot_look(s, bool:full)
 
 stock tick_loot(s)
 {
-	solid_when_clear(s, SOLID_BBOX);
 	if (g_state[s] == 1)
 	{
 		if (g_pf[s][W_RESPAWN] > 0.0 && g_now >= g_pf[s][W_BACKAT])
@@ -2789,7 +2796,7 @@ stock tick_crate(s, bool:sec)
 			set_pev(ent, pev_movetype, MOVETYPE_NONE);
 			engfunc(EngFunc_SetOrigin, ent, g_org[s]);
 			engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 24.0});
-			/* never solid around someone standing there: it turns solid once the spot is clear */
+			/* never solid (it mustn't block or trap anyone; USE and bots go by position) */
 			set_pev(ent, pev_solid, SOLID_NOT);
 			g_aux[s] = 1;
 			g_state[s] = CRATE_FULL;
@@ -2809,7 +2816,6 @@ stock tick_crate(s, bool:sec)
 			&& !creature_near(g_org[s], g_org[s], 1500.0))
 			bots_to_crate(s);
 		bots_open(s);
-		solid_when_clear(s, SOLID_BBOX);
 	}
 	if (sec && g_state[s] != CRATE_EMPTY && ki(s, "beacon", 1))
 	{
@@ -4828,6 +4834,22 @@ stock status_icon(id, status, const sprite[], r, g, b)
 	message_end();
 }
 
+/* a tint that stays for `hold` s, then fades out over `secs` */
+stock fade_hold(id, r, g, b, a, Float:secs, Float:hold)
+{
+	if (!g_msgFade || g_bot[id])
+		return;
+	message_begin(MSG_ONE_UNRELIABLE, g_msgFade, _, id);
+	write_short(floatround(secs * 4096.0));
+	write_short(floatround(hold * 4096.0));
+	write_short(0);
+	write_byte(r);
+	write_byte(g);
+	write_byte(b);
+	write_byte(a);
+	message_end();
+}
+
 stock fade(id, r, g, b, a, Float:secs)
 {
 	if (!g_msgFade || g_bot[id])
@@ -5276,7 +5298,7 @@ new g_w3StatHeal[HEAL_KINDS], g_w3StatVest[4], g_w3StatHelm[4], g_w3DcLooted;
 /* match HUD */
 #define W3_TASK_SPEC 7737000
 #define W3_FEED 5
-new g_w3cMatchHud, g_w3SyncTop, g_w3SyncSide;
+new g_w3cMatchHud, g_w3SyncTop, g_w3SyncSide, g_w3SyncCompass;
 new g_w3Kills[33];
 new g_w3Feed[W3_FEED][96];
 new Float:g_w3FeedAt[W3_FEED];
@@ -5388,6 +5410,9 @@ stock w3_init()
 	g_w3cMatchHud = register_cvar("ls_match_hud", "0");
 	g_w3SyncTop = CreateHudSyncObj();
 	g_w3SyncSide = CreateHudSyncObj();
+	/* the compass under the top line, and the "outside the zone" warning (about 7 times a second) */
+	g_w3SyncCompass = CreateHudSyncObj();
+	set_task(0.15, "w3_compass_tick", _, _, _, "b");
 	/* drop-in: how high above the landing spot at most (the sky is the real limit) */
 	g_w3cDropHeight = register_cvar("ls_drop_height", "3000");
 	g_w3fwLanded = CreateMultiForward("ls_on_landed", ET_IGNORE, FP_CELL);
@@ -7229,8 +7254,13 @@ stock w3_match_hud()
 			len += formatex(top[len], charsmax(top) - len, "   %s", zone);
 		if (g_alive[p])
 		{
-			new extra[160], el = 0, nz[64];
+			new extra[200], el = 0, nz[64], zl[48];
+			w3_zone_line(p, z, zl, charsmax(zl));
+			if (zl[0])
+				el += formatex(extra[el], charsmax(extra) - el, "%s", zl);
 			w3_next_zone(p, z, nz, charsmax(nz));
+			if (nz[0] && el)
+				el += formatex(extra[el], charsmax(extra) - el, "    ");
 			if (nz[0])
 				el += formatex(extra[el], charsmax(extra) - el, "%s", nz);
 			if (get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
@@ -7253,6 +7283,109 @@ stock w3_match_hud()
 			set_hudmessage(220, 220, 220, 0.70, 0.16, 0, 0.0, 1.1, 0.0, 0.1, -1);
 			ShowSyncHudMsg(p, g_w3SyncSide, "%s", side);
 		}
+	}
+}
+
+/* the live zone, the one closing in */
+stock w3_zone_now()
+{
+	for (new k = 0; k < g_nslots; k++)
+		if (g_ent[k] && g_kind[k] == K_ZONE && g_on[k])
+			return k;
+	return -1;
+}
+
+/* a compass bearing (degrees clockwise from north) from p to a point */
+stock Float:w3_bearing(p, const Float:to[3])
+{
+	new Float:b = 90.0 - floatatan2(to[1] - g_porg[p][1], to[0] - g_porg[p][0], degrees);
+	while (b < 0.0)
+		b += 360.0;
+	while (b >= 360.0)
+		b -= 360.0;
+	return b;
+}
+
+stock w3_heading_word(Float:b, out[], len)
+{
+	static const names[8][] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+	copy(out, len, names[floatround(b / 45.0) % 8]);
+}
+
+/* "Safe zone: 900 m NE" outside or near its edge, "In the zone" otherwise */
+stock w3_zone_line(p, z, out[], len)
+{
+	out[0] = EOS;
+	if (z < 0)
+		return;
+	new Float:r = zone_radius_now(z), Float:d = dist2d(g_porg[p], g_va[z]), w[4];
+	w3_heading_word(w3_bearing(p, g_va[z]), w, charsmax(w));
+	if (d > r)
+		formatex(out, len, "Safe zone: %d m %s", floatround((d - r) * 0.0254), w);
+	else if (r - d < floatmax(400.0, r * 0.15))
+		formatex(out, len, "Zone edge: %d m (center %s)", floatround((r - d) * 0.0254), w);
+	else
+		copy(out, len, "In the zone");
+}
+
+/* the compass strip round where a player faces (15-degree steps, the facing one in brackets), the
+   safe zone's direction on it (Z, or an arrow at the edge), and outside the zone a red warning */
+public w3_compass_tick()
+{
+	if (!get_pcvar_num(g_w3cMatchHud) || g_w3Lobby)
+		return;
+	new z = w3_zone_now();
+	new strip[160], Float:ang[3];
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_bot[p] || !is_user_connected(p))
+			continue;
+		pev(p, pev_v_angle, ang);
+		new Float:h = 90.0 - ang[1];
+		while (h < 0.0)
+			h += 360.0;
+		while (h >= 360.0)
+			h -= 360.0;
+		new center = (floatround(h / 15.0) * 15) % 360;
+		/* where the zone's middle is, as steps from the center (outside -6..6: off the strip) */
+		new zstep = 99;
+		new bool:outside = false, w[4];
+		if (z >= 0)
+		{
+			new Float:zb = w3_bearing(p, g_va[z]), Float:off = zb - float(center);
+			while (off > 180.0)
+				off -= 360.0;
+			while (off < -180.0)
+				off += 360.0;
+			zstep = floatround(off / 15.0);
+			outside = dist2d(g_porg[p], g_va[z]) > zone_radius_now(z);
+			w3_heading_word(zb, w, charsmax(w));
+		}
+		new n = 0;
+		n += formatex(strip[n], charsmax(strip) - n, "%s", z >= 0 && zstep < -6 ? "<< " : "   ");
+		for (new k = -6; k <= 6; k++)
+		{
+			new a = (center + 15 * k + 360) % 360, t[8];
+			if (a % 45 == 0)
+				w3_heading_word(float(a), t, charsmax(t));
+			else
+				copy(t, charsmax(t), ".");
+			if (k == zstep && k)
+				copy(t, charsmax(t), "Z");
+			if (!k)
+				n += formatex(strip[n], charsmax(strip) - n, " [%s%s] ", t, zstep == 0 ? "*" : "");
+			else
+				n += formatex(strip[n], charsmax(strip) - n, " %s ", t);
+		}
+		n += formatex(strip[n], charsmax(strip) - n, "%s", z >= 0 && zstep > 6 ? " >>" : "   ");
+		if (outside)
+		{
+			formatex(strip[n], charsmax(strip) - n, "^nOUTSIDE THE ZONE: go %s", w);
+			set_hudmessage(255, 60, 50, -1.0, 0.11, 0, 0.0, 0.3, 0.0, 0.05, -1);
+		}
+		else
+			set_hudmessage(230, 230, 210, -1.0, 0.11, 0, 0.0, 0.3, 0.0, 0.05, -1);
+		ShowSyncHudMsg(p, g_w3SyncCompass, "%s", strip);
 	}
 }
 
