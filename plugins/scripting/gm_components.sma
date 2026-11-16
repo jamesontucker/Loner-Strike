@@ -572,6 +572,11 @@ public task_round_fallback()
 
 /* the map's env_fog density (from its keys), and the draw distance the drop phase put aside */
 new g_kvDensityEnt, Float:g_kvDensity, Float:g_zmaxOld;
+/* the storm's fog is on for this player (outside the zone) */
+new bool:g_stormFog[33];
+/* the gear panel: off for this player (they turned it off with /gear; kept per SteamID) */
+new bool:g_gearOff[33];
+new Trie:g_gearOffIds = Invalid_Trie;
 
 public plugin_end()
 {
@@ -2141,6 +2146,13 @@ stock tick_zone(s, bool:sec)
 		{
 			inside_set(p, s, out);
 			fwd3(g_fwZoneCross, g_ent[s], p, out ? 1 : 0);
+		}
+		/* the storm's fog outside (not while still dropping in: that has its own haze), the map's
+		   own back inside; sent only when it changes */
+		if (!g_bot[p] && out != g_stormFog[p] && !w3_falling(p))
+		{
+			g_stormFog[p] = out;
+			w3_storm_fog(p, out);
 		}
 		if (!out)
 		{
@@ -5009,7 +5021,7 @@ stock zone_beams(s, Float:r)
 		/* not while dropping in from the sky (the ring would hang across the sky): from the landing on */
 		if (w3_falling(p) || !(pev(p, pev_flags) & FL_ONGROUND))
 			continue;
-		zone_arc(p, g_va[s], r, 24, 80, 160, 255, 140);
+		zone_wall(p, g_va[s], r, 24, 90, 150, 255, 110);
 		if (g_pf[s][Z_TOR] < r - 1.0)
 			zone_arc(p, g_vb[s], g_pf[s][Z_TOR], 16, 255, 255, 255, 70);
 	}
@@ -5032,6 +5044,42 @@ stock zone_arc(id, const Float:c[3], Float:r, segs, cr, cg, cb, bright)
 		zone_arc_point(c, r, mid - 60.0 + step * float(i), feet, b);
 		beam(id, a, b, cr, cg, cb, 12, 8, bright);
 		a = b;
+	}
+}
+
+/* the zone's edge as a storm wall near the player: upright beams from the floor up 512 u along
+   the same 120 degrees (as many beams as the ground arc, so the same budget), wide and see-through
+   so they read as a curtain */
+stock zone_wall(id, const Float:c[3], Float:r, segs, cr, cg, cb, bright)
+{
+	if (g_beamLeft[id] < segs || r < 8.0)
+		return;
+	g_beamLeft[id] -= segs;
+	new Float:feet = g_porg[id][2] - 36.0;
+	new Float:mid = floatatan2(g_porg[id][1] - c[1], g_porg[id][0] - c[0], degrees);
+	new Float:step = 120.0 / float(segs - 1), Float:a[3], Float:b[3];
+	for (new i = 0; i < segs; i++)
+	{
+		zone_arc_point(c, r, mid - 60.0 + step * float(i), feet, a);
+		b = a;
+		b[2] += 512.0;
+		/* (wide, a little noise: a haze between the posts) */
+		message_begin(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, _, id);
+		write_byte(TE_BEAMPOINTS);
+		write_coord(floatround(a[0])); write_coord(floatround(a[1])); write_coord(floatround(a[2]));
+		write_coord(floatround(b[0])); write_coord(floatround(b[1])); write_coord(floatround(b[2]));
+		write_short(g_sprBeam);
+		write_byte(0);
+		write_byte(0);
+		write_byte(12);
+		write_byte(120);
+		write_byte(6);
+		write_byte(cr);
+		write_byte(cg);
+		write_byte(cb);
+		write_byte(bright);
+		write_byte(0);
+		message_end();
 	}
 }
 
@@ -5327,11 +5375,6 @@ stock bool:w3_falling(id)
    the color, then the density as a float's four bytes; 0 clears it). About 800 u of view. */
 stock w3_drop_fog(id, bool:on)
 {
-	static msgFog;
-	if (!msgFog)
-		msgFog = get_user_msgid("Fog");
-	if (!msgFog || !is_user_connected(id) || is_user_bot(id))
-		return;
 	/* off: back to the map's own fog (an env_fog), else none */
 	new col[3], Float:dens = 0.0;
 	if (on)
@@ -5341,6 +5384,32 @@ stock w3_drop_fog(id, bool:on)
 	}
 	else
 		dens = w3_map_fog(col);
+	g_stormFog[id] = false;
+	w3_fog(id, col, dens);
+}
+
+/* outside the zone: a purple-grey storm haze; back inside: the map's own fog */
+stock w3_storm_fog(id, bool:on)
+{
+	new col[3], Float:dens;
+	if (on)
+	{
+		col = { 110, 80, 130 };
+		dens = 0.0012;
+	}
+	else
+		dens = w3_map_fog(col);
+	w3_fog(id, col, dens);
+}
+
+/* the game's Fog message to one player: the color, then the density as a float's four bytes */
+stock w3_fog(id, const col[3], Float:dens)
+{
+	static msgFog;
+	if (!msgFog)
+		msgFog = get_user_msgid("Fog");
+	if (!msgFog || !is_user_connected(id) || is_user_bot(id))
+		return;
 	new bits = _:dens;
 	message_begin(MSG_ONE_UNRELIABLE, msgFog, _, id);
 	write_byte(col[0]);
@@ -5431,6 +5500,91 @@ public cmd_w3_gear(id)
 
 public w3_gear_menu(id, key)
 	return PLUGIN_HANDLED;
+
+/* the gear panel's lines: guns with their rarity and ammo, armor, heals */
+stock w3_gear_lines(p, out[], len)
+{
+	static const tag[6][] = { "", "C", "U", "R", "E", "L" };
+	new n = formatex(out, len, "^nGear^n"), weapons[32], num, name[32];
+	get_user_weapons(p, weapons, num);
+	for (new i = 0; i < num && n < len - 40; i++)
+	{
+		new w = weapons[i];
+		if (w <= 0 || w == CSW_KNIFE || w == CSW_C4 || !get_weaponname(w, name, charsmax(name)))
+			continue;
+		new clip, ammo, t = clamp(w3_item_tier(name[7]), 1, 5);
+		get_user_ammo(p, w, clip, ammo);
+		if (w == CSW_HEGRENADE || w == CSW_FLASHBANG || w == CSW_SMOKEGRENADE)
+			n += formatex(out[n], len - n, "%s x%d^n", name[7], max(ammo, 1));
+		else
+			n += formatex(out[n], len - n, "%s [%s] %d/%d^n", name[7], tag[t], clip, ammo);
+	}
+	if (g_w3Vest[p] || g_w3Helm[p])
+		n += formatex(out[n], len - n, "Vest %d  Helmet %d^n", g_w3Vest[p], g_w3Helm[p]);
+	if (w3_heals_total(p))
+		n += formatex(out[n], len - n, "Bandage %d  Medkit %d  Drink %d^n", g_w3Heals[p][HEAL_BANDAGE], g_w3Heals[p][HEAL_MEDKIT], g_w3Heals[p][HEAL_DRINK]);
+	return n;
+}
+
+/* say /gear: the gear panel off or on (remembered for the player's SteamID) */
+public cmd_w3_gear_toggle(id)
+{
+	g_gearOff[id] = !g_gearOff[id];
+	new sid[36];
+	get_user_authid(id, sid, charsmax(sid));
+	if (g_gearOffIds == Invalid_Trie)
+		g_gearOffIds = TrieCreate();
+	if (g_gearOff[id])
+		TrieSetCell(g_gearOffIds, sid, 1);
+	else
+		TrieDeleteKey(g_gearOffIds, sid);
+	w3_gear_save();
+	client_print(id, print_chat, g_gearOff[id] ? "[Loner-Strike] Gear panel off (say /gear for it again, /gearlist for the details)." : "[Loner-Strike] Gear panel on (say /gear to hide it).");
+	return PLUGIN_HANDLED;
+}
+
+/* data/ls_gear_off.txt: the SteamIDs of players who turned the panel off, one a line */
+stock w3_gear_path(path[], len)
+{
+	get_datadir(path, len);
+	add(path, len, "/ls_gear_off.txt");
+}
+
+stock w3_gear_load()
+{
+	new path[192], line[40];
+	w3_gear_path(path, charsmax(path));
+	new f = fopen(path, "rt");
+	if (!f)
+		return;
+	if (g_gearOffIds == Invalid_Trie)
+		g_gearOffIds = TrieCreate();
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line);
+		if (line[0])
+			TrieSetCell(g_gearOffIds, line, 1);
+	}
+	fclose(f);
+}
+
+stock w3_gear_save()
+{
+	new path[192], sid[40];
+	w3_gear_path(path, charsmax(path));
+	new f = fopen(path, "wt");
+	if (!f)
+		return;
+	new TrieIter:it = TrieIterCreate(g_gearOffIds);
+	while (!TrieIterEnded(it))
+	{
+		TrieIterGetKey(it, sid, charsmax(sid));
+		fprintf(f, "%s^n", sid);
+		TrieIterNext(it);
+	}
+	TrieIterDestroy(it);
+	fclose(f);
+}
 new Float:g_w3FallAt[33];
 new Float:g_w3DropSpots[33][2];
 new g_w3NDrop;
@@ -5506,8 +5660,11 @@ stock w3_init()
 	/* for the bots' brain: ls_comp_heal <bot> [kind] starts a heal (it picks the moment, e.g. in cover) */
 	register_srvcmd("ls_comp_heal", "cmd_w3_heal_srv");
 	register_clcmd("say /heal", "cmd_w3_heal_menu");
-	register_clcmd("say /gear", "cmd_w3_gear");
-	register_clcmd("say_team /gear", "cmd_w3_gear");
+	register_clcmd("say /gear", "cmd_w3_gear_toggle");
+	register_clcmd("say_team /gear", "cmd_w3_gear_toggle");
+	register_clcmd("say /gearlist", "cmd_w3_gear");
+	register_clcmd("say_team /gearlist", "cmd_w3_gear");
+	w3_gear_load();
 	register_menucmd(register_menuid("LS Gear"), MENU_KEY_0, "w3_gear_menu");
 	register_clcmd("say_team /heal", "cmd_w3_heal_menu");
 	register_forward(FM_CmdStart, "fm_w3_cmdstart");
@@ -5594,6 +5751,11 @@ public client_putinserver(id)
 {
 	if (g_w3Hooked)
 		w3_reset_player(id);
+	g_stormFog[id] = false;
+	/* the gear panel: on unless this player turned it off before */
+	new sid[36];
+	get_user_authid(id, sid, charsmax(sid));
+	g_gearOff[id] = g_gearOffIds != Invalid_Trie && TrieKeyExists(g_gearOffIds, sid);
 	g_w3Squad[id] = 0;
 	g_w3Invite[id] = 0;
 	g_w3Down[id] = false;
@@ -5602,7 +5764,7 @@ public client_putinserver(id)
 public ham_w3_killed(id, killer, gib)
 {
 	w3_heal_stop(id, false);
-	if (g_w3Falling[id])
+	if (g_w3Falling[id] || g_stormFog[id])
 		w3_drop_fog(id, false);
 	g_w3Falling[id] = false;
 	if (get_pcvar_num(g_w3cDeathCrates) && g_w3SnapN[id])
@@ -7394,9 +7556,10 @@ stock w3_match_hud()
 				el += formatex(extra[el], charsmax(extra) - el, "    ");
 			if (nz[0])
 				el += formatex(extra[el], charsmax(extra) - el, "%s", nz);
-			if (get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
+			/* (armor and heals are in the gear panel when it's on) */
+			if (g_gearOff[p] && get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
 				el += formatex(extra[el], charsmax(extra) - el, "%sVest %d  Helmet %d", el ? "    " : "", g_w3Vest[p], g_w3Helm[p]);
-			if (get_pcvar_num(g_w3cHealCarry) && w3_heals_total(p))
+			if (g_gearOff[p] && get_pcvar_num(g_w3cHealCarry) && w3_heals_total(p))
 				el += formatex(extra[el], charsmax(extra) - el, "%sBandage %d  Medkit %d  Drink %d", el ? "    " : "",
 					g_w3Heals[p][HEAL_BANDAGE], g_w3Heals[p][HEAL_MEDKIT], g_w3Heals[p][HEAL_DRINK]);
 			if (el)
@@ -7409,6 +7572,9 @@ stock w3_match_hud()
 		if (feed[0])
 			sl += formatex(side[sl], charsmax(side) - sl, "%s", feed);
 		sl += w3_side_extra(p, side[sl], charsmax(side) - sl);
+		/* the gear panel, under the feed and the squad (/gear turns it off and on) */
+		if (g_alive[p] && !g_gearOff[p])
+			sl += w3_gear_lines(p, side[sl], charsmax(side) - sl);
 		if (side[0])
 		{
 			set_hudmessage(220, 220, 220, 0.70, 0.16, 0, 0.0, 1.1, 0.0, 0.1, -1);
