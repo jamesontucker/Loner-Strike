@@ -437,6 +437,11 @@ def main():
         # the private mod channel's cards and buttons, through the bot application
         bot_token = os.environ.pop("DISCORD_BOT_TOKEN", "").strip()
         channel = os.environ.get("DISCORD_CHANNEL_ID", "").strip()
+        # the public feed #new-on-community: a card when a creation is first listed or gets a new file
+        public = os.environ.get("DISCORD_PUBLIC_CHANNEL_ID", "").strip()
+        if bot_token and public:
+            import modbot
+            community.announcer = cm.Announcer(modbot.Bot(bot_token, public).post)
         if bot_token and channel:
             import modbot
             modbot.Mod(community, modbot.Bot(bot_token, channel), os.environ.get("DISCORD_PUBLIC_KEY", "").strip(),

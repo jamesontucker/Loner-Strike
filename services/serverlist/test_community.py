@@ -1445,6 +1445,42 @@ class FileChoice(unittest.TestCase):
         it = json.loads(c.store.get("mod:739197")["item"])
         self.assertEqual((it["file"], it["md5"]), (2000000, "1" * 32))
 
+    def test_the_public_feed_posts_new_listings_and_new_files_only(self):
+        c, _ = make()
+        posts = []
+        c.announcer = cm.Announcer(lambda payload: posts.append(payload) or "1", background=False)
+        c.submit(body(map_item()), "a")
+        self.assertEqual(len(posts), 1, "first listed: a card")
+        card = posts[0]
+        e = card["embeds"][0]
+        self.assertEqual((e["url"], e["fields"][0]["value"]), ("https://gamebanana.com/mods/739197", "Map"))
+        self.assertIn("New on Community", e["footer"]["text"])
+        links = [(b["label"], b["url"]) for b in card["components"][0]["components"]]
+        self.assertEqual(links, [("Open on GameBanana", "https://gamebanana.com/mods/739197"), ("Install in Loner-Strike", cm.INSTALL_LINK)])
+        self.assertTrue(all(b["style"] == 5 for b in card["components"][0]["components"]), "links only: no moderation buttons")
+        # registered again with the same file (or re-checked): nothing new
+        c.submit(body(map_item()), "b")
+        self.assertEqual(len(posts), 1, "the same file: no card")
+        # a new file replaces the listed one: a card, as a new version
+        self.two_files(c)
+        c.submit(body(map_item()), "c")
+        self.assertEqual(len(posts), 2)
+        self.assertIn("new version", posts[1]["embeds"][0]["footer"]["text"])
+        c.submit(body(map_item()), "d")
+        self.assertEqual(len(posts), 2, "that new file again: no card")
+
+    def test_the_public_feed_waits_for_a_moderator(self):
+        c, _ = make()
+        posts = []
+        c.announcer = cm.Announcer(lambda payload: posts.append(payload) or "1", background=False)
+        block(c, SPRAY)
+        c.submit(body(SPRAY_ITEM), "a")
+        self.assertEqual(posts, [], "waiting for a moderator: not public yet")
+        c.moderate("spray:82585", "approve", {})
+        self.assertEqual(len(posts), 1, "approved: a card")
+        self.assertEqual(posts[0]["embeds"][0]["fields"][0]["value"], "Spray")
+        self.assertEqual(cm.Announcer().announce({"md5": "x"}, ""), False, "off without a channel")
+
     def test_a_newer_file_that_fails_keeps_the_listed_one(self):
         for bad in ({"newer_av": "infected"}, {"newer_zip": map_zip(["addons/amxmodx/plugins/x.amxx"])}):
             c, _ = make()

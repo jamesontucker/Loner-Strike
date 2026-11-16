@@ -1243,6 +1243,61 @@ def gb_link(model, gb):
     return f"https://gamebanana.com/{'sprays' if model == 'Spray' else 'mods'}/{gb}"
 
 
+# ---- the public feed (#new-on-community) -----------------------------------------------------
+
+# Discord link buttons take http(s) only, so not the app's loner-strike:// link: the docs say how
+# to open Community and install from it
+INSTALL_LINK = "https://lonerstrike.com/docs.html#community-try"
+KIND_WORDS = {"map": "Map", "mode": "Game mode", "prefab": "Prefab", "spray": "Spray", "texture": "Textures", "creature": "Creature"}
+
+
+def public_card(item, update):
+    """The public card for a creation: its first picture, name, kind, author, a one-line summary,
+    and links to its page and to installing it from the app. No moderation buttons."""
+    def plain(s, n):
+        # (embed text: one line, capped, no mentions)
+        return one_line(str(s or ""), n).replace("@", "@​")
+    link = gb_link(item["model"], item["gb"])
+    kind = KIND_WORDS.get(item.get("kind", ""), "Creation")
+    embed = {"title": plain(item.get("name") or "A new creation", 200), "url": link,
+             "fields": [{"name": "Kind", "value": kind, "inline": True}, {"name": "By", "value": plain(item.get("author") or "unknown", 60), "inline": True}],
+             "footer": {"text": "A new version, checked again" if update else "New on Community: passed Loner-Strike's automatic checks"},
+             "color": 0x7C9A5B}
+    summary = plain(item.get("summary"), 200)
+    if summary:
+        embed["description"] = summary
+    shot = next((u for u in item.get("screenshots") or [] if isinstance(u, str) and u.startswith("https://")
+                 and u[8:].split("/", 1)[0] in SHOT_HOSTS), None)
+    if shot:
+        embed["thumbnail"] = {"url": shot}
+    buttons = [{"type": 2, "style": 5, "label": "Open on GameBanana", "url": link},
+               {"type": 2, "style": 5, "label": "Install in Loner-Strike", "url": INSTALL_LINK}]
+    return {"embeds": [embed], "components": [{"type": 1, "components": buttons}]}
+
+
+class Announcer:
+    """The public #new-on-community feed: a card when a creation is first listed, or when a new
+    file (a new MD5) replaces its listed one; never on a re-check or a re-listing of the same file.
+    Off without a poster; never blocks the caller."""
+
+    def __init__(self, post=None, background=True):
+        self._post, self.background = post, background
+
+    def announce(self, item, before_md5):
+        if not self._post or not item or item.get("md5") == before_md5:
+            return False
+        payload = public_card(item, update=bool(before_md5))
+
+        def go():
+            if not self._post(payload):
+                log(f"the public feed's post for {item.get('model')}:{item.get('gb')} didn't go through")
+        if self.background:
+            threading.Thread(target=go, daemon=True).start()
+        else:
+            go()
+        return True
+
+
 # ---- the store ------------------------------------------------------------------------------
 
 MIGRATIONS = [
@@ -1903,6 +1958,8 @@ class Community:
         # the publish workflow's token: it may read the published index (GET /community/publish/...), nothing else
         self.publish_digest = hashlib.sha256(publish_token.encode()).digest() if len(publish_token) >= MIN_TOKEN else None
         self.notifier = notifier or Notifier("")
+        # the public feed (serverlist.py sets it when DISCORD_PUBLIC_CHANNEL_ID is set)
+        self.announcer = Announcer()
         self.get = get
         self.get_range = get_range
         self.admin_local = admin_local
@@ -2156,6 +2213,8 @@ class Community:
         fresh = row is None
         row = row or new_row(model, gb, t)
         was = row["state"]
+        # (the file listed until now, for the public feed: a new one is news, the same one isn't)
+        before_md5 = (_j(row["item"]) or {}).get("md5", "") if row.get("item") else ""
         row.update(kind=item["kind"], submitter_id=facts["submitterId"], submitter=facts["author"], app=app, updated=t)
         data = json.dumps(item, ensure_ascii=False)
         if look:
@@ -2182,6 +2241,8 @@ class Community:
         log(f"registration {key} {row['state']} ({'new' if fresh else 'update'})")
         self.notify_new(key, item, look, not fresh and was in ("listed", "hidden"), fresh,
                         why="blocked creator" if look and blocked else f"{was} by the team" if look else "")
+        if not look and row["state"] == "listed":
+            self.announcer.announce(item, before_md5)
         return 200, {"ok": True, "key": key, "state": "pending" if look else row["state"]}
 
     def _earliest_carrying(self, model, gb, kind, uids, at):
@@ -2502,6 +2563,7 @@ class Community:
                 raise Reject(409, "It's pulled. Restore it first if it should come back.")
             if live:
                 cand = self._verify_live(row, cand)
+            before_md5 = (_j(row["item"]) or {}).get("md5", "") if row["item"] else ""
             row.update(item=json.dumps(cand, ensure_ascii=False), proposed=None, state="listed", reason="", updated=t, rejected_md5="",
                        hidden_by="", check_note="")
             # its uids are settled now, as for any listing (a held submission took none)
@@ -2510,6 +2572,7 @@ class Community:
             at = self._earliest_carrying(p[0], p[1], cand.get("kind") or "mode", uids, cand.get("fileAt") or 0) if uids and live else (cand.get("fileAt") or 0)
             for cid in self.store.put(row, "approve", reason, claim=self._claim(uids, row["submitter_id"], row["submitter"], at)):
                 self.notify_uid_conflict(cid)
+            self.announcer.announce(cand, before_md5)
         elif action == "reject":
             row = self._need(key)
             cand = _j(row["proposed"])
