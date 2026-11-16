@@ -89,8 +89,9 @@ p.cm-line { display: block; width: auto; padding-top: 0; padding-bottom: 0; padd
 .cm-register input:not([type="checkbox"]) { flex: 1 1 260px; min-width: 0; }
 .cm-register .cm-agree input[type="checkbox"] { flex: none; width: 16px; height: 16px; min-width: 16px; }
 .cm-result { display: grid; gap: 8px; justify-items: start; }
-/* what's said spans the result's width (only the buttons keep their own size) */
-.cm-result > p, .cm-result > .inline-error { justify-self: stretch; }
+/* every result line (listed, sent, refused, its fix, the list not answering and its copy row,
+   a plugin mode) spans the result's width; only the buttons keep their own size */
+.cm-result > :not(button):not(.btn) { justify-self: stretch; }
 /* a refusal: the app's inline error (err-text), its ✕ on the first line */
 .cm-refusal { margin: 0; }
 .cm-refusal p.cm-line.err-text { color: var(--danger); }

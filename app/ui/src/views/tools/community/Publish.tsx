@@ -862,8 +862,9 @@ function RegisterForm({ file, onDone }: { file: string; onDone: () => void }) {
       setStudio(!!r.studio);
       setCheckErr(null);
       if (r.error && !r.state) {
-        if (r.studio) return;
+        // (each answer replaces the last one shown)
         setResult(null);
+        if (r.studio) return;
         return setCheckErr(r.error);
       }
       setResult({ state: r.state, error: r.error, copy: r.copy });
@@ -889,21 +890,21 @@ function RegisterForm({ file, onDone }: { file: string; onDone: () => void }) {
         )}
         {studio && (
           <div className="cm-result" role="status">
-            <p className="cm-line warn">Plugin modes can't be shared yet. A mode made in Game Mode Studio can: the app builds its code on each player's computer.</p>
+            <p className="cm-line warn" data-testid="register-result">Plugin modes can't be shared yet. A mode made in Game Mode Studio can: the app builds its code on each player's computer.</p>
             <button className="btn primary" onClick={() => useNav.getState().go("tools", "studio")}>Open in Game Mode Studio</button>
           </div>
         )}
         {result && (
           <div className="cm-result" role="status">
             {result.state === "listed" || result.state === "sent" ? (
-              <p className="cm-line ok">Listed. It shows up in Community within a few minutes, once the Loner-Strike list is next updated.</p>
+              <p className="cm-line ok" data-testid="register-result">Listed. It shows in Community within a few minutes.</p>
             ) : result.state === "pending" ? (
-              <p className="cm-line ok">Sent. A Loner-Strike moderator looks at it first; Published shows when it's listed.</p>
+              <p className="cm-line ok" data-testid="register-result">Sent. A Loner-Strike moderator looks at it first; Published shows when it's listed.</p>
             ) : result.state === "refused" ? (
               <Refused why={result.error || "the Loner-Strike list gave no reason."} />
             ) : (
               <>
-                <p className="cm-line warn">The page checks out, but the Loner-Strike list didn't answer. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
+                <p className="cm-line warn" data-testid="register-result">The page checks out, but the Loner-Strike list didn't answer. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
                 <CopyRow label="Entry" value={result.copy} long />
               </>
             )}
