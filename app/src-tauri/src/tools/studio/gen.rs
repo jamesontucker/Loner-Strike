@@ -3045,7 +3045,12 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     None => format!("ls_drop_in({})", p()),
                 },
                 "br.lobby" => format!("ls_squad_lobby(floatmax({}, 0.0))", inp("secs", "number")),
-                "wave.table" => format!("ls_wave_table({}, {}, {})", pawn_str(&name_text(gen.text(n, def, "section"))), if gen.choice(n, def, "team") == "1" { 1 } else { 2 }, if gen.boolean(n, def, "creatures") { "true" } else { "false" }),
+                "wave.table" => {
+                    let t = format!("ls_wave_table({}, {}, {})", pawn_str(&name_text(gen.text(n, def, "section"))), if gen.choice(n, def, "team") == "1" { 1 } else { 2 }, if gen.boolean(n, def, "creatures") { "true" } else { "false" });
+                    // (only when not the default, hunt and never flee: a 1.0 graph makes the plugin it did)
+                    let (hunt, own) = (gen.boolean(n, def, "hunt"), gen.choice(n, def, "flee") == "own");
+                    if hunt && !own { t } else { format!("{t}\n\t\tls_wave_creature_ai({hunt}, {})", if own { 1 } else { 0 }) }
+                }
                 "wave.table_off" => "ls_wave_table_off()".into(),
                 "wave.scale" => format!("ls_wave_scale(floatclamp({}, 0.1, 10.0), floatclamp({}, 0.1, 10.0))", inp("count", "number"), inp("hp", "number")),
                 "wave.cap" => format!("ls_wave_cap(clamp(floatround({}), 0, 64))", inp("n", "number")),

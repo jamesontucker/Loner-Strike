@@ -15273,7 +15273,7 @@
 "wave.table":{
 "title":"Round Table On",
 "category":"Waves",
-"what":"Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix.",
+"what":"Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix. Creatures hunt players: on, they go for the defenders from anywhere; off, each type keeps its own aggression (a hound only fights what comes near). Flee when badly hurt: Never, they keep coming; Creature's own, each type runs at its own flee point. A waves.ini section (hunt =, flee =) or one wave's line (hunt=0 flee=own) can still say otherwise for its waves.",
 "pins":[
 {
 "id":"exec",
@@ -15298,6 +15298,14 @@
 {
 "id":"creatures",
 "help":"On or off."
+},
+{
+"id":"hunt",
+"help":"On or off."
+},
+{
+"id":"flee",
+"help":"Pick one: Never, Creature's own."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -15328,7 +15336,9 @@
 "params":{
 "section":"",
 "team":"2",
-"creatures":true
+"creatures":true,
+"hunt":true,
+"flee":"never"
 }
 }
 ],

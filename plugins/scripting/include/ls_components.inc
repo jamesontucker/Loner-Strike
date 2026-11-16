@@ -677,6 +677,10 @@ forward ls_on_turret(ent, owner);
  */
 native ls_wave_table(const section[] = "", team = 2, bool:creatures = true);
 native ls_wave_table_off();
+/* how the round table's creatures act (the mode's default; a waves.ini section or one wave's line
+   can still say otherwise): hunt the defenders from anywhere (false: each type's own aggression),
+   flee 0 = never when badly hurt, 1 = at the type's own flee point */
+native ls_wave_creature_ai(bool:hunt = true, flee = 0);
 /** The mode's difficulty: times the count and the health. */
 native ls_wave_scale(Float:count, Float:hp);
 /** Alive at once (0: 16 + 2 a defender, 20-96); never over the game DLL's adaptive cap. */

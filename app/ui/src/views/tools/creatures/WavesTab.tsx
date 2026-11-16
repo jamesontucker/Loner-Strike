@@ -171,6 +171,17 @@ export function WavesTab() {
               </label>
             </span>
           </Row>
+          <Row name="Creatures hunt players" note={w.hunt === false ? "Each type keeps its own aggression: a hound only fights what comes near" : "They go for the defenders from anywhere"}>
+            <label className="tl-check">
+              <input type="checkbox" checked={w.hunt !== false} onChange={(e) => setW({ ...w, hunt: e.target.checked ? null : false })} /> Hunt
+            </label>
+          </Row>
+          <Row name="Flee when badly hurt" note={w.flee === "own" ? "At each type's own flee point" : "They keep coming"}>
+            <select value={w.flee === "own" ? "own" : "never"} aria-label="Flee when badly hurt" onChange={(e) => setW({ ...w, flee: e.target.value === "own" ? "own" : null })}>
+              <option value="never">Never</option>
+              <option value="own">Creature's own</option>
+            </select>
+          </Row>
         </Rows>
       </div>
 
@@ -179,7 +190,7 @@ export function WavesTab() {
           The mix <Info text="Each enemy a wave brings is one of these types, picked by weight: with zombie 10 and runner 5, two in three are zombies. A wave with no line of its own uses the line before it." />
         </h4>
         <div className="cs-wave-table" role="table" aria-label="Wave mixes">
-          <div className="cs-wave-head" role="row" style={{ gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${cols.length}, minmax(64px, 90px)) minmax(120px, 1fr) 36px` }}>
+          <div className="cs-wave-head" role="row" style={{ gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${cols.length}, minmax(64px, 90px)) minmax(120px, 1fr) minmax(200px, auto) 36px` }}>
             <span role="columnheader">Waves</span>
             {cols.map((t, i) => (
               <span key={t} role="columnheader" className="cs-col">
@@ -188,12 +199,15 @@ export function WavesTab() {
               </span>
             ))}
             <span role="columnheader">Mix</span>
+            <span role="columnheader">
+              These waves <Info text="Hunt and flee for just these waves; Default uses the settings above." />
+            </span>
             <span />
           </div>
           {w.rows.map((r, i) => {
             const total = cols.reduce((n, t) => n + weight(r, t), 0) || 1;
             return (
-              <div key={i} className="cs-wave-row" role="row" style={{ gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${cols.length}, minmax(64px, 90px)) minmax(120px, 1fr) 36px` }}>
+              <div key={i} className="cs-wave-row" role="row" style={{ gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${cols.length}, minmax(64px, 90px)) minmax(120px, 1fr) minmax(200px, auto) 36px` }}>
                 <span className="cs-wave-range" role="cell">
                   <input className="search cs-numbox" type="number" min={1} value={r.from} aria-label="From wave" onChange={(e) => setRow(i, { ...r, from: Math.max(1, Math.round(Number(e.target.value) || 1)) })} />
                   {r.to == null ? (
@@ -214,6 +228,18 @@ export function WavesTab() {
                 ))}
                 <span className="cs-mixbar" role="cell" title={cols.map((t) => `${t} ${Math.round((weight(r, t) / total) * 100)}%`).join(", ")}>
                   {cols.map((t, k) => (weight(r, t) > 0 ? <span key={t} style={{ flexGrow: weight(r, t), background: COLOURS[k % COLOURS.length] }} /> : null))}
+                </span>
+                <span className="row" role="cell">
+                  <select value={r.hunt == null ? "" : r.hunt ? "1" : "0"} aria-label={`${rowLabel(r)}: hunt players`} onChange={(e) => setRow(i, { ...r, hunt: e.target.value === "" ? null : e.target.value === "1" })}>
+                    <option value="">Hunt: default</option>
+                    <option value="1">Hunt</option>
+                    <option value="0">Own aggression</option>
+                  </select>
+                  <select value={r.flee ?? ""} aria-label={`${rowLabel(r)}: flee when badly hurt`} onChange={(e) => setRow(i, { ...r, flee: e.target.value || null })}>
+                    <option value="">Flee: default</option>
+                    <option value="never">Never flee</option>
+                    <option value="own">Creature's own</option>
+                  </select>
                 </span>
                 <button type="button" className="btn small" aria-label={`Remove ${rowLabel(r)}`} disabled={w.rows.length <= 1} title={w.rows.length <= 1 ? "A wave needs at least one row." : undefined} onClick={() => setW({ ...w, rows: w.rows.filter((_, j) => j !== i) })}>
                   ×

@@ -10279,6 +10279,10 @@ new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][W
 new g_wtFileBoss[32] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
 /* own_rounds = 1 in the section: the built-in boss waves, pack rounds and heavies stay; the rows give the everyday mix */
 new bool:g_wtFileRounds;
+/* how a wave's creatures act: hunt the defenders from anywhere (else each type's own aggression),
+   and never flee when badly hurt (else the type's flee point). The mode's (ls_wave_creature_ai),
+   then a waves.ini section's hunt= / flee=, then a wave line's own hunt=0 flee=own; -1 = not set */
+new g_wtHunt = 1, g_wtFlee = 0, g_wtFileHunt = -1, g_wtFileFlee = -1, g_wtRowHunt[WT_MAX_ROWS], g_wtRowFlee[WT_MAX_ROWS];
 new Float:g_wtCallAt;
 new g_wtBoss[32], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
 
@@ -10342,6 +10346,7 @@ stock up_natives()
 	register_native("ls_pickup_spawn", "n_pickup_spawn");
 	register_native("ls_wave_table", "n_wave_table");
 	register_native("ls_wave_table_off", "n_wave_table_off");
+	register_native("ls_wave_creature_ai", "n_wave_creature_ai");
 	register_native("ls_wave_scale", "n_wave_scale");
 	register_native("ls_wave_cap", "n_wave_cap");
 	register_native("ls_wave_tiers", "n_wave_tiers");
@@ -13308,10 +13313,26 @@ stock wt_creature(const type[], const Float:o[3], speed)
 		set_kv(ent, "speed", v);
 	}
 	set_kv(ent, "behaviour", "chase");
-	/* a wave keeps coming: never runs when hurt, and goes for the defenders from anywhere (the
-	   hound's own 0.35 aggression only fights what comes near, so hounds waited at the spawn) */
-	set_kv(ent, "aggression", "1");
-	set_kv(ent, "flee_hp", "0");
+	/* by default a wave keeps coming: goes for the defenders from anywhere (the hound's own 0.35
+	   aggression only fights what comes near, so hounds waited at the spawn) and never runs when
+	   hurt. A mode, a waves.ini section or one wave's line can give the types their own way. */
+	new hunt = g_wtHunt, flee = g_wtFlee;
+	if (g_wtFileHunt >= 0)
+		hunt = g_wtFileHunt;
+	if (g_wtFileFlee >= 0)
+		flee = g_wtFileFlee;
+	if (g_wtNrows > 0)
+	{
+		new r = wt_row(g_wave);
+		if (g_wtRowHunt[r] >= 0)
+			hunt = g_wtRowHunt[r];
+		if (g_wtRowFlee[r] >= 0)
+			flee = g_wtRowFlee[r];
+	}
+	if (hunt)
+		set_kv(ent, "aggression", "1");
+	if (!flee)
+		set_kv(ent, "flee_hp", "0");
 	set_kv(ent, "hates", g_wtTeam == 1 ? "t" : "ct");
 	new Float:ang[3];
 	ang[1] = random_float(0.0, 360.0);
@@ -13344,6 +13365,8 @@ stock wt_load(const section[])
 	g_wtFileHp = 1.0;
 	g_wtTypeHp = false;
 	g_wtFileRounds = false;
+	g_wtFileHunt = -1;
+	g_wtFileFlee = -1;
 	if (!section[0])
 		return;
 	new path[192];
@@ -13392,6 +13415,10 @@ stock wt_load(const section[])
 			g_wtTypeHp = str_to_num(val) != 0;
 		else if (equal(key, "own_rounds"))
 			g_wtFileRounds = str_to_num(val) != 0;
+		else if (equal(key, "hunt"))
+			g_wtFileHunt = str_to_num(val) != 0 ? 1 : 0;
+		else if (equal(key, "flee"))
+			g_wtFileFlee = equali(val, "own") ? 1 : 0;
 		else if (equal(key, "wave", 4) && g_wtNrows < WT_MAX_ROWS)
 		{
 			new r = g_wtNrows;
@@ -13420,11 +13447,24 @@ stock wt_load(const section[])
 			if (g_wtRowFrom[r] < 1)
 				continue;
 			g_wtMixN[r] = 0;
+			g_wtRowHunt[r] = -1;
+			g_wtRowFlee[r] = -1;
 			new rest[480], t[32], w[12];
 			copy(rest, charsmax(rest), val);
 			while (rest[0] && g_wtMixN[r] < WT_MAX_MIX)
 			{
 				strtok2(rest, t, charsmax(t), rest, charsmax(rest), ' ', TRIM_FULL);
+				/* this wave's own hunt=0|1 and flee=never|own */
+				if (equali(t, "hunt=", 5))
+				{
+					g_wtRowHunt[r] = str_to_num(t[5]) != 0 ? 1 : 0;
+					continue;
+				}
+				if (equali(t, "flee=", 5))
+				{
+					g_wtRowFlee[r] = equali(t[5], "own") ? 1 : 0;
+					continue;
+				}
 				strtok2(rest, w, charsmax(w), rest, charsmax(rest), ' ', TRIM_FULL);
 				if (!t[0] || !w[0])
 					break;
@@ -13766,6 +13806,15 @@ public n_wave_table(plugin, params)
 	g_wtCreatures = get_param(3) != 0 && g_upCreatures;
 	g_wtOn = true;
 	return g_wtNrows;
+}
+
+/* ls_wave_creature_ai(bool:hunt = true, flee = 0): the mode's default for the round table's creatures
+   (flee 0: never, 1: the type's own flee point) */
+public n_wave_creature_ai(plugin, params)
+{
+	g_wtHunt = get_param(1) != 0 ? 1 : 0;
+	g_wtFlee = get_param(2) != 0 ? 1 : 0;
+	return 1;
 }
 
 public n_wave_table_off(plugin, params)
