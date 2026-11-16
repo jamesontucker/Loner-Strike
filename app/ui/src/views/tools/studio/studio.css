@@ -303,7 +303,7 @@
 .st-results-status { list-style: none; }
 /* Compile: the button, its status icon (gray stale, green ok, yellow warnings, red errors) */
 .st-check { display: inline-flex; align-items: center; gap: 6px; }
-.st-check-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; background: none; font-size: 12px; line-height: 1; cursor: pointer; color: var(--st-muted, #999); padding: 0; }
+.st-check-icon { flex: none; align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; background: none; font-size: 12px; line-height: 1; cursor: pointer; color: var(--st-muted, #999); padding: 0; }
 .st-check-icon.ok { color: var(--st-ok, #5cb85c); }
 .st-check-icon.warn { color: var(--st-warn); }
 .st-check-icon.error, .st-check-icon.failed { color: var(--st-bad); }

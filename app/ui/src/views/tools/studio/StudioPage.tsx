@@ -809,7 +809,7 @@ function Studio({ maps }: ToolProps) {
           )}
           {(() => {
             const shown = full.state === "running" ? "running" : fullStale || full.state === "none" ? "none" : full.state;
-            const icon = shown === "ok" ? "\u2713" : shown === "warn" ? "!" : shown === "error" || shown === "failed" ? "\u2715" : shown === "running" ? "\u2026" : "?";
+            const icon = shown === "ok" ? "\u2713" : shown === "warn" ? "!" : shown === "error" || shown === "failed" ? "\u2715" : shown === "running" ? "\u2026" : "\u2013";
             const text = withStop(fullText(full.state, fullStale) + (full.message ? `: ${full.message}` : "")) + " Click to see Problems.";
             return (
               <button type="button" className={`st-check-icon ${shown}`} data-testid="studio-check-icon" data-state={shown} onClick={() => st.showResults("problems")} title={text} aria-label={text}>
