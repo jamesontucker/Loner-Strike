@@ -608,10 +608,14 @@ def http_get(url, limit, hosts=(GB_HOST,), schemes=("https",), timeout=15):
     return r.status if hasattr(r, "status") else r.code, data
 
 
-def page_url(model, gb):
+def page_url(model, gb, now=None):
+    """A page's ProfilePage address, with a query that changes every 15 s: GameBanana's edge keeps
+    the plain address for minutes, so a tag added just now read as missing there (br_valley,
+    741494, while the same request with a query had it). The app does the same (profile_url)."""
     if model not in ("Mod", "Spray") or not isinstance(gb, int) or not 0 < gb < 100_000_000:
         raise FetchError("bad page")
-    return f"{GB_API}/{model}/{gb}/ProfilePage"
+    t = int(time.time() if now is None else now) // 15
+    return f"{GB_API}/{model}/{gb}/ProfilePage?t={t}"
 
 
 _FILE_HOST = re.compile(r"^(files|filecache\d{1,3})\.gamebanana\.com$")

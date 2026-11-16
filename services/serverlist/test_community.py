@@ -57,7 +57,8 @@ class FakeGB:
 
     def __call__(self, url, limit, **kw):
         self.calls.append(url)
-        assert url.startswith("https://gamebanana.com/apiv11/") and url.endswith("/ProfilePage"), url
+        assert url.startswith("https://gamebanana.com/apiv11/") and "/ProfilePage?t=" in url, url
+        url = url.split("?", 1)[0]
         model, gb = url.split("/")[4], int(url.split("/")[5])
         page = self.pages.get((model, gb), None)
         if isinstance(page, Exception):
@@ -434,6 +435,12 @@ class Pages(unittest.TestCase):
             cm.page_url("Mod", "1/../../x")
         with self.assertRaises(cm.FetchError):
             cm.page_url("Wip", 1)
+        # the page as it is now, never GameBanana's edge copy from minutes ago
+        a = cm.page_url("Mod", 741494, now=1794821219)
+        self.assertTrue(a.startswith("https://gamebanana.com/apiv11/Mod/741494/ProfilePage?t="), a)
+        self.assertNotEqual(a, cm.page_url("Mod", 741494, now=1794821219 + 15))
+        # a value-only Custom Tag (no title), as br_valley's page sends it
+        self.assertTrue(cm.has_tag([{"_sValue": "LonerStrike"}]))
 
     def test_no_redirects_and_size_cap(self):
         class H(BaseHTTPRequestHandler):
