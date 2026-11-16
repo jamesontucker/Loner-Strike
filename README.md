@@ -6,7 +6,9 @@
 [![License: GPL-3.0](https://img.shields.io/github/license/jamesontucker/Loner-Strike)](LICENSE)
 [![Discord](https://img.shields.io/discord/1568421500636233748?label=discord&logo=discord&logoColor=white)](https://discord.gg/K9eBHVVwZE)
 
-**Play Counter-Strike like it's 2004, alone or with the friends you don't have.** A free desktop app that sets up Counter-Strike 1.6 and Condition Zero like an old community server, with bots that play like people.
+**Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
+
+A free desktop app that sets up Counter-Strike 1.6 and Condition Zero like an old community server, with bots that play like people.
 
 > A side project I work on now and then. Bugs and ideas are welcome in [Issues](https://github.com/jamesontucker/Loner-Strike/issues).
 
