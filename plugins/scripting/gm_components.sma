@@ -5306,7 +5306,7 @@ new Float:g_w3FeedAt[W3_FEED];
 new g_w3HudText[128];
 new g_w3Killer[33];
 /* drop-in */
-new g_w3cDropHeight, g_w3fwLanded;
+new g_w3cDropHeight, g_w3fwLanded, g_w3cGlide;
 new bool:g_w3Falling[33];
 /* (for code above this line: still in the drop from the sky) */
 stock bool:w3_falling(id)
@@ -5476,6 +5476,8 @@ stock w3_init()
 	set_task(0.15, "w3_compass_tick", _, _, _, "b");
 	/* drop-in: how high above the landing spot at most (the sky is the real limit) */
 	g_w3cDropHeight = register_cvar("ls_drop_height", "3000");
+	/* how fast people glide sideways while dropping in, steering with WASD (u/s) */
+	g_w3cGlide = register_cvar("ls_drop_glide", "350");
 	g_w3fwLanded = CreateMultiForward("ls_on_landed", ET_IGNORE, FP_CELL);
 	register_forward(FM_PlayerPostThink, "fm_w3_postthink", 1);
 	RegisterHamPlayer(Ham_TakeDamage, "ham_w3_hurt_pre");
@@ -7736,7 +7738,48 @@ public fm_w3_postthink(id)
 		v[1] = 0.0;
 		set_pev(id, pev_velocity, v);
 	}
+	else
+		w3_glide(id);
 	return FMRES_IGNORED;
+}
+
+/* people steer their drop: WASD and where they look set a heading at ls_drop_glide u/s, eased
+   in over about a quarter second; let go and the speed they have dies away slowly. Up and down
+   are the fall's own (the game's air control alone gives about 30 u/s, too little to steer) */
+stock w3_glide(id)
+{
+	static Float:last[33];
+	new Float:now = get_gametime();
+	new Float:dt = floatclamp(now - last[id], 0.0, 0.1);
+	last[id] = now;
+	if (dt <= 0.0)
+		return;
+	new b = pev(id, pev_button), Float:f = 0.0, Float:sd = 0.0;
+	if (b & IN_FORWARD) f += 1.0;
+	if (b & IN_BACK) f -= 1.0;
+	if (b & IN_MOVERIGHT) sd += 1.0;
+	if (b & IN_MOVELEFT) sd -= 1.0;
+	new Float:v[3], Float:ang[3];
+	pev(id, pev_velocity, v);
+	if (f == 0.0 && sd == 0.0)
+	{
+		new Float:k = 1.0 - floatmin(dt * 0.6, 1.0);
+		v[0] *= k;
+		v[1] *= k;
+		set_pev(id, pev_velocity, v);
+		return;
+	}
+	pev(id, pev_v_angle, ang);
+	new Float:cy = floatcos(ang[1], degrees), Float:sy = floatsin(ang[1], degrees);
+	/* forward along the view's yaw, right clockwise from it */
+	new Float:wx = f * cy + sd * sy, Float:wy = f * sy - sd * cy;
+	new Float:len = floatsqroot(wx * wx + wy * wy), Float:speed = floatclamp(get_pcvar_float(g_w3cGlide), 0.0, 2000.0);
+	wx = wx / len * speed;
+	wy = wy / len * speed;
+	new Float:e = floatmin(dt * 4.0, 1.0);
+	v[0] += (wx - v[0]) * e;
+	v[1] += (wy - v[1]) * e;
+	set_pev(id, pev_velocity, v);
 }
 
 /* falling in: nothing hurts (not a hit, not the landing) */
