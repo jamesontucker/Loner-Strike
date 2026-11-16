@@ -1211,8 +1211,16 @@ pub fn files_of(page: &Value) -> Vec<Value> {
     v
 }
 
+/// A page's ProfilePage address. GameBanana's edge keeps a page's plain address for minutes, so a
+/// tag added just now still reads as missing there ("doesn't carry the Loner-Strike tag any more"
+/// on br_valley, 741494, while the same request with a query had it): a query that changes every
+/// 15 s always gets the page as it is now.
+fn profile_url(model: Model, id: i64, now_secs: u64) -> String {
+    format!("{GB_API}/{}/{id}/ProfilePage?t={}", model.path(), now_secs / 15)
+}
+
 fn profile(model: Model, id: i64) -> Result<Value, String> {
-    let b = http_get(&format!("{GB_API}/{}/{id}/ProfilePage", model.path()), 4 << 20).map_err(|_| "Couldn't reach GameBanana. Check your internet connection.".to_string())?;
+    let b = http_get(&profile_url(model, id, now()), 4 << 20).map_err(|_| "Couldn't reach GameBanana. Check your internet connection.".to_string())?;
     let v: Value = serde_json::from_slice(&b).map_err(|_| "GameBanana sent something the app couldn't read. Try again in a minute.".to_string())?;
     if v.get("_sErrorCode").is_some() || v["_idRow"].as_i64() != Some(id) {
         return Err("That page isn't on GameBanana (any more).".into());
@@ -3399,6 +3407,15 @@ mod tests {
         // Parity A: only the value counts: a Custom Tag with any title or none (the search lists an
         // untitled one as the bare value, or ": value")
         assert!(has_tag(&json!([{"_sTitle": "", "_sValue": "LonerStrike"}])));
+        // a value-only Custom Tag as GameBanana sends it (no title at all), any case, comma lists
+        assert!(has_tag(&json!([{"_sValue": "LonerStrike"}])), "br_valley's page: value only");
+        assert!(has_tag(&json!([{"_sValue": "lonerstrike"}])) && has_tag(&json!([{"_sValue": "LONER-STRIKE"}])));
+        assert!(has_tag(&json!([{"_sValue": "Hammer, LonerStrike"}])) && has_tag(&json!(["Software Used: Hammer, Loner-Strike"])));
+        assert!(!has_tag(&json!([{"_sValue": "Loner Strike"}])) && !has_tag(&json!([])));
+        // the page is read as it is now, never the edge's minutes-old copy
+        let a = profile_url(Model::Mod, 741494, 1_794_821_219);
+        assert!(a.starts_with(&format!("{GB_API}/Mod/741494/ProfilePage?t=")), "{a}");
+        assert_ne!(a, profile_url(Model::Mod, 741494, 1_794_821_219 + 15), "a new address every 15 s");
         assert!(has_tag(&json!([{"_sTitle": " ", "_sValue": "Loner-Strike"}])));
         assert!(has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "lonerstrike"}])));
         assert!(has_tag(&json!([{"_sTitle": "Made with", "_sValue": "LonerStrike"}])), "any title");
