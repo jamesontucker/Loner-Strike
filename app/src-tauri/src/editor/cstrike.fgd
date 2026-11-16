@@ -636,11 +636,25 @@
 @PointClass base(Targetname, Angles, RenderFields) size(-16 -16 -16, 16 16 16) studio() = cycler : "A model that plays its animation."
 [
 	model(studio) : "Model" : : "A .mdl under models/."
+	ls_collision(choices) : "Collision" : "none" : "What it blocks once compiled (a model): a box fitted to the model, made when the map compiles and following the model; Custom: draw your own brushes. (Loner-Strike's editor; other editors leave it be.)" =
+	[
+		"none" : "None (walk through)"
+		"box" : "Box, players only"
+		"box_bullets" : "Box, players and bullets"
+		"custom" : "Custom (your own brushes)"
+	]
 ]
 @PointClass base(Targetname, Angles, RenderFields) size(-8 -8 -8, 8 8 8) = cycler_sprite : "A sprite or model that animates."
 [
 	model(sprite) : "Sprite or model" : : "The model or sprite it shows."
 	framerate(float) : "Frames a second" : 10 : "How many frames a second the sprite plays."
+	ls_collision(choices) : "Collision" : "none" : "What it blocks once compiled (a model): a box fitted to the model, made when the map compiles and following the model; Custom: draw your own brushes. (Loner-Strike's editor; other editors leave it be.)" =
+	[
+		"none" : "None (walk through)"
+		"box" : "Box, players only"
+		"box_bullets" : "Box, players and bullets"
+		"custom" : "Custom (your own brushes)"
+	]
 ]
 
 // ---- logic ------------------------------------------------------------------------------

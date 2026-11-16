@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_fx"
 #define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 37
+#define LSG_N 38
 #define LSG_TASK 7310000
-#pragma dynamic 27776
+#pragma dynamic 28416
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 72
+#define LSG_O 76
 #define LSG_OT 1
 
 
@@ -2708,6 +2708,38 @@ stock bool:lsg_spawn_field(e, const key[], const val[], bool:drawn)
 	return true
 }
 
+// a model entity's Collision box: its model's bounds (as SetModel left them; a 32-unit box when
+// the model has none) times its scale; it stops players and bullets (the engine has no
+// players-only solid for an entity)
+stock lsg_prop_box(e, Float:scale)
+{
+	if (e <= 0 || !pev_valid(e))
+		return e
+	new Float:lo[3], Float:hi[3]
+	pev(e, pev_mins, lo)
+	pev(e, pev_maxs, hi)
+	if (hi[0] - lo[0] < 1.0 || hi[1] - lo[1] < 1.0 || hi[2] - lo[2] < 1.0)
+	{
+		lo = Float:{-16.0, -16.0, 0.0}
+		hi = Float:{16.0, 16.0, 32.0}
+	}
+	for (new i = 0; i < 3; i++)
+	{
+		lo[i] *= scale
+		hi[i] *= scale
+	}
+	set_pev(e, pev_solid, SOLID_BBOX)
+	engfunc(EngFunc_SetSize, e, lo, hi)
+	return e
+}
+
+stock lsg_prop_nosolid(e)
+{
+	if (e > 0 && pev_valid(e))
+		set_pev(e, pev_solid, SOLID_NOT)
+	return e
+}
+
 // ---- effects, sounds and spawning (fx.rs) ----
 // the engine's crash points are gen.rs's shared guards: lsg_msg_room (effect messages a frame,
 // the mode's "messages" limit) and lsg_ent_room (entity slots with a reserve)
@@ -3842,12 +3874,40 @@ lsg_n24(ctx[])
 	#pragma unused lsgWait
 }
 
-// Spawn Creature (cr)
+// Spawn Prop (pr4)
 lsg_n25(ctx[])
 {
 	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 25
 	if (!lsgRe)
 		g_lsgXrN[25] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(ctx[0], o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 0, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_vis_note(lsg_prop_box(lsg_prop_o(o, "models/w_c4.mdl", 0), 1.0))))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[25] = e
+	g_lsgO[32] = e
+	g_lsgO[33] = e ? 1 : 0
+	g_lsgO[34] = e ? lsgMv : 0
+	g_lsgO[35] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n26(ctx)
+	#pragma unused lsgWait
+}
+
+// Spawn Creature (cr)
+lsg_n26(ctx[])
+{
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 26
+	if (!lsgRe)
+		g_lsgXrN[26] = 0
 	g_lsgXrIn = -1
 	if (!(get_cvar_pointer("ls_creature_ver")))
 		lsgWhy = 6
@@ -3861,22 +3921,22 @@ lsg_n25(ctx[])
 		lsgWhy = 4
 	lsg_xf_set(e, 0, -1, -1, lsg_vec(0.0, 0.0, 300.0), 1.0)
 	new bool:lsgWait = false
-	g_lsgOut[25] = e
-	g_lsgO[32] = e
-	g_lsgO[33] = e ? 1 : 0
-	g_lsgO[34] = e ? lsgMv : 0
-	g_lsgO[35] = e ? 0 : lsgWhy
+	g_lsgOut[26] = e
+	g_lsgO[36] = e
+	g_lsgO[37] = e ? 1 : 0
+	g_lsgO[38] = e ? lsgMv : 0
+	g_lsgO[39] = e ? 0 : lsgWhy
 	if (!lsgRe)
-		lsg_n26(ctx)
+		lsg_n27(ctx)
 	#pragma unused lsgWait
 }
 
 // Spawn NPC (np)
-lsg_n26(ctx[])
+lsg_n27(ctx[])
 {
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 26
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 27
 	if (!lsgRe)
-		g_lsgXrN[26] = 0
+		g_lsgXrN[27] = 0
 	g_lsgXrIn = -1
 	if (!(ls_components_running()))
 		lsgWhy = 6
@@ -3890,22 +3950,22 @@ lsg_n26(ctx[])
 		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, lsg_vec(0.0, 45.0, 0.0), -1, 1.0)
 	new bool:lsgWait = false
-	g_lsgOut[26] = e
-	g_lsgO[36] = e
-	g_lsgO[37] = e ? 1 : 0
-	g_lsgO[38] = e ? lsgMv : 0
-	g_lsgO[39] = e ? 0 : lsgWhy
+	g_lsgOut[27] = e
+	g_lsgO[40] = e
+	g_lsgO[41] = e ? 1 : 0
+	g_lsgO[42] = e ? lsgMv : 0
+	g_lsgO[43] = e ? 0 : lsgWhy
 	if (!lsgRe)
-		lsg_n27(ctx)
+		lsg_n28(ctx)
 	#pragma unused lsgWait
 }
 
 // Spawn Interactable (iu)
-lsg_n27(ctx[])
+lsg_n28(ctx[])
 {
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 27
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 28
 	if (!lsgRe)
-		g_lsgXrN[27] = 0
+		g_lsgXrN[28] = 0
 	g_lsgXrIn = -1
 	if (!(ls_components_running()))
 		lsgWhy = 6
@@ -3919,22 +3979,22 @@ lsg_n27(ctx[])
 		lsgWhy = 6
 	lsg_xf_set(e, 0, lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)
 	new bool:lsgWait = false
-	g_lsgOut[27] = e
-	g_lsgO[40] = e
-	g_lsgO[41] = e ? 1 : 0
-	g_lsgO[42] = e ? lsgMv : 0
-	g_lsgO[43] = e ? 0 : lsgWhy
+	g_lsgOut[28] = e
+	g_lsgO[44] = e
+	g_lsgO[45] = e ? 1 : 0
+	g_lsgO[46] = e ? lsgMv : 0
+	g_lsgO[47] = e ? 0 : lsgWhy
 	if (!lsgRe)
-		lsg_n28(ctx)
+		lsg_n29(ctx)
 	#pragma unused lsgWait
 }
 
 // Create Component (cc)
-lsg_n28(ctx[])
+lsg_n29(ctx[])
 {
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 28
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 29
 	if (!lsgRe)
-		g_lsgXrN[28] = 0
+		g_lsgXrN[29] = 0
 	g_lsgXrIn = -1
 	if (!(ls_components_running()))
 		lsgWhy = 6
@@ -3948,34 +4008,6 @@ lsg_n28(ctx[])
 		lsgWhy = 1
 	lsg_xf_set(e, 0, lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)
 	new bool:lsgWait = false
-	g_lsgOut[28] = e
-	g_lsgO[44] = e
-	g_lsgO[45] = e ? 1 : 0
-	g_lsgO[46] = e ? lsgMv : 0
-	g_lsgO[47] = e ? 0 : lsgWhy
-	if (!lsgRe)
-		lsg_n29(ctx)
-	#pragma unused lsgWait
-}
-
-// Spawn Prop (pforce)
-lsg_n29(ctx[])
-{
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 29
-	if (!lsgRe)
-		g_lsgXrN[29] = 0
-	g_lsgXrIn = -1
-	if (!(lsg_have("models/w_c4.mdl")))
-		lsgWhy = 4
-	else if (!(lsg_ent_room("Spawn Prop")))
-		lsgWhy = 2
-	else if (!(lsg_ent_origin(ctx[0], o)))
-		lsgWhy = 6
-	else if (!lsg_xf_free(o, 1, 0, 128.0, lsgMv))
-		lsgWhy = 1
-	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
-		lsgWhy = 6
-	new bool:lsgWait = false
 	g_lsgOut[29] = e
 	g_lsgO[48] = e
 	g_lsgO[49] = e ? 1 : 0
@@ -3986,7 +4018,7 @@ lsg_n29(ctx[])
 	#pragma unused lsgWait
 }
 
-// Spawn Prop (palways)
+// Spawn Prop (pforce)
 lsg_n30(ctx[])
 {
 	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 30
@@ -3999,7 +4031,7 @@ lsg_n30(ctx[])
 		lsgWhy = 2
 	else if (!(lsg_ent_origin(ctx[0], o)))
 		lsgWhy = 6
-	else if (!lsg_xf_free(o, 1, 1, 64.0, lsgMv))
+	else if (!lsg_xf_free(o, 1, 0, 128.0, lsgMv))
 		lsgWhy = 1
 	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
 		lsgWhy = 6
@@ -4014,12 +4046,40 @@ lsg_n30(ctx[])
 	#pragma unused lsgWait
 }
 
-// Spawn Weapon On Ground (pnear)
+// Spawn Prop (palways)
 lsg_n31(ctx[])
 {
 	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 31
 	if (!lsgRe)
 		g_lsgXrN[31] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_ent_origin(ctx[0], o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 1, 64.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[31] = e
+	g_lsgO[56] = e
+	g_lsgO[57] = e ? 1 : 0
+	g_lsgO[58] = e ? lsgMv : 0
+	g_lsgO[59] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n32(ctx)
+	#pragma unused lsgWait
+}
+
+// Spawn Weapon On Ground (pnear)
+lsg_n32(ctx[])
+{
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 32
+	if (!lsgRe)
+		g_lsgXrN[32] = 0
 	g_lsgXrIn = -1
 	if (!(lsg_have("models/w_deagle.mdl")))
 		lsgWhy = 4
@@ -4033,65 +4093,31 @@ lsg_n31(ctx[])
 		lsgWhy = 6
 	lsg_xf_set(e, 1, -1, -1, -1, 1.0)
 	new bool:lsgWait = false
-	g_lsgOut[31] = e
-	g_lsgO[56] = e
-	g_lsgO[57] = e ? 1 : 0
-	g_lsgO[58] = e ? lsgMv : 0
-	g_lsgO[59] = e ? 0 : lsgWhy
-	if (e)
-	{
-		lsg_n32(ctx)
-	}
-	else if (!lsgWait)
-	{
-	}
-	if (!lsgRe)
-		lsg_n33(ctx)
-}
-
-// Branch (br)
-lsg_n32(ctx[])
-{
-	new ok = ((((g_lsgO[58]) ? 1 : 0)) ? 1 : 0)
-	#pragma unused ok
-	#pragma unused ctx
-}
-
-// Spawn Prop (pfail)
-lsg_n33(ctx[])
-{
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 33
-	if (!lsgRe)
-		g_lsgXrN[33] = 0
-	g_lsgXrIn = -1
-	if (!(lsg_have("models/w_c4.mdl")))
-		lsgWhy = 4
-	else if (!(lsg_ent_room("Spawn Prop")))
-		lsgWhy = 2
-	else if (!(lsg_ent_origin(ctx[0], o)))
-		lsgWhy = 6
-	else if (!lsg_xf_free(o, 1, 3, 128.0, lsgMv))
-		lsgWhy = 1
-	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
-		lsgWhy = 6
-	new bool:lsgWait = false
-	g_lsgOut[33] = e
+	g_lsgOut[32] = e
 	g_lsgO[60] = e
 	g_lsgO[61] = e ? 1 : 0
 	g_lsgO[62] = e ? lsgMv : 0
 	g_lsgO[63] = e ? 0 : lsgWhy
 	if (e)
 	{
+		lsg_n33(ctx)
 	}
 	else if (!lsgWait)
 	{
-		lsg_n34(ctx)
 	}
 	if (!lsgRe)
-		lsg_n36(ctx)
+		lsg_n34(ctx)
 }
 
-// Spawn Prop (pB)
+// Branch (br)
+lsg_n33(ctx[])
+{
+	new ok = ((((g_lsgO[62]) ? 1 : 0)) ? 1 : 0)
+	#pragma unused ok
+	#pragma unused ctx
+}
+
+// Spawn Prop (pfail)
 lsg_n34(ctx[])
 {
 	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 34
@@ -4102,9 +4128,9 @@ lsg_n34(ctx[])
 		lsgWhy = 4
 	else if (!(lsg_ent_room("Spawn Prop")))
 		lsgWhy = 2
-	else if (!(lsg_xf_at(0, lsg_vec(0.0, 0.0, 40.0), -1, o)))
+	else if (!(lsg_ent_origin(ctx[0], o)))
 		lsgWhy = 6
-	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+	else if (!lsg_xf_free(o, 1, 3, 128.0, lsgMv))
 		lsgWhy = 1
 	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
 		lsgWhy = 6
@@ -4121,12 +4147,46 @@ lsg_n34(ctx[])
 	{
 		lsg_n35(ctx)
 	}
+	if (!lsgRe)
+		lsg_n37(ctx)
+}
+
+// Spawn Prop (pB)
+lsg_n35(ctx[])
+{
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 35
+	if (!lsgRe)
+		g_lsgXrN[35] = 0
+	g_lsgXrIn = -1
+	if (!(lsg_have("models/w_c4.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_ent_room("Spawn Prop")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsg_vec(0.0, 0.0, 40.0), -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 1, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = lsg_vis_note(lsg_prop_o(o, "models/w_c4.mdl", 1))))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[35] = e
+	g_lsgO[68] = e
+	g_lsgO[69] = e ? 1 : 0
+	g_lsgO[70] = e ? lsgMv : 0
+	g_lsgO[71] = e ? 0 : lsgWhy
+	if (e)
+	{
+	}
+	else if (!lsgWait)
+	{
+		lsg_n36(ctx)
+	}
 }
 
 // Switch on Enum (why)
-lsg_n35(ctx[])
+lsg_n36(ctx[])
 {
-	switch (g_lsgO[63])
+	switch (g_lsgO[67])
 	{
 		case 0:
 		{
@@ -4157,38 +4217,38 @@ lsg_n35(ctx[])
 }
 
 // Spawn Creature (cretry)
-lsg_n36(ctx[])
+lsg_n37(ctx[])
 {
-	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 36
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 37
 	if (!lsgRe)
-		g_lsgXrN[36] = 0
+		g_lsgXrN[37] = 0
 	g_lsgXrIn = -1
 	if (!(get_cvar_pointer("ls_creature_ver")))
 		lsgWhy = 6
 	else if (!(lsg_ent_room("Spawn Creature")))
 		lsgWhy = 2
-	else if (!((lsgRe ? lsg_xr_get(36, o) : lsg_xr_put(36, (lsg_ent_origin(ctx[0], o)) ? 1 : 0, o))))
+	else if (!((lsgRe ? lsg_xr_get(37, o) : lsg_xr_put(37, (lsg_ent_origin(ctx[0], o)) ? 1 : 0, o))))
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, 2, 4, 128.0, lsgMv))
 		lsgWhy = 1
 	else if (!(e = lsg_vis_note(lsg_creature_o2("zombie", o, 0, 0.0, floatround(0.0)))))
 		lsgWhy = 4
-	new bool:lsgWait = !e && lsgWhy == 1 && (0 == 0 || ++g_lsgXrN[36] < 0)
+	new bool:lsgWait = !e && lsgWhy == 1 && (0 == 0 || ++g_lsgXrN[37] < 0)
 	if (lsgWait)
-		lsg_xr_wait(36, "lsg_xr36", 1.0, ctx, o)
+		lsg_xr_wait(37, "lsg_xr37", 1.0, ctx, o)
 	else if (!e && lsgWhy == 1)
 		lsgWhy = 5
-	g_lsgOut[36] = e
-	g_lsgO[68] = e
-	g_lsgO[69] = e ? 1 : 0
-	g_lsgO[70] = e ? lsgMv : 0
-	g_lsgO[71] = e ? 0 : lsgWhy
+	g_lsgOut[37] = e
+	g_lsgO[72] = e
+	g_lsgO[73] = e ? 1 : 0
+	g_lsgO[74] = e ? lsgMv : 0
+	g_lsgO[75] = e ? 0 : lsgWhy
 	#pragma unused lsgWait
 }
 
-public lsg_xr36(d[])
+public lsg_xr37(d[])
 {
-	lsg_xr_back(36, d)
-	lsg_n36(d)
+	lsg_xr_back(37, d)
+	lsg_n37(d)
 }
 

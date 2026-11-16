@@ -509,3 +509,8 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-ctx button .ed-ctx-keys { float: right; margin-left: 16px; font: inherit; font-size: 11px; color: var(--bone-dim, #9aa); background: none; border: 0; }
 .ed-ctx button:disabled { opacity: 0.45; cursor: default; }
 .ed-ctx button:disabled:hover { background: none; color: var(--bone); }
+/* the information drawing styles' key (Collision, By entity type, Missing textures) */
+.ed-pane-legend { position: absolute; left: 0; top: calc(100% + 4px); margin: 0; padding: 4px 6px; list-style: none; background: rgba(20, 23, 18, 0.82); border: 1px solid var(--line); border-radius: 3px; font-size: 11px; color: var(--bone); pointer-events: none; z-index: 2; }
+.ed-pane-legend li { display: flex; align-items: center; gap: 5px; line-height: 1.5; }
+.ed-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.ed-swatch-wire { background: none; border: 1px solid #ff8c1a; outline: 1px solid #e53935; outline-offset: 1px; }

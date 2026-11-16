@@ -3458,7 +3458,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let fallback = if v.data_source(id, "at").is_some() { format!("lsg_ent_origin({}, o)", inp("at", "entity")) } else { "false".into() };
             let place = fx::place(gen, id, "at", &fallback);
             let model = assets::path_or(gen, id, "model", pawn_str(&model_text(gen.text(n, def, "model")))); // X-fx
-            let create = format!("lsg_prop_o(o, {model}, {})", if gen.boolean(n, def, "solid") { 1 } else { 0 });
+            let create = fx::prop_create(gen, n, def, &model); // (Collision: gen/fx.rs)
             let apply = fx::apply(gen, n, def, id, "e", "at", true, None);
             let pre = [(format!("lsg_have({model})"), fx::WHY_MISSING, "No prop: its model isn't loaded with the map."), ("lsg_ent_room(\"Spawn Prop\")".to_string(), fx::WHY_SLOTS, "No prop: the server is out of entity slots.")];
             fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &create, (fx::WHY_BAD, "No prop: the game didn't make it."), apply, &exit, &err, &next, &mut after);

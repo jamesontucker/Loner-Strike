@@ -285,7 +285,8 @@ const snapTo = (v: number, g: number) => (g > 0 ? Math.round(v / g) * g : Math.r
  *  usual static prop), a sprite as an env_sprite (additive, on), a sound as an ambient_generic
  *  (medium radius, playing). */
 export function assetEntity(kind: "model" | "sprite" | "sound", path: string): { classname: string; keys: [string, string][] } {
-  if (kind === "model") return { classname: "cycler_sprite", keys: [["model", path], ["framerate", "1"], ["renderamt", "255"]] };
+  // (a dropped model blocks players with a box fitted to it: Collision, editor/collision.rs)
+  if (kind === "model") return { classname: "cycler_sprite", keys: [["model", path], ["framerate", "1"], ["renderamt", "255"], ["ls_collision", "box"]] };
   if (kind === "sprite") return { classname: "env_sprite", keys: [["model", path], ["rendermode", "5"], ["renderamt", "255"], ["scale", "1"], ["framerate", "10"], ["spawnflags", "1"]] };
   return { classname: "ambient_generic", keys: [["message", keyValue({ kind, path })], ["health", "10"], ["spawnflags", "4"]] };
 }

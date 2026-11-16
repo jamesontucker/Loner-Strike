@@ -1749,7 +1749,19 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
     if let Some(e) = wad_errors(&wads, p.folder.is_some()) {
         return Err(e);
     }
-    let text = map_text(&p.doc, &wads.paths)?;
+    // a model entity's Collision box (editor/collision.rs): made now, from where the model is
+    let read_model = |rel: &str| -> Option<Vec<u8>> {
+        let rel = rel.replace('\\', "/");
+        if rel.contains("..") || rel.starts_with('/') {
+            return None;
+        }
+        p.folder.iter().chain(p.wad_dirs.iter()).map(|d| d.join(&rel)).find(|f| f.is_file()).and_then(|f| std::fs::read(f).ok())
+    };
+    let (boxed, box_notes) = crate::editor::collision::with_boxes(&p.doc, &read_model);
+    for note in box_notes {
+        with_job(|j| j.problems.push(Problem { level: "warning".into(), kind: "other".into(), message: note, ..Default::default() }));
+    }
+    let text = map_text(&boxed, &wads.paths)?;
     // entity text in the game's code page (GoldSrc shows bytes, not UTF-8)
     let (bytes, cp, lost) = mapfile::encode_for_game(&text);
     if let Some(note) = super::editor::code_page_note(cp, &lost) {

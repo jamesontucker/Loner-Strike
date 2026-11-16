@@ -208,7 +208,7 @@ export async function importOther() {
 
 function cyclePaneMode() {
   const p = usePanes.getState();
-  const order: RenderMode[] = ["textured", "flat", "wire", "texwire"];
+  const order: RenderMode[] = ["textured", "flat", "wire", "texwire", "collision", "bytype", "missing"];
   const cur = modeFor(p.modes?.[p.active], p.views[p.active]);
   setPaneMode(p.active, order[(order.indexOf(cur) + 1) % order.length]);
 }
@@ -357,7 +357,10 @@ export function commands(): Command[] {
     { id: "view.speedUp", label: "Camera faster", menu: "View", hidden: true, run: () => stepSpeed(1), fly: true },
     { id: "view.speedDown", label: "Camera slower", menu: "View", hidden: true, run: () => stepSpeed(-1), fly: true },
     { id: "view.models", label: "Models in place of entity boxes on / off", menu: "View", hint: "Hostages, spawns, weapons, cyclers drawn as their models", run: () => useP5.getState().set({ showModels: !useP5.getState().showModels }), fly: true },
-    { id: "view.paneMode", label: "Next drawing style for the active pane", menu: "View", hint: "Textured, flat, wireframe, textured + wire", run: () => cyclePaneMode(), fly: true },
+    { id: "view.paneMode", label: "Next drawing style for the active pane", menu: "View", hint: "Textured, flat, wireframe, textured + wire, collision, by entity type, missing textures", run: () => cyclePaneMode(), fly: true },
+    { id: "view.style.collision", label: "Draw what blocks what (Collision)", menu: "View", hint: "Solid gray, CLIP orange, NULL red, triggers purple, ladders green, water blue, illusionary ghosted; model boxes as wireframes", run: () => setPaneMode(usePanes.getState().active, "collision") },
+    { id: "view.style.bytype", label: "Draw brushes by entity type", menu: "View", hint: "World, func_detail, func_wall, doors, breakables, illusionary, triggers", run: () => setPaneMode(usePanes.getState().active, "bytype") },
+    { id: "view.style.missing", label: "Show missing textures", menu: "View", hint: "Textures that can't be found in magenta, everything else muted: find them before you compile", run: () => setPaneMode(usePanes.getState().active, "missing") },
 
     // View > Panels and layouts
     ...DOCK_PANELS.map((p, i): Command => ({ id: `panel.${p.id}`, label: `Panel: ${p.title}`, menu: "View", sep: i === 0, hint: p.subtitle ? `${p.subtitle}. Shows it wherever it's docked or floating.` : "Show it (wherever it's docked or floating)", run: () => showPanel(p.id) })),

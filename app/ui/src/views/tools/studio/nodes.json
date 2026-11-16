@@ -11735,7 +11735,7 @@
    "type": "ent.spawn_prop",
    "title": "Spawn Prop",
    "category": "Entities",
-   "help": "A model (models/...mdl, loaded with the map) at an entity's place; solid or not. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
+   "help": "A model (models/...mdl, loaded with the map) at an entity's place; solid or not. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. Collision: None (walk through), Box, players only, or Box, players and bullets: a box the model's own size. At run time both boxes stop bullets too (the engine has no players-only solid for an entity; in the map editor, players only is an invisible CLIP brush).",
    "inputs": [
     {
      "id": "exec",
@@ -11907,9 +11907,33 @@
      "default": 1,
      "min": 0.05,
      "max": 10
+    },
+    {
+     "id": "collision",
+     "label": "Collision",
+     "kind": "choice",
+     "default": "solid",
+     "choices": [
+      [
+       "solid",
+       "As Solid says (a 32-unit box)"
+      ],
+      [
+       "none",
+       "None (walk through)"
+      ],
+      [
+       "box",
+       "Box, players only"
+      ],
+      [
+       "box_bullets",
+       "Box, players and bullets"
+      ]
+     ]
     }
    ],
-   "keywords": "collision handling force spawn always spawn blocked free spot fallback"
+   "keywords": "collision handling force spawn always spawn blocked free spot fallback collision solid box clip block walk through"
   },
   {
    "type": "ent.remove",
@@ -28023,7 +28047,7 @@
    "type": "ent.spawn_entity",
    "title": "Spawn Entity",
    "category": "Entities",
-   "help": "Makes one of the game's entities with your keys (key=value pairs as in a map, | between them: model=sprites/glow01.spr|rendercolor=255 0 0|targetname=door_fx). Only classes that are safe to make while the game runs are listed: effects, sounds, markers, relays, pickups. Never players, worldspawn, game_* server controls or anything that runs commands. Files its keys name are loaded with the map; if one isn't on the server it's skipped, never a crash. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot.",
+   "help": "Makes one of the game's entities with your keys (key=value pairs as in a map, | between them: model=sprites/glow01.spr|rendercolor=255 0 0|targetname=door_fx). Only classes that are safe to make while the game runs are listed: effects, sounds, markers, relays, pickups. Never players, worldspawn, game_* server controls or anything that runs commands. Files its keys name are loaded with the map; if one isn't on the server it's skipped, never a crash. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Collision (a model class: cycler_sprite, cycler): None (walk through), Box, players only, or Box, players and bullets: a box the model's own size. At run time both boxes stop bullets too (the engine has no players-only solid for an entity; in the map editor, players only is an invisible CLIP brush).",
    "inputs": [
     {
      "id": "exec",
@@ -28283,9 +28307,33 @@
      "default": 10,
      "min": 0,
      "max": 1000
+    },
+    {
+     "id": "collision",
+     "label": "Collision",
+     "kind": "choice",
+     "default": "class",
+     "choices": [
+      [
+       "class",
+       "As the class makes it"
+      ],
+      [
+       "none",
+       "None (walk through)"
+      ],
+      [
+       "box",
+       "Box, players only"
+      ],
+      [
+       "box_bullets",
+       "Box, players and bullets"
+      ]
+     ]
     }
    ],
-   "keywords": "spawn create entity class keyvalue env_ make collision handling force spawn always spawn blocked free spot fallback",
+   "keywords": "spawn create entity class keyvalue env_ make collision handling force spawn always spawn blocked free spot fallback collision solid box clip block walk through",
    "advanced": false
   },
   {

@@ -29,8 +29,9 @@ import { paneCount, PaneCtx, usePaneActive, usePanes, usePaneView } from "./pane
 import { useP5 } from "./p5store";
 import { duplicateWith } from "./commands";
 import { useKeySet } from "./Shortcuts"; // (Alt-drag copies with the Loner-Strike keys)
+import { CollisionBoxes } from "./CollisionBoxes";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
-import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
+import { byClass, categoryMaterial, categoryOf, edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { PickedOverlay, SharedBrushes } from "./SharedBrushes"; // Parity A: shared brush buffers
 import { syncBrushBuffers, useBrushBuffers } from "./brushBuffers"; // Parity A
 import { brushRaycast } from "./pickRay";
@@ -157,7 +158,18 @@ function isPicked(b: BrushGeo, sel: { brushes: number[]; entities: number[] }) {
 
 function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; version: number; dim?: boolean }) {
   const mode = usePaneMode(); // P5: textured / flat / wire / textured + wire, per pane
-  const materials = useMemo(() => (mode === "flat" ? b.textures.map(flatMaterial) : b.textures.map((t) => mats.get(drawOf(t)))), [b, mats, version, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cls = useEditor((s) => (b.entity != null ? s.doc?.entities.find((e) => e.id === b.entity)?.classname ?? "" : ""));
+  const materials = useMemo(
+    () =>
+      byClass(mode)
+        ? b.textures.map((t) => categoryMaterial(mode, categoryOf(mode, t, cls)))
+        : mode === "missing"
+          ? b.textures.map((t) => (mats.get(drawOf(t)), categoryMaterial(mode, [...mats.missing].some((x) => x.toLowerCase() === t.toLowerCase()) ? "missing" : "ok")))
+          : mode === "flat"
+            ? b.textures.map(flatMaterial)
+            : b.textures.map((t) => mats.get(drawOf(t))),
+    [b, mats, version, mode, cls], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const edges = useMemo(() => new THREE.EdgesGeometry(b.geometry, 20), [b]);
   const look = edgeLook(mode, picked, b.entity != null);
   useEffect(() => () => edges.dispose(), [edges]);
@@ -175,6 +187,22 @@ function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; ma
   );
 }
 
+
+/** Every shown brush on its own (the class styles color a brush by its entity). */
+function ClassBrushes({ mats, version, hideSky }: { mats: MapMaterials; version: number; hideSky: boolean }) {
+  const brushes = useEditor((s) => s.brushes);
+  const hidden = useEditor((s) => s.hidden.brushes);
+  const sel = useEditor((s) => s.sel);
+  return (
+    <>
+      {[...brushes.values()]
+        .filter((b) => !hidden.has(b.id) && !isPicked(b, sel))
+        .map((b) => (
+          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} />
+        ))}
+    </>
+  );
+}
 
 function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   const preview = useEditor((s) => s.preview);
@@ -198,6 +226,7 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
     <>
       <group>
         <SharedBrushes mats={mats} version={version} mode={mode} hideSky={hideSky} />
+        {byClass(mode) && <ClassBrushes mats={mats} version={version} hideSky={hideSky} /> /* Collision / By entity type: each brush its own color */}
         {dimmed.map((b) => (
           <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim />
         ))}
@@ -962,6 +991,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       {!gameView && <Links />}
       {!gameView && <EffectPreviews />}
       {!gameView && <StockPreviews />}
+      {!gameView && <CollisionBoxes /> /* a picked model's Collision box */}
       <mesh rotation={planeRot} userData={{ kind: "plane" }} renderOrder={-1}>
         <planeGeometry args={[span, span]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />

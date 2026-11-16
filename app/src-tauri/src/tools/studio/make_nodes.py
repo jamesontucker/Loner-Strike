@@ -1404,6 +1404,15 @@ _lp = next(d for d in nodes if d["type"] == "snd.loop")
 for o in _lp["outputs"]:
     if o["id"] == "out":
         o["type"] = "soundloop"
+# Collision (the map editor's names): what a spawned model blocks. The first choice keeps what an
+# older graph did (Spawn Prop: what Solid says; Spawn Entity: what the class does)
+COLL_HELP = " Collision: None (walk through), Box, players only, or Box, players and bullets: a box the model's own size. At run time both boxes stop bullets too (the engine has no players-only solid for an entity; in the map editor, players only is an invisible CLIP brush)."
+for t, first in [("ent.spawn_prop", ["solid", "As Solid says (a 32-unit box)"]), ("ent.spawn_entity", ["class", "As the class makes it"])]:
+    d = next(d for d in nodes if d["type"] == t)
+    if not any(p["id"] == "collision" for p in d["params"]):
+        d["params"].append(prm("collision", "Collision", "choice", first[0], choices=[first, ["none", "None (walk through)"], ["box", "Box, players only"], ["box_bullets", "Box, players and bullets"]]))
+        d["help"] += COLL_HELP if t == "ent.spawn_prop" else " Collision (a model class: cycler_sprite, cycler):" + COLL_HELP[len(" Collision:"):]
+        d["keywords"] = (d.get("keywords", "") + " collision solid box clip block walk through").strip()
 # ==== end assets (X-fx) ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")

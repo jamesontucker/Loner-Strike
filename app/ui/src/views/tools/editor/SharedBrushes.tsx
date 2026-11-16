@@ -6,14 +6,21 @@ import { useMemo, useRef } from "react";
 import type { Draw } from "../viewer/bundle";
 import type { MapMaterials } from "../viewer/materials";
 import { allTrianglePools, makePicker, outlinePools, useBrushBuffers, type Overlay } from "./brushBuffers";
-import { edgeLook, flatMaterial, type RenderMode } from "./renderModes";
+import { byClass, categoryMaterial, edgeLook, flatMaterial, type RenderMode } from "./renderModes";
 
 const drawOf = (texture: string): Draw => ({ model: 0, texture, start: 0, count: 0, flags: 0 });
 const isSky = (t: string) => /^sky$/i.test(t);
 const noRay = () => null;
 
 function materialFor(mats: MapMaterials, mode: RenderMode, texture: string) {
-  return mode === "flat" ? flatMaterial(texture) : mats.get(drawOf(texture));
+  if (mode === "missing") {
+    // (asked for so a texture that can't be found shows up in the missing list)
+    mats.get(drawOf(texture));
+    const gone = [...mats.missing].some((x) => x.toLowerCase() === texture.toLowerCase());
+    return categoryMaterial(mode, gone ? "missing" : "ok");
+  }
+  // (a class style draws each brush on its own; the shared pools and the picked overlay are flat)
+  return mode === "flat" || byClass(mode) ? flatMaterial(texture) : mats.get(drawOf(texture));
 }
 
 /** Every unpicked, shown brush: one draw per texture and up to three outline draws. */
@@ -29,7 +36,7 @@ export function SharedBrushes({ mats, version, mode, hideSky }: { mats: MapMater
   void version;
   return (
     <>
-      {mode !== "wire" && pools.map((p) => <mesh key={`${p.key}:${p.gen}`} geometry={p.geometry} material={materialFor(mats, mode, p.key)} raycast={noRay} frustumCulled={false} />)}
+      {mode !== "wire" && !byClass(mode) && pools.map((p) => <mesh key={`${p.key}:${p.gen}`} geometry={p.geometry} material={materialFor(mats, mode, p.key)} raycast={noRay} frustumCulled={false} />)}
       {e.world && (
         <lineSegments key={`w${e.world.gen}`} geometry={e.world.geometry} renderOrder={1} raycast={noRay} frustumCulled={false}>
           <lineBasicMaterial color={w.color} transparent opacity={w.opacity} depthTest={mode !== "wire"} />

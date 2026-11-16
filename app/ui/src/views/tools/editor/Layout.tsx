@@ -4,7 +4,29 @@
 import { useRef, type MutableRefObject } from "react";
 import "./p5.css";
 import { paneCount, toggleMaximise, usePanes, type LayoutId, type Split } from "./panes";
-import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderModes";
+import { legendFor, modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderModes";
+
+/** The information styles' key: a swatch and a word per color, in the pane's corner. */
+function PaneLegend({ mode }: { mode: RenderMode }) {
+  const cats = legendFor(mode);
+  if (!cats) return null;
+  return (
+    <ul className="ed-pane-legend" aria-label="What the colors mean">
+      {cats.map((c) => (
+        <li key={c.id}>
+          <span className="ed-swatch" style={{ background: c.color, opacity: Math.max(0.35, c.opacity ?? 1) }} />
+          {c.label}
+        </li>
+      ))}
+      {mode === "collision" && (
+        <li>
+          <span className="ed-swatch ed-swatch-wire" />
+          Model boxes (orange: players, red: and bullets)
+        </li>
+      )}
+    </ul>
+  );
+}
 import { useEffect, useState } from "react";
 import { SPEEDS, useNav } from "./navigation";
 import { AxisTriad } from "./AxisTriad";
@@ -173,7 +195,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                   className="ed-pane-mode"
                   value={modeFor(modes?.[i], views[i])}
                   aria-label={`How pane ${i + 1} draws`}
-                  title="Textured, flat colors, wireframe, or textured with the edges"
+                  title="Textured, flat colors, wireframe, textured with the edges; or what blocks what (Collision), brushes by entity type, missing textures"
                   onChange={(e) => setPaneMode(i, e.target.value as RenderMode)}
                 >
                   {RENDER_MODES.map((m) => (
@@ -182,6 +204,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                     </option>
                   ))}
                 </select>
+                <PaneLegend mode={modeFor(modes?.[i], views[i])} />
                 {n > 1 && (
                 <button type="button" className="ed-pane-max" title={max === i ? "Put the panes back (Shift+Space)" : "Fill the space with this pane (Shift+Space)"} aria-label={max === i ? "Restore" : "Maximize"} onClick={() => toggleMaximise(i)}>
                   {max === i ? "▣" : "□"}

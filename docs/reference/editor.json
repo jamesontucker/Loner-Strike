@@ -547,6 +547,14 @@
           "entities": ["cycler_sprite", "env_sprite", "ambient_generic"]
         },
         {
+          "id": "model-collision",
+          "name": "A model's Collision",
+          "what": "What a model you placed blocks once the map is compiled (Inspect › Collision on a cycler_sprite or cycler): None (walk through); Box, players only (an invisible CLIP brush fitted to the model's box); Box, players and bullets (the same box as a func_wall with NULL faces); Custom (no box: draw your own brushes). The box is made when the map compiles, from the model's bounds, its scale and its turn, so it always follows the model; it never shows up as a brush to edit. While the model is picked its box is drawn as a wireframe.",
+          "where": ["Inspect panel › Collision (a model entity)"],
+          "good": "A model dropped from the Content Browser starts as Box, players only. Models already in a map keep what they did (None). Spawn Prop and Spawn Entity in the Game Mode Studio have the same choices.",
+          "entities": ["cycler_sprite", "cycler"]
+        },
+        {
           "id": "content-drawer",
           "name": "Content drawer",
           "what": "Slides the Content Browser up over the bottom panels; Esc or a click elsewhere puts it away.",
@@ -774,8 +782,8 @@
         {
           "id": "drawing-style",
           "name": "Drawing style",
-          "what": "Draws the active view textured, flat, as a wireframe, or textured with the wireframe on top.",
-          "commands": ["view.paneMode"],
+          "what": "Draws the active view textured, flat, as a wireframe, or textured with the wireframe on top; or as information, with a key in the corner: Collision (what blocks what: solid gray, CLIP orange, NULL red, triggers purple, ladders green, water blue, illusionary ghosted, model boxes as wireframes), By entity type (world, func_detail, func_wall, doors, breakables, illusionary, triggers), or Missing textures (in magenta, everything else muted, to find them before you compile).",
+          "commands": ["view.paneMode", "view.style.collision", "view.style.bytype", "view.style.missing"],
           "where": ["The style picker in the view's corner"]
         },
         {

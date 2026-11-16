@@ -630,6 +630,7 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
             let create = format!("lsg_spawn_ev({}, o{}{})", pawn_str(c.0), if kv.is_empty() { "" } else { ", " }, kv.join(", "));
             // (a sprite with no draw mode in its keys: the one its file is made for; an additive
             // glow drawn Normal shows its black background as a box)
+            let create = entity_collision(gen, n, def, c.0, &keys, create);
             let create = match sprite_look(c.0, &keys) {
                 Some((spr, glow, amt)) => format!("lsg_spr_look({create}, {}, {}, {})", pawn_str(&spr), glow as i32, amt as i32),
                 None => create,
@@ -755,6 +756,68 @@ stock bool:lsg_spawn_field(e, const key[], const val[], bool:drawn)
 }
 "#;
 
+/// Spawn Prop's model with its Collision (the map editor's names): "solid" (what Solid says: a
+/// 32-unit box, or none; old graphs), "none", "box" or "box_bullets": a box the model's own size
+/// (its bounds as the engine sets them, times its Scale). At run time the engine has no
+/// players-only solid for an entity, so both box kinds stop bullets too (in the map editor
+/// "players only" is a CLIP brush).
+pub(super) fn prop_create(gen: &Gen, n: &Node, def: &'static NodeDef, model: &str) -> String {
+    match gen.choice(n, def, "collision") {
+        "none" => format!("lsg_prop_o(o, {model}, 0)"),
+        "box" | "box_bullets" => format!("lsg_prop_box(lsg_prop_o(o, {model}, 0), {})", float_lit(gen.num(n, def, "scale").clamp(0.05, 10.0))),
+        _ => format!("lsg_prop_o(o, {model}, {})", if gen.boolean(n, def, "solid") { 1 } else { 0 }),
+    }
+}
+
+/// Spawn Entity's Collision for a model class (cycler_sprite, cycler): "class" leaves it as the
+/// class makes it (old graphs), "none" walks through, a box is the model's own size.
+fn entity_collision(gen: &Gen, n: &Node, def: &'static NodeDef, class: &str, keys: &[(String, String)], create: String) -> String {
+    let model = keys.iter().any(|(k, v)| k.eq_ignore_ascii_case("model") && v.to_ascii_lowercase().ends_with(".mdl"));
+    if !model || !matches!(class, "cycler_sprite" | "cycler") {
+        return create;
+    }
+    let scale = keys.iter().find(|(k, _)| k.eq_ignore_ascii_case("scale")).and_then(|(_, v)| v.parse::<f64>().ok()).filter(|s| *s > 0.0).unwrap_or(1.0);
+    match gen.choice(n, def, "collision") {
+        "none" => format!("lsg_prop_nosolid({create})"),
+        "box" | "box_bullets" => format!("lsg_prop_box({create}, {})", float_lit(scale.clamp(0.05, 10.0))),
+        _ => create,
+    }
+}
+
+/// A model entity's box, its own size (only in plugins that use a box Collision).
+const PROP_BOX: &str = r#"// a model entity's Collision box: its model's bounds (as SetModel left them; a 32-unit box when
+// the model has none) times its scale; it stops players and bullets (the engine has no
+// players-only solid for an entity)
+stock lsg_prop_box(e, Float:scale)
+{
+	if (e <= 0 || !pev_valid(e))
+		return e
+	new Float:lo[3], Float:hi[3]
+	pev(e, pev_mins, lo)
+	pev(e, pev_maxs, hi)
+	if (hi[0] - lo[0] < 1.0 || hi[1] - lo[1] < 1.0 || hi[2] - lo[2] < 1.0)
+	{
+		lo = Float:{-16.0, -16.0, 0.0}
+		hi = Float:{16.0, 16.0, 32.0}
+	}
+	for (new i = 0; i < 3; i++)
+	{
+		lo[i] *= scale
+		hi[i] *= scale
+	}
+	set_pev(e, pev_solid, SOLID_BBOX)
+	engfunc(EngFunc_SetSize, e, lo, hi)
+	return e
+}
+
+stock lsg_prop_nosolid(e)
+{
+	if (e > 0 && pev_valid(e))
+		set_pev(e, pev_solid, SOLID_NOT)
+	return e
+}
+"#;
+
 /// lsg_spr_look: only in plugins that make a sprite with no draw mode (Spawn Entity).
 const SPR_LOOK: &str = r#"// ---- a sprite made with no draw mode: the one its file is made for (the .spr header's format at
 // byte 12: 0 normal, 1 additive, 2 indexalpha, 3 alphatest). An additive glow drawn Normal shows
@@ -786,6 +849,9 @@ stock lsg_spr_look(e, const spr[], glow, amt)
 pub(super) fn blocks(g: &Graph, o: &mut Out) {
     if g.nodes.iter().any(|n| n.kind == "ent.spawn_entity") {
         o.line(SPAWN_EV);
+    }
+    if g.nodes.iter().any(|n| matches!(n.kind.as_str(), "ent.spawn_prop" | "ent.spawn_entity") && n.params.get("collision").and_then(Value::as_str).is_some_and(|c| matches!(c, "none" | "box" | "box_bullets"))) {
+        o.line(PROP_BOX);
     }
     if g.nodes.iter().any(|n| n.kind == "ent.spawn_entity" && class_of(n).is_some_and(|c| sprite_look(c.0, &spawn_keys(s(n, "keys", ""))).is_some())) {
         o.line(SPR_LOOK);
@@ -1682,6 +1748,44 @@ mod tests {
         let c = code_of(&r.source, &r.spans, "se");
         assert!(c.contains("lsg_spr_look(lsg_spawn_ev(\"env_sprite\", o, \"model\", \"sprites/glow01.spr\"), \"sprites/glow01.spr\", 0, 0)"), "{c}");
         assert!(r.source.contains("fseek(f, 12, SEEK_SET)"));
+    }
+
+    /// Collision: old graphs as before (what Solid says; what the class does); a box is the model's
+    /// own size; None walks through; Spawn Entity's only for a model class.
+    #[test]
+    fn collision_choices_set_the_solid() {
+        let old = include_str!("../testdata/compat_v3/graph-every_node_fx.json");
+        let g = crate::tools::studio::graph::parse(old).unwrap();
+        let r = super::super::generate(&g, false);
+        assert!(!r.source.contains("lsg_prop_box("), "an old graph: no box helper");
+        let base = include_str!("../testdata/every_node_fx.graph.json");
+        let mut v: Value = serde_json::from_str(base).unwrap();
+        for n in v["nodes"].as_array_mut().unwrap() {
+            if n["id"] == "pr" {
+                n["params"]["collision"] = "box".into();
+            }
+            if n["id"] == "pr2" {
+                n["params"]["collision"] = "none".into();
+            }
+        }
+        let g = crate::tools::studio::graph::parse(&v.to_string()).unwrap();
+        let r = super::super::generate(&g, false);
+        let c = |id: &str| code_of(&r.source, &r.spans, id);
+        assert!(c("pr").contains("lsg_prop_box(lsg_prop_o(o, "), "{}", c("pr"));
+        assert!(c("pr2").contains("lsg_prop_o(o, ") && c("pr2").contains(", 0)") && !c("pr2").contains("lsg_prop_box"), "{}", c("pr2"));
+        assert!(r.source.contains("stock lsg_prop_box(e, Float:scale)"));
+        // Spawn Entity: a cycler_sprite model gets its box (a sprite class never does)
+        for n in v["nodes"].as_array_mut().unwrap() {
+            if n["id"] == "se" {
+                n["params"]["class"] = "cycler_sprite".into();
+                n["params"]["keys"] = "model=models/w_c4.mdl".into();
+                n["params"]["collision"] = "box_bullets".into();
+            }
+        }
+        let g = crate::tools::studio::graph::parse(&v.to_string()).unwrap();
+        let r = super::super::generate(&g, false);
+        let se = code_of(&r.source, &r.spans, "se");
+        assert!(se.contains("lsg_prop_box(lsg_spawn_ev(\"cycler_sprite\", o, \"model\", \"models/w_c4.mdl\"), 1.0)"), "{se}");
     }
 
     /// A class off the list never becomes code; Problems lists what's allowed.

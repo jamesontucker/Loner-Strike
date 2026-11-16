@@ -360,10 +360,23 @@
    }
   },
   {
+   "id": "pr4",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1300,
+    "y": 660
+   },
+   "params": {
+    "model": "models/w_c4.mdl",
+    "collision": "box_bullets",
+    "blocked": "force"
+   }
+  },
+  {
    "id": "cr",
    "type": "creature.spawn",
    "pos": {
-    "x": 1300,
+    "x": 1560,
     "y": 660
    },
    "params": {
@@ -374,7 +387,7 @@
    "id": "np",
    "type": "npc.spawn",
    "pos": {
-    "x": 1560,
+    "x": 1820,
     "y": 660
    },
    "params": {
@@ -387,8 +400,8 @@
    "id": "iu",
    "type": "npc.spawn_use",
    "pos": {
-    "x": 1820,
-    "y": 660
+    "x": 0,
+    "y": 880
    },
    "params": {}
   },
@@ -396,7 +409,7 @@
    "id": "cc",
    "type": "comp.create",
    "pos": {
-    "x": 0,
+    "x": 260,
     "y": 880
    },
    "params": {
@@ -407,7 +420,7 @@
    "id": "pforce",
    "type": "ent.spawn_prop",
    "pos": {
-    "x": 260,
+    "x": 520,
     "y": 880
    },
    "params": {
@@ -419,7 +432,7 @@
    "id": "palways",
    "type": "ent.spawn_prop",
    "pos": {
-    "x": 520,
+    "x": 780,
     "y": 880
    },
    "params": {
@@ -432,7 +445,7 @@
    "id": "pnear",
    "type": "ent.spawn_weapon",
    "pos": {
-    "x": 780,
+    "x": 1040,
     "y": 880
    },
    "params": {
@@ -445,7 +458,7 @@
    "id": "br",
    "type": "flow.branch",
    "pos": {
-    "x": 1040,
+    "x": 1300,
     "y": 880
    },
    "params": {}
@@ -454,7 +467,7 @@
    "id": "pfail",
    "type": "ent.spawn_prop",
    "pos": {
-    "x": 1300,
+    "x": 1560,
     "y": 880
    },
    "params": {
@@ -466,7 +479,7 @@
    "id": "pB",
    "type": "ent.spawn_prop",
    "pos": {
-    "x": 1560,
+    "x": 1820,
     "y": 880
    },
    "params": {
@@ -477,8 +490,8 @@
    "id": "why",
    "type": "flow.switch_enum",
    "pos": {
-    "x": 1820,
-    "y": 880
+    "x": 0,
+    "y": 1100
    },
    "params": {
     "enum": "ls_spawn_fail"
@@ -488,7 +501,7 @@
    "id": "cretry",
    "type": "creature.spawn",
    "pos": {
-    "x": 0,
+    "x": 260,
     "y": 1100
    },
    "params": {
@@ -859,12 +872,23 @@
     "pin": "player"
    },
    "to": {
+    "node": "pr4",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
     "node": "cr",
     "pin": "at_ent"
    }
   },
   {
-   "id": "w34",
+   "id": "w35",
    "from": {
     "node": "vofs",
     "pin": "out"
@@ -875,7 +899,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w36",
    "from": {
     "node": "vvel",
     "pin": "out"
@@ -886,7 +910,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w37",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -897,7 +921,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w38",
    "from": {
     "node": "vofs",
     "pin": "out"
@@ -908,7 +932,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w39",
    "from": {
     "node": "v1",
     "pin": "out"
@@ -919,7 +943,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w40",
    "from": {
     "node": "vrot",
     "pin": "out"
@@ -930,7 +954,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w41",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -941,7 +965,7 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w42",
    "from": {
     "node": "vofs",
     "pin": "out"
@@ -952,7 +976,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w43",
    "from": {
     "node": "vrot",
     "pin": "out"
@@ -963,24 +987,13 @@
    }
   },
   {
-   "id": "w43",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "pforce",
-    "pin": "at"
-   }
-  },
-  {
    "id": "w44",
    "from": {
     "node": "ps",
     "pin": "player"
    },
    "to": {
-    "node": "palways",
+    "node": "pforce",
     "pin": "at"
    }
   },
@@ -991,12 +1004,23 @@
     "pin": "player"
    },
    "to": {
+    "node": "palways",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
     "node": "pnear",
     "pin": "at_ent"
    }
   },
   {
-   "id": "w46",
+   "id": "w47",
    "from": {
     "node": "pnear",
     "pin": "spawned"
@@ -1007,7 +1031,7 @@
    }
   },
   {
-   "id": "w47",
+   "id": "w48",
    "from": {
     "node": "pnear",
     "pin": "moved"
@@ -1018,7 +1042,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w49",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -1029,7 +1053,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w50",
    "from": {
     "node": "pfail",
     "pin": "failed"
@@ -1040,7 +1064,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w51",
    "from": {
     "node": "v1",
     "pin": "out"
@@ -1051,7 +1075,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w52",
    "from": {
     "node": "pB",
     "pin": "failed"
@@ -1062,7 +1086,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w53",
    "from": {
     "node": "pfail",
     "pin": "reason"
@@ -1073,7 +1097,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w54",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -1084,7 +1108,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w55",
    "from": {
     "node": "ps",
     "pin": "then"
@@ -1095,7 +1119,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w56",
    "from": {
     "node": "dl",
     "pin": "then"
@@ -1106,7 +1130,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w57",
    "from": {
     "node": "dl2",
     "pin": "then"
@@ -1117,7 +1141,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w58",
    "from": {
     "node": "dc",
     "pin": "then"
@@ -1128,7 +1152,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w59",
    "from": {
     "node": "gb",
     "pin": "then"
@@ -1139,7 +1163,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w60",
    "from": {
     "node": "gb2",
     "pin": "then"
@@ -1150,7 +1174,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w61",
    "from": {
     "node": "rg",
     "pin": "then"
@@ -1161,7 +1185,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w62",
    "from": {
     "node": "s2",
     "pin": "then"
@@ -1172,7 +1196,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w63",
    "from": {
     "node": "s2b",
     "pin": "then"
@@ -1183,7 +1207,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w64",
    "from": {
     "node": "sa",
     "pin": "then"
@@ -1194,7 +1218,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w65",
    "from": {
     "node": "sa2",
     "pin": "then"
@@ -1205,7 +1229,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w66",
    "from": {
     "node": "so",
     "pin": "then"
@@ -1216,7 +1240,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w67",
    "from": {
     "node": "lp",
     "pin": "then"
@@ -1227,7 +1251,7 @@
    }
   },
   {
-   "id": "w67",
+   "id": "w68",
    "from": {
     "node": "lp2",
     "pin": "then"
@@ -1238,7 +1262,7 @@
    }
   },
   {
-   "id": "w68",
+   "id": "w69",
    "from": {
     "node": "st",
     "pin": "then"
@@ -1249,7 +1273,7 @@
    }
   },
   {
-   "id": "w69",
+   "id": "w70",
    "from": {
     "node": "st2",
     "pin": "then"
@@ -1260,7 +1284,7 @@
    }
   },
   {
-   "id": "w70",
+   "id": "w71",
    "from": {
     "node": "st3",
     "pin": "then"
@@ -1271,7 +1295,7 @@
    }
   },
   {
-   "id": "w71",
+   "id": "w72",
    "from": {
     "node": "se",
     "pin": "then"
@@ -1282,7 +1306,7 @@
    }
   },
   {
-   "id": "w72",
+   "id": "w73",
    "from": {
     "node": "se2",
     "pin": "then"
@@ -1293,7 +1317,7 @@
    }
   },
   {
-   "id": "w73",
+   "id": "w74",
    "from": {
     "node": "se3",
     "pin": "then"
@@ -1304,7 +1328,7 @@
    }
   },
   {
-   "id": "w74",
+   "id": "w75",
    "from": {
     "node": "sw",
     "pin": "then"
@@ -1315,7 +1339,7 @@
    }
   },
   {
-   "id": "w75",
+   "id": "w76",
    "from": {
     "node": "sw2",
     "pin": "then"
@@ -1326,7 +1350,7 @@
    }
   },
   {
-   "id": "w76",
+   "id": "w77",
    "from": {
     "node": "pr",
     "pin": "then"
@@ -1337,7 +1361,7 @@
    }
   },
   {
-   "id": "w77",
+   "id": "w78",
    "from": {
     "node": "pr2",
     "pin": "then"
@@ -1348,9 +1372,20 @@
    }
   },
   {
-   "id": "w78",
+   "id": "w79",
    "from": {
     "node": "pr3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pr4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "pr4",
     "pin": "then"
    },
    "to": {
@@ -1359,7 +1394,7 @@
    }
   },
   {
-   "id": "w79",
+   "id": "w81",
    "from": {
     "node": "cr",
     "pin": "then"
@@ -1370,7 +1405,7 @@
    }
   },
   {
-   "id": "w80",
+   "id": "w82",
    "from": {
     "node": "np",
     "pin": "then"
@@ -1381,7 +1416,7 @@
    }
   },
   {
-   "id": "w81",
+   "id": "w83",
    "from": {
     "node": "iu",
     "pin": "then"
@@ -1392,7 +1427,7 @@
    }
   },
   {
-   "id": "w82",
+   "id": "w84",
    "from": {
     "node": "cc",
     "pin": "then"
@@ -1403,7 +1438,7 @@
    }
   },
   {
-   "id": "w83",
+   "id": "w85",
    "from": {
     "node": "pforce",
     "pin": "then"
@@ -1414,7 +1449,7 @@
    }
   },
   {
-   "id": "w84",
+   "id": "w86",
    "from": {
     "node": "palways",
     "pin": "then"
@@ -1425,7 +1460,7 @@
    }
   },
   {
-   "id": "w85",
+   "id": "w87",
    "from": {
     "node": "pnear",
     "pin": "then"
@@ -1436,7 +1471,7 @@
    }
   },
   {
-   "id": "w86",
+   "id": "w88",
    "from": {
     "node": "pfail",
     "pin": "then"

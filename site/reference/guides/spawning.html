@@ -38,7 +38,7 @@
 <div class="table"><table>
 <thead><tr><th>Node</th><th>Makes</th></tr></thead>
 <tbody>
-<tr><td><a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a></td><td>A model, solid or not.</td></tr>
+<tr><td><a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a></td><td>A model. Its <b>Collision</b>: None (walk through), Box, players only, or Box, players and bullets (a box the model's own size; at run time both boxes stop bullets too).</td></tr>
 <tr><td><a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a></td><td>A creature of a type from Creature Studio, with health, tier and pay.</td></tr>
 <tr><td><a class="node" data-node="npc.spawn" href="../nodes/npcs.html#n-npc-spawn">Spawn NPC</a></td><td>A character people talk to.</td></tr>
 <tr><td><a class="node" data-node="npc.spawn_use" href="../nodes/npcs.html#n-npc-spawn-use">Spawn Interactable</a></td><td>Something people use with E: a lever, a note, a terminal.</td></tr>
@@ -82,6 +82,7 @@
 <p class="chain"><a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a> (env_sprite, At entity: Player) <span class="to">→</span> <a class="node" data-node="ent.attach" href="../nodes/entities.html#n-ent-attach">Attach To</a> (Entity, Parent: Player, Offset: 0 0 48)</p>
 
 <h2 id="blocked">When the spot is taken</h2>
+<p><b>Collision</b> on <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a> (and <a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a> making a cycler_sprite or cycler model) has the map editor's names: None, Box, players only, Box, players and bullets. A box is the model's own size times its scale. The game has no players-only solid for something spawned, so at run time both boxes stop bullets too; in the map editor, players only is an invisible CLIP brush. A graph from before keeps what it did (Spawn Prop: what Solid says).</p>
 <p>Spawning on top of a wall, a player or another prop can leave a thing stuck. <a class="node" data-node="ent.spawn_prop" href="../nodes/entities.html#n-ent-spawn-prop">Spawn Prop</a>, <a class="node" data-node="creature.spawn" href="../nodes/creatures.html#n-creature-spawn">Spawn Creature</a>, <a class="node" data-node="npc.spawn" href="../nodes/npcs.html#n-npc-spawn">Spawn NPC</a>, <a class="node" data-node="npc.spawn_use" href="../nodes/npcs.html#n-npc-spawn-use">Spawn Interactable</a>, <a class="node" data-node="ent.spawn_entity" href="../nodes/entities.html#n-ent-spawn-entity">Spawn Entity</a>, <a class="node" data-node="ent.spawn_weapon" href="../nodes/entities.html#n-ent-spawn-weapon">Spawn Weapon On Ground</a>, <a class="node" data-node="comp.create" href="../nodes/components.html#n-comp-create">Create Component</a> and <a class="node" data-node="proj.spawn" href="../nodes/projectiles.html#n-proj-spawn">Spawn Projectile</a> check the spot for you. Their setting <b>If the spot is blocked</b> says what to do (the same choices as Unreal's Spawn Collision Handling):</p>
 <div class="table"><table>
 <thead><tr><th>If the spot is blocked</th><th>What happens</th></tr></thead>

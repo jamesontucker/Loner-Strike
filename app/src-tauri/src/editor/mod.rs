@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 pub mod bulk; // P5
+pub mod collision; // a model entity's Collision (Content Browser models)
 pub mod checks;
 pub mod fgd;
 pub mod doc;

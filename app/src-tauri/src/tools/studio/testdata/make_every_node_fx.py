@@ -45,6 +45,8 @@ A("sw2", "ent.spawn_weapon", {"item": "kevlar"}, [("v1", "out", "pos"), ("vrot",
 A("pr", "ent.spawn_prop", {"model": "models/w_c4.mdl", "solid": False}, [(*P, "at"), ("vofs", "out", "offset"), ("vrot", "out", "angles"), ("vvel", "out", "vel")])
 A("pr2", "ent.spawn_prop", {"model": "models/w_c4.mdl", "scale": 1.5}, [("v1", "out", "pos")])
 A("pr3", "ent.spawn_prop", {"model": "models/w_c4.mdl"}, [(*P, "at")])
+# Collision: a box the model's own size (and the helper compiled)
+A("pr4", "ent.spawn_prop", {"model": "models/w_c4.mdl", "collision": "box_bullets", "blocked": "force"}, [(*P, "at")])
 A("cr", "creature.spawn", {"kind": "zombie"}, [(*P, "at_ent"), ("vofs", "out", "offset"), ("vvel", "out", "vel")])
 A("np", "npc.spawn", {"name": "Guide", "yaw": 45, "copy_rot": True}, [(*P, "at_ent"), ("vofs", "out", "offset")])
 A("iu", "npc.spawn_use", {}, [("v1", "out", "pos"), ("vrot", "out", "angles")])
