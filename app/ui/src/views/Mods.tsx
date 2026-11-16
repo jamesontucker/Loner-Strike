@@ -10,6 +10,7 @@ import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useC
 import type { Scan } from "./Setup";
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO } from "../games";
 import { CommunityModes, OwnModes } from "./tools/community/Hooks";
+import { SourceBadge } from "./tools/community/chip";
 
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
@@ -214,7 +215,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
             return (
               <div key={c.id} className={`mod${on ? " on" : ""}`}>
                 <Icon name={c.id.replace(/^(mode|addon)-/, "")} size={22} />
-                <span className="mod-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}{!c.builtin && on ? " · installed" : ""}</small></span>
+                <span className="mod-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}{!c.builtin && on ? " · installed" : ""}</small><span className="mode-src"><SourceBadge s={{ kind: "builtin", label: "Built-in", title: "Comes with Loner-Strike" }} /></span></span>
                 {c.description && <span className="mod-desc">{c.description}</span>}
                 {/* how bots play it, under the description as on Play's mode cards */}
                 {rating && <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>}
@@ -294,6 +295,14 @@ function OwnPlugins() {
     getJson<{ plugins: string[] }>("/api/mods/plugins").then((r) => setList(r.plugins ?? [])).catch((e) => !isAbort(e) && setFailed(true));
   };
   useEffect(load, []);
+  // made in the Plugin Studio (a source of that name in My plugins) or added from a file
+  const [mine, setMine] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!ON_THIS_COMPUTER) return;
+    getJson<{ folders?: { id: string; files: { name: string }[] }[] }>("/api/tools/plugins")
+      .then((o) => setMine(new Set((o.folders?.find((f) => f.id === "mine")?.files ?? []).map((f) => f.name.replace(/\.sma$/i, "").toLowerCase()))))
+      .catch(() => {});
+  }, []);
   type R = { ok?: boolean; error?: string; cancelled?: boolean; name?: string; plugins?: string[] };
   const add = () => run(key("add"), async () => {
     const r = await postJson<R>("/api/mods/plugins/add").catch((): R => ({ error: "Couldn't reach the app." }));
@@ -325,7 +334,7 @@ function OwnPlugins() {
           {list.map((n) => (
             <li key={n}>
               <div className="person">
-                <span className="person-name">{n}</span>
+                <span className="person-name">{n} <SourceBadge s={mine.has(n.toLowerCase()) ? { kind: "mine", label: "Made by you", title: "Its source is in the Plugin Studio's My plugins" } : { kind: "added", label: "Added", title: "Added from a file" }} /></span>
                 <span className="person-sub mono">addons/amxmodx/plugins/{n}.amxx</span>
               </div>
               {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(key(`remove:${n}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(n)} />}

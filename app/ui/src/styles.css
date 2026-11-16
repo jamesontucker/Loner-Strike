@@ -2025,3 +2025,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .idle-docs a.btn.docs-link { margin: 0; opacity: .75; }
 .idle-docs a.btn.docs-link:hover, .idle-docs a.btn.docs-link:focus-visible { opacity: 1; }
 @media (max-width: 640px) { .idle-docs { position: static; display: flex; justify-content: flex-end; margin-bottom: 6px; } .idle-docs a.btn.docs-link { min-height: 32px; padding: 4px 10px; } }
+/* where a mode or mod came from: a quiet tag on its card, and the filter above a long list */
+.mode-src { display: block; }
+.src-badge.src-builtin { opacity: .75; }
+.src-filter { margin: 0 0 10px; }

@@ -9,7 +9,7 @@ import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
-import { CommunityLink, communityMode, originText, useCommunity, useOrigins } from "./tools/community/chip";
+import { CommunityLink, modeSource, SourceBadge, SourceFilter, useCommunity, useOrigins, type SourceKind } from "./tools/community/chip";
 import { DocsLink } from "./DocsLink";
 import { MatchMode } from "./MatchMode";
 import { ModeSettings } from "./ModeSettings";
@@ -28,9 +28,15 @@ const STUCK_MS = 20000;
 function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void }) {
   const community = useCommunity(); // (community chip)
   const origins = useOrigins(); // (origin: your own and remixed Studio modes)
+  // where each came from (Built-in, Made by you, Community), with a filter on a long list
+  const [only, setOnly] = useState<SourceKind | "all">("all");
+  const listed = [...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => ({ m, src: modeSource(m.id, community, origins) }));
+  const shown = listed.filter((x) => only === "all" || x.src.kind === only || x.m.id === current);
   return (
+    <>
+    {listed.length > 6 && <SourceFilter label="Show modes" kinds={listed.map((x) => x.src.kind)} value={only} onChange={setOnly} />}
     <div className="modes">
-      {[...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
+      {shown.map(({ m, src }) => {
         const rating = BOT_RATING[m.id] ?? "great";
         return (
           <button key={m.id} className="mode" aria-pressed={current === m.id} disabled={!!busy} aria-busy={busy === m.id} onClick={() => onPick(m.id)}>
@@ -39,13 +45,13 @@ function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name
             </span>
             <span className="mode-name">{busy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
             {m.desc && <span className="mode-desc">{m.desc}</span>}
-            {communityMode(community, m.id) && <span className="mode-desc" title={`From Community: ${communityMode(community, m.id)!.name}`}>Community{communityMode(community, m.id)!.author ? ` · ${communityMode(community, m.id)!.author}` : ""}</span>}
-            {!communityMode(community, m.id) && origins?.modes[m.id] && <span className="mode-desc">{originText(origins.modes[m.id])}</span>}
+            <span className="mode-src"><SourceBadge s={src} /></span>
             <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
           </button>
         );
       })}
     </div>
+    </>
   );
 }
 

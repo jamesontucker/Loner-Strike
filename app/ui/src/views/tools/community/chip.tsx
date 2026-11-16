@@ -139,3 +139,47 @@ export function OriginTag({ o }: { o?: Origin | null }) {
     </span>
   );
 }
+
+// ---- where a mode or mod came from: Built-in / Made by you / Community / Added ----------------
+
+export type SourceKind = "builtin" | "mine" | "community" | "added";
+export type Source = { kind: SourceKind; label: string; title: string };
+export const SOURCE_LABEL: Record<SourceKind, string> = { builtin: "Built-in", mine: "Made by you", community: "Community", added: "Added" };
+
+/** A mode's source: Community (the library knows the creator), your own Studio mode or remix, or
+ *  else one that ships with Loner-Strike (nothing else records an origin for those). */
+export function modeSource(id: string, lib: CommunityLookup | undefined, origins: Origins | undefined): Source {
+  const cm = communityMode(lib, id);
+  if (cm) return { kind: "community", label: `Community${cm.author ? ` · ${cm.author}` : ""}`, title: `From Community: ${cm.name}${cm.author ? ` by ${cm.author}` : ""}` };
+  const o = origins?.modes[id];
+  if (o?.kind === "community") return { kind: "community", label: originText(o), title: `From Community${o.name ? `: ${o.name}` : ""}` };
+  if (o?.kind === "remix") return { kind: "mine", label: "Made by you", title: originText(o) };
+  if (o?.kind === "mine") return { kind: "mine", label: "Made by you", title: "Made in Game Mode Studio" };
+  if (o?.kind === "file") return { kind: "added", label: "Added", title: "Added from a file" };
+  return { kind: "builtin", label: "Built-in", title: "Comes with Loner-Strike" };
+}
+
+/** The source as a small tag (not a link: safe inside a card's button). */
+export function SourceBadge({ s }: { s: Source }) {
+  return (
+    <span className={`tag src-badge src-${s.kind}`} style={STYLE} title={s.title}>
+      {s.label}
+    </span>
+  );
+}
+
+/** All / Built-in / Made by you / Community / Added, for a list with more than a handful in it;
+ *  only the kinds the list has (and nothing when it has one kind). */
+export function SourceFilter({ kinds, value, onChange, label }: { kinds: SourceKind[]; value: SourceKind | "all"; onChange: (k: SourceKind | "all") => void; label: string }) {
+  const have = (["builtin", "mine", "community", "added"] as SourceKind[]).filter((k) => kinds.includes(k));
+  if (have.length < 2) return null;
+  return (
+    <div className="chips src-filter" role="group" aria-label={label}>
+      {(["all", ...have] as const).map((k) => (
+        <button key={k} type="button" className="chip" aria-pressed={value === k} onClick={() => onChange(k)}>
+          {k === "all" ? "All" : SOURCE_LABEL[k]}
+        </button>
+      ))}
+    </div>
+  );
+}

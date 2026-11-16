@@ -3,6 +3,7 @@ import { useNav } from "../store";
 import type { Online } from "../types";
 import { Banner, BusyButton, SectionHead, Segmented, Switch, useCommand } from "../ui";
 import { SAVED_NOTE, usePending, WithSaved, type Saved } from "./Settings";
+import { SourceBadge } from "./tools/community/chip";
 
 /** Add-ons with their switch on Sounds instead (one switch for each, in one place). */
 const ON_SOUNDS = ["quakesounds", "roundmusic"];
@@ -54,7 +55,7 @@ function AddonsPage({ data, refresh, saved }: { data: Online; refresh: () => voi
             <div className="addon" key={a.id}>
               <div className="addon-head">
                 <div>
-                  <h3>{a.name}</h3>
+                  <h3>{a.name} <SourceBadge s={{ kind: "builtin", label: "Built-in", title: "Comes with Loner-Strike" }} /></h3>
                   <p>
                     {a.desc}
                     {a.on !== a.loaded && <span className="muted"> · applies after a map restart</span>}
