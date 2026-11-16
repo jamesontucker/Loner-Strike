@@ -865,9 +865,12 @@ impl Learner for LocalLearner {
         from[2] = 0;
         // (one left from an earlier run that never ended: it would hold the files and a port)
         self.end_wine_side();
-        let mut child = self.spawn(&learn_args(&m.game, port, &password, &m.name), out).map_err(fail)?;
+        let args = learn_args(&m.game, port, &password, &m.name);
+        let mut child = self.spawn(&args, out).map_err(fail)?;
         sys::tie_to_app(&child);
-        let started = Instant::now();
+        let mut started = Instant::now();
+        // (the hidden servers' retry rules: crate::tools::health::retry_reason)
+        let (mut steam, mut hang) = (0u32, 0u32);
         let rcon = crate::rcon::Rcon::at(password.clone(), "127.0.0.1", port);
         let mut answered: Option<Instant> = None;
         let mut asked = Instant::now();
@@ -886,10 +889,8 @@ impl Learner for LocalLearner {
             for (p, f) in logs.iter().zip(from.iter_mut()) {
                 text.push_str(&read_new(p, f));
             }
-            let says = read_log(&text, &m.name);
-            if let LogSays::Failed(why) = says {
-                break Err(fail(why));
-            }
+            // (from the last restart on: a start tried again isn't this map's failure)
+            let says = read_log(crate::tools::health::after_restart(&text), &m.name);
             // done: the file is there and whole (said so, or the same on two looks)
             let now = std::fs::metadata(&nav).ok().filter(|x| x.len() >= MIN_NAV).and_then(|x| Some((x.len(), x.modified().ok()?)));
             if let Some(now) = now.filter(|_| read_head(&nav).is_some()) {
@@ -898,8 +899,28 @@ impl Learner for LocalLearner {
                 }
                 last = Some(now);
             }
-            if matches!(child.try_wait(), Ok(Some(_))) {
-                break Err(fail("the hidden server closed while loading it.".into()));
+            let closed = matches!(child.try_wait(), Ok(Some(_)));
+            let waited = if answered.is_none() { started.elapsed() } else { Duration::ZERO };
+            if let Some(why) = crate::tools::health::retry_reason(&text, closed, waited, steam, hang) {
+                if why == "steam" {
+                    steam += 1;
+                } else {
+                    hang += 1;
+                }
+                job.detail(&crate::tools::health::retry_detail(why));
+                let r = crate::tools::health::restart_hidden(&mut child, &self.dir, &logs[2], why, |out| self.spawn(&args, out));
+                if let Err(e) = r {
+                    break Err(fail(e));
+                }
+                started = Instant::now();
+                answered = None;
+                continue;
+            }
+            if let LogSays::Failed(why) = &says {
+                break Err(fail(crate::tools::health::closed_why(&text, why)));
+            }
+            if closed {
+                break Err(fail(crate::tools::health::closed_why(&text, "the hidden server closed while loading it.")));
             }
             if started.elapsed() > LEARN_LIMIT {
                 break Err(fail("it took longer than 45 minutes.".into()));
@@ -1025,6 +1046,17 @@ pub fn owner_routes() -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // a learn that was started again after Steam didn't answer: only the new attempt is read
+    #[test]
+    fn a_retried_learn_reads_only_the_new_attempt() {
+        let log = format!("FATAL ERROR (shutting down): Unable to initialize Steam\n{}\nL 11/16/2026 - 10:00:00: Navigation file 'maps/de_x.nav' saved.\n", crate::tools::health::RESTART_MARK);
+        assert!(matches!(read_log(&log, "de_x"), LogSays::Saved));
+        assert!(matches!(read_log(crate::tools::health::after_restart(&log), "de_x"), LogSays::Saved));
+        let only_old = format!("FATAL ERROR (shutting down): Unable to initialize Steam\n{}\nloading\n", crate::tools::health::RESTART_MARK);
+        assert!(matches!(read_log(crate::tools::health::after_restart(&only_old), "de_x"), LogSays::Nothing));
+        assert!(matches!(read_log(&only_old, "de_x"), LogSays::Failed(_)), "without the mark the old error would end it");
+    }
 
     #[test]
     fn bring_bots_takes_only_our_brain() {

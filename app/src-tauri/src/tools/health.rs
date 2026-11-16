@@ -268,9 +268,19 @@ pub fn after_restart(text: &str) -> &str {
 /// HLDS under CrossOver sometimes stops at `Failed to load "SDL3.dll"` on the first map change
 /// (final check 2026-11-15), or nothing came up in 4 minutes: tried once.
 pub fn retry_reason(log: &str, closed: bool, waited: Duration, steam_retries: u32, hang_retries: u32) -> Option<&'static str> {
+    retry_reason_with(log, closed, waited, steam_retries, hang_retries, Some(Duration::from_secs(240)))
+}
+
+/// retry_reason for a hidden server that works without answering for minutes (the map knowledge
+/// builder): `silent_limit` None retries a hang only on the SDL3 line.
+pub fn retry_reason_with(log: &str, closed: bool, waited: Duration, steam_retries: u32, hang_retries: u32, silent_limit: Option<Duration>) -> Option<&'static str> {
     let log = after_restart(log);
+    // (Steam: when it closed, or sitting with its FATAL ERROR: under CrossOver it doesn't end)
+    if log.contains("Unable to initialize Steam") {
+        return (steam_retries < 2).then_some("steam");
+    }
     if closed {
-        return (steam_retries < 2 && log.contains("Unable to initialize Steam")).then_some("steam");
+        return None;
     }
     if hang_retries >= 1 {
         return None;
@@ -278,7 +288,49 @@ pub fn retry_reason(log: &str, closed: bool, waited: Duration, steam_retries: u3
     if log.contains("Failed to load \"SDL3.dll\"") && waited >= Duration::from_secs(30) {
         return Some("hang");
     }
-    (waited > Duration::from_secs(240)).then_some("hang")
+    silent_limit.is_some_and(|l| waited > l).then_some("hang")
+}
+
+/// What a hidden server that closed by itself said, for the error a tool shows: Steam that didn't
+/// answer is the firewall prompt on Windows (engine_finding), anything else is `otherwise`.
+pub fn closed_why(log: &str, otherwise: &str) -> String {
+    let last = after_restart(log);
+    match last.lines().find(|l| l.contains("Unable to initialize Steam")) {
+        Some(l) => engine_finding(l, cfg!(windows)),
+        None => otherwise.to_string(),
+    }
+}
+
+/// The hidden server started again after a retry_reason: the old one ended, the mark written into
+/// its console log (`log`, appended to), a new process from `spawn`. On Windows a Steam retry waits
+/// 15 s first: time to answer the firewall prompt.
+pub fn restart_hidden(child: &mut std::process::Child, hidden: &Path, log: &Path, why: &str, spawn: impl FnOnce(std::fs::File) -> Result<std::process::Child, String>) -> Result<(), String> {
+    pkill_hidden(hidden);
+    let _ = child.kill();
+    let _ = child.wait();
+    // (under CrossOver the server can outlive wine's launcher: ended by its own path)
+    #[cfg(target_os = "macos")]
+    if let Some(win) = crate::servers::windows_path(&hidden.join("hlds.exe")) {
+        crate::procmatch::end_wine_side(&win, Duration::from_secs(3));
+    }
+    if why == "steam" {
+        std::thread::sleep(Duration::from_secs(if cfg!(windows) { 15 } else { 3 }));
+    }
+    let mut out = std::fs::OpenOptions::new().create(true).append(true).open(log).map_err(|e| e.to_string())?;
+    use std::io::Write;
+    let _ = writeln!(out, "\n{RESTART_MARK}");
+    *child = spawn(out)?;
+    crate::sys::tie_to_app(child);
+    Ok(())
+}
+
+/// What the progress line says while a hidden server is started again.
+pub fn retry_detail(why: &str) -> String {
+    match why {
+        "steam" if cfg!(windows) => "Steam didn't answer the hidden server: if Windows Firewall asks about it, choose Allow access. Trying again…".into(),
+        "steam" => "Steam didn't answer the hidden server: trying again…".into(),
+        _ => "The hidden server got stuck starting: starting it again…".into(),
+    }
 }
 
 fn amx_line() -> &'static regex::Regex {
@@ -1367,7 +1419,11 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
         }
         match playing {
             None if retry_reason(&tail(&logs[2], 1 << 16), false, started.elapsed(), retries, hang_retries).is_some() => {
-                hang_retries += 1;
+                if retry_reason(&tail(&logs[2], 1 << 16), false, started.elapsed(), retries, hang_retries) == Some("steam") {
+                    retries += 1;
+                } else {
+                    hang_retries += 1;
+                }
                 restart(&mut child, format!("The hidden server got stuck starting: starting it again on {}", p.asked.map))?;
                 started = Instant::now();
                 last_nudge = started;
@@ -1883,6 +1939,27 @@ mod tests {
         let e = f.iter().find(|f| f.text.contains("engine error")).expect("the engine finding");
         assert_eq!(e.kind.as_deref(), Some("engine"));
         assert!(f.iter().filter(|f| !f.text.contains("engine error")).all(|f| f.kind.is_none()));
+    }
+
+    // the other hidden servers (Studio Test run, the nav learner, the map knowledge builder) share
+    // the rules and the words
+    #[test]
+    fn the_shared_rules_for_every_hidden_server() {
+        let steam = "FATAL ERROR (shutting down): Unable to initialize Steam";
+        // under CrossOver the server sits with the error instead of closing: still a Steam retry
+        assert_eq!(retry_reason(steam, false, D::from_secs(5), 0, 0), Some("steam"));
+        // the knowledge builder works for minutes without answering: no silent-hang retry, the SDL3 line still
+        assert_eq!(retry_reason_with("", false, D::from_secs(600), 0, 0, None), None);
+        let sdl = "Assertion Failed: Failed to load \"SDL3.dll\"";
+        assert_eq!(retry_reason_with(sdl, false, D::from_secs(31), 0, 0, None), Some("hang"));
+        // the error a tool shows when it gives up
+        let w = closed_why(&format!("x\n{steam}\n"), "the hidden server closed while loading it.");
+        assert!(!w.contains("crashed") && w.contains("Steam"), "{w}");
+        assert_eq!(closed_why("Host_Error: y", "the hidden server closed while loading it."), "the hidden server closed while loading it.");
+        // an old attempt's Steam line after a restart: the tool's own words
+        assert_eq!(closed_why(&format!("{steam}\n{RESTART_MARK}\nnothing"), "closed."), "closed.");
+        assert!(retry_detail("steam").contains("trying again") || retry_detail("steam").contains("Trying again"));
+        assert!(retry_detail("hang").contains("stuck"));
     }
 
     #[test]

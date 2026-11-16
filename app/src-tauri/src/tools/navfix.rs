@@ -1654,28 +1654,34 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
     }
     let log_path = dir.join("knowledge-server.log");
     let log = std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
-    let mut cmd = if client.kind == "crossover" {
-        let mut c = crate::sys::command(crate::servers::CROSSOVER_WINE);
-        let win = crate::servers::windows_path(&hlds).ok_or("The hidden server has to be inside the game's CrossOver bottle.")?;
-        c.arg("--bottle").arg(client.bottle.as_deref().unwrap_or("Steam")).arg(win);
-        c.env("WINEDEBUG", "-all");
-        c
-    } else {
-        crate::sys::command(&hlds)
+    let spawn = |log: std::fs::File| -> Result<std::process::Child, String> {
+        let mut cmd = if client.kind == "crossover" {
+            let mut c = crate::sys::command(crate::servers::CROSSOVER_WINE);
+            let win = crate::servers::windows_path(&hlds).ok_or("The hidden server has to be inside the game's CrossOver bottle.")?;
+            c.arg("--bottle").arg(client.bottle.as_deref().unwrap_or("Steam")).arg(win);
+            c.env("WINEDEBUG", "-all");
+            c
+        } else {
+            crate::sys::command(&hlds)
+        };
+        low_priority(&mut cmd);
+        cmd.args(crate::navs::learn_args(&m.game, port, &password, &m.name))
+            .current_dir(dir)
+            .stdin(std::process::Stdio::null())
+            .stdout(log.try_clone().map_err(|e| e.to_string())?)
+            .stderr(log);
+        cmd.spawn().map_err(|e| format!("The hidden server didn't start ({e})."))
     };
-    low_priority(&mut cmd);
-    cmd.args(crate::navs::learn_args(&m.game, port, &password, &m.name))
-        .current_dir(dir)
-        .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone().map_err(|e| e.to_string())?)
-        .stderr(log);
-    let mut child = cmd.spawn().map_err(|e| format!("The hidden server didn't start ({e})."))?;
+    let mut child = spawn(log)?;
     crate::sys::tie_to_app(&child);
+    // (the hidden servers' retry rules: crate::tools::health::retry_reason_with; this one works for
+    // minutes without answering, so a hang is only Valve's SDL3.dll line)
+    let (mut steam, mut hang) = (0u32, 0u32);
 
     let logs = [dir.join("qconsole.log"), gdir.join("qconsole.log"), log_path, gdir.join("lonerstrike_mapknow.log")];
     let mut from: Vec<u64> = logs.iter().map(|p| std::fs::metadata(p).map(|x| x.len()).unwrap_or(0)).collect();
     from[2] = 0;
-    let started = Instant::now();
+    let mut started = Instant::now();
     let limit = Duration::from_secs((secs * 6).max(15 * 60));
     let done_line = format!("map knowledge for {}:", m.name.to_lowercase());
     let mut text = String::new();
@@ -1684,15 +1690,29 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
         for (p, at) in logs.iter().zip(from.iter_mut()) {
             text.push_str(&read_new(p, at));
         }
-        let lower = text.to_lowercase();
+        let lower = crate::tools::health::after_restart(&text).to_lowercase();
         if lower.contains(&done_line) {
             break Ok(());
         }
-        if lower.contains("host_error") || lower.contains("fatal error") {
-            break Err("the hidden server stopped with an error loading the map.".to_string());
+        let closed = matches!(child.try_wait(), Ok(Some(_)));
+        if let Some(why) = crate::tools::health::retry_reason_with(&text, closed, started.elapsed(), steam, hang, None) {
+            if why == "steam" {
+                steam += 1;
+            } else {
+                hang += 1;
+            }
+            job.detail(&crate::tools::health::retry_detail(why));
+            if let Err(e) = crate::tools::health::restart_hidden(&mut child, dir, &logs[2], why, &spawn) {
+                break Err(e);
+            }
+            started = Instant::now();
+            continue;
         }
-        if matches!(child.try_wait(), Ok(Some(_))) {
-            break Err("the hidden server closed while loading the map.".to_string());
+        if lower.contains("host_error") || lower.contains("fatal error") {
+            break Err(crate::tools::health::closed_why(&text, "the hidden server stopped with an error loading the map."));
+        }
+        if closed {
+            break Err(crate::tools::health::closed_why(&text, "the hidden server closed while loading the map."));
         }
         if started.elapsed() > limit {
             break Err(format!("it took longer than {} minutes.", limit.as_secs() / 60));

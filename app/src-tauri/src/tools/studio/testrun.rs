@@ -106,6 +106,38 @@ pub fn parse_stats(text: &str) -> Option<(f64, f64, f64)> {
     (nums.len() >= 7).then(|| (nums[0], nums[5], nums[6]))
 }
 
+/// The first start: waits for the server to answer, with the hidden servers' retry rules
+/// (health::retry_reason: Steam that didn't answer, on Windows the firewall prompt, tried up to twice;
+/// a start stuck at Valve's SDL3.dll line or silent for 4 minutes, once).
+fn wait_first(rcon: &crate::rcon::Rcon, child: &mut std::process::Child, dir: &Path, log: &Path, spawn: impl Fn(std::fs::File) -> Result<std::process::Child, String>) -> Result<(), String> {
+    use super::super::health;
+    let (mut steam, mut hang) = (0u32, 0u32);
+    let mut started = Instant::now();
+    std::thread::sleep(Duration::from_secs(2));
+    loop {
+        stopped()?;
+        let closed = matches!(child.try_wait(), Ok(Some(_)));
+        if !closed && rcon.send("bot_join_after_player 0").is_ok() {
+            return Ok(());
+        }
+        match health::retry_reason(&health::tail(log, 1 << 16), closed, started.elapsed(), steam, hang) {
+            Some(why) => {
+                if why == "steam" {
+                    steam += 1;
+                } else {
+                    hang += 1;
+                }
+                step(health::retry_detail(why));
+                health::restart_hidden(child, dir, log, why, &spawn)?;
+                started = Instant::now();
+            }
+            None if closed => return Err("crashed".into()),
+            None if started.elapsed() > Duration::from_secs(240) => return Err("The hidden server didn't come up in time.".into()),
+            None => std::thread::sleep(Duration::from_millis(700)),
+        }
+    }
+}
+
 /// Waits for the server to answer (after a start or a map change), up to `secs`.
 fn wait_up(rcon: &crate::rcon::Rcon, child: &mut std::process::Child, secs: u64) -> Result<(), String> {
     let end = Instant::now() + Duration::from_secs(secs);
@@ -404,7 +436,9 @@ fn run(st: &Shared, g: Graph) -> Result<Value, String> {
     step(format!("Starting a hidden server on {map1}"));
     let port = super::super::health::free_port()?;
     let log = std::fs::File::create(&logs[2]).map_err(|e| e.to_string())?;
-    let mut child = super::super::health::spawn(&h.client, &h.dir, &super::super::health::server_args(&h.game, port, &password, &map1), log)?;
+    let args = super::super::health::server_args(&h.game, port, &password, &map1);
+    let spawn = |log: std::fs::File| super::super::health::spawn(&h.client, &h.dir, &args, log);
+    let mut child = spawn(log)?;
     crate::sys::tie_to_app(&child);
     let rcon = crate::rcon::Rcon::at(password.clone(), "127.0.0.1", port);
     let mut crashed = false;
@@ -415,7 +449,7 @@ fn run(st: &Shared, g: Graph) -> Result<Value, String> {
     // (the debugger's log starts again on each map: what the first map wrote is kept here)
     let mut events_before = String::new();
     let played: Result<(), String> = (|| {
-        wait_up(&rcon, &mut child, 240)?;
+        wait_first(&rcon, &mut child, &h.dir, &logs[2], spawn)?;
         let _ = rcon.send(&format!("bot_quota {BOTS}"));
         step("Measuring the server without the mode");
         sample(&rcon, &mut child, BASELINE, &mut base_stats)?;
@@ -468,7 +502,8 @@ fn run(st: &Shared, g: Graph) -> Result<Value, String> {
     // what the server and AMXX said
     let mut log = String::new();
     for l in &logs {
-        log.push_str(&super::super::health::tail(l, 200_000));
+        // (from the last restart on: a start that was tried again isn't the mode's problem)
+        log.push_str(super::super::health::after_restart(&super::super::health::tail(l, 200_000)));
     }
     let mut amxx = String::new();
     for e in std::fs::read_dir(am.join("logs")).into_iter().flatten().flatten() {
@@ -494,7 +529,8 @@ fn run(st: &Shared, g: Graph) -> Result<Value, String> {
     if crashed {
         fail = true;
         summary.push("The server crashed while playing the mode.".into());
-        problems.push(json!({"level": "error", "message": format!("The server crashed.{}", if crash_text.is_empty() { "" } else { " Its crash report is in the log." }) }));
+        let said = super::super::health::closed_why(&log, "");
+        problems.push(json!({"level": "error", "message": if said.is_empty() { format!("The server crashed.{}", if crash_text.is_empty() { "" } else { " Its crash report is in the log." }) } else { said } }));
     }
     for l in &load {
         fail = true;
