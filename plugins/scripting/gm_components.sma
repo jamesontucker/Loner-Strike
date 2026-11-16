@@ -2137,7 +2137,8 @@ stock tick_zone(s, bool:sec)
 				hud_add(p, false, "The zone is closing in");
 			continue;
 		}
-		if (!g_bot[p])
+		/* (with the match HUD on, its compass says it in red instead) */
+		if (!g_bot[p] && !w3_compass_on())
 		{
 			new dir[24];
 			dir_word(p, g_va[s], dir, charsmax(dir));
@@ -7285,6 +7286,10 @@ stock w3_match_hud()
 		}
 	}
 }
+
+/* the compass (and its zone warning) is showing */
+stock bool:w3_compass_on()
+	return get_pcvar_num(g_w3cMatchHud) != 0 && !g_w3Lobby;
 
 /* the live zone, the one closing in */
 stock w3_zone_now()
