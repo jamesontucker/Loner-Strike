@@ -5311,6 +5311,63 @@ new bool:g_w3Falling[33];
 /* (for code above this line: still in the drop from the sky) */
 stock bool:w3_falling(id)
 	return g_w3Falling[id];
+
+/* while dropping in: thick haze, so nobody spots everyone from the sky (the game's Fog message:
+   the color, then the density as a float's four bytes; 0 clears it). About 800 u of view. */
+stock w3_drop_fog(id, bool:on)
+{
+	static msgFog;
+	if (!msgFog)
+		msgFog = get_user_msgid("Fog");
+	if (!msgFog || !is_user_connected(id) || is_user_bot(id))
+		return;
+	new bits = on ? (_:0.0016) : 0;
+	message_begin(MSG_ONE_UNRELIABLE, msgFog, _, id);
+	write_byte(on ? 150 : 0);
+	write_byte(on ? 160 : 0);
+	write_byte(on ? 170 : 0);
+	write_byte(bits & 255);
+	write_byte((bits >> 8) & 255);
+	write_byte((bits >> 16) & 255);
+	write_byte((bits >>> 24) & 255);
+	message_end();
+}
+
+/* say /gear: the player's guns with their rarity and ammo, armor and heals, for a few seconds */
+public cmd_w3_gear(id)
+{
+	if (!is_user_alive(id))
+		return PLUGIN_HANDLED;
+	static const rare[6][] = { "", "Common", "Uncommon", "Rare", "Epic", "Legendary" };
+	new text[512], n = 0, weapons[32], num, name[32];
+	n += formatex(text[n], charsmax(text) - n, "\yYour gear^n^n\w");
+	get_user_weapons(id, weapons, num);
+	for (new i = 0; i < num; i++)
+	{
+		new w = weapons[i];
+		if (w <= 0 || w == CSW_KNIFE || !get_weaponname(w, name, charsmax(name)))
+			continue;
+		new clip, ammo, t = clamp(w3_item_tier(name[7]), 1, 5);
+		get_user_ammo(id, w, clip, ammo);
+		if (w == CSW_HEGRENADE || w == CSW_FLASHBANG || w == CSW_SMOKEGRENADE || w == CSW_C4)
+			n += formatex(text[n], charsmax(text) - n, "%s  \d%s\w  x%d^n", name[7], rare[t], max(ammo, 1));
+		else
+			n += formatex(text[n], charsmax(text) - n, "%s  \d%s\w  %d / %d^n", name[7], rare[t], clip, ammo);
+	}
+	if (g_w3Vest[id] || g_w3Helm[id])
+		n += formatex(text[n], charsmax(text) - n, "^nVest %d   Helmet %d^n", g_w3Vest[id], g_w3Helm[id]);
+	else
+		n += formatex(text[n], charsmax(text) - n, "^nArmor %d^n", get_user_armor(id));
+	if (w3_heals_total(id))
+		n += formatex(text[n], charsmax(text) - n, "Bandage %d   Medkit %d   Drink %d^n",
+			g_w3Heals[id][HEAL_BANDAGE], g_w3Heals[id][HEAL_MEDKIT], g_w3Heals[id][HEAL_DRINK]);
+	formatex(text[n], charsmax(text) - n, "^n\r0.\w Close");
+	show_menu(id, MENU_KEY_0, text, 6, "LS Gear");
+	return PLUGIN_HANDLED;
+}
+
+public w3_gear_menu(id, key)
+	return PLUGIN_HANDLED;
 new Float:g_w3FallAt[33];
 new Float:g_w3DropSpots[33][2];
 new g_w3NDrop;
@@ -5386,6 +5443,9 @@ stock w3_init()
 	/* for the bots' brain: ls_comp_heal <bot> [kind] starts a heal (it picks the moment, e.g. in cover) */
 	register_srvcmd("ls_comp_heal", "cmd_w3_heal_srv");
 	register_clcmd("say /heal", "cmd_w3_heal_menu");
+	register_clcmd("say /gear", "cmd_w3_gear");
+	register_clcmd("say_team /gear", "cmd_w3_gear");
+	register_menucmd(register_menuid("LS Gear"), MENU_KEY_0, "w3_gear_menu");
 	register_clcmd("say_team /heal", "cmd_w3_heal_menu");
 	register_forward(FM_CmdStart, "fm_w3_cmdstart");
 	RegisterHamPlayer(Ham_Killed, "ham_w3_killed", 1);
@@ -5477,6 +5537,8 @@ public client_putinserver(id)
 public ham_w3_killed(id, killer, gib)
 {
 	w3_heal_stop(id, false);
+	if (g_w3Falling[id])
+		w3_drop_fog(id, false);
 	g_w3Falling[id] = false;
 	if (get_pcvar_num(g_w3cDeathCrates) && g_w3SnapN[id])
 		w3_dc_from_death(id);
@@ -7628,6 +7690,7 @@ stock bool:w3_drop_in(id, const Float:spot[3], Float:height)
 	set_pev(id, pev_groundentity, 0);
 	set_user_gravity(id, 0.2);
 	g_w3Falling[id] = true;
+	w3_drop_fog(id, true);
 	g_w3FallAt[id] = get_gametime();
 	if (!is_user_bot(id))
 		toast_add(id, 255, 200, 60, 4.0, "Pick your landing! (steer as you fall)", false);
@@ -7639,6 +7702,7 @@ stock w3_land(id, bool:tell)
 	if (!g_w3Falling[id])
 		return;
 	g_w3Falling[id] = false;
+	w3_drop_fog(id, false);
 	if (is_user_alive(id))
 		set_user_gravity(id, 1.0);
 	if (tell)
