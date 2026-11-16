@@ -252,7 +252,7 @@ export function ToolOptions() {
               </button>
             ))}
           </div>
-          <button type="button" className="btn small primary" disabled={(clip?.points ?? 0) < 2} onClick={() => s.doClip?.()}>
+          <button type="button" className="btn small primary" disabled={(clip?.points ?? 0) < 2} title={(clip?.points ?? 0) < 2 ? "Click two points in a 2D view first: the cut goes along that line" : undefined} onClick={() => s.doClip?.()}>
             Cut
           </button>
         </>
@@ -329,7 +329,7 @@ function SelectionPanel() {
             </button>
           </div>
           <div className="editor-row wrap">
-            <button type="button" className="btn small" disabled={n < 2} data-cmd="edit.merge" title="One brush around all the picked ones" onClick={() => void s.cmd({ op: "merge", brushes: ids.brushes })}>
+            <button type="button" className="btn small" disabled={n < 2} data-cmd="edit.merge" title={n < 2 ? "Pick two or more brushes first" : "One brush around all the picked ones"} onClick={() => void s.cmd({ op: "merge", brushes: ids.brushes })}>
               Merge
             </button>
             <button
@@ -337,7 +337,7 @@ function SelectionPanel() {
               className="btn small"
               disabled={n !== 1}
               data-cmd="edit.carve"
-              title="Cut this brush's shape out of every brush it overlaps (makes many pieces)"
+              title={n !== 1 ? "Pick exactly one brush: its shape is cut out of the others" : "Cut this brush's shape out of every brush it overlaps (makes many pieces)"}
               onClick={() => void s.cmd({ op: "carve", cutter: ids.brushes[0], targets: [...useEditor.getState().brushes.keys()] })}
             >
               Carve
@@ -533,7 +533,8 @@ function MapPanel() {
           </li>
         ))}
       </ul>
-      {wads && (
+      {/* (nothing left to add: no picker with only its placeholder) */}
+      {wads && wads.some((w) => !listed.has(w.name.toLowerCase())) && (
         <div className="editor-row">
           <select value={adding} onChange={(e) => setAdding(e.target.value)} aria-label="Add a WAD">
             <option value="">Add a WAD…</option>
