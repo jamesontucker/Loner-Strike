@@ -148,3 +148,9 @@ detail entity (not the world: they'd split visleaves). Clipnodes 77 %.
 After setup copies `plugins/game/` into the game: Play page → Battle Royale → map `br_valley` (or
 `changelevel br_valley` on a server: `br_*` maps start in Battle Royale). 16-28 players is the sweet
 spot (fill with bots). Squads: Game Mode Menu → Battle Royale → Squads 2 or 4.
+
+## Hand-edited source of truth (2026-11-15)
+
+`br_valley.lsmap` is the hand-edited map (cleanup, hints, env_fog, MaxRange 8192, waterfall notch,
+func_detail/road groups) and is now the source of truth. Do NOT regenerate from `build_map.py`:
+it would wipe the hand edits. Open the .lsmap in the Loner-Strike editor, compile with Final.
