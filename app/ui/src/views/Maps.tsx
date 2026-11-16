@@ -304,7 +304,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           </span>
         </SectionHead>
         <div className="toolbar">
-          <input className="search" type="search" aria-label="Search maps" placeholder="Search maps, authors or names like “cobble”" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="search maps-search" type="search" aria-label="Search maps" placeholder="Search maps, authors or names like “cobble”" value={q} onChange={(e) => setQ(e.target.value)} />
           <label className="sort">
             <span>Show</span>
             <select value={show} onChange={(e) => setShow(e.target.value)}>
@@ -312,13 +312,14 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             </select>
           </label>
           <Info text={SHOW_INFO} />
-          {!currentTarget() && <CommunityLink kind="map" label="More maps from Community" />}{/* (community) */}
           <label className="sort">
             <span>Sort</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} disabled={cat === "recent"}>
               {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </label>
+          {/* (after Sort, so the filters Show and Sort sit together) */}
+          {!currentTarget() && <CommunityLink kind="map" label="More maps from Community" />}{/* (community) */}
           <div className="chips" role="group" aria-label="Map type">
             {CATS.map(([id, label]) => (
               <button key={id} className="chip" aria-pressed={cat === id} onClick={() => setCat(id)}>{label}</button>

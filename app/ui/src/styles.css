@@ -406,6 +406,8 @@ select, .search {
 }
 .search { flex: 1 1 260px; max-width: 420px; }
 .search::placeholder { color: var(--bone-faint); }
+/* Maps: the search gives way first, so Show, Sort and "More maps from Community" stay on its line */
+.search.maps-search { flex-basis: 130px; min-width: 130px; }
 /* Every text field the app's look by default, so a field without a class is never the browser's
    white box, system font or monospace textarea. Zero specificity (:where): any component's own rule
    wins, and the size follows the text around it (the compact editor and Studio panels stay compact;
