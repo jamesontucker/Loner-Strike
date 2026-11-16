@@ -114,7 +114,7 @@ export function ModelPicker({ value, onChange, report }: { value: string; onChan
       )}
       <CreditLine credit={credit} />
       <label className="tl-check cs-check">
-        <input type="checkbox" checked={standIn} disabled={!first || first === STAND_IN} onChange={(e) => setStandIn(e.target.checked)} />
+        <input type="checkbox" checked={standIn} disabled={!first || first === STAND_IN} title={!first ? "Pick a model first" : first === STAND_IN ? "The stand-in is the model already" : undefined} onChange={(e) => setStandIn(e.target.checked)} />
         Stand-in where it's missing (the hostage, tinted)
       </label>
     </div>

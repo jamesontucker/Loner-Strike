@@ -261,7 +261,7 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
           </table>
         </div>
         <div className="row st-table-foot">
-          <button type="button" className="btn small" disabled={t.rows.length >= LIMITS.rows} onClick={() => up((x) => ({ ...x, rows: [...x.rows, x.columns.map(blank)] }))}>
+          <button type="button" className="btn small" disabled={t.rows.length >= LIMITS.rows} title={t.rows.length >= LIMITS.rows ? `A table has at most ${LIMITS.rows} rows.` : undefined} onClick={() => up((x) => ({ ...x, rows: [...x.rows, x.columns.map(blank)] }))}>
             + Row
           </button>
           <span className="st-muted">Rows count from 0 (Get Cell's Row). Get Row finds a row by its key.</span>
