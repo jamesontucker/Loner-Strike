@@ -353,6 +353,7 @@ html { scroll-padding-top: 72px; }
 .feature p { color: var(--dim); margin: 0 0 12px; }
 .feature ul { margin: 0; padding-left: 20px; color: var(--dim); }
 .feature li + li { margin-top: 4px; }
+.feature .ref-link { font-size: 14px; font-weight: 600; margin-left: 4px; white-space: nowrap; }
 .phone { width: min(300px, 100%); margin: 0 auto; border-radius: 22px; padding: 10px; background: #23271c; box-shadow: var(--raised), 0 24px 60px rgba(0,0,0,.45); }
 .phone img { border-radius: 14px; }
 .pair { display: grid; grid-template-columns: 1fr; gap: 18px; }
@@ -898,7 +899,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
         <li><b>Paintball</b></li><li><b>Knife Arena</b></li><li>AWP, Scoutz, Deagle and pistol-only</li><li>Roll the Dice</li><li>Round-end music</li><li>Grappling hook</li>
         <li class="ours"><a href="docs#last-stand"><b>Last Stand</b> <span class="tag">made here</span> Hold an outpost against waves of creatures</a></li>
-        <li class="ours"><a href="docs#battle-royale"><b>Battle Royale</b> <span class="tag">made here</span> Drop in, loot up, outlast the zone</a></li>
+        <li class="ours"><a href="docs#battle-royale"><b>Battle Royale</b> <span class="tag">made here</span> Glide in, walk over loot, outlast the storm wall</a></li>
       </ul>
     </div>
   </section>
@@ -909,8 +910,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <h3>Make your own <span class="beta" title="New and still settling in">Beta</span></h3>
         <p>The tools we wished we had in 2004. Make a map, give it a mode, and playtest it with bots in one click.</p>
         <ul>
-          <li><b>Map editor:</b> Hammer's depth, modern editor feel. Press F5 and you're playing it with bots</li>
-          <li><b>Game Mode Studio:</b> game modes from nodes and wires, debugged live in the game. NPCs, dialog and things to use make story and RPG modes</li>
+          <li><b>Map editor:</b> Hammer's depth, modern editor feel. Press F5 and you're playing it with bots <a class="ref-link" href="reference/editor.html">Reference</a></li>
+          <li><b>Game Mode Studio:</b> game modes from nodes and wires, debugged live in the game, with typed pins (models, sounds, colors, weapons, hit zones) that only connect where they fit. NPCs, dialog and things to use make story and RPG modes <a class="ref-link" href="reference/nodes.html">Reference</a></li>
           <li><b>Map simulator:</b> bots play a match on your map, drawn on it afterward</li>
           <li><b>Replay:</b> watch a whole bot match back on your map, in 3D or from above, every move and fight</li>
           <li><b>Nav fixer:</b> fix where bots can walk, in 3D, top-down or split view</li>
