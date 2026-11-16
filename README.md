@@ -22,7 +22,6 @@
 - Map editor: brushes and entities in 3D, live checks, Hammer, J.A.C.K. and TrenchBroom import, F5 to playtest with bots
 - Game Mode Studio: modes from typed node graphs, playtested with bots and debugged live in the game
 - Creature Studio for creatures and waves, and Plugin Studio for AMX Mod X plugins
-- An AI agent connector (MCP), so coding agents like Claude Code can use the tools
 
 **Host**
 - Dedicated servers on your computer, or on a rented Linux machine (a VPS) the app sets up over SSH
