@@ -2000,7 +2000,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
         }
         check_members(g, "The struct", &s.name, &s.fields, false, &mut p);
         if s.fields.iter().any(|f| !item_type_ok(g, &f.ty, false)) {
-            p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d}: a field can be a number, yes/no, text, player, entity, team, vector, timer or enum (not an array, map or struct).", short(&s.name))));
+            p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d}: a field is one value: a number, yes/no, text, vector, color, file (model, sprite, sound, decal), player, entity or entity handle (NPC, creature...), team, timer, sound loop or enum (not an array, map or struct).", short(&s.name))));
         }
         if s.fields.iter().filter(|f| f.ty == "text").count() > MAX_TEXT_FIELDS {
             p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d} can have at most {MAX_TEXT_FIELDS} text fields.", short(&s.name))));

@@ -1078,7 +1078,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
     <li><b>Variables</b>: number, yes/no, text, vector, color, transform, player, team, a weapon, a file and more, per mode, player or team, kept for the map or reset each round. Lists and maps too.</li>
     <li><b>Functions</b>: reusable graphs with inputs, outputs and locals. They run straight through, so waiting nodes like Delay go in a macro.</li>
     <li><b>Macros</b>: copied in where used, with several flows in and out.</li>
-    <li><b>Structs</b> group values (a loadout); <b>enums</b> are named choices (scout, tank, medic).</li>
+    <li><b>Structs</b> group values (a loadout); <b>enums</b> are named choices (scout, tank, medic). A struct's field holds one value: a number, yes/no, text, a vector, a color, a file (model, sprite, sound or decal), a player, an entity or an entity handle (NPC, creature, projectile...), a team, a timer, a sound loop or an enum. For a list, make an <b>Array of</b> the struct.</li>
     <li><b>Collapse to Function</b> or <b>Collapse to Macro</b> tidies picked nodes.</li>
   </ul>
   <p>Deleting a variable, function or custom event that's in use asks what to do with the nodes that use it (it says how many and where, with <b>Find uses</b>): <b>Replace with</b> another of the same kind (wires stay), <b>Remove it and its nodes</b> (the flow is joined up round them), or <b>Remove it, keep the nodes</b>. Each is one <b>Undo</b>.</p>

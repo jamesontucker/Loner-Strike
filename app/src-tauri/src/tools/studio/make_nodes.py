@@ -666,8 +666,8 @@ node("vec.entity", "Position Of Entity", "Vectors", "Where an entity is (the mid
 node("player.set_position", "Set Position", "Players", "Moves a living player to a position (pick one where they fit).", inputs=[X, P("player","player","Player",required=True), P("at","vector","Position",required=True)], outputs=[E()])
 node("player.set_velocity", "Set Velocity", "Players", "Throws a living player: their speed and direction as a vector.", inputs=[X, P("player","player","Player",required=True), P("v","vector","Velocity",required=True)], outputs=[E()])
 # structs and enums
-node("struct.make", "Make Struct", "Structs", "A struct from its fields.", inputs=[], outputs=[P("out","$S","Struct")], params=[prm("struct","Struct","struct","")], pure=True)
-node("struct.break", "Break Struct", "Structs", "A struct's fields.", inputs=[P("in","$S","Struct",required=True)], outputs=[], params=[prm("struct","Struct","struct","")], pure=True)
+node("struct.make", "Make Struct", "Structs", "A struct from its fields. Each field is one value (a number, yes/no, text, a vector, a color, a file (model, sprite, sound or decal), a player, an entity or an entity handle (NPC, creature, projectile...), a team, a timer, a sound loop or an enum); for a list, an Array of the struct.", inputs=[], outputs=[P("out","$S","Struct")], params=[prm("struct","Struct","struct","")], pure=True)
+node("struct.break", "Break Struct", "Structs", "A struct's fields, each one value (a number, text, a color, a file, an entity or handle, an enum...).", inputs=[P("in","$S","Struct",required=True)], outputs=[], params=[prm("struct","Struct","struct","")], pure=True)
 node("struct.set_field", "Set Field", "Structs", "Sets one field of a struct variable.", inputs=[X, P("value","$F","Value",optional=True)], outputs=[E()],
      params=[prm("var","Variable","var","",varType="struct"), prm("field","Field","field","")])
 node("enum.value", "Enum Value", "Enums", "One of an enum's values.", outputs=[P("out","$E","Value")], params=[prm("enum","Enum","enum",""), prm("value","Value","enumvalue",0)], pure=True)

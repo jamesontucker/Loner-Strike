@@ -40042,7 +40042,7 @@
 "struct.make":{
 "title":"Make Struct",
 "category":"Structs",
-"what":"A struct from its fields.",
+"what":"A struct from its fields. Each field is one value (a number, yes/no, text, a vector, a color, a file (model, sprite, sound or decal), a player, an entity or an entity handle (NPC, creature, projectile...), a team, a timer, a sound loop or an enum); for a list, an Array of the struct.",
 "pins":[
 {
 "id":"out",
@@ -40064,7 +40064,7 @@
 "struct.break":{
 "title":"Break Struct",
 "category":"Structs",
-"what":"A struct's fields.",
+"what":"A struct's fields, each one value (a number, text, a color, a file, an entity or handle, an enum...).",
 "pins":[
 {
 "id":"in",
