@@ -4972,10 +4972,55 @@ stock zone_beams(s, Float:r)
 		new Float:d = dist2d(g_porg[p], g_va[s]);
 		if (floatabs(d - r) > 1500.0)
 			continue;
-		ring(p, g_va[s], g_porg[p][2] - 30.0, r, 24, 80, 160, 255, 180);
+		/* not while dropping in from the sky (the ring would hang across the sky): from the landing on */
+		if (w3_falling(p) || !(pev(p, pev_flags) & FL_ONGROUND))
+			continue;
+		zone_arc(p, g_va[s], r, 24, 80, 160, 255, 140);
 		if (g_pf[s][Z_TOR] < r - 1.0)
-			ring(p, g_vb[s], g_porg[p][2] - 30.0, g_pf[s][Z_TOR], 16, 255, 255, 255, 90);
+			zone_arc(p, g_vb[s], g_pf[s][Z_TOR], 16, 255, 255, 255, 70);
 	}
+}
+
+/* the part of a zone circle near a player (120 degrees round the point closest to them), on the
+   ground: each segment's ends traced down to the floor there, so it follows slopes and doesn't
+   cut through buildings at one height (the same number of beams as a whole ring had) */
+stock zone_arc(id, const Float:c[3], Float:r, segs, cr, cg, cb, bright)
+{
+	if (g_beamLeft[id] < segs || r < 8.0)
+		return;
+	g_beamLeft[id] -= segs;
+	new Float:feet = g_porg[id][2] - 36.0;
+	new Float:mid = floatatan2(g_porg[id][1] - c[1], g_porg[id][0] - c[0], degrees);
+	new Float:step = 120.0 / float(segs), Float:a[3], Float:b[3];
+	zone_arc_point(c, r, mid - 60.0, feet, a);
+	for (new i = 1; i <= segs; i++)
+	{
+		zone_arc_point(c, r, mid - 60.0 + step * float(i), feet, b);
+		beam(id, a, b, cr, cg, cb, 12, 8, bright);
+		a = b;
+	}
+}
+
+/* a point of the circle at the angle, on the floor below (within 400 u of the player's feet;
+   their own height where there's none, or inside a wall) */
+stock zone_arc_point(const Float:c[3], Float:r, Float:ang, Float:feet, Float:out[3])
+{
+	out[0] = c[0] + r * floatcos(ang, degrees);
+	out[1] = c[1] + r * floatsin(ang, degrees);
+	new Float:top[3], Float:down[3], Float:frac;
+	top[0] = down[0] = out[0];
+	top[1] = down[1] = out[1];
+	top[2] = feet + 72.0;
+	down[2] = feet - 400.0;
+	engfunc(EngFunc_TraceLine, top, down, IGNORE_MONSTERS, 0, 0);
+	get_tr2(0, TR_flFraction, frac);
+	if (get_tr2(0, TR_StartSolid) || frac >= 1.0)
+	{
+		out[2] = feet + 12.0;
+		return;
+	}
+	get_tr2(0, TR_vecEndPos, out);
+	out[2] += 12.0;
 }
 
 stock pulse(const Float:c[3], Float:r)
@@ -5240,6 +5285,9 @@ new g_w3Killer[33];
 /* drop-in */
 new g_w3cDropHeight, g_w3fwLanded;
 new bool:g_w3Falling[33];
+/* (for code above this line: still in the drop from the sky) */
+stock bool:w3_falling(id)
+	return g_w3Falling[id];
 new Float:g_w3FallAt[33];
 new Float:g_w3DropSpots[33][2];
 new g_w3NDrop;
