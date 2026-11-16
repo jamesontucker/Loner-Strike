@@ -10342,8 +10342,6 @@ new g_wtBoss[32], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_w
 #define SH_MAX_ITEMS 12
 
 new g_shopIn[33];
-/* the mystery box asked to be pressed again (its slot + 1) and when */
-new g_boxAsk[33], Float:g_boxAskAt[33];
 new g_shopVisits[33];
 new Float:g_shopMenuUntil[33];
 new g_shopMenuSlot[33];
@@ -11433,16 +11431,6 @@ public up_prethink(id)
 			g_upUseNext[id] = now + 1.0;
 			return FMRES_IGNORED;
 		}
-		/* a second press within 2 s buys: a stray press never spends money */
-		if (g_boxAsk[id] != s + 1 || now - g_boxAskAt[id] > 2.0)
-		{
-			g_boxAsk[id] = s + 1;
-			g_boxAskAt[id] = now;
-			g_upUseNext[id] = now + 0.25;
-			client_print(id, print_center, "Press USE again to buy a random gun for $%d", floatround(g_pf[s][BX_PRICE]));
-			return FMRES_IGNORED;
-		}
-		g_boxAsk[id] = 0;
 	}
 	g_upUseNext[id] = now + 1.0;
 	up_use(s, id, !bot);
