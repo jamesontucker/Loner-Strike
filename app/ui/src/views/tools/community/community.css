@@ -84,7 +84,7 @@
 .cm-copy input, .cm-copy textarea { width: 100%; min-width: 0; font-size: 13px; }
 .cm-register { margin-top: 6px; flex-wrap: wrap; }
 .cm-register input:not([type="checkbox"]) { flex: 1 1 260px; min-width: 0; }
-.cm-register .cm-agree input[type="checkbox"] { flex: none; width: auto; min-width: 0; }
+.cm-register .cm-agree input[type="checkbox"] { flex: none; width: 16px; height: 16px; min-width: 16px; }
 .cm-result { display: grid; gap: 8px; justify-items: start; }
 
 /* yours */
