@@ -438,6 +438,9 @@ html { scroll-padding-top: 72px; }
 .server-addr { margin: 0; color: var(--faint); font-size: 15px; line-height: 1.4; }
 .server-addr code { color: var(--dim); user-select: all; white-space: nowrap; }
 .srv-actions { display: grid; gap: 8px; }
+.srv-list { display: grid; gap: 2px; }
+.srv-name .hy { font-family: var(--text); font-weight: 700; }
+.srv-foot { display: flex; justify-content: flex-end; padding: 10px 18px; background: var(--panel); border-radius: 2px; margin-top: 2px; }
 .srv-actions .btn { min-height: 40px; font-size: 16px; }
 /* the server list: the app's Find servers on the site */
 .servers-dlg { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 4px; border: 0; color: var(--bone); }
@@ -1054,23 +1057,28 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <div class="community-text">
         <h3>Find people to play with</h3>
-        <p>Jump on our server, or join the Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
+        <p>Jump on one of our servers, or join the Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
       </div>
       <div class="community-cards">
         <div class="window srv" id="play-online" hidden>
-          <div class="window-bar"><span></span><span></span><span></span>Our server</div>
-          <div class="srv-body">
-            <div>
-              <b class="srv-name" id="ourserver-name">Loner-Strike | Alone Together</b>
-              <p class="server-live" id="ourserver-live" hidden></p>
-              <p class="server-addr">Bots and the community modes, 24/7.<br>Console: <code id="ourserver-addr"></code></p>
-            </div>
-            <div class="srv-actions">
-              <a class="btn primary" id="ourserver-join" href="#" data-event="Join our server">Join the server</a>
-              <button type="button" class="btn" id="servers-open" data-event="Open server list">All servers</button>
-            </div>
+          <div class="window-bar"><span></span><span></span><span></span>Our servers</div>
+          <div class="srv-list" id="ourservers"></div>
+          <div class="srv-foot">
+            <button type="button" class="btn" id="servers-open" data-event="Open server list">All servers</button>
           </div>
         </div>
+        <template id="ourserver-tpl">
+          <div class="srv-body">
+            <div>
+              <b class="srv-name"></b>
+              <p class="server-live" hidden></p>
+              <p class="server-addr"><span class="srv-what"></span><br>Console: <code></code></p>
+            </div>
+            <div class="srv-actions">
+              <a class="btn primary" href="#" data-event="Join our server">Join</a>
+            </div>
+          </div>
+        </template>
       <!-- Our own card instead of Discord's widget: the invite comes from data-invite, or from the
            server's widget settings (Server Settings, Widget, Invite channel) when that's set -->
       <div class="window dc" id="discord" data-guild="1568421500636233748" data-invite="https://discord.gg/K9eBHVVwZE" hidden>
@@ -1294,10 +1302,15 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 <script src="viewer.js"></script>
 <script>
   // ---- settings -------------------------------------------------------------
-  // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
-  // is an https URL that answers {name, map, players, max_players} (optional: without it
-  // the block just has the Join button).
-  const OUR_SERVER = { address: "play.lonerstrike.com", status: "https://status.lonerstrike.com/status" };
+  // Our public servers, shown in "Our servers" in this order. ADDRESS is what players connect to
+  // (host or host:port). STATUS is an https URL that answers {name, map, players, bots, online}
+  // (optional: without it, or while it doesn't answer, the row just has its Join button).
+  const OUR_SERVERS = [
+    { name: "Loner-Strike | Classic | Human-like Bots", what: "Classic bomb defusal on the competitive maps, with bots that play like people. 24/7.",
+      address: "play.lonerstrike.com", status: "https://status.lonerstrike.com/status" },
+    { name: "Loner-Strike | Battle Royale + Last Stand", what: "Battle Royale on br_valley and Last Stand on ls_outpost, with bots. 24/7.",
+      address: "play.lonerstrike.com:27016", status: "https://status-br.lonerstrike.com/status" },
+  ];
   // Your Polar checkout link (in Polar: Products, your product, Checkout Links).
   // the monthly option (same Supporter level); empty until the user sends the link, and the line stays hidden
   const POLAR_CHECKOUT_MONTHLY = "https://buy.polar.sh/polar_cl_9rZkPVVIEoqbhvtwsBwabcBOHvIhqgZR7n7Bz3rzl8E";
@@ -1308,36 +1321,51 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   // once per browser session and remembers the number. Empty, or if the request fails: no counter.
   const COUNTER_URL = "https://status.lonerstrike.com/visit";
 
-  // "Play on our server": shown once an address is set above
-  if (OUR_SERVER.address) {
+  // "Our servers": one row per server above
+  if (OUR_SERVERS.length) {
     const box = document.getElementById("play-online");
     box.hidden = false;
     box.closest("section").hidden = false;
-    document.getElementById("ourserver-join").href = `steam://connect/${OUR_SERVER.address}`;
-    document.getElementById("ourserver-addr").textContent = `connect ${OUR_SERVER.address}`;
-    const live = document.getElementById("ourserver-live");
-    const show = async () => {
-      if (!OUR_SERVER.status || document.hidden) return;
-      try {
-        const r = await fetch(OUR_SERVER.status, { cache: "no-store" });
-        const s = await r.json();
-        // between maps, or while it restarts, the server doesn't answer: show nothing
-        if (s.online === false || typeof s.players !== "number") { live.hidden = true; return; }
-        live.replaceChildren();
-        const dot = document.createElement("span");
-        dot.className = "dot";
-        const people = s.players - (s.bots || 0);
-        live.append(dot, people > 0
-          ? `${people} ${people === 1 ? "person" : "people"} and ${s.bots || 0} bots on ${s.map}`
-          : `${s.bots || 0} bots on ${s.map}, waiting for you`);
-        live.hidden = false;
-        // (the name stays the one written above, whatever the server calls itself in game)
-      } catch {
-        live.hidden = true;
-      }
-    };
-    show();
-    setInterval(show, 30000);
+    const list = document.getElementById("ourservers");
+    const tpl = document.getElementById("ourserver-tpl");
+    for (const srv of OUR_SERVERS) {
+      const row = tpl.content.firstElementChild.cloneNode(true);
+      // the stencil font draws "-" as the logo's soldier: keep that for "Loner-Strike" only
+      const nameEl = row.querySelector(".srv-name");
+      srv.name.split(/(?<!Loner)-/).forEach((part, i) => {
+        if (i) { const hy = document.createElement("span"); hy.className = "hy"; hy.textContent = "-"; nameEl.append(hy); }
+        nameEl.append(part);
+      });
+      row.querySelector(".srv-what").textContent = srv.what;
+      row.querySelector("code").textContent = `connect ${srv.address}`;
+      const join = row.querySelector(".btn");
+      join.href = `steam://connect/${srv.address}`;
+      join.setAttribute("aria-label", `Join ${srv.name}`);
+      list.append(row);
+      const live = row.querySelector(".server-live");
+      const show = async () => {
+        if (!srv.status || document.hidden) return;
+        try {
+          const r = await fetch(srv.status, { cache: "no-store" });
+          const s = await r.json();
+          // between maps, or while it restarts, the server doesn't answer: show nothing
+          if (s.online === false || typeof s.players !== "number") { live.hidden = true; return; }
+          live.replaceChildren();
+          const dot = document.createElement("span");
+          dot.className = "dot";
+          const people = s.players - (s.bots || 0);
+          live.append(dot, people > 0
+            ? `${people} ${people === 1 ? "person" : "people"} and ${s.bots || 0} bots on ${s.map}`
+            : `${s.bots || 0} bots on ${s.map}, waiting for you`);
+          live.hidden = false;
+          // (the name stays the one written above, whatever the server calls itself in game)
+        } catch {
+          live.hidden = true;
+        }
+      };
+      show();
+      setInterval(show, 30000);
+    }
   }
 
   // Made by players: Community's index (what the app lists), read-only. Asked once, when the
