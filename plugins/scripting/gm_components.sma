@@ -470,6 +470,11 @@ public plugin_init()
 	g_msgFade = get_user_msgid("ScreenFade");
 	g_msgRoundTime = get_user_msgid("RoundTime");
 	g_msgRadar = get_user_msgid("Radar");
+	/* Condition Zero's tutor: "You have N teammates left" means nothing in free-for-all or Battle
+	   Royale (the squad HUD says who's left in squads) */
+	new msgTutor = get_user_msgid("TutorText");
+	if (msgTutor)
+		register_message(msgTutor, "msg_tutor_text");
 	g_sync = CreateHudSyncObj();
 
 	RegisterHamPlayer(Ham_Spawn, "ham_player_spawn", 1);
@@ -7667,6 +7672,19 @@ stock w3_match_hud()
 			ShowSyncHudMsg(p, g_w3SyncSide, "%s", side);
 		}
 	}
+}
+
+/* CZ's tutor messages: its teammate-killed ones blocked in free-for-all and with the match HUD
+   (Battle Royale, solo and squads); team modes keep them */
+public msg_tutor_text(msgid, dest, id)
+{
+	if (!get_cvar_num("mp_freeforall") && !w3_compass_on())
+		return PLUGIN_CONTINUE;
+	new key[64];
+	get_msg_arg_string(1, key, charsmax(key));
+	if (containi(key, "Tutor_Teammate_Killed") != -1)
+		return PLUGIN_HANDLED;
+	return PLUGIN_CONTINUE;
 }
 
 /* the compass (and its zone warning) is showing */
