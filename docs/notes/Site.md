@@ -360,6 +360,6 @@ clone only for the shot; the clone's other demos set aside meanwhile), `models` 
 whole map); the Inspect size line says "center"; Demos no longer lists HLTV's own slot as a player (the HLTV
 userinfo has `*hltv`); the Play page's mode settings give a long choice room (was cut: "Whoever has i").
 Docs pictures open in the home page's viewer (site/viewer.js + viewer.css, shared; Enter/Space, Esc, focus back).
-**Still for the draft build** (the dev server can't run them): the map simulator report (`health`, no picture in the
-docs yet: the section shows none), Replay (none yet), the Studio debugger, and the main app's `mode-settings`
+**Still for the draft build** (the dev server can't run them): ~~the map simulator report and Replay~~ (taken from the
+1.0.0 draft, 8006dae0; in the docs' Map simulator and Replay sections and the home page's Make tour), the Studio debugger, and the main app's `mode-settings`
 (fix above, needs a retake), `crashes`, `roles-*` and the home page's `app-*` gallery.

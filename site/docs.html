@@ -1399,6 +1399,9 @@ public on_spawn(id)
   <p class="crumb">Map tools</p>
   <h1>Map simulator</h1>
   <p class="lead">Bots play a match on a hidden server for a few minutes. The report shows on the map where they fight, die, fall, get stuck and never go, who wins rounds, and any errors.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/health.webp" type="image/webp"><img src="img/1.0/health.png" alt="The Map simulator's report on de_dust2: 10 bots for 3 minutes, Looks fine, and the map colored by where bots went, with pins for fights" width="1440" height="900" loading="lazy"></picture>
+  </figure>
   <ol>
     <li>Under <b>Simulate a match</b>, pick a map with a bot nav (teach bots the map first if needed).</li>
     <li>Pick the <b>Game mode</b>, <b>How long</b> (2 to 15 minutes; longer is fairer) and how many <b>Bots</b>.</li>
@@ -1529,6 +1532,9 @@ public on_spawn(id)
   <p class="crumb">Watch &amp; inspect</p>
   <h1>Replay</h1>
   <p class="lead">Watch a recorded bot match in 3D: where every bot went, why, and where it fell.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/replay.webp" type="image/webp"><img src="img/1.0/replay.png" alt="Replay with a Map simulator match on de_dust2 open: the map in 3D with a bot's trail, the timeline with its kill marks, and the list of players" width="1440" height="900" loading="lazy"></picture>
+  </figure>
   <ol>
     <li>Pick a recording (the <a href="#map-simulator">Map simulator</a> makes them), or <b>Open a recording…</b>.</li>
     <li>Play at up to 16x. The bar marks rounds, kills and falls.</li>
@@ -2753,7 +2759,7 @@ args = ["--mcp-stdio"]</code></pre>
 })();
 </script>
 <script src="viewer.js"></script>
-<script src="reference/index.js?v=e3660077" defer></script>
+<script src="reference/index.js?v=cabde025" defer></script>
 <script>
   // Every picture opens the big viewer (viewer.js, the same as the home page's): a click, or Enter or
   // Space on it; Esc closes it and focus comes back here. The arrows step through the page's pictures.
