@@ -5067,18 +5067,39 @@ stock zone_beams(s, Float:r)
 {
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!g_alive[p] || g_bot[p])
+		if (g_bot[p] || !is_user_connected(p))
 			continue;
+		/* out of the game: drawn round what they watch (the player they follow, else their own
+		   free camera) */
+		new watched = p;
+		if (!g_alive[p])
+		{
+			watched = spec_view(p);
+			if (watched == p)
+				pev(p, pev_origin, g_porg[p]);
+			else
+				vcopy(g_porg[watched], g_porg[p]);
+		}
 		new Float:d = dist2d(g_porg[p], g_va[s]);
 		if (floatabs(d - r) > 1500.0)
 			continue;
 		/* not while dropping in from the sky (the ring would hang across the sky): from the landing on */
-		if (w3_falling(p) || !(pev(p, pev_flags) & FL_ONGROUND))
+		if (w3_falling(watched) || (watched != p || g_alive[p]) && !(pev(watched, pev_flags) & FL_ONGROUND))
 			continue;
 		zone_wall(p, g_va[s], r, 24, 90, 150, 255, 110);
 		if (g_pf[s][Z_TOR] < r - 1.0)
 			zone_arc(p, g_vb[s], g_pf[s][Z_TOR], 16, 255, 255, 255, 70);
 	}
+}
+
+/* who a dead player is watching (a living player they follow in the eye or chase view), else
+   themselves (free roam: their own camera) */
+stock spec_view(p)
+{
+	new mode = pev(p, pev_iuser1), t = pev(p, pev_iuser2);
+	if ((mode == 1 || mode == 2 || mode == 4) && 1 <= t <= MaxClients && t != p && g_alive[t])
+		return t;
+	return p;
 }
 
 /* the part of a zone circle near a player (120 degrees round the point closest to them), on the
@@ -7599,6 +7620,18 @@ stock w3_match_hud()
 			len += formatex(top[len], charsmax(top) - len, "   %s", g_w3HudText);
 		else if (zone[0])
 			len += formatex(top[len], charsmax(top) - len, "   %s", zone);
+		/* (the dead see the zone status of what they watch) */
+		if (!g_alive[p])
+		{
+			new watched = spec_view(p), zl[48];
+			if (watched == p)
+				pev(p, pev_origin, g_porg[p]);
+			else
+				vcopy(g_porg[watched], g_porg[p]);
+			w3_zone_line(p, z, zl, charsmax(zl));
+			if (zl[0])
+				formatex(top[len], charsmax(top) - len, "^n%s", zl);
+		}
 		if (g_alive[p])
 		{
 			new extra[200], el = 0, nz[64], zl[48];
