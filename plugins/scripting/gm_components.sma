@@ -13303,6 +13303,10 @@ stock wt_creature(const type[], const Float:o[3], speed)
 		set_kv(ent, "speed", v);
 	}
 	set_kv(ent, "behaviour", "chase");
+	/* a wave keeps coming: never runs when hurt, and goes for the defenders from anywhere (the
+	   hound's own 0.35 aggression only fights what comes near, so hounds waited at the spawn) */
+	set_kv(ent, "aggression", "1");
+	set_kv(ent, "flee_hp", "0");
 	set_kv(ent, "hates", g_wtTeam == 1 ? "t" : "ct");
 	new Float:ang[3];
 	ang[1] = random_float(0.0, 360.0);
