@@ -1324,6 +1324,7 @@ public on_spawn(id)
   <p><b>Models</b>: CS player models (gign, terror…) aren't supported for creatures yet: they'd stand in the floor. Use an <a href="#npcs">NPC</a> for human characters, or a Half-Life-style model (like hgrunt).</p>
   <h2 id="creature-waves">Waves</h2>
   <p>In <b>Waves &amp; spawn groups</b>, pick the mode, then set the <b>Boss</b> and how often it comes, enemies and health per wave, and <b>The mix</b> of creatures per wave. <b>Start from the mode's own mix</b> is a good start. <b>Save waves</b>; <b>Place in map…</b> opens the map editor to place spawners.</p>
+  <p><b>Creatures hunt players</b> (on by default) sends every wave creature after the defenders; off, each type keeps its own aggression. <b>Flee when badly hurt</b> is <b>Never</b> by default; <b>Creature's own</b> uses each type's flee point. Set both for the whole mode, or for some waves in the <b>These waves</b> column. In Game Mode Studio they're settings on <b>Round Table On</b>.</p>
   <h2 id="creatures-how">How creatures work</h2>
   <ul>
     <li><b>What it edits.</b> The Studio changes <code>creatures.ini</code> and <code>waves.ini</code> in the game picked at the top: your Counter-Strike 1.6 or Condition Zero, or a server on this computer. Servers on another computer can't be edited from here.</li>

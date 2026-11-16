@@ -534,6 +534,9 @@ on; each `ls_wave_start(n)` then plans the round and the spawners make the creat
 - **A waves.ini section** (`configs/gamemodes/waves.ini`, written by the Creature Studio) replaces the mix:
   `boss`, `boss_every`, `count_scale`, `hp_scale`, `type_hp` (1: the types' own health) and
   `wave N | N-M | N+ = type weight ...` rows.
+- **How the creatures act:** by default they hunt the defenders from anywhere (`aggression 1`) and never flee
+  (`flee_hp 0`). `ls_wave_creature_ai(hunt, flee)` sets the mode's own (flee 1: the type's flee point). A waves.ini
+  section's `hunt = 0` / `flee = own`, or `hunt=0 flee=own` in one wave's line, override it for those waves.
 - Natives: `ls_wave_table_off`, `ls_wave_scale(count, hp)`, `ls_wave_cap`, `ls_wave_cap_now`, `ls_wave_planned`,
   `ls_wave_spawned`, `ls_wave_kind(out[], len)` (0 normal, 1 boss, 2 pack), `ls_wave_hp_mult`,
   `ls_wave_type_pay(type[])`, `ls_wave_is_big(type[])`, `ls_wave_types(out[], len, upto)` (for

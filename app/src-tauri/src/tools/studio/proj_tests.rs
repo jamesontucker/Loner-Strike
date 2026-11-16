@@ -298,3 +298,20 @@ fn ground_spots_never_leave_a_person_in_the_floor() {
     }
     assert!(!comp.contains("SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0}") && !comp.contains("SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0}"));
 }
+
+/// Round Table On's "Creatures hunt players" and "Flee when badly hurt": the defaults (hunt, never)
+/// make the plugin a 1.0 graph made (no extra call); anything else sets the mode's own.
+#[test]
+fn round_table_hunt_and_flee_only_when_changed() {
+    let src = |params: serde_json::Value| {
+        let g = graph::from_value(serde_json::json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "wt_ai", "name": "Waves"},
+            "nodes": [{"id": "rs", "type": "event.round_started"}, {"id": "wt", "type": "wave.table", "params": params}],
+            "edges": [{"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "wt", "pin": "exec"}}]}))
+        .unwrap();
+        gen::generate(&g, false).source
+    };
+    assert!(!src(serde_json::json!({})).contains("ls_wave_creature_ai("));
+    assert!(!src(serde_json::json!({"hunt": true, "flee": "never"})).contains("ls_wave_creature_ai("));
+    assert!(src(serde_json::json!({"hunt": false})).contains("\t\tls_wave_creature_ai(false, 0)"));
+    assert!(src(serde_json::json!({"flee": "own"})).contains("\t\tls_wave_creature_ai(true, 1)"));
+}

@@ -61,6 +61,11 @@ who adds or changes nodes, pins, types or the graph format.
    both check it.
 10. **Built-in enums only grow.** Add values at the end; never reorder or remove one. Saved graphs and
     Switch on Enum outputs refer to values by id.
+11. **New settings get defaults that keep the old behavior, wherever they live.** That covers node params, waves.ini
+    and creatures.ini keys, and mode keys. An old graph or file doesn't have the setting, and it must play as before.
+    Write the setting only when it's not the default, so old files save unchanged. Example: Round Table On's
+    "Creatures hunt players" (on) and "Flee when badly hurt" (Never). They're emitted only when changed, and waves.ini
+    gets `hunt =` / `flee =` only when set.
 
 ## Orphaned pins and settings
 

@@ -98,8 +98,9 @@ export type SoundItem = { file: string; folder: string };
 
 export type Live = { running: boolean; creatures?: boolean; message?: string; types?: { name: string; precached: boolean; standIn: boolean }[]; alive?: number };
 
-export type WaveRow = { from: number; to: number | null; mix: [string, number][] };
-export type WaveSet = { mode: string; boss: string; boss_every: number; count_scale: number; hp_scale: number; type_hp: boolean; own_rounds?: boolean; rows: WaveRow[] };
+// hunt / flee: null = the set's (or the mode's) setting; flee "never" | "own"
+export type WaveRow = { from: number; to: number | null; mix: [string, number][]; hunt?: boolean | null; flee?: string | null };
+export type WaveSet = { mode: string; boss: string; boss_every: number; count_scale: number; hp_scale: number; type_hp: boolean; own_rounds?: boolean; hunt?: boolean | null; flee?: string | null; rows: WaveRow[] };
 export type WavesStatus = { file: string; exists: boolean; sets: WaveSet[]; defaults: Record<string, WaveSet>; types: string[]; modes: { id: string; name: string; reads: boolean; note: string }[] };
 
 type Done<S> = { ok?: boolean; changed?: boolean; message?: string; status?: S };

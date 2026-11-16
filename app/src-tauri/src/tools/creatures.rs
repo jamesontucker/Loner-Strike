@@ -1480,6 +1480,12 @@ pub struct WaveRow {
     pub to: Option<u32>,
     /// (type, weight): how likely each enemy is of that type
     pub mix: Vec<(String, u32)>,
+    /// these waves' own "Creatures hunt players" (None: the set's / the mode's)
+    #[serde(default)]
+    pub hunt: Option<bool>,
+    /// these waves' own "Flee when badly hurt": "never" or "own" (None: the set's / the mode's)
+    #[serde(default)]
+    pub flee: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1499,12 +1505,17 @@ pub struct WaveSet {
     /// true: the mode keeps its own boss waves, pack rounds and heavies (boss and boss_every
     /// aren't used); the rows only give the everyday mix
     pub own_rounds: bool,
+    /// "Creatures hunt players" (None: the mode's, on unless the mode says otherwise; false: each
+    /// type's own aggression). Written only when set, so older files stay as they were.
+    pub hunt: Option<bool>,
+    /// "Flee when badly hurt": None (the mode's, never unless it says otherwise), "never" or "own"
+    pub flee: Option<String>,
     pub rows: Vec<WaveRow>,
 }
 
 impl Default for WaveSet {
     fn default() -> Self {
-        WaveSet { mode: String::new(), boss: String::new(), boss_every: 0, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: false, rows: vec![] }
+        WaveSet { mode: String::new(), boss: String::new(), boss_every: 0, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: false, hunt: None, flee: None, rows: vec![] }
     }
 }
 
@@ -1557,11 +1568,11 @@ fn round_mix(n: u32) -> Vec<(String, u32)> {
 /// from 10), hound and snark rounds every 6th and heavies from 11. Saving it with one type
 /// added keeps every type the mode had.
 pub fn laststand_default() -> WaveSet {
-    let mut rows: Vec<WaveRow> = (1..=14u32).map(|n| WaveRow { from: n, to: Some(n), mix: round_mix(n) }).collect();
+    let mut rows: Vec<WaveRow> = (1..=14u32).map(|n| WaveRow { from: n, to: Some(n), mix: round_mix(n), hunt: None, flee: None }).collect();
     for (from, to, at) in [(15, Some(19), 17), (20, Some(29), 24), (30, None, 30)] {
-        rows.push(WaveRow { from, to, mix: round_mix(at) });
+        rows.push(WaveRow { from, to, mix: round_mix(at), hunt: None, flee: None });
     }
-    WaveSet { mode: "laststand".into(), boss: "boss".into(), boss_every: 5, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: true, rows }
+    WaveSet { mode: "laststand".into(), boss: "boss".into(), boss_every: 5, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: true, hunt: None, flee: None, rows }
 }
 
 /// The creature types a map loads for this set from wave 1 to `upto` (gm_components wt_types):
@@ -1632,11 +1643,29 @@ pub fn parse_waves(text: &str) -> Vec<WaveSet> {
                     "hp_scale" => w.hp_scale = num(&value, 0.1, 10.0, 1.0),
                     "type_hp" => w.type_hp = atoi(&value) != 0,
                     "own_rounds" => w.own_rounds = atoi(&value) != 0,
+                    "hunt" => w.hunt = Some(atoi(&value) != 0),
+                    "flee" => w.flee = Some(if value.trim().eq_ignore_ascii_case("own") { "own" } else { "never" }.into()),
                     _ => {
                         if let Some((from, to)) = wave_key(&k) {
-                            let toks: Vec<&str> = value.split_whitespace().collect();
+                            // (this wave's own hunt=0|1 and flee=never|own, anywhere in the line)
+                            let mut hunt = None;
+                            let mut flee = None;
+                            let toks: Vec<&str> = value
+                                .split_whitespace()
+                                .filter(|t| {
+                                    let l = t.to_ascii_lowercase();
+                                    if let Some(v) = l.strip_prefix("hunt=") {
+                                        hunt = Some(atoi(v) != 0);
+                                    } else if let Some(v) = l.strip_prefix("flee=") {
+                                        flee = Some(if v == "own" { "own" } else { "never" }.to_string());
+                                    } else {
+                                        return true;
+                                    }
+                                    false
+                                })
+                                .collect();
                             let mix = toks.chunks(2).filter(|c| c.len() == 2).map(|c| (c[0].to_ascii_lowercase(), atoi(c[1]).clamp(0, 1000) as u32)).collect();
-                            w.rows.push(WaveRow { from, to, mix });
+                            w.rows.push(WaveRow { from, to, mix, hunt, flee });
                         }
                     }
                 }
@@ -1657,6 +1686,12 @@ fn waves_section(w: &WaveSet) -> Vec<String> {
     if w.own_rounds {
         v.push("own_rounds = 1".into());
     }
+    if let Some(h) = w.hunt {
+        v.push(format!("hunt = {}", if h { 1 } else { 0 }));
+    }
+    if let Some(f) = &w.flee {
+        v.push(format!("flee = {f}"));
+    }
     let mut rows = w.rows.clone();
     rows.sort_by_key(|r| r.from);
     for r in rows {
@@ -1665,7 +1700,13 @@ fn waves_section(w: &WaveSet) -> Vec<String> {
             Some(t) if t == r.from => format!("wave {}", r.from),
             Some(t) => format!("wave {}-{t}", r.from),
         };
-        let mix: Vec<String> = r.mix.iter().filter(|(_, n)| *n > 0).map(|(t, n)| format!("{t} {n}")).collect();
+        let mut mix: Vec<String> = r.mix.iter().filter(|(_, n)| *n > 0).map(|(t, n)| format!("{t} {n}")).collect();
+        if let Some(h) = r.hunt {
+            mix.push(format!("hunt={}", if h { 1 } else { 0 }));
+        }
+        if let Some(f) = &r.flee {
+            mix.push(format!("flee={f}"));
+        }
         v.push(format!("{key} = {}", mix.join(" ")));
     }
     v
@@ -1681,6 +1722,9 @@ const WAVES_HEAD: &str = "; waves.ini: which enemies each wave brings, per game 
 ; own_rounds = 1            the mode keeps its own boss waves, pack rounds and heavies (boss lines unused)
 ; wave 3 = zombie 10 runner 7     a wave's mix: type and weight (how likely), as many as you like
 ; wave 4-6 = ...            waves 4 to 6;  wave 10+ = ...  wave 10 and every one after
+; hunt = 0                  creatures keep their type's own aggression (default: they hunt the players)
+; flee = own                creatures flee at their type's flee point (default: never)
+; wave 8 = hound 5 hunt=0 flee=own   one wave's own hunt / flee
 ; A wave with no line of its own uses the closest line before it.";
 
 /// Puts one mode's set into a waves.ini's text: its section replaced (or added), everything
@@ -1718,6 +1762,10 @@ pub fn check_waves(w: &WaveSet, types: &[String]) -> Vec<Problem> {
     let at = "waves";
     if !mode_ok(&w.mode) {
         out.push(problem(at, "mode", "A mode id is small letters, digits and _ (starting with a letter), 24 at most.", true));
+    }
+    let flee_ok = |f: &Option<String>| f.as_deref().is_none_or(|f| f == "never" || f == "own");
+    if !flee_ok(&w.flee) || w.rows.iter().any(|r| !flee_ok(&r.flee)) {
+        out.push(problem(at, "flee", "Flee when badly hurt is \"never\" or \"own\".", true));
     }
     let known = |t: &str| types.iter().any(|x| x.eq_ignore_ascii_case(t));
     if !w.boss.is_empty() && !known(&w.boss) {
@@ -3164,6 +3212,26 @@ mod tests {
 
     /// QA4-T1 T1-1: saving the waves with one type added keeps every type Last Stand's round
     /// table had (the map loaded 17 with the turret: 16 from the table), so 18 in all.
+    #[test]
+    fn wave_hunt_and_flee_round_trip_and_default_to_nothing_written() {
+        // (unset: nothing written, so an older waves.ini saves as it was)
+        let plain = write_waves("", &laststand_default());
+        assert!(!plain.lines().filter(|l| !l.starts_with(';')).any(|l| l.starts_with("hunt") || l.starts_with("flee") || l.contains("hunt=") || l.contains("flee=")), "{plain}");
+        let mut w = laststand_default();
+        w.hunt = Some(false);
+        w.flee = Some("own".into());
+        w.rows[7].hunt = Some(true);
+        w.rows[7].flee = Some("never".into());
+        let text = write_waves("", &w);
+        assert!(text.contains("\nhunt = 0\n") && text.contains("\nflee = own\n") && text.contains("hunt=1 flee=never"), "{text}");
+        let back = parse_waves(&text).into_iter().find(|x| x.mode == "laststand").unwrap();
+        assert_eq!(back, w);
+        assert!(check_waves(&back, &builtins().iter().map(|t| t.name.clone()).collect::<Vec<_>>()).iter().all(|p| p.field != "flee"));
+        let mut bad = w.clone();
+        bad.flee = Some("sometimes".into());
+        assert!(check_waves(&bad, &builtins().iter().map(|t| t.name.clone()).collect::<Vec<_>>()).iter().any(|p| p.field == "flee" && p.error));
+    }
+
     #[test]
     fn saving_waves_keeps_every_last_stand_type() {
         let before: Vec<&str> = "zombie babycrab headcrab runner spitter brute vortigaunt assassin soldier controller stukabat hound snark babygarg boss gonarch".split(' ').collect();
