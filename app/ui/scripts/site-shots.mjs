@@ -355,10 +355,17 @@ const SHOTS = {
       const r = await api(page, "/api/tools/health/start", { map: "de_dust2", mode: "classic", minutes: 3, bots: 10 });
       if (r.error) throw new Error(`start: ${r.error}`);
       step("simulating (about 4 minutes)…");
-      await page.waitForFunction(async () => {
-        const p = await (await fetch("/api/tools/health/progress")).json();
-        return p && p.run && !p.active;
-      }, null, { timeout: 1_200_000, polling: 5000 });
+      // (polled from here: waitForFunction takes an async function's promise as a truthy answer and
+      // returned at once, so the shot showed the server still downloading)
+      for (let t = Date.now(); ; ) {
+        const p = await page.evaluate(async () => (await fetch("/api/tools/health/progress")).json());
+        if (p && p.run && !p.active) {
+          if (p.run.phase !== "done") throw new Error(`the simulation ended ${p.run.phase}: ${p.run.error ?? ""}`);
+          break;
+        }
+        if (Date.now() - t > 1_500_000) throw new Error("the simulation took over 25 minutes");
+        await new Promise((r) => setTimeout(r, 5000));
+      }
       await page.reload();
       await settle(page, 3000);
       // the newest report
