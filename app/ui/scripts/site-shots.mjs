@@ -369,12 +369,15 @@ const SHOTS = {
       await page.reload();
       await settle(page, 3000);
       // the newest report
-      const first = page.locator(".health-report-row, .hc-report, [data-report]").first();
+      const first = page.locator(".health-list li button, .health-list li").first();
       if (await first.count()) await first.click();
       await settle(page, 3000);
     },
   },
-  replay: plain("sim", "replay", "Replay: the simulator's match played back"),
+  replay: plain("sim", "replay", "Replay: the simulator's match played back (the newest recording opened)", async (page) => {
+    await page.locator(".tools-rec").first().click();
+    await settle(page, 8000);
+  }),
   "editor-compile": {
     group: "compile",
     about: "Compile on ls_outpost: the Fast preset run with SDHLT, its steps and the finished map",
