@@ -476,15 +476,9 @@ public plugin_init()
 	new msgTutor = get_user_msgid("TutorText");
 	if (msgTutor)
 		register_message(msgTutor, "msg_tutor_text");
-	/* ...and all of its hints off unless ls_cz_tutor is 1 (they come up all the time; 1.6 has none) */
+	/* ...and its stock tips (#Cstrike_Tutor_* keys) off unless ls_cz_tutor is 1: a mode's own
+	   tutor text still shows (1.6 has no tutor) */
 	g_cCzTutor = register_cvar("ls_cz_tutor", "0");
-	static const tutorMsgs[][] = { "TutorLine", "TutorState", "TutorClose" };
-	for (new i = 0; i < sizeof tutorMsgs; i++)
-	{
-		new m = get_user_msgid(tutorMsgs[i]);
-		if (m)
-			register_message(m, "msg_tutor_other");
-	}
 	g_sync = CreateHudSyncObj();
 
 	RegisterHamPlayer(Ham_Spawn, "ham_player_spawn", 1);
@@ -7684,23 +7678,21 @@ stock w3_match_hud()
 	}
 }
 
-/* CZ's tutor messages: its teammate-killed ones blocked in free-for-all and with the match HUD
-   (Battle Royale, solo and squads); team modes keep them */
+/* CZ's tutor text: the game's stock tips (#Cstrike_Tutor_* keys) off unless ls_cz_tutor is 1;
+   its teammate-killed one always off in free-for-all and with the match HUD (Battle Royale, solo
+   and squads); any other text (a mode's own hints) goes through */
 public msg_tutor_text(msgid, dest, id)
 {
-	if (!get_pcvar_num(g_cCzTutor))
-		return PLUGIN_HANDLED;
-	if (!get_cvar_num("mp_freeforall") && !w3_compass_on())
-		return PLUGIN_CONTINUE;
 	new key[64];
 	get_msg_arg_string(1, key, charsmax(key));
-	if (containi(key, "Tutor_Teammate_Killed") != -1)
+	if (!equali(key, "#Cstrike_Tutor_", 15))
+		return PLUGIN_CONTINUE;
+	if (!get_pcvar_num(g_cCzTutor))
+		return PLUGIN_HANDLED;
+	if ((get_cvar_num("mp_freeforall") || w3_compass_on()) && containi(key, "Tutor_Teammate_Killed") != -1)
 		return PLUGIN_HANDLED;
 	return PLUGIN_CONTINUE;
 }
-
-public msg_tutor_other(msgid, dest, id)
-	return get_pcvar_num(g_cCzTutor) ? PLUGIN_CONTINUE : PLUGIN_HANDLED;
 
 /* the compass (and its zone warning) is showing */
 stock bool:w3_compass_on()
