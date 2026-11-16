@@ -55,11 +55,14 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
   await link.fill("https://gamebanana.com/mods/123456");
   await page.getByRole("checkbox", { name: /I have the right to share this/ }).check();
   const add = page.getByRole("button", { name: "Add to Community" });
+  // (a reason that already says what to do is said once, without a second "fix" line)
   await add.click();
-  await expect(page.getByTestId("refusal-fix")).toContainText("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save.");
+  await expect(page.getByTestId("refusal-why")).toContainText("add a Custom Tag with the value LonerStrike (the title can stay empty), then press + and save.");
+  await expect(page.getByTestId("refusal-fix")).toHaveCount(0);
   await add.click();
-  await expect(page.getByTestId("refusal-fix")).toContainText("Try again in a few minutes.");
+  await expect(page.getByTestId("refusal-why")).toContainText("Try again in a few minutes.");
+  await expect(page.getByTestId("refusal-fix")).toHaveCount(0);
   await add.click();
-  await expect(page.getByTestId("refusal-fix")).toContainText("Counter-Strike 1.6 section");
+  await expect(page.getByTestId("refusal-fix")).toContainText("Move the page to GameBanana's Counter-Strike 1.6 section");
   await page.request.post(`/api/tools/studio/graph/${id}/delete`, { headers: H });
 });

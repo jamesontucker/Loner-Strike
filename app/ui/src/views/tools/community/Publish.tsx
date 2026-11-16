@@ -791,13 +791,19 @@ export function fixFor(why: string): string | null {
   return null;
 }
 
+/** Whether a refusal's reason already says what to do (then its fix would say it twice). */
+export function saysWhatToDo(why: string): boolean {
+  return /\b(try again|then press|add a custom tag|upload (the|it)|move the page|ask in the)\b/i.test(why);
+}
+
 function Refused({ why }: { why: string }) {
-  const fix = fixFor(why);
+  // the fix only when it adds something: "still checking ... Try again in a few minutes." is said once
+  const fix = saysWhatToDo(why) ? null : fixFor(why);
   return (
-    <>
-      <p className="cm-line bad">Not added: {why}</p>
-      {fix && <p className="cm-line" data-testid="refusal-fix">{fix}</p>}
-    </>
+    <div className="inline-error cm-refusal">
+      <p className="cm-line bad err-text" data-testid="refusal-why">Not added: {why}</p>
+      {fix && <p className="small-note" data-testid="refusal-fix">{fix}</p>}
+    </div>
   );
 }
 

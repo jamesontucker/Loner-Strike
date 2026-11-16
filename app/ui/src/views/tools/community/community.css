@@ -55,6 +55,9 @@
 /* publish */
 .cm-ready { display: grid; gap: 4px; margin: 10px 0; }
 .cm-line { margin: 0; padding-left: 22px; position: relative; overflow-wrap: anywhere; }
+/* (styles.css has a .cm-line of its own: the moderation chat's two-column button. These lines are
+   paragraphs: a plain block, the full width, wrapping normally) */
+p.cm-line { display: block; width: auto; padding-top: 0; padding-bottom: 0; padding-right: 0; cursor: auto; font-size: inherit; color: inherit; }
 .cm-line::before { position: absolute; left: 0; top: 0; width: 16px; text-align: center; font-weight: 800; }
 .cm-line.ok::before { content: "✓"; color: var(--ok); }
 .cm-line.warn::before { content: "!"; color: var(--warn); }
@@ -86,6 +89,12 @@
 .cm-register input:not([type="checkbox"]) { flex: 1 1 260px; min-width: 0; }
 .cm-register .cm-agree input[type="checkbox"] { flex: none; width: 16px; height: 16px; min-width: 16px; }
 .cm-result { display: grid; gap: 8px; justify-items: start; }
+/* what's said spans the result's width (only the buttons keep their own size) */
+.cm-result > p, .cm-result > .inline-error { justify-self: stretch; }
+/* a refusal: the app's inline error (err-text), its ✕ on the first line */
+.cm-refusal { margin: 0; }
+.cm-refusal p.cm-line.err-text { color: var(--danger); }
+.cm-refusal .cm-line.bad::before { color: inherit; }
 
 /* yours */
 .cm-mine { list-style: none; margin: 0; padding: 0; display: grid; }
