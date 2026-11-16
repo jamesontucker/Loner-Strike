@@ -24,7 +24,14 @@
 #include <engine>
 #include <cstrike>
 #include <fun>
+/* (our plugin_natives: loner.inc's optional natives and ReAPI's, below) */
+#define LS_OWN_PLUGIN_NATIVES
 #include <loner>
+
+/* ReAPI's (reapi_gamedll.inc): the game's own carry limit for an item, when ReAPI is there
+   (dedicated servers); optional, so the mode still loads without it (a listen server) */
+native rg_set_global_iteminfo(const weapon_id, const type, any:...);
+#define LS_ITEMINFO_MAXAMMO1 3          /* ItemInfo_iMaxAmmo1 */
 
 #pragma semicolon 1
 
@@ -96,6 +103,8 @@ new g_mapname[64];
 new g_classZombie;
 new g_kills;
 new g_hePack[33];
+new g_cHeCarry, g_cFlashCarry, g_cSmokeCarry;
+new bool:g_carryRaised;               /* the game's grenade limits raised by this mode (ReAPI) */
 new g_cKeeper;
 /* the armory is a gm_components ls_shop (the map's own, or made here at the shop spot) */
 new g_shopEnt;
@@ -235,10 +244,55 @@ public plugin_init()
 	g_record = record_load();
 	set_task(1.0, "tick", TASK_TICK, _, _, "b");
 	set_task(0.25, "tick_revive", TASK_REV, _, _, "b");
+	/* grenades a player can carry (with ReAPI: the game's limit; without, the shop's 3 HE still
+	   come one after another) */
+	g_cHeCarry = register_cvar("lst_he_carry", "3");
+	g_cFlashCarry = register_cvar("lst_flash_carry", "2");
+	g_cSmokeCarry = register_cvar("lst_smoke_carry", "1");
 }
+
+public plugin_natives()
+{
+	set_module_filter("ls__module_filter");
+	set_native_filter("ls_native_filter");
+}
+
+/* ReAPI may not be loaded (a listen server): its native is optional, like loner.inc's */
+public ls_native_filter(const name[], index, trap)
+{
+	if (!trap && equal(name, "rg_set_global_iteminfo"))
+		return PLUGIN_HANDLED;
+	return ls__native_filter(name, index, trap);
+}
+
+/* how many of each grenade a player can carry in this mode: the game's own limit (ReAPI), so
+   buying and picking up more both work; put back to the game's 1 / 2 / 1 when the map ends */
+stock carry_limits(bool:on)
+{
+	if (!LibraryExists("reapi", LibType_Library))
+		return;
+	if (on)
+	{
+		rg_set_global_iteminfo(CSW_HEGRENADE, LS_ITEMINFO_MAXAMMO1, clamp(get_pcvar_num(g_cHeCarry), 1, 10));
+		rg_set_global_iteminfo(CSW_FLASHBANG, LS_ITEMINFO_MAXAMMO1, clamp(get_pcvar_num(g_cFlashCarry), 1, 10));
+		rg_set_global_iteminfo(CSW_SMOKEGRENADE, LS_ITEMINFO_MAXAMMO1, clamp(get_pcvar_num(g_cSmokeCarry), 1, 10));
+		g_carryRaised = true;
+	}
+	else if (g_carryRaised)
+	{
+		rg_set_global_iteminfo(CSW_HEGRENADE, LS_ITEMINFO_MAXAMMO1, 1);
+		rg_set_global_iteminfo(CSW_FLASHBANG, LS_ITEMINFO_MAXAMMO1, 2);
+		rg_set_global_iteminfo(CSW_SMOKEGRENADE, LS_ITEMINFO_MAXAMMO1, 1);
+		g_carryRaised = false;
+	}
+}
+
+public plugin_end()
+	carry_limits(false);
 
 public plugin_cfg()
 {
+	carry_limits(true);
 	g_creatures = g_hasCreatureDll && get_pcvar_num(g_cCreatures) != 0;
 	if (!ls_components_running())
 		log_amx("Last Stand needs gm_components.amxx; add it to laststand.plugins.ini before gm_laststand.amxx.");
@@ -2257,8 +2311,42 @@ stock find_upgrades()
 		o = g_shop;
 		if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
 			o = g_base;
+		else
+			box_beside(o);
 		o[2] += 16.0;
 		ls_comp_create("ls_mystery_box", o, "team=ct moves_after=0 name=^"Mystery box^"");
+	}
+}
+
+/* the box beside the armory, not on it: the shopkeeper stands at the armory's spot, and USE
+   there opened the box instead of his menu. 112 u to one side, with a clear line from the spot
+   and a floor under it (else where it was) */
+stock box_beside(Float:o[3])
+{
+	static const Float:dirs[4][2] = { { 1.0, 0.0 }, { -1.0, 0.0 }, { 0.0, 1.0 }, { 0.0, -1.0 } };
+	new Float:a[3], Float:b[3], Float:down[3], Float:frac;
+	a = o;
+	a[2] += 24.0;
+	for (new k = 0; k < 4; k++)
+	{
+		b[0] = a[0] + dirs[k][0] * 112.0;
+		b[1] = a[1] + dirs[k][1] * 112.0;
+		b[2] = a[2];
+		engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HEAD, 0, 0);
+		get_tr2(0, TR_flFraction, frac);
+		if (frac < 1.0 || get_tr2(0, TR_StartSolid))
+			continue;
+		down = b;
+		down[2] -= 120.0;
+		engfunc(EngFunc_TraceLine, b, down, IGNORE_MONSTERS, 0, 0);
+		get_tr2(0, TR_flFraction, frac);
+		if (frac >= 1.0)
+			continue;
+		get_tr2(0, TR_vecEndPos, down);
+		o[0] = down[0];
+		o[1] = down[1];
+		o[2] = down[2];
+		return;
 	}
 }
 
@@ -2591,7 +2679,7 @@ public ls_on_shop_item(ent, id, const item[])
 		ls_shop_why("the barricades are fine");
 		return PLUGIN_HANDLED;
 	}
-	if (equal(item, "@he3") && g_hePack[id] >= 3)
+	if (equal(item, "@he3") && (g_carryRaised ? cs_get_user_bpammo(id, CSW_HEGRENADE) >= clamp(get_pcvar_num(g_cHeCarry), 1, 10) : g_hePack[id] >= 3))
 	{
 		ls_shop_why("you have 3 already");
 		return PLUGIN_HANDLED;
@@ -2610,6 +2698,15 @@ public ls_on_shop_buy(ent, id, const item[], price)
 		   many are left */
 		if (!user_has_weapon(id, CSW_HEGRENADE))
 			ls_give_item(id, "he");
+		/* with the game's limit raised: three more in the pack, up to it */
+		if (g_carryRaised)
+		{
+			new cap = clamp(get_pcvar_num(g_cHeCarry), 1, 10);
+			cs_set_user_bpammo(id, CSW_HEGRENADE, min(max(cs_get_user_bpammo(id, CSW_HEGRENADE), 0) + 3, cap));
+			if (!is_user_bot(id))
+				client_print(id, print_center, "HE grenades: %d", cs_get_user_bpammo(id, CSW_HEGRENADE));
+			return PLUGIN_CONTINUE;
+		}
 		cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
 		g_hePack[id] = 3;
 		if (!is_user_bot(id))

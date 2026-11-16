@@ -327,7 +327,8 @@ public plugin_precache()
 	}
 
 	g_sprBeam = precache_model("sprites/laserbeam.spr");
-	g_sprSmoke = precache_model("sprites/smokepuff.spr");
+	/* (Half-Life's own smoke for TE_SMOKE: smokepuff.spr drew a black box there) */
+	g_sprSmoke = precache_model("sprites/steam1.spr");
 	g_mdlGibs = precache_model("models/woodgibs.mdl");
 	up_precache(); /* W1 */
 	npc_precache(); /* T1fix */
@@ -8972,8 +8973,12 @@ stock give_thing(id, const item[])
 	}
 	if (!can_take(id, item) && !((1 << csw) & ((1 << CSW_HEGRENADE) | (1 << CSW_FLASHBANG) | (1 << CSW_SMOKEGRENADE))))
 		return 0;
-	if (!give_item(id, w))
+	/* (a grenade already carried: give_item refuses; "he:3" still fills the pack below) */
+	if (!give_item(id, w) && !(num > 1 && ((1 << csw) & ((1 << CSW_HEGRENADE) | (1 << CSW_FLASHBANG) | (1 << CSW_SMOKEGRENADE)))))
 		return 0;
+	/* "he:3": that many in the pack (as far as the game lets one carry: Last Stand raises it) */
+	if (num > 1 && ((1 << csw) & ((1 << CSW_HEGRENADE) | (1 << CSW_FLASHBANG) | (1 << CSW_SMOKEGRENADE))))
+		cs_set_user_bpammo(id, csw, max(cs_get_user_bpammo(id, csw), num));
 	if ((1 << csw) & (PRIMARY_IDS | SECONDARY_IDS))
 		cs_set_user_bpammo(id, csw, max(cs_get_user_bpammo(id, csw), w3_found_reserve(csw))); /* W3 */
 	emit_sound(id, CHAN_ITEM, "items/gunpickup2.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
