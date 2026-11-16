@@ -2316,6 +2316,19 @@ stock find_upgrades()
 		o[2] += 16.0;
 		ls_comp_create("ls_mystery_box", o, "team=ct moves_after=0 name=^"Mystery box^"");
 	}
+	/* where the box and the armory's keeper ended up (the keeper is placed a moment later) */
+	set_task(3.0, "task_log_box");
+}
+
+public task_log_box()
+{
+	new box = ls_comp_find("ls_mystery_box"), keeper = find_ent_by_class(-1, "ls_shopkeeper");
+	new Float:bo[3], Float:ko[3];
+	if (box > 0)
+		pev(box, pev_origin, bo);
+	if (keeper > 0)
+		pev(keeper, pev_origin, ko);
+	log_amx("Last Stand on %s: mystery box %d at %.0f %.0f %.0f, shopkeeper %d at %.0f %.0f %.0f (%.0f u apart)", g_mapname, box, bo[0], bo[1], bo[2], keeper, ko[0], ko[1], ko[2], box > 0 && keeper > 0 ? get_distance_f(bo, ko) : 0.0);
 }
 
 /* the box beside the armory, not on it: the shopkeeper stands at the armory's spot, and USE
@@ -2323,6 +2336,15 @@ stock find_upgrades()
    and a floor under it (else where it was) */
 stock box_beside(Float:o[3])
 {
+	/* (from where the keeper actually stands, when he's there already) */
+	new keeper = find_ent_by_class(-1, "ls_shopkeeper");
+	if (keeper > 0)
+	{
+		new Float:ko[3];
+		pev(keeper, pev_origin, ko);
+		o[0] = ko[0];
+		o[1] = ko[1];
+	}
 	static const Float:dirs[4][2] = { { 1.0, 0.0 }, { -1.0, 0.0 }, { 0.0, 1.0 }, { 0.0, -1.0 } };
 	new Float:a[3], Float:b[3], Float:down[3], Float:frac;
 	a = o;
