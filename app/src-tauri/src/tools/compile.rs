@@ -288,6 +288,7 @@ pub fn cores() -> usize {
 /// The compiler runs below normal priority: on Unix (macOS through CrossOver's wine, which
 /// passes it on to the Windows tool) a nice value of 10 set on the child before it starts; on
 /// Windows BELOW_NORMAL_PRIORITY_CLASS (plus no console window). SDHLT's own `-low` is passed too.
+#[cfg(any(unix, test))]
 pub const NICE: i32 = 10;
 #[cfg(any(windows, test))]
 pub const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
