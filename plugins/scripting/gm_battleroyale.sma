@@ -318,6 +318,11 @@ stock Float:pace()
 	return floatclamp(float(n) / 24.0, 0.5, 1.25);
 }
 
+/* seconds into the fight the zone starts (br_zone_start times the pace), never so late that the
+   first shrink (br_zone_first_wait in, with 10 s of warning) can't start on time */
+stock Float:zone_start_secs()
+	return floatmax(floatmin(get_pcvar_float(g_cZoneStart) * g_pace, get_pcvar_float(g_cZoneFirst) - 10.0), 0.0);
+
 /* the shrinker's stages with every warn/shrink time times pace() (from the map's own each game) */
 stock pace_zone(Float:f)
 {
@@ -337,9 +342,9 @@ stock pace_zone(Float:f)
 			break;
 		replace_all(tok, charsmax(tok), ":", " ");
 		parse(tok, a[0], 11, a[1], 11, a[2], 11, a[3], 11);
-		/* (the first wait is br_zone_first_wait seconds whatever the pace: players meet within 2-3
-		   minutes of landing) */
-		new Float:w = k++ == 0 ? get_pcvar_float(g_cZoneFirst) : str_to_float(a[1]) * f;
+		/* (the first shrink starts br_zone_first_wait seconds into the fight whatever the pace: the
+		   zone's own start is taken off it, at least 10 s of warning left) */
+		new Float:w = k++ == 0 ? floatmax(get_pcvar_float(g_cZoneFirst) - zone_start_secs(), 10.0) : str_to_float(a[1]) * f;
 		format(out, charsmax(out), "%s%s%s:%d:%d:%s", out, out[0] ? " " : "", a[0],
 			max(floatround(w), 5), max(floatround(str_to_float(a[2]) * f), 5), a[3][0] ? a[3] : "1");
 	}
@@ -351,8 +356,8 @@ stock start_drop()
 	g_phase = PH_DROP;
 	g_pace = pace();
 	/* a big map (zone radius 4000+): it takes a while to get anywhere, so the zone takes longer:
-	   at least pace 1.5 (br_valley: the first shrink 45 s after the zone starts, fully closed
-	   about 11-12 min after the fight starts) */
+	   at least pace 1.5 (br_valley: the zone up 35 s into the fight, the first shrink at 45 s, fully
+	   closed about 11 min after the fight starts) */
 	new zone = ls_comp_find("ls_safe_zone");
 	if (zone && ls_comp_getf(zone, "radius") >= 4000.0)
 		g_pace = floatmax(g_pace, 1.5);
@@ -539,7 +544,7 @@ public tick()
 	}
 	if (g_phase == PH_PLAY)
 	{
-		if (!g_zoneStarted && now - g_playAt >= get_pcvar_float(g_cZoneStart) * g_pace)
+		if (!g_zoneStarted && now - g_playAt >= zone_start_secs())
 		{
 			g_zoneStarted = true;
 			new sh = ls_comp_find("ls_zone_shrinker");
@@ -1603,6 +1608,6 @@ stock hud()
 	if (g_phase == PH_DROP)
 		formatex(text, charsmax(text), "Loot up: fighting in %d s", max(floatround(g_phaseEnd - now), 0));
 	else if (g_phase == PH_PLAY && !g_zoneStarted)
-		formatex(text, charsmax(text), "The zone starts closing in %d s", max(floatround(get_pcvar_float(g_cZoneStart) * g_pace - (now - g_playAt)), 0));
+		formatex(text, charsmax(text), "The zone starts closing in %d s", max(floatround(zone_start_secs() - (now - g_playAt)), 0));
 	ls_match_hud_text(text);
 }
