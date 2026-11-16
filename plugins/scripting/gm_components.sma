@@ -2729,25 +2729,78 @@ stock loot_give(s, id)
 		return;
 	new n = max(floatround(g_pf[s][W_ITEMS]), 1);
 	new tier = floatround(g_pf[s][W_TIER]);
-	new item[32], list[160];
+	new item[32], list[160], got = 0;
 	for (new i = 0; i < n; i++)
 	{
-		if (!loot_roll(g_item[s], item, charsmax(item), tier))
-			break;
-		new r2;
-		ExecuteForward(g_fwLootItem, r2, g_ent[s], id, item);
-		if (r2 >= PLUGIN_HANDLED)
-			continue;
-		if (give_thing(id, item))
+		/* a few rolls for something this player can take (one they can't carry, or a table with
+		   nothing at this tier, used to leave the box empty and say nothing); then any tier */
+		new bool:given = false;
+		for (new tries = 0; tries < 6 && !given; tries++)
 		{
-			if (list[0])
-				add(list, charsmax(list), ", ");
-			add(list, charsmax(list), item);
+			if (!loot_roll(g_item[s], item, charsmax(item), tries < 4 ? tier : 0))
+				continue;
+			new r2;
+			ExecuteForward(g_fwLootItem, r2, g_ent[s], id, item);
+			if (r2 >= PLUGIN_HANDLED)
+			{
+				given = true;
+				continue;
+			}
+			if (give_thing(id, item))
+			{
+				given = true;
+				got++;
+				loot_list_add(list, charsmax(list), item);
+			}
 		}
 	}
-	if (list[0] && !is_user_bot(id))
-		client_print(id, print_center, "Found: %s", list);
-	emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+	/* nothing from the table fitted: heals, or ammo for a gun they have */
+	if (!got)
+	{
+		static const fallback[][] = { "bandage", "drink", "ammo" };
+		for (new k = 0; k < sizeof fallback && !got; k++)
+		{
+			if (equal(fallback[k], "ammo") && !has_gun(id))
+				continue;
+			if (give_thing(id, fallback[k]))
+			{
+				got++;
+				loot_list_add(list, charsmax(list), fallback[k]);
+			}
+		}
+	}
+	if (!is_user_bot(id))
+	{
+		if (got)
+			client_print(id, print_center, "Found: %s", list);
+		else
+			client_print(id, print_center, "Nothing you can carry");
+	}
+	if (got)
+		emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+}
+
+stock loot_list_add(list[], len, const item[])
+{
+	new label[48];
+	w3_item_label(item, label, charsmax(label));
+	if (list[0])
+		add(list, len, ", ");
+	add(list, len, label[0] ? label : item);
+}
+
+/* a primary or a pistol in hand or on the back */
+stock bool:has_gun(id)
+{
+	new weapons[32], num;
+	get_user_weapons(id, weapons, num);
+	for (new i = 0; i < num; i++)
+	{
+		new w = weapons[i];
+		if (w > 0 && w != CSW_KNIFE && w != CSW_C4 && w != CSW_HEGRENADE && w != CSW_FLASHBANG && w != CSW_SMOKEGRENADE)
+			return true;
+	}
+	return false;
 }
 
 /* ---- supply drop: a marker that calls a crate ---- */
@@ -7639,8 +7692,21 @@ public w3_compass_tick()
 	new strip[160], Float:ang[3];
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!g_alive[p] || g_bot[p] || !is_user_connected(p))
+		if (g_bot[p] || !is_user_connected(p))
 			continue;
+		/* out of the game, watching someone: who, and how to change */
+		if (!g_alive[p])
+		{
+			new target = pev(p, pev_iuser2);
+			if (pev(p, pev_iuser1) && 1 <= target <= MaxClients && is_user_connected(target))
+			{
+				new name[32];
+				get_user_name(target, name, charsmax(name));
+				set_hudmessage(200, 200, 200, -1.0, 0.11, 0, 0.0, 0.3, 0.0, 0.05, -1);
+				ShowSyncHudMsg(p, g_w3SyncCompass, "Watching %s  -  Space: next player", name);
+			}
+			continue;
+		}
 		pev(p, pev_v_angle, ang);
 		new Float:h = 90.0 - ang[1];
 		while (h < 0.0)

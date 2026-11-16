@@ -95,6 +95,7 @@ new g_unstuckTries[33];
 new Float:g_releaseAt[33];
 new g_stagesOrig[256];
 new g_botsMid;
+new g_place[33], g_players;   /* each player's place when they went out, and how many started */
 
 public plugin_natives()
 {
@@ -391,6 +392,8 @@ stock start_drop()
 			loot_goal_on_landing(p);
 	toast(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
 	log_amx("Battle Royale on %s: game starts, %d players, pace %.2f, loot-up %d s", g_mapname, alive_count(), g_pace, drop);
+	g_players = alive_count();
+	arrayset(g_place, 0, sizeof g_place);
 	if (get_pcvar_num(g_cSquad) > 1)
 		ls_chat(0, "Squads of %d: your squad mates are on your side (say /br for help).", get_pcvar_num(g_cSquad));
 }
@@ -672,21 +675,39 @@ stock bool:check_winner()
 			went++;
 	if (sides == 0 || !last)
 	{
-		toast(0, 6.0, "Nobody survived");
+		end_screen("Nobody survived");
 		/* (the game's figures even with no winner - QA4-DE F5) */
 		log_amx("Battle Royale on %s: nobody survived, after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 		server_cmd("endround");
 		return true;
 	}
-	new name[32];
+	new name[32], head[64];
 	get_user_name(last, name, charsmax(name));
 	if (get_pcvar_num(g_cSquad) > 1)
-		toast(0, 8.0, "%s's squad wins!", name);
+		formatex(head, charsmax(head), "Winner: %s's squad", name);
 	else
-		toast(0, 8.0, "%s wins! (%d kills)", name, ls_kills(last));
+		formatex(head, charsmax(head), "Winner: %s (%d kills)", name, ls_kills(last));
+	end_screen(head);
 	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, name, ls_kills(last), floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
+}
+
+/* the end of a game, for each person: the winner, big, and where they placed (those still in at
+   the end, standing or down, placed first) with their kills, for a few seconds before the next */
+stock end_screen(const head[])
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue;
+		new place = g_place[p] ? g_place[p] : 1;
+		set_dhudmessage(255, 210, 90, -1.0, 0.30, 0, 0.0, 7.0, 0.3, 0.6);
+		show_dhudmessage(p, "%s", head);
+		set_dhudmessage(230, 230, 230, -1.0, 0.36, 0, 0.0, 7.0, 0.3, 0.6);
+		if (g_players > 0)
+			show_dhudmessage(p, "You placed #%d of %d  -  %d kills", place, max(g_players, place), ls_kills(p));
+	}
 }
 
 /* bots that come in during a game (the host raised the count on the Bots page) watch until the
@@ -1325,6 +1346,8 @@ public ham_killed(victim, killer, gib)
 	if (get_pcvar_num(g_cSquad) > 1)
 		set_task(4.5, "task_watch_squad", TASK_GEAR + 64 + victim);
 	new place = alive_count() + 1;
+	if (1 <= victim <= 32)
+		g_place[victim] = place;
 	new wpn[24] = "world", Float:dist = 0.0;
 	if (1 <= killer <= MaxClients && killer != victim && is_user_connected(killer))
 	{
