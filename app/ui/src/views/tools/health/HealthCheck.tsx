@@ -301,11 +301,29 @@ function WatchButton({ s, recording }: { s: Spot; recording: string | null }) {
   return <BusyButton className="btn small" busy={opening} label="Watch in Replay" busyLabel="Opening…" onClick={watch} />;
 }
 
-function FindingRow({ f, map, recording }: { f: Finding; map: string; recording: string | null }) {
+// engine-error notices put away with "It's fine", per report (this computer only)
+const DISMISSED = "ls.health.dismissed";
+function dismissedIds(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(DISMISSED) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function FindingRow({ f, map, recording, onDismiss }: { f: Finding; map: string; recording: string | null; onDismiss?: () => void }) {
   return (
     <li className={`health-finding ${f.level}`}>
       <span className="health-dot" aria-hidden="true" />
       <span className="health-finding-text">{f.text}</span>
+      {f.kind === "engine" && onDismiss && (
+        <span className="row health-finding-actions">
+          <button type="button" className="btn small" onClick={onDismiss} title="Hide this notice for this report">
+            It's fine
+          </button>
+        </span>
+      )}
       {f.spot && (
         <span className="row health-finding-actions">
           <WatchButton s={f.spot} recording={recording} />
@@ -359,6 +377,16 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "health", "report", id], queryFn: () => healthReport(id) });
   const [replaying, setReplaying] = useState(false);
+  const [dismissed, setDismissed] = useState<string[]>(dismissedIds);
+  const dismiss = (rid: string) => {
+    const next = [...dismissed.filter((x) => x !== rid), rid].slice(-200);
+    setDismissed(next);
+    try {
+      localStorage.setItem(DISMISSED, JSON.stringify(next));
+    } catch {
+      /* (private window: hidden for now only) */
+    }
+  };
   useReportAddress("health", `health:report:${id}`);
   const reportMap = q.data?.report?.map;
   useToolCrumbs("health", reportMap ? [{ label: reportMap, address: `health:${reportMap}`, title: `Simulate ${reportMap} again` }, { label: "Report" }] : [{ label: "Report" }]);
@@ -404,9 +432,11 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
           </div>
         </div>
         <ul className="health-findings">
-          {r.findings.map((f, i) => (
-            <FindingRow key={i} f={f} map={r.map} recording={r.recording} />
-          ))}
+          {r.findings.map((f, i) =>
+            f.kind === "engine" && dismissed.includes(r.id) ? null : (
+              <FindingRow key={i} f={f} map={r.map} recording={r.recording} onDismiss={() => dismiss(r.id)} />
+            ),
+          )}
         </ul>
       </div>
 

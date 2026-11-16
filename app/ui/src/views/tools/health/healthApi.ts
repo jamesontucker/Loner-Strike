@@ -53,7 +53,7 @@ export type FightSpot = { at: Vec3; place: string; deaths: number; tDeaths: numb
 export type HeatGrid = { cell: number; x0: number; y0: number; w: number; h: number; time: number[]; deaths: number[]; kills: number[] };
 /** winner: 1 the Terrorists, 2 the CTs, 0 not known */
 export type RoundResult = { seconds: number; winner: 0 | 1 | 2 };
-export type Finding = { level: "bad" | "warn" | "good"; text: string; spot?: Spot };
+export type Finding = { level: "bad" | "warn" | "good"; text: string; spot?: Spot; /** "engine": a crash or engine error line (It's fine puts it away) */ kind?: "engine" };
 export type Report = {
   id: string;
   map: string;

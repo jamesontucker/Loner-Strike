@@ -108,6 +108,9 @@ pub struct Finding {
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spot: Option<Spot>,
+    /// "engine": a crash or engine error line; the page offers "It's fine" to put it away
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 /// A place where many fights ended: deaths to enemies there, and which side died.
@@ -235,6 +238,47 @@ pub struct Asked {
 fn bad_line() -> &'static regex::Regex {
     static RE: OnceLock<regex::Regex> = OnceLock::new();
     RE.get_or_init(|| regex::Regex::new(r"(?i)FATAL ERROR|Host_Error|Segmentation fault|Mod_LoadModel|Unhandled exception").unwrap())
+}
+
+/// What an engine error line in the console says to the person. "Unable to initialize Steam" isn't a
+/// crash: the hidden server couldn't reach Steam's library as it started, on Windows usually because
+/// the firewall is asking about it the first time (the user's Windows test of the 1.0.0 draft).
+pub fn engine_finding(line: &str, windows: bool) -> String {
+    if line.contains("Unable to initialize Steam") {
+        return if windows {
+            "The hidden server couldn't reach Steam as it started. On Windows that's usually the firewall asking about it the first time: choose Allow access in the Windows Firewall prompt, and the next run works.".into()
+        } else {
+            "The hidden server couldn't reach Steam's library as it started. Run it again; it usually works the second time.".into()
+        };
+    }
+    format!("The server crashed or hit an engine error: \u{201c}{line}\u{201d}")
+}
+
+/// Written into the hidden server's console log before a retry: the report reads only what comes
+/// after the last one, so a start that failed and was tried again isn't reported as a crash.
+pub const RESTART_MARK: &str = "=== Loner-Strike: the hidden server was started again ===";
+
+/// A console log's text from the last restart on.
+pub fn after_restart(text: &str) -> &str {
+    text.rfind(RESTART_MARK).map(|i| &text[i + RESTART_MARK.len()..]).unwrap_or(text)
+}
+
+/// Why to start the hidden server again (None: don't). Steam that didn't answer as the server came
+/// up (it closed): on Windows the firewall prompt, tried up to twice. A start that hung: Valve's
+/// HLDS under CrossOver sometimes stops at `Failed to load "SDL3.dll"` on the first map change
+/// (final check 2026-11-15), or nothing came up in 4 minutes: tried once.
+pub fn retry_reason(log: &str, closed: bool, waited: Duration, steam_retries: u32, hang_retries: u32) -> Option<&'static str> {
+    let log = after_restart(log);
+    if closed {
+        return (steam_retries < 2 && log.contains("Unable to initialize Steam")).then_some("steam");
+    }
+    if hang_retries >= 1 {
+        return None;
+    }
+    if log.contains("Failed to load \"SDL3.dll\"") && waited >= Duration::from_secs(30) {
+        return Some("hang");
+    }
+    (waited > Duration::from_secs(240)).then_some("hang")
 }
 
 fn amx_line() -> &'static regex::Regex {
@@ -672,12 +716,12 @@ pub fn findings(r: &Report) -> Vec<Finding> {
     let mode = r.mode.as_str();
     let mut bad = Vec::new();
     let mut warn = Vec::new();
-    let say = |v: &mut Vec<Finding>, level: &str, text: String, spot: Option<Spot>| v.push(Finding { level: level.into(), text, spot });
+    let say = |v: &mut Vec<Finding>, level: &str, text: String, spot: Option<Spot>| v.push(Finding { level: level.into(), text, spot, kind: None });
     if let Some(why) = &r.ended_early {
         say(&mut bad, "bad", format!("The check ended early: {why}"), None);
     }
     if let Some(l) = r.fatal.first() {
-        say(&mut bad, "bad", format!("The server crashed or hit an engine error: \u{201c}{l}\u{201d}"), None);
+        bad.push(Finding { level: "bad".into(), text: engine_finding(l, cfg!(windows)), spot: None, kind: Some("engine".into()) });
     }
     for p in r.plugin_error_list.iter().take(2) {
         say(&mut bad, "bad", format!("{} had {} in the console. The first: \u{201c}{}\u{201d}", p.plugin, plural(p.count, "error", "errors"), p.first), None);
@@ -745,7 +789,7 @@ pub fn findings(r: &Report) -> Vec<Finding> {
     if out.is_empty() {
         let used = r.coverage_pct.map(|c| format!(", used {c:.0}% of the map")).unwrap_or_default();
         let fought = if FEW_KILLS.contains(&mode) { String::new() } else { format!(" ({:.2} kills a bot-minute)", r.kills_per_bot_min) };
-        out.push(Finding { level: "good".into(), text: format!("No problems found. Bots played{fought}{used} and rarely got stuck or fell."), spot: None });
+        out.push(Finding { level: "good".into(), text: format!("No problems found. Bots played{fought}{used} and rarely got stuck or fell."), spot: None, kind: None });
     }
     out
 }
@@ -1258,7 +1302,23 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
     let started = Instant::now();
     let mut playing: Option<Instant> = None;
     let (mut nudges, mut last_nudge, mut last_check) = (0, started, started);
-    let mut retries = 0;
+    let (mut retries, mut hang_retries) = (0u32, 0u32);
+    let mut started = started;
+    // (a retry: the console log gets the mark, the server's own logs start again, a new process)
+    let restart = |child: &mut std::process::Child, what: String| -> Result<(), String> {
+        pkill_hidden(&p.hidden);
+        let _ = child.kill();
+        update(|r| r.detail = what);
+        for l in &logs[..2] {
+            let _ = std::fs::remove_file(l);
+        }
+        let mut out = std::fs::OpenOptions::new().append(true).open(&logs[2]).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        let _ = writeln!(out, "\n{RESTART_MARK}");
+        *child = spawn(&p.client, &p.hidden, &server_args(&game, port, &password, &p.asked.map), out)?;
+        crate::sys::tie_to_app(child);
+        Ok(())
+    };
     let ended = loop {
         std::thread::sleep(Duration::from_millis(500));
         if STOP.load(Ordering::SeqCst) {
@@ -1267,14 +1327,20 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
         if matches!(child.try_wait(), Ok(Some(_))) {
             // a server that couldn't reach Steam's library as it came up (seen on the first
             // start of a freshly set up one under CrossOver) usually does on a second try
-            if playing.is_none() && retries < 2 && tail(&logs[2], 1 << 16).contains("Unable to initialize Steam") {
+            if playing.is_none() && retry_reason(&tail(&logs[2], 1 << 16), true, started.elapsed(), retries, hang_retries).is_some() {
                 retries += 1;
-                pkill_hidden(&p.hidden);
-                update(|r| r.detail = format!("Starting the hidden server on {} again (Steam didn't answer)", p.asked.map));
-                std::thread::sleep(Duration::from_secs(3));
-                let out = std::fs::OpenOptions::new().append(true).open(&logs[2]).map_err(|e| e.to_string())?;
-                child = spawn(&p.client, &p.hidden, &server_args(&game, port, &password, &p.asked.map), out)?;
-                crate::sys::tie_to_app(&child);
+                // (on Windows the firewall prompt is likely up: time to answer it)
+                let wait = if cfg!(windows) { 15 } else { 3 };
+                update(|r| {
+                    r.detail = if cfg!(windows) {
+                        "Steam didn't answer the hidden server: if Windows Firewall asks about it, choose Allow access. Trying again…".into()
+                    } else {
+                        format!("Starting the hidden server on {} again (Steam didn't answer)", p.asked.map)
+                    }
+                });
+                std::thread::sleep(Duration::from_secs(wait));
+                restart(&mut child, format!("Starting the hidden server on {} again", p.asked.map))?;
+                started = Instant::now();
                 continue;
             }
             break Ended::Closed;
@@ -1300,6 +1366,12 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
             }
         }
         match playing {
+            None if retry_reason(&tail(&logs[2], 1 << 16), false, started.elapsed(), retries, hang_retries).is_some() => {
+                hang_retries += 1;
+                restart(&mut child, format!("The hidden server got stuck starting: starting it again on {}", p.asked.map))?;
+                started = Instant::now();
+                last_nudge = started;
+            }
             None if started.elapsed() > Duration::from_secs(240) => break Ended::NoStart,
             None => {}
             Some(t) if t.elapsed() >= total => break Ended::Done,
@@ -1322,7 +1394,7 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
         .map(|d| d.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("csv"))).collect())
         .unwrap_or_default();
     recs.sort();
-    let console: String = logs.iter().map(|l| tail(l, MAX_CONSOLE)).collect::<Vec<_>>().join("\n");
+    let console: String = logs.iter().map(|l| after_restart(&tail(l, MAX_CONSOLE)).to_string()).collect::<Vec<_>>().join("\n");
     Ok((ended, recs, console))
 }
 
@@ -1783,6 +1855,55 @@ pub fn routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration as D;
+
+    // the user's Windows test: the firewall blocked the first start, the retry worked; the report
+    // must not call the first attempt a crash (only what came after the restart is read)
+    #[test]
+    fn a_start_retried_isnt_a_crash() {
+        let log = format!("FATAL ERROR (shutting down): Unable to initialize Steam\n{RESTART_MARK}\nL 11/16/2026 - 10:00:00: Started map \"de_dust2\"\n");
+        assert!(read_console(after_restart(&log)).fatal.is_empty());
+        assert_eq!(read_console(&log).fatal.len(), 1, "without the mark it would have been reported");
+        assert_eq!(after_restart("no restart here"), "no restart here");
+    }
+
+    #[test]
+    fn steam_not_answering_is_the_firewall_on_windows_not_a_crash() {
+        let l = "FATAL ERROR (shutting down): Unable to initialize Steam";
+        let w = engine_finding(l, true);
+        assert!(w.contains("Allow access") && w.contains("Windows Firewall") && !w.contains("crashed"), "{w}");
+        assert!(!engine_finding(l, false).contains("crashed"));
+        assert!(engine_finding("Host_Error: PF_precache_model_I: x", true).starts_with("The server crashed or hit an engine error"));
+    }
+
+    #[test]
+    fn engine_findings_are_marked_for_the_dismiss_button() {
+        let r = Report { fatal: vec!["Host_Error: x".into()], ..Default::default() };
+        let f = findings(&r);
+        let e = f.iter().find(|f| f.text.contains("engine error")).expect("the engine finding");
+        assert_eq!(e.kind.as_deref(), Some("engine"));
+        assert!(f.iter().filter(|f| !f.text.contains("engine error")).all(|f| f.kind.is_none()));
+    }
+
+    #[test]
+    fn retries_steam_twice_and_a_hang_once() {
+        let steam = "FATAL ERROR (shutting down): Unable to initialize Steam";
+        assert_eq!(retry_reason(steam, true, D::from_secs(5), 0, 0), Some("steam"));
+        assert_eq!(retry_reason(steam, true, D::from_secs(5), 2, 0), None, "two retries at most");
+        assert_eq!(retry_reason("closed for another reason", true, D::from_secs(5), 0, 0), None);
+        // after a restart only the new attempt counts: the old Steam line doesn't retry again
+        assert_eq!(retry_reason(&format!("{steam}\n{RESTART_MARK}\nsomething else"), true, D::from_secs(5), 1, 0), None);
+        // the SDL3 hang (Valve's HLDS 4599 under CrossOver): retried once, after 30 s with no answer
+        let sdl = "src\\public\\tier1\\interface.h (273) : Assertion Failed: Failed to load \"SDL3.dll\"";
+        assert_eq!(retry_reason(sdl, false, D::from_secs(10), 0, 0), None, "too soon");
+        assert_eq!(retry_reason(sdl, false, D::from_secs(31), 0, 0), Some("hang"));
+        assert_eq!(retry_reason(sdl, false, D::from_secs(31), 0, 1), None, "once");
+        // nothing at all in 4 minutes: once too
+        assert_eq!(retry_reason("", false, D::from_secs(241), 0, 0), Some("hang"));
+        assert_eq!(retry_reason("", false, D::from_secs(100), 0, 0), None);
+        assert_eq!(retry_reason("", false, D::from_secs(241), 0, 1), None);
+    }
+
     use super::*;
 
     const FALLS: &str = include_str!("health/testdata/rats2_falls.csv");
