@@ -301,7 +301,7 @@ One line each: Title (type, category): what it does. In: inputs. Out: outputs.
 - Squad Size (br.squad_size, Battle Royale): Sets the squad size: 1 solo, 2 duos, 4 squads... In: Size Number.
 - Lobby Ended (br.on_lobby_end, Battle Royale): The squad lobby is over and the squads are filled. Out: Squads Number.
 - Sides Alive (br.squads_alive, Battle Royale): How many sides have someone alive (squads, and players in none). Out: Sides Number.
-- Round Table On (wave.table, Waves): Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix.
+- Round Table On (wave.table, Waves): Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix. Creatures hunt players: on, they go for the defenders from anywhere; off, each type keeps its own aggression (a hound only fights what comes near). Flee when badly hurt: Never, they keep coming; Creature's own, each type runs at its own flee point. A waves.ini section (hunt =, flee =) or one wave's line (hunt=0 flee=own) can still say otherwise for its waves.
 - Round Table Off (wave.table_off, Waves): Waves go back to the spawners' own settings.
 - Round Difficulty (wave.scale, Waves): Times the round table's counts and health (the mode's difficulty). In: Count times Number, Health times Number.
 - Alive Cap (wave.cap, Waves): How many creatures at once (0: 16 + 2 a defender, 20-48; never over the game's own cap). In: At once Number.
@@ -592,8 +592,8 @@ One line each: Title (type, category): what it does. In: inputs. Out: outputs.
 - Position Of Entity (vec.entity, Vectors): Where an entity is (the middle of a brush entity). In: Entity Entity. Out: Position Vector.
 - Set Position (player.set_position, Players): Moves a living player to a position (pick one where they fit). In: Player Player, Position Vector.
 - Set Velocity (player.set_velocity, Players): Throws a living player: their speed and direction as a vector. In: Player Player, Velocity Vector.
-- Make Struct (struct.make, Structs): A struct from its fields. Out: Struct The picked struct.
-- Break Struct (struct.break, Structs): A struct's fields. In: Struct The picked struct.
+- Make Struct (struct.make, Structs): A struct from its fields. Each field is one value (a number, yes/no, text, a vector, a color, a file (model, sprite, sound or decal), a player, an entity or an entity handle (NPC, creature, projectile...), a team, a timer, a sound loop or an enum); for a list, an Array of the struct. Out: Struct The picked struct.
+- Break Struct (struct.break, Structs): A struct's fields, each one value (a number, text, a color, a file, an entity or handle, an enum...). In: Struct The picked struct.
 - Set Field (struct.set_field, Structs): Sets one field of a struct variable. In: Value The picked field's type.
 - Enum Value (enum.value, Enums): One of an enum's values. Out: Value The picked enum.
 - Enum To Number (enum.to_number, Enums): An enum value's number (the first is 0). In: Value The picked enum. Out: Number Number.

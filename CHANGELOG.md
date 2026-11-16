@@ -26,6 +26,11 @@ The first full release:
 - They remember who they backed off from and decide what to do about it: hold, take another angle, go back in or go round, each in their own way.
 - Fights look more human: they spread out instead of stacking, stop to shoot by habit, reload out of sight, and fire a shotgun mid-reload.
 - They buy ammo with their Deagle and don't charge in with an empty gun.
+- The bot brain is now ls23.
+
+### Game modes
+- Battle Royale, rebuilt: a compass and zone status on screen, a storm wall and fog you can see coming, a gliding drop through the fog, a gear panel, loot you pick up by walking through it, an end screen, and spectating once you're out. br_valley is reworked to match.
+- Last Stand: grenade limits, a mystery box, and waves that hunt you down. Each is a setting.
 
 ### Voice commands
 - On a dedicated server, the bots understand voice chat the same as typed team chat, loose wording included. An optional add-on per server (about 500 MB, once per computer), installed and removed from its Bot voice commands tab. Speech is turned into text on the machine running the server; no audio is kept or sent anywhere.
@@ -48,6 +53,7 @@ The first full release:
 - First setup is faster: the fun maps download four at a time, the progress bar moves while they come in, and the time estimate counts them.
 - A map with more models than a mode has room for is skipped by that mode, refused with a message if you pick it, and never crashes the server. `gm_mapfit <mode> <map>` in the server console shows the numbers.
 - Easier to read: stronger contrast throughout, and every text field and box in the app's own style.
+- Docs buttons on the main pages and tools open the right part of the docs, and Game Mode Studio and the map editor also have a Reference button.
 - New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
 
 ### Make and share (Beta)
@@ -59,7 +65,12 @@ The first full release:
 - Share and remix maps: publish a map with its editable source, ready for the map editor, TrenchBroom, Hammer or J.A.C.K.
 - TrenchBroom: its groups and layers come in on import and go back out on export.
 - Plugin Studio: Export and Import plugins.
-- Publish fills in the GameBanana credits and asks whether AI helped make what you share.
+- Publish fills in the GameBanana credits.
+- Game Mode Studio's types: pickers for models, sprites, sounds and decals, a Color picker, Transform, lists for Weapon, Hit Zone and Damage Kind, typed handles (NPC, Creature, Projectile and more) with casts, and a # on pins that take whole numbers.
+- After an update, a pin a node no longer has shows in red for you to rewire, and Refresh nodes brings a mode's nodes up to date.
+- The files a mode uses go with it when you publish it, and updates never break a mode made with 1.0.
+- Modes can't overload the server: effects have a budget per player, and loops are spread out so they never freeze it. If a mode still fails to load, the server falls back to a safe mode instead of crashing.
+- Map editor: Alt+drag copies what you drag, and Inspect can copy and paste an entity's settings.
 
 ### Servers
 - A server's tabs are grouped Server, Game, People and Library, with new Health, Who can join, Moderation and Stats tabs. Helpers see what's owner only.
