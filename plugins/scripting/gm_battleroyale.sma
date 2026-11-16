@@ -55,7 +55,7 @@ native people_get(id, const key[]);
 enum { PH_IDLE = 0, PH_WAIT, PH_LOBBY, PH_DROP, PH_PLAY, PH_OVER };
 enum { TR_HUNTER = 0, TR_LOOTER, TR_CAMPER };
 
-new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight, g_cLobby, g_cLateFill, g_cBleed;
+new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cZoneFirst, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight, g_cLobby, g_cLateFill, g_cBleed;
 new g_knocker[33];
 new bool:g_contactLogged;
 
@@ -118,6 +118,8 @@ public plugin_init()
 	g_cStart = register_cvar("br_start", "knife");
 	g_cDrop = register_cvar("br_drop", "15");
 	g_cZoneStart = register_cvar("br_zone_start", "30");
+	/* the zone's first wait before it first shrinks, in seconds (not scaled by the pace) */
+	g_cZoneFirst = register_cvar("br_zone_first_wait", "45");
 	g_cDrops = register_cvar("br_drops", "3");
 	g_cWaitHuman = register_cvar("br_wait_human", "1");
 	g_cDropIn = register_cvar("br_dropin", "1");
@@ -335,8 +337,9 @@ stock pace_zone(Float:f)
 			break;
 		replace_all(tok, charsmax(tok), ":", " ");
 		parse(tok, a[0], 11, a[1], 11, a[2], 11, a[3], 11);
-		/* (the first wait is a third shorter: players meet within 2-3 minutes of landing) */
-		new Float:w = str_to_float(a[1]) * f * (k++ == 0 ? 0.667 : 1.0);
+		/* (the first wait is br_zone_first_wait seconds whatever the pace: players meet within 2-3
+		   minutes of landing) */
+		new Float:w = k++ == 0 ? get_pcvar_float(g_cZoneFirst) : str_to_float(a[1]) * f;
 		format(out, charsmax(out), "%s%s%s:%d:%d:%s", out, out[0] ? " " : "", a[0],
 			max(floatround(w), 5), max(floatround(str_to_float(a[2]) * f), 5), a[3][0] ? a[3] : "1");
 	}
@@ -347,12 +350,12 @@ stock start_drop()
 {
 	g_phase = PH_DROP;
 	g_pace = pace();
-	/* a big map (zone radius 4000+): it takes a while to get anywhere, so the zone takes longer
-	   (20 bots on br_valley: about 5 min of game time at pace 0.75-1.0, the zone doing the
-	   last 5 kills; 1.5 aims at 7-8 min) */
+	/* a big map (zone radius 4000+): it takes a while to get anywhere, so the zone takes longer:
+	   at least pace 1.5 (br_valley: the first shrink 45 s after the zone starts, fully closed
+	   about 11-12 min after the fight starts) */
 	new zone = ls_comp_find("ls_safe_zone");
 	if (zone && ls_comp_getf(zone, "radius") >= 4000.0)
-		g_pace = floatmax(g_pace, 2.0);
+		g_pace = floatmax(g_pace, 1.5);
 	pace_zone(g_pace);
 	/* small games: a little more in each crate */
 	new extra[4];
