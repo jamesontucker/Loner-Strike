@@ -326,7 +326,7 @@ stock pace_zone(Float:f)
 		ls_comp_get(sh, "stages", g_stagesOrig, charsmax(g_stagesOrig));
 	if (!g_stagesOrig[0])
 		return;
-	new out[256], tok[48], rest[256], a[4][12];
+	new out[256], tok[48], rest[256], a[4][12], k = 0;
 	copy(rest, charsmax(rest), g_stagesOrig);
 	while (rest[0])
 	{
@@ -335,8 +335,10 @@ stock pace_zone(Float:f)
 			break;
 		replace_all(tok, charsmax(tok), ":", " ");
 		parse(tok, a[0], 11, a[1], 11, a[2], 11, a[3], 11);
+		/* (the first wait is a third shorter: players meet within 2-3 minutes of landing) */
+		new Float:w = str_to_float(a[1]) * f * (k++ == 0 ? 0.667 : 1.0);
 		format(out, charsmax(out), "%s%s%s:%d:%d:%s", out, out[0] ? " " : "", a[0],
-			max(floatround(str_to_float(a[1]) * f), 5), max(floatround(str_to_float(a[2]) * f), 5), a[3][0] ? a[3] : "1");
+			max(floatround(w), 5), max(floatround(str_to_float(a[2]) * f), 5), a[3][0] ? a[3] : "1");
 	}
 	ls_comp_set(sh, "stages", out);
 }

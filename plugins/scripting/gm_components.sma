@@ -2221,7 +2221,7 @@ stock zone_shrink(s, const Float:c[3], Float:r, Float:secs)
 stock bool:shrinker_stage(s, n, &Float:r, &Float:warn, &Float:shrink, &Float:dmg)
 {
 	new stages[256];
-	ks(s, "stages", stages, charsmax(stages), "2400:60:40:1 1600:45:35:2 900:40:30:4 400:30:25:8 0:20:20:15");
+	ks(s, "stages", stages, charsmax(stages), "2400:40:40:1 1600:45:35:2 900:40:30:4 400:30:25:8 0:20:20:15");
 	new tok[48], pos = 0, i = 0;
 	while (stages[pos])
 	{
