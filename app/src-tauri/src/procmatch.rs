@@ -26,7 +26,8 @@ pub fn same_start(noted: Option<u64>, actual: u64) -> bool {
     noted.is_none_or(|n| n.abs_diff(actual) <= START_SLACK)
 }
 
-/// `ps -o etime` ("[[dd-]hh:]mm:ss") as seconds.
+/// `ps -o etime` ("[[dd-]hh:]mm:ss") as seconds (Unix only: Windows reads the start time another way).
+#[cfg(any(unix, test))]
 pub fn parse_etime(s: &str) -> Option<u64> {
     let s = s.trim();
     let (days, rest) = match s.split_once('-') {
