@@ -1677,7 +1677,16 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
   const [user, setUser] = useState("");
   const [key, setKey] = useState("");
   // the machine as first seen: its fingerprint to confirm before anything is set up
-  const [probe, setProbe] = useState<{ fingerprint: string; known: boolean; arch: string; x86: boolean } | null>(null);
+  const [probe, setProbe] = useState<{ fingerprint: string; known: boolean; arch: string; x86: boolean; used: { port: number; by: string }[] } | null>(null);
+  // its game port on that machine: the first free one, or one the player picks
+  const [port, setPort] = useState("");
+  // machines the app's servers are on already: picked instead of typing it all again
+  type Machine = { host: string; user: string; key: string; ssh_port: number; servers: { name: string; port: number }[] };
+  const [machines, setMachines] = useState<Machine[]>([]);
+  useEffect(() => {
+    if (!ON_THIS_COMPUTER) return;
+    getJson<{ machines?: Machine[] }>("/api/servers/machines").then((r) => setMachines(r.machines ?? [])).catch(() => setMachines([]));
+  }, []);
   const [checkErr, setCheckErr] = useState("");
   const [makeErr, setMakeErr] = useState("");
   const { run, busy } = useActions();
@@ -1702,15 +1711,28 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
   const machineChanged = () => {
     setProbe(null);
     setCheckErr("");
+    setPort("");
+  };
+  // (a pasted address may come with spaces or a comma after it)
+  // (not a final dot: it's typed on the way to "play.example.com"; the app drops one left at the end)
+  const cleanHost = (h: string) => h.trim().replace(/^[\s,;/]+|[\s,;/]+$/g, "");
+  const useMachine = (i: string) => {
+    const m = machines[Number(i)];
+    if (!m) return;
+    setHost(m.host);
+    setUser(m.user);
+    setKey(m.key);
+    machineChanged();
   };
 
   const check = () => run("new-server:check", async () => {
     setProbe(null);
     setCheckErr("");
-    type Probe = { error?: string; fingerprint?: string; known?: boolean; arch?: string; x86?: boolean };
+    type Probe = { error?: string; fingerprint?: string; known?: boolean; arch?: string; x86?: boolean; port?: number | null; used?: { port: number; by: string }[] };
     const r = await postJson<Probe>("/api/servers/remote/probe", { name, game, host, user, key }).catch((): Probe => ({ error: "Couldn't reach the app." }));
     if (r.error || !r.fingerprint) return setCheckErr(r.error || "Couldn't check the server.");
-    setProbe({ fingerprint: r.fingerprint, known: !!r.known, arch: r.arch ?? "", x86: !!r.x86 });
+    setProbe({ fingerprint: r.fingerprint, known: !!r.known, arch: r.arch ?? "", x86: !!r.x86, used: r.used ?? [] });
+    setPort(r.port ? String(r.port) : "");
   }, `Connecting to ${host}…`);
   const pickKey = async () => {
     const r = await post("/api/servers/pick-key");
@@ -1728,7 +1750,7 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
   const create = () => run("new-server:make", async () => {
     setMakeErr("");
     const r = where === "vps"
-      ? await post("/api/servers/remote", { name, game, template, visibility: vis, password, host, user, key, host_key: probe?.fingerprint ?? "" })
+      ? await post("/api/servers/remote", { name, game, template, visibility: vis, password, host, user, key, host_key: probe?.fingerprint ?? "", port: port ? Number(port) : null })
       : await post("/api/servers", { name, game, template, visibility: vis, password });
     if (r.error) return setMakeErr(r.error);
     // the setup runs inside the app: closing this window is fine, quitting stops it
@@ -1739,7 +1761,8 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
   }, where === "vps" ? `Starting the setup on ${host}…` : "Starting the server setup…");
 
   // why Make the server can't be pressed yet
-  const why = where === "vps" && !probe ? "Check the machine first." : where === "vps" && probe && !probe.x86 ? "This machine can't run the server." : !name.trim() ? "Give it a name." : "";
+  const portBad = where === "vps" && !!probe && (!/^\d+$/.test(port) || Number(port) < 27015 || Number(port) > 27019 || probe.used.some((u) => u.port === Number(port)));
+  const why = where === "vps" && !probe ? "Check the machine first." : where === "vps" && probe && !probe.x86 ? "This machine can't run the server." : portBad ? "Pick a free port." : !name.trim() ? "Give it a name." : "";
   return (
     <Sheet label="New server" onClose={close} className="sheet new-server">
       <div className="sheet-body">
@@ -1759,9 +1782,20 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
               Don't have a machine or SSH key yet?{" "}
               <button type="button" className="link inline" onClick={async () => { if (!filled || (await ask("Close this and open the guide? What you typed here is lost.", { ok: "Open the guide" }))) onGuide(); }}>See the guide</button>
             </p>
+            {machines.length > 0 && (
+              <label className="field">
+                <span>Use a machine you already have<Info text="Another server on the same machine: it gets its own port there. The address, user and key are filled in from the server that's on it." /></span>
+                <select value="" onChange={(e) => useMachine(e.target.value)} aria-label="Use a machine you already have">
+                  <option value="">Pick one, or type a new machine below</option>
+                  {machines.map((m, i) => (
+                    <option key={`${m.host}-${i}`} value={i}>{m.host} ({m.servers.map((x) => x.name).join(", ")})</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="field">
               <span>Address<Info text="The machine's public IP address or host name, from your hosting provider's page." /></span>
-              <input ref={hostBox} className="search" placeholder="Like 146.235.20.10" value={host} onChange={(e) => { setHost(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
+              <input ref={hostBox} className="search" placeholder="Like 146.235.20.10" value={host} onChange={(e) => { setHost(cleanHost(e.target.value)); machineChanged(); }} spellCheck={false} />
             </label>
             <label className="field">
               <span>User<Info text="The account you log in with over SSH: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. It needs to be root or able to use sudo." /></span>
@@ -1798,6 +1832,18 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
                 </div>
               )}
             </div>
+            {probe?.x86 && (
+              <label className="field" data-testid="new-server-port">
+                <span>Port<Info text="The port players connect to. Each server on a machine needs its own, from 27015 to 27019 (27020 is for HLTV). Setup checks it's free on the machine before it changes anything." /></span>
+                <input className="search narrow" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, "").slice(0, 5))} aria-label="Port" />
+                <small>
+                  {probe.used.length
+                    ? `Used on this machine: ${probe.used.map((u) => `${u.port} by ${u.by}`).join(", ")}.`
+                    : "Nothing else of yours runs on this machine, so the usual 27015."}
+                  {portBad && port ? " Pick a free port from 27015 to 27019." : ""}
+                </small>
+              </label>
+            )}
           </>
         )}
         <label className="field">

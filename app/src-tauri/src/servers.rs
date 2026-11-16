@@ -367,6 +367,47 @@ fn route_ip() -> Option<String> {
 /// is HLTV's
 pub(crate) const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
 
+/// The other saved servers on the same Linux machine as `r` (by address or SSH identity:
+/// one machine can be saved as its IP and as a host name).
+pub(crate) fn on_machine<'a>(r: &'a crate::remote::RemoteInfo, all: &'a [Entry], except: &'a str) -> impl Iterator<Item = &'a Entry> + 'a {
+    all.iter().filter(move |o| o.id != except && o.remote.as_ref().is_some_and(|x| crate::remote::same_machine(x, r)))
+}
+
+/// The game and HLTV ports the app's servers use on that machine: (port, what uses it).
+pub(crate) fn machine_ports(r: &crate::remote::RemoteInfo, all: &[Entry], except: &str) -> Vec<(u16, String)> {
+    let mut out = Vec::new();
+    for o in on_machine(r, all, except) {
+        out.push((o.port, format!("\"{}\"", o.name)));
+        if o.hltv.enabled {
+            out.push((crate::hltv::port_of(o), format!("HLTV on \"{}\"", o.name)));
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The first game port no saved server on that machine uses (27015 on a machine of its own).
+pub(crate) fn suggest_remote_port(r: &crate::remote::RemoteInfo, all: &[Entry], except: &str) -> Option<u16> {
+    let used = machine_ports(r, all, except);
+    REMOTE_PORTS.clone().find(|p| !used.iter().any(|(u, _)| u == p))
+}
+
+/// A game port is free for a server on that machine: in the range, not one the app's other
+/// servers there use, and nothing listening on it there now (another program, or a server
+/// the app doesn't know). The check over SSH is skipped only when `live` is None.
+pub(crate) fn remote_port_free(p: u16, r: &crate::remote::RemoteInfo, all: &[Entry], except: &str, live: Option<&std::collections::BTreeSet<u16>>) -> Result<(), String> {
+    if !REMOTE_PORTS.contains(&p) {
+        return Err("Pick a port from 27015 to 27019 (27020 is for HLTV).".into());
+    }
+    if let Some((_, who)) = machine_ports(r, all, except).into_iter().find(|(u, _)| *u == p) {
+        return Err(format!("Port {p} is already used on this machine by {who}. Pick another."));
+    }
+    if live.is_some_and(|l| l.contains(&p)) {
+        return Err(format!("Port {p} is already used on this machine by another program. Pick another."));
+    }
+    Ok(())
+}
+
 /// Start options the app sets itself, so they can't be added again by hand
 const OWN_ARGS: &[&str] = &[
     "-game", "-port", "+port", "-ip", "+ip", "+hostport", "+clientport", "-console", "-condebug", "-nomaster", "+map", "+maxplayers", "-maxplayers", "+sv_lan", "+rcon_password", "+sv_password", "+exec",
@@ -509,7 +550,7 @@ fn load_checked() -> Result<Vec<Entry>, String> {
     };
     // servers made before they started at 27016 shared the game's port: move them
     // (saved with the next change)
-    // (not servers on another machine: they're alone there, on 27015 to 27019)
+    // (not servers on another machine: they use 27015 to 27019 there, one each)
     for e in list.iter_mut().filter(|e| e.remote.is_some() && !REMOTE_PORTS.contains(&e.port)) {
         e.port = 27015;
     }
@@ -641,14 +682,23 @@ fn slug(name: &str, taken: &[Entry]) -> String {
         .filter(|p| !p.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    base.truncate(32);
+    // never ending in "-" where it was cut: on a Linux machine the id names its systemd units,
+    // and systemd reads "lonerstrike-<id>-.service.wants" as a prefix for every unit starting
+    // with it, so the server's watchdog (and with it the game) was pulled in by its shared
+    // control units, and Stop couldn't stop it
+    let cut = |b: &mut String| {
+        b.truncate(32);
+        let t = b.trim_end_matches('-').len();
+        b.truncate(t);
+    };
+    cut(&mut base);
     if base.is_empty() {
         base = "server".into();
     }
     // "sh-" starts the ids of servers friends share with you (shared control)
     if base.starts_with("sh-") {
         base.insert_str(0, "my-");
-        base.truncate(32);
+        cut(&mut base);
     }
     let mut id = base.clone();
     let mut n = 2;
@@ -982,6 +1032,28 @@ fn template_source(template: &str, game: &str, client: &Install, catalog: &[Valu
     Some((dir, comps))
 }
 
+/// A copy of another server starts in the mode that server plays now. For one on another
+/// machine that's the machine's word: this computer's copy of its current.txt is only what
+/// was last sent there, never what the plugin wrote since (a copy of a server playing Classic
+/// started in Warcraft 3). A mode the copy doesn't have, or no answer: Classic. Copies of the
+/// player's own game keep its current.txt as copied; a fresh server starts as usual.
+fn carry_start_mode(entry: &Entry, game_dir: &Path) {
+    let template = entry.setup_with.as_ref().map(|w| w.template.clone()).unwrap_or_default();
+    if matches!(template.as_str(), "" | "local" | "fresh") {
+        return;
+    }
+    let playing = game_for(&template, || None).map(|g| crate::extras::current_mode(&g)).unwrap_or_default();
+    let modes = crate::extras::parse_modes(&sys::read_latin1(&game_dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default());
+    let mode = start_mode_for(&playing, &modes);
+    let _ = std::fs::write(game_dir.join("addons/amxmodx/data/gamemodes/current.txt"), format!("{mode}\n"));
+}
+
+/// The mode a copy starts in: the template's, if the copy has it, else Classic.
+fn start_mode_for(playing: &str, modes: &[(String, String)]) -> String {
+    let p = playing.trim();
+    if !p.is_empty() && modes.iter().any(|(id, _)| id == p) { p.to_string() } else { "classic".into() }
+}
+
 /// Game Mode Menu settings worth carrying over: presets, saved settings, admins…
 /// not the panel's password, live status or logs, nor the template's history (its
 /// stats, reports, matches and who played there belong to it, not to a new server).
@@ -1111,6 +1183,7 @@ fn local_setup(entry: Entry, base: PathBuf, source: Option<PathBuf>, components:
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
+            carry_start_mode(&entry, &entry.dir.join(&g));
             write_join(&data, &entry.name, &join_pw, bots_when_empty(&entry), false)?;
             // empty ban lists, so the server doesn't complain it has none
             for f in ["banned.cfg", "listip.cfg"] {
@@ -1212,11 +1285,20 @@ pub struct NewRemote {
     pub host_key: String,    /// to join it (empty: none)
     #[serde(default)]
     pub password: String,
+    /// The game port (None: the first one no other server on that machine uses)
+    #[serde(default)]
+    pub port: Option<u16>,
+}
+
+/// A machine's address as typed: spaces and stray punctuation around it go
+/// ("play.example.com," pasted from a list).
+fn clean_host(h: &str) -> String {
+    h.trim().trim_matches(|c: char| c.is_whitespace() || ",;/".contains(c)).trim_end_matches('.').to_string()
 }
 
 /// The machine a NewRemote describes (checked; no identity yet).
 fn remote_of(req: &NewRemote) -> Result<crate::remote::RemoteInfo, String> {
-    let host = req.host.trim().to_string();
+    let host = clean_host(&req.host);
     if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c)) {
         return Err("Enter the machine's address, like 146.235.20.10 or myserver.example.com.".into());
     }
@@ -1845,13 +1927,20 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     };
     let root = root_for(&client)?;
     let list = load();
+    // its game port: the one asked for, else the first no other server there uses; checked
+    // against the app's list and what listens on the machine now, before anything changes
+    let port = match req.port {
+        Some(p) => p,
+        None => suggest_remote_port(&info, &list, "").ok_or("Every game port on this machine (27015 to 27019) is used by another server already.")?,
+    };
+    let live = crate::remote::listening(&info).map(|(udp, _)| udp)?;
+    remote_port_free(port, &info, &list, "", Some(&live))?;
     let id = slug_in(&name, &list, &root);
     let entry = Entry {
         id: id.clone(),
         name: name.clone(),
         game: req.game.clone(),
-        // the only server on the machine: the usual port
-        port: 27015,
+        port,
         dir: root.join(&id),
         kind: client.kind.clone(),
         bottle: client.bottle.clone(),
@@ -1946,6 +2035,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
+            carry_start_mode(&entry, &entry.dir.join(&g));
             // the password from the form, or the one it has now when this runs again
             let pw = Some(join_password(&entry)).filter(|p| !p.is_empty()).or(entry.setup_with.as_ref().map(|w| w.password.clone())).unwrap_or_default();
             write_join(&data, &entry.name, &pw, bots_when_empty(&entry), false)?;
@@ -3182,11 +3272,42 @@ async fn api_probe_remote(headers: HeaderMap, Json(req): Json<NewRemote>) -> (St
     let r = tokio::task::spawn_blocking(move || {
         let info = remote_of(&req)?;
         let (fingerprint, known, arch) = crate::remote::probe(&info)?;
-        Ok(json!({"ok": true, "fingerprint": fingerprint, "known": known, "arch": arch, "x86": arch == "x86_64"}))
+        // the ports the app's servers already use on this machine, and the first free one
+        let mut me = info.clone();
+        me.host_key = Some(fingerprint.clone());
+        let all = load();
+        let used: Vec<Value> = machine_ports(&me, &all, "").into_iter().map(|(p, who)| json!({"port": p, "by": who})).collect();
+        Ok(json!({"ok": true, "fingerprint": fingerprint, "known": known, "arch": arch, "x86": arch == "x86_64",
+                  "port": suggest_remote_port(&me, &all, ""), "used": used}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
+}
+
+/// The Linux machines the app's servers are on (one each, however it's saved), for New
+/// server's "Use a machine you already have": how to reach it and what runs there.
+pub(crate) fn machines(all: &[Entry]) -> Vec<Value> {
+    let mut out: Vec<(crate::remote::RemoteInfo, Vec<Value>)> = Vec::new();
+    for e in all.iter().filter(|e| !e.imported) {
+        let Some(r) = &e.remote else { continue };
+        let server = json!({"name": e.name, "port": e.port});
+        match out.iter_mut().find(|(m, _)| crate::remote::same_machine(m, r)) {
+            Some((_, list)) => list.push(server),
+            None => out.push((r.clone(), vec![server])),
+        }
+    }
+    out.into_iter()
+        .map(|(r, servers)| json!({"host": r.host, "user": r.user, "key": r.key, "ssh_port": r.ssh_port, "servers": servers}))
+        .collect()
+}
+
+async fn api_machines(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+    // (key paths on this computer: the computer's own window only)
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    answer(Ok(json!({"machines": machines(&load())})))
 }
 
 /// The app window only: a file picker for the SSH key.
@@ -3286,17 +3407,24 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 return Err(why.into());
             }
         }
-        let host = |o: &Entry| o.remote.as_ref().map(|r| r.host.clone());
+        // (the same machine: by address, or by SSH identity for one saved as an IP and a host name)
+        let same = |o: &Entry| match (&o.remote, &e.remote) {
+            (Some(a), Some(b)) => crate::remote::same_machine(a, b),
+            (None, None) => true,
+            _ => false,
+        };
         if let Some(p) = req.port {
             let all = load();
-            let taken = all.iter().any(|o| o.id != id && o.port == p && host(o) == host(&e));
+            let taken = all.iter().any(|o| o.id != id && o.port == p && same(o));
             // HLTV's ports count too, this server's own included
-            let hltv = all.iter().any(|o| host(o) == host(&e) && o.hltv.enabled && (if o.id == id { o.hltv.port == Some(p) } else { crate::hltv::port_of(o) == p }));
+            let hltv = all.iter().any(|o| same(o) && o.hltv.enabled && (if o.id == id { o.hltv.port == Some(p) } else { crate::hltv::port_of(o) == p }));
             if hltv {
                 return Err(format!("Port {p} is used by HLTV. Pick another one."));
             }
-            if e.remote.is_some() && (!REMOTE_PORTS.contains(&p) || taken) {
-                return Err("Pick a port from 27015 to 27019 that no other server on that machine uses (27020 is for HLTV).".into());
+            if let Some(r) = e.remote.as_ref().filter(|_| p != e.port) {
+                // and what listens on the machine now (another program, or a server the app doesn't know)
+                let live = crate::remote::listening(r).map(|(udp, _)| udp)?;
+                remote_port_free(p, r, &all, &id, Some(&live))?;
             }
             // (servers this app made start at 27016: 27015 is your own game's)
             let lowest = if e.imported { 1024 } else { FIRST_PORT };
@@ -4037,6 +4165,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/servers/pick-folder", post(api_pick_folder))
         .route("/api/servers/remote", post(api_create_remote))
         .route("/api/servers/remote/probe", post(api_probe_remote))
+        .route("/api/servers/machines", route_get(api_machines))
         .route("/api/servers/pick-key", post(api_pick_key))
 }
 
@@ -4408,6 +4537,60 @@ mod tests {
     }
 
     #[test]
+    fn servers_sharing_a_linux_machine_get_their_own_ports() {
+        let on_box = |id: &str, name: &str, port: u16, host: &str, key: &str| -> Entry {
+            serde_json::from_value(json!({"id": id, "name": name, "game": "cstrike", "port": port, "dir": "/tmp/x", "kind": "crossover", "ready": true,
+                "remote": {"host": host, "user": "cs", "key": "/k", "ssh_port": 22, "host_key": key}})).unwrap()
+        };
+        let mut at = on_box("at", "Alone Together", 27015, "178.156.241.180", "SHA256:box");
+        let r = |host: &str, key: &str| crate::remote::RemoteInfo { host: host.into(), user: "cs".into(), key: "/k".into(), ssh_port: 22, host_key: Some(key.into()) };
+        // the same machine by its host name: 27015 is taken, so 27016
+        let named = r("play.lonerstrike.com", "SHA256:box");
+        assert_eq!(suggest_remote_port(&named, &[at.clone()], ""), Some(27016));
+        assert_eq!(remote_port_free(27015, &named, &[at.clone()], "", None).unwrap_err(), "Port 27015 is already used on this machine by \"Alone Together\". Pick another.");
+        assert!(remote_port_free(27016, &named, &[at.clone()], "", None).is_ok());
+        // what listens there now counts too
+        let live: std::collections::BTreeSet<u16> = [27016].into();
+        assert!(remote_port_free(27016, &named, &[at.clone()], "", Some(&live)).unwrap_err().contains("another program"));
+        assert!(remote_port_free(27020, &named, &[], "", None).is_err(), "27020 is HLTV's");
+        // its HLTV port counts; another machine is free; a machine full of servers has none
+        at.hltv.enabled = true;
+        assert!(machine_ports(&named, &[at.clone()], "").contains(&(27020, "HLTV on \"Alone Together\"".into())));
+        assert_eq!(suggest_remote_port(&r("203.0.113.9", "SHA256:other"), &[at.clone()], ""), Some(27015));
+        let full: Vec<Entry> = (0..5).map(|i| on_box(&format!("s{i}"), "S", 27015 + i, "178.156.241.180", "SHA256:box")).collect();
+        assert_eq!(suggest_remote_port(&named, &full, ""), None);
+        // the server itself doesn't count against its own port
+        assert!(remote_port_free(27015, &named, &[at.clone()], "at", None).is_ok());
+    }
+
+    #[test]
+    fn machines_are_listed_once_however_they_are_saved() {
+        let on_box = |id: &str, port: u16, host: &str| -> Entry {
+            serde_json::from_value(json!({"id": id, "name": id, "game": "cstrike", "port": port, "dir": "/tmp/x", "kind": "crossover", "ready": true,
+                "remote": {"host": host, "user": "cs", "key": "/k", "ssh_port": 22, "host_key": "SHA256:box"}})).unwrap()
+        };
+        let m = machines(&[on_box("a", 27015, "178.156.241.180"), on_box("b", 27016, "play.lonerstrike.com")]);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0]["servers"].as_array().unwrap().len(), 2);
+        assert_eq!((m[0]["host"].as_str(), m[0]["user"].as_str()), (Some("178.156.241.180"), Some("cs")));
+    }
+
+    #[test]
+    fn a_copy_starts_in_its_templates_mode() {
+        let modes = vec![("classic".to_string(), "Classic".to_string()), ("war3".into(), "Warcraft 3".into()), ("br".into(), "Battle Royale".into())];
+        assert_eq!(start_mode_for("br\n", &modes), "br");
+        assert_eq!(start_mode_for("zombie", &modes), "classic", "a mode the copy doesn't have");
+        assert_eq!(start_mode_for("", &modes), "classic", "no answer");
+    }
+
+    #[test]
+    fn machine_addresses_are_tidied() {
+        assert_eq!(clean_host("play.lonerstrike.com,"), "play.lonerstrike.com");
+        assert_eq!(clean_host("  203.0.113.10 ; "), "203.0.113.10");
+        assert_eq!(clean_host("play.example.com."), "play.example.com");
+    }
+
+    #[test]
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
@@ -4416,6 +4599,8 @@ mod tests {
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
         assert_eq!(slug("¿?", &[]), "server");
+        assert_eq!(slug("Loner-Strike | Battle Royale | Last Stand", &[]), "loner-strike-battle-royale-last", "never ends in - where it was cut");
+        assert!(!slug("sh-aaaaaaaaaaaaaaaaaaaaaaaaaaaa-b", &[]).ends_with('-'));
         assert_eq!(free_port(&[e("a")]), 27016, "the game's 27015 is never handed out");
         let mut b = e("b");
         b.port = 27016;

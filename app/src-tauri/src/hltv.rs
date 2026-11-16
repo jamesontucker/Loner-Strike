@@ -123,6 +123,14 @@ pub fn validate(mut s: Settings, me: &Entry, all: &[Entry]) -> Result<Settings, 
     if s.port == Some(default_port(me)) {
         s.port = None;
     }
+    // on a Linux machine with more than one server: the usual 27020 may be another server's
+    // HLTV already, so this one takes the highest port no server there uses
+    if let (true, None, Some(r)) = (s.enabled, s.port, &me.remote) {
+        let used = crate::servers::machine_ports(r, all, &me.id);
+        if used.iter().any(|(u, _)| *u == REMOTE_PORT) {
+            s.port = (27015..=REMOTE_PORT).rev().find(|p| *p != me.port && !used.iter().any(|(u, _)| u == p));
+        }
+    }
     if s.enabled {
         let mut probe = me.clone();
         probe.hltv = s.clone();
@@ -137,7 +145,8 @@ fn port_free_in_list(p: u16, me: &Entry, all: &[Entry]) -> Result<(), String> {
         if !(27015..=REMOTE_PORT).contains(&p) || p == me.port {
             return Err(format!("On a Linux server HLTV uses a port from 27015 to 27020 that the server doesn't (27020 if the server is on {}).", me.port));
         }
-        let same = |o: &&Entry| o.id != me.id && o.remote.as_ref().is_some_and(|x| x.host == r.host);
+        // (by address or SSH identity: one machine can be saved as its IP and as a host name)
+        let same = |o: &&Entry| o.id != me.id && o.remote.as_ref().is_some_and(|x| crate::remote::same_machine(x, r));
         if let Some(o) = all.iter().filter(same).find(|o| o.port == p || (o.hltv.enabled && port_of(o) == p)) {
             return Err(format!("\"{}\" uses port {p} on that machine. Pick another one.", o.name));
         }
@@ -731,7 +740,12 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
         // on a Linux server: the service written again, and on or off with these settings,
         // before they're saved here (if the machine can't be reached nothing changes, and
         // saving again tries again)
-        if e.remote.is_some() {
+        if let Some(r) = &e.remote {
+            // turned on, or on another port: nothing else may listen on it there now
+            let p = port_of(&Entry { hltv: s.clone(), ..e.clone() });
+            if s.enabled && (!e.hltv.enabled || port_of(&e) != p) && crate::remote::listening(r)?.0.contains(&p) {
+                return Err(format!("Port {p} is already used on this machine by another program. Pick another."));
+            }
             if changed || s.enabled {
                 remote_apply(&Entry { hltv: s.clone(), ..e.clone() }, s.enabled)?;
             }
@@ -977,6 +991,25 @@ mod tests {
         assert!(validate(on(80), &a, &all).is_err() && validate(on(65535), &a, &all).is_err());
         // off: the port isn't checked, so other settings still save
         assert!(validate(Settings { enabled: false, ..on(27017) }, &a, &all).is_ok());
+    }
+
+    #[test]
+    fn a_second_server_on_one_machine_gets_its_own_hltv_port() {
+        // one machine saved as its IP and as a host name (the same SSH identity)
+        let on_box = |id: &str, port: u16, host: &str| {
+            let mut e = server(id, port);
+            e.remote = Some(crate::remote::RemoteInfo { host: host.into(), user: "cs".into(), key: "/k".into(), ssh_port: 22, host_key: Some("SHA256:same".into()) });
+            e
+        };
+        let mut a = on_box("a", 27015, "203.0.113.10");
+        a.hltv.enabled = true;
+        let b = on_box("b", 27016, "play.example.com");
+        let all = vec![a.clone(), b.clone()];
+        let s = validate(Settings { enabled: true, max_spectators: 8, ..Settings::default() }, &b, &all).unwrap();
+        assert_eq!(s.port, Some(27019), "27020 is a's HLTV: the highest free port there");
+        assert!(validate(Settings { enabled: true, max_spectators: 8, port: Some(27015), ..Settings::default() }, &b, &all).is_err(), "a's game port");
+        // alone on its machine: the usual 27020, stored as automatic
+        assert_eq!(validate(Settings { enabled: true, max_spectators: 8, ..Settings::default() }, &a, &[a.clone()]).unwrap().port, None);
     }
 
     #[test]

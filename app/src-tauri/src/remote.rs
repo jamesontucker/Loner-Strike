@@ -1383,14 +1383,14 @@ pub fn console(r: &RemoteInfo, id: &str, game: &str) -> Vec<String> {
 /// its shared control service. `for_good`: the server is being deleted, so its visit count
 /// and the people helping run it go too (a rebuild keeps them).
 pub fn remove(r: &RemoteInfo, id: &str, for_good: bool) -> Result<(), String> {
-    let u = unit(id);
     let (code, out) = exec(
         r,
         &format!(
-            "{}{}{}sudo systemctl disable --now {u}-watchdog {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service /etc/systemd/system/{u}-watchdog.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            "{}{}{}{}rm -rf \"$HOME/{}\"",
             if for_good { crate::webstatus::remove_sh(id) } else { crate::webstatus::off_sh(id) },
             crate::control::agent::remove_sh(id, for_good),
             crate::voice::remove_sh(id),
+            remove_units_sh(id),
             server_dir(id)
         ),
     )?;
@@ -1398,6 +1398,37 @@ pub fn remove(r: &RemoteInfo, id: &str, for_good: bool) -> Result<(), String> {
         return Err(format!("Couldn't remove it from the server ({}).", out.trim()));
     }
     Ok(())
+}
+
+/// Every systemd unit a server has on its machine.
+fn server_units(id: &str) -> Vec<String> {
+    let u = unit(id);
+    vec![
+        u.clone(),
+        format!("{u}-watchdog"),
+        hltv_unit(id),
+        crate::control::agent::unit(id),
+        format!("{}-roles", crate::control::agent::unit(id)),
+        crate::webstatus::unit(id),
+        crate::webstatus::tunnel_unit(id),
+        crate::voice::unit(id),
+    ]
+}
+
+/// Takes all of a server's units off its machine: every one stopped first, together (so
+/// none can start another again in between: a watchdog bound to the game, or units a
+/// .wants folder ties together), then disabled, their files and .wants folders gone,
+/// systemd told, and any left marked failed cleared. A unit still running after that is
+/// an error, not a quiet leftover.
+fn remove_units_sh(id: &str) -> String {
+    let units = server_units(id);
+    let names = units.iter().map(|u| format!("{u}.service")).collect::<Vec<_>>().join(" ");
+    let files = units.iter().flat_map(|u| [format!("/etc/systemd/system/{u}.service"), format!("/etc/systemd/system/{u}.service.wants")]).collect::<Vec<_>>().join(" ");
+    format!(
+        "sudo systemctl stop {names} >/dev/null 2>&1; sudo systemctl disable {names} >/dev/null 2>&1; sudo rm -rf {files}; \
+         sudo systemctl daemon-reload; sudo systemctl reset-failed {names} >/dev/null 2>&1; \
+         for u in {names}; do if systemctl is-active --quiet \"$u\"; then echo \"$u is still running\"; exit 1; fi; done; "
+    )
 }
 
 /// HLTV's settings and service on the machine. `cfg` is what it runs at start (with the
@@ -1494,6 +1525,30 @@ const CAT_MARK: &str = "\n@@LS-FILE@@\n";
 
 /// Several files of a folder on the machine in one command: each one's bytes, or None if
 /// it isn't there. A failed command is an error, never missing files.
+/// Whether two saved machines are the same one: the same address, or the same SSH identity
+/// (an IP address and a host name for one machine, like 203.0.113.10 and play.example.com).
+/// Ports are the machine's, whoever logs in, so the user doesn't matter.
+pub fn same_machine(a: &RemoteInfo, b: &RemoteInfo) -> bool {
+    a.host.eq_ignore_ascii_case(&b.host) || matches!((&a.host_key, &b.host_key), (Some(x), Some(y)) if x == y)
+}
+
+/// The ports something listens on, on the machine: (UDP, TCP), from `ss`.
+pub fn listening(r: &RemoteInfo) -> Result<(std::collections::BTreeSet<u16>, std::collections::BTreeSet<u16>), String> {
+    let (code, out) = exec_quick(r, "ss -Hlun 2>/dev/null; echo ---; ss -Hltn 2>/dev/null")?;
+    if code != 0 {
+        return Err("Couldn't see which ports are in use on the machine.".into());
+    }
+    let (udp, tcp) = out.split_once("---").unwrap_or((&out, ""));
+    Ok((listening_ports(udp), listening_ports(tcp)))
+}
+
+/// Local ports in `ss -H` lines: the first address:port on each line (the peer comes after).
+fn listening_ports(text: &str) -> std::collections::BTreeSet<u16> {
+    text.lines()
+        .filter_map(|l| l.split_whitespace().find_map(|w| w.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok())))
+        .collect()
+}
+
 pub fn cat_files(r: &RemoteInfo, dir: &str, rels: &[&str]) -> Result<Vec<Option<Vec<u8>>>, String> {
     let names = rels.iter().map(|f| shell_quote(f)).collect::<Vec<_>>().join(" ");
     let cmd = format!(
@@ -1798,5 +1853,33 @@ mod tests {
         assert_eq!(split_cat(&out, 3), vec![Some(b"a\nb".to_vec()), None, Some(vec![])]);
         // a folder that isn't there prints nothing: every file missing
         assert_eq!(split_cat("", 2), vec![None, None]);
+    }
+
+    #[test]
+    fn removing_a_server_stops_every_unit_first() {
+        let sh = remove_units_sh("friday");
+        for u in ["lonerstrike-friday", "lonerstrike-friday-watchdog", "lonerstrike-friday-hltv", "lonerstrike-friday-control", "lonerstrike-friday-control-roles", "lonerstrike-friday-status", "lonerstrike-friday-tunnel", "lonerstrike-friday-voice"] {
+            assert!(sh.contains(&format!("{u}.service ")) || sh.contains(&format!("{u}.service;")), "{u}");
+            assert!(sh.contains(&format!("/etc/systemd/system/{u}.service.wants")), "{u}'s .wants folder");
+        }
+        // stopped (all at once) before anything is disabled or deleted, then systemd told
+        let at = |w: &str| sh.find(w).unwrap();
+        assert!(at("systemctl stop") < at("systemctl disable") && at("systemctl disable") < at("rm -rf"));
+        assert!(at("rm -rf") < at("daemon-reload") && at("daemon-reload") < at("reset-failed"));
+        assert!(sh.contains("is still running\"; exit 1"), "a unit still running is an error");
+        // the whole removal runs it before the server's folder goes
+        assert!(!sh.contains("$HOME"));
+    }
+
+    #[test]
+    fn listening_ports_and_machines() {
+        let udp = "UNCONN 0      0            0.0.0.0:27015      0.0.0.0:*\nUNCONN 0 0 [::]:27020 [::]:*\nUNCONN 0 0 *:5353 *:*\n";
+        assert_eq!(listening_ports(udp).into_iter().collect::<Vec<_>>(), vec![5353, 27015, 27020]);
+        assert!(listening_ports("").is_empty());
+        let m = |host: &str, key: Option<&str>| RemoteInfo { host: host.into(), user: "cs".into(), key: PathBuf::new(), ssh_port: 22, host_key: key.map(String::from) };
+        assert!(same_machine(&m("203.0.113.10", Some("SHA256:a")), &m("play.example.com", Some("SHA256:a"))), "an IP and a host name for one machine");
+        assert!(same_machine(&m("Play.Example.com", None), &m("play.example.com", Some("SHA256:a"))));
+        assert!(!same_machine(&m("203.0.113.10", Some("SHA256:a")), &m("203.0.113.11", Some("SHA256:b"))));
+        assert!(!same_machine(&m("203.0.113.10", None), &m("203.0.113.11", None)));
     }
 }

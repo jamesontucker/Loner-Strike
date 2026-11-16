@@ -186,7 +186,17 @@ pub fn clean_token(text: &str) -> Result<String, String> {
 
 /// Another server on the same machine.
 fn same_machine(me: &Entry, o: &Entry) -> bool {
-    o.id != me.id && o.remote.as_ref().zip(me.remote.as_ref()).is_some_and(|(a, b)| a.host == b.host)
+    // (by address or SSH identity: one machine can be saved as its IP and as a host name)
+    o.id != me.id && o.remote.as_ref().zip(me.remote.as_ref()).is_some_and(|(a, b)| crate::remote::same_machine(a, b))
+}
+
+/// A new service's port: not one the app's other servers on that machine have, and with
+/// nothing listening there on it or on its shared control port (ls-control: + PORT_OFFSET)
+/// now (`busy`: the machine's TCP ports in use).
+fn pick_port(me: &Entry, all: &[Entry], busy: &std::collections::BTreeSet<u16>) -> Option<u16> {
+    let taken: Vec<u16> = all.iter().filter(|o| same_machine(me, o)).filter_map(|o| o.web_status.port).collect();
+    let control = crate::control::agent::PORT_OFFSET;
+    (FIRST_PORT..=LAST_PORT).find(|p| !taken.contains(p) && !busy.contains(p) && !busy.contains(&p.saturating_add(control)))
 }
 
 /// The port the service has, or the one it would get.
@@ -973,7 +983,18 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
             return Err("Wait for the server's setup to finish first.".into());
         }
         let wanted = Settings { enabled: req.enabled, domain: req.domain, origins: req.origins, counter: req.counter, mode: req.mode, port: e.web_status.port, own_tunnel: e.web_status.own_tunnel, fastdl: req.fastdl };
-        let mut s = validate(wanted, &e, &servers::load())?;
+        let all = servers::load();
+        let mut s = validate(wanted, &e, &all)?;
+        // a service turned on for the first time: its port (and its shared control's) also
+        // checked against what listens on the machine now, a server the app doesn't know or
+        // another program
+        if s.enabled && e.web_status.port.is_none() {
+            if let Some(r) = &e.remote {
+                let (_, tcp) = crate::remote::listening(r)?;
+                let probe = Entry { web_status: s.clone(), ..e.clone() };
+                s.port = Some(pick_port(&probe, &all, &tcp).ok_or("Every port the status service can use on this machine is taken.")?);
+            }
+        }
         let token = (!req.token.trim().is_empty()).then(|| clean_token(&req.token)).transpose()?;
         if s.tunnel() {
             // a new token: the app's own tunnel. Otherwise the one it has, or the machine's own
