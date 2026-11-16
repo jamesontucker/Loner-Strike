@@ -39,6 +39,11 @@ export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[];
   if (map) return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
   return (
     <div className="cm-pub">
+      <details className="cm-step panel cm-register-own" data-testid="register-own">
+        <summary>Already uploaded? Register a GameBanana page</summary>
+        <p className="muted small-note">For a page that's already on GameBanana: made on another computer, or a map that comes with Loner-Strike. Paste its link; no package needed.</p>
+        <RegisterForm file="" onDone={onDone} />
+      </details>
       <Step n={1} title="What are you publishing?">
         <Segmented label="What to publish" values="map mode prefab" labels="A map|A game mode|A prefab" current={what} onPick={(v) => setWhat(v as What)} />
         {what === "map" && (
@@ -798,32 +803,10 @@ function Refused({ why }: { why: string }) {
 
 function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () => void }) {
   const toast = useToast();
-  const [url, setUrl] = useState("");
-  // (terms: registering is where the right to share matters most, so it's a required tick)
-  const [agree, setAgree] = useState(false);
-  const { working, run } = useBusy();
-  const [result, setResult] = useState<{ state: MineState; error?: string | null; copy: string } | null>(null);
-  const [studio, setStudio] = useState(false);
-  // the app's own check of the page turned it down (the tag, the section, the file): said here
-  const [checkErr, setCheckErr] = useState<string | null>(null);
-
   const show = async () => {
     const r = await reveal(pkg.file);
     if (r.error) toast(r.error, true);
   };
-  const send = () =>
-    run("Checking the page…", async () => {
-      const r = await register(url.trim(), pkg.file);
-      setStudio(!!r.studio);
-      setCheckErr(null);
-      if (r.error && !r.state) {
-        if (r.studio) return;
-        setResult(null);
-        return setCheckErr(r.error);
-      }
-      setResult({ state: r.state, error: r.error, copy: r.copy });
-    });
-
   return (
     <>
       <Step n={1} title="The package is ready" note={`${pkg.file} · ${sizeText(pkg.size)} · ${pkg.contents.length} files${pkg.screenshots.length ? ` · ${pkg.screenshots.length} screenshots beside it` : ""}`}>
@@ -847,6 +830,41 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
         <p className="muted small-note">On GameBanana's Technical tab, under Tags, add a Custom Tag with the value <code>{form.tag.value}</code> (the title can stay empty), then press + and save. That's how Community finds it.</p>
       </Step>
       <Step n={3} title="Register the page" note="Paste the page's link once GameBanana has checked the file.">
+        <RegisterForm file={pkg.file} onDone={onDone} />
+      </Step>
+    </>
+  );
+}
+
+/** Step 3's form: a GameBanana page's link, the Terms tick and Add to Community; the answers and
+ *  their fixes. Also on its own above Publish ("Already uploaded?", `file` empty): for a page made
+ *  on another computer or a map that comes with Loner-Strike; the app checks the page and the
+ *  Loner-Strike list checks its file. */
+function RegisterForm({ file, onDone }: { file: string; onDone: () => void }) {
+  const [url, setUrl] = useState("");
+  // (terms: registering is where the right to share matters most, so it's a required tick)
+  const [agree, setAgree] = useState(false);
+  const { working, run } = useBusy();
+  const [result, setResult] = useState<{ state: MineState; error?: string | null; copy: string } | null>(null);
+  const [studio, setStudio] = useState(false);
+  // the app's own check of the page turned it down (the tag, the section, the file): said here
+  const [checkErr, setCheckErr] = useState<string | null>(null);
+
+  const send = () =>
+    run("Checking the page…", async () => {
+      const r = await register(url.trim(), file);
+      setStudio(!!r.studio);
+      setCheckErr(null);
+      if (r.error && !r.state) {
+        if (r.studio) return;
+        setResult(null);
+        return setCheckErr(r.error);
+      }
+      setResult({ state: r.state, error: r.error, copy: r.copy });
+    });
+
+  return (
+    <>
         <form className="cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" aria-describedby="cm-needs" />
           <p className="muted small-note" id="cm-needs">Needs: Counter-Strike 1.6 section, a Custom Tag with the value LonerStrike (Technical tab, Tags), and GameBanana's file check done.</p>
@@ -886,7 +904,6 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
             <button className="btn" onClick={onDone}>See what you've published</button>
           </div>
         )}
-      </Step>
     </>
   );
 }

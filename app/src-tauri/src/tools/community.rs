@@ -2605,6 +2605,41 @@ pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<
     Ok(it)
 }
 
+/// A page registered on its own ("Already uploaded? Register a GameBanana page": made on another
+/// computer, or a map that comes with Loner-Strike), with no package of the app's to compare: the
+/// same section and tag checks as check_page, and the page's newest checked file. The Loner-Strike
+/// list reads that file's loner-strike.json and checks everything else itself.
+pub fn page_only_item(page: &Value, model: Model, id: i64) -> Result<Item, String> {
+    if page["_aGame"]["_idRow"].as_i64().is_some_and(|g| g != CS16_GAME) {
+        return Err("That page isn't in GameBanana's Counter-Strike 1.6 section.".into());
+    }
+    if !has_tag(&page["_aTags"]) {
+        return Err(format!("On GameBanana's Technical tab, under Tags, add a Custom Tag with the value {TAG_VALUE} (the title can stay empty), then press + and save. Then try again."));
+    }
+    // (files_of: newest first; a file GameBanana hasn't checked yet has no MD5)
+    let files = files_of(page);
+    let Some(f) = files.iter().find(|f| f["md5"].as_str().is_some_and(|m| m.len() == 32)) else {
+        return Err("GameBanana is still checking the page's file. Try again in a few minutes.".into());
+    };
+    let root = s(&page["_aSuperCategory"]["_sName"]);
+    let cat = s(&page["_aCategory"]["_sName"]);
+    let mut it = Item {
+        kind: kind_of(model.path(), if root.is_empty() { &cat } else { &root }, &cat),
+        model,
+        gb: id,
+        file: f["id"].as_i64().unwrap_or(0),
+        md5: s(&f["md5"]),
+        name: one_line(&s(&page["_sName"]), 80),
+        author: one_line(&s(&page["_aSubmitter"]["_sName"]), 40),
+        status: Status::Listed,
+        ..Default::default()
+    };
+    if let Some(m) = page["_aSubmitter"]["_idRow"].as_i64().filter(|m| *m > 0) {
+        it.owner_id = m;
+    }
+    Ok(it)
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Mine {
@@ -2745,17 +2780,16 @@ async fn api_register(h: HeaderMap, Json(req): Json<RegisterReq>) -> Response {
             let (model, id) = parse_gb_link(&req.url).ok_or_else(|| fail("Paste the link of your GameBanana page (gamebanana.com/mods/…).".into()))?;
             let page = profile(model, id).map_err(fail)?;
             let pkgs = load_packages(&packages_dir());
-            if pkgs.is_empty() {
-                return Err(fail("Make the package first (Publish), upload it, then paste the link.".into()));
-            }
             let mds: Vec<String> = files_of(&page).iter().filter_map(|f| f["md5"].as_str().map(String::from)).collect();
-            let pkg = pkgs
-                .iter()
-                .find(|p| !req.file.is_empty() && p.file == req.file && mds.contains(&p.md5))
-                .or_else(|| pkgs.iter().find(|p| mds.contains(&p.md5)))
-                .or_else(|| pkgs.iter().find(|p| p.file == req.file))
-                .unwrap_or(&pkgs[0]);
-            let item = match check_page(&page, model, id, pkg) {
+            let matching = pkgs.iter().find(|p| !req.file.is_empty() && p.file == req.file && mds.contains(&p.md5)).or_else(|| pkgs.iter().find(|p| mds.contains(&p.md5)));
+            // registered on its own (no package named) and none of the app's packages is on the
+            // page: the page's own file goes to the list, which checks it (page_only_item)
+            let checked = match matching {
+                None if req.file.is_empty() => page_only_item(&page, model, id),
+                _ if pkgs.is_empty() => return Err(fail("Make the package first (Publish), upload it, then paste the link.".into())),
+                found => check_page(&page, model, id, found.or_else(|| pkgs.iter().find(|p| p.file == req.file)).unwrap_or(&pkgs[0])),
+            };
+            let item = match checked {
                 Ok(it) => it,
                 // a Studio mode can be made again without plugins: the page offers to open the Studio
                 Err(e) if e == PLUGIN_REFUSAL => return Ok(json!({"error": e, "studio": true})),
@@ -3231,6 +3265,28 @@ mod tests {
         {"kind": "texture", "gb": 108, "name": "Bricks", "futureField": {"a": 1}}
       ]
     }"#;
+
+    /// "Already uploaded? Register a GameBanana page": no package of the app's, the same section
+    /// and tag checks, and the page's newest checked file is what's sent.
+    #[test]
+    fn a_page_registers_on_its_own() {
+        let page = json!({"_aGame": {"_idRow": 4254}, "_aTags": [{"_sValue": "LonerStrike"}], "_sName": "br_valley - Battle Royale",
+            "_aSubmitter": {"_sName": "jamGB", "_idRow": 123}, "_aSuperCategory": {"_sName": "Maps"}, "_aCategory": {"_sName": "Battle Royale"},
+            "_aFiles": [{"_idRow": 9, "_sFile": "old.zip", "_tsDateAdded": 1, "_sMd5Checksum": "a".repeat(32)},
+                        {"_idRow": 10, "_sFile": "br_valley.zip", "_tsDateAdded": 2, "_sMd5Checksum": "B".repeat(32)}]});
+        let it = page_only_item(&page, Model::Mod, 741494).unwrap();
+        assert_eq!((it.kind, it.gb, it.file, it.md5.as_str(), it.name.as_str(), it.owner_id), (Kind::Map, 741494, 10, "b".repeat(32).as_str(), "br_valley - Battle Royale", 123));
+        assert_eq!(submit_body(&it)["page"], json!({"model": "Mod", "id": 741494, "file": 10}));
+        let mut untagged = page.clone();
+        untagged["_aTags"] = json!([]);
+        assert!(page_only_item(&untagged, Model::Mod, 741494).unwrap_err().contains("Custom Tag"));
+        let mut other = page.clone();
+        other["_aGame"]["_idRow"] = json!(1);
+        assert!(page_only_item(&other, Model::Mod, 741494).unwrap_err().contains("1.6 section"));
+        let mut unchecked = page.clone();
+        unchecked["_aFiles"] = json!([{"_idRow": 11, "_sFile": "new.zip", "_tsDateAdded": 3}]);
+        assert!(page_only_item(&unchecked, Model::Mod, 741494).unwrap_err().contains("still checking"));
+    }
 
     #[test]
     fn index_parsing_keeps_good_entries_and_drops_bad_ones() {
