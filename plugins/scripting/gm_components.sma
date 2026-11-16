@@ -10294,6 +10294,8 @@ new g_wtBoss[32], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_w
 #define SH_MAX_ITEMS 12
 
 new g_shopIn[33];
+/* the mystery box asked to be pressed again (its slot + 1) and when */
+new g_boxAsk[33], Float:g_boxAskAt[33];
 new g_shopVisits[33];
 new Float:g_shopMenuUntil[33];
 new g_shopMenuSlot[33];
@@ -11272,9 +11274,13 @@ stock up_near(id)
 			global_get(glb_v_forward, fwd);
 			o[2] += 8.0;
 			new Float:de = get_distance_f(eye, o);
-			if (de > 1.0 && ((o[0] - eye[0]) * fwd[0] + (o[1] - eye[1]) * fwd[1] + (o[2] - eye[2]) * fwd[2]) / de < 0.6)
+			/* (the mystery box wants a clear look from close by: it costs money) */
+			new Float:need = k == K_BOX ? 0.85 : 0.6;
+			if (de > 1.0 && ((o[0] - eye[0]) * fwd[0] + (o[1] - eye[1]) * fwd[1] + (o[2] - eye[2]) * fwd[2]) / de < need)
 				continue;
 		}
+		if (k == K_BOX && !g_bot[id] && d > 64.0)
+			continue;
 		bd = d;
 		best = s;
 	}
@@ -11370,11 +11376,60 @@ public up_prethink(id)
 	/* a bot buys only what it was sent to (not the box beside the gate it's repairing) */
 	if (bot && !was_offered(id, g_ent[s]))
 		return FMRES_IGNORED;
+	if (!bot && g_kind[s] == K_BOX)
+	{
+		/* by a shop's keeper the shop wins: a press that could be for him (he's near and as much
+		   in view as the box) opens his menu, never the box beside him */
+		if (g_shopIn[id] && keeper_wins(id, s) && shop_use(id))
+		{
+			g_upUseNext[id] = now + 1.0;
+			return FMRES_IGNORED;
+		}
+		/* a second press within 2 s buys: a stray press never spends money */
+		if (g_boxAsk[id] != s + 1 || now - g_boxAskAt[id] > 2.0)
+		{
+			g_boxAsk[id] = s + 1;
+			g_boxAskAt[id] = now;
+			g_upUseNext[id] = now + 0.25;
+			client_print(id, print_center, "Press USE again to buy a random gun for $%d", floatround(g_pf[s][BX_PRICE]));
+			return FMRES_IGNORED;
+		}
+		g_boxAsk[id] = 0;
+	}
 	g_upUseNext[id] = now + 1.0;
 	up_use(s, id, !bot);
 	if (bot)
 		up_offers(id);
 	return FMRES_IGNORED;
+}
+
+/* the shop's keeper is within reach and at least as much where the player looks as box s */
+stock bool:keeper_wins(id, s)
+{
+	new sh = g_shopIn[id] - 1;
+	if (sh < 0 || !g_ent[sh] || g_kind[sh] != K_SHOP)
+		return false;
+	new k = g_aux[sh];
+	new Float:ko[3];
+	if (k > 0 && pev_valid(k))
+		pev(k, pev_origin, ko);
+	else
+		vcopy(g_org[sh], ko);
+	new Float:eye[3], Float:ang[3], Float:fwd[3], Float:bo[3];
+	pev(id, pev_view_ofs, eye);
+	for (new i = 0; i < 3; i++)
+		eye[i] += g_porg[id][i];
+	pev(id, pev_v_angle, ang);
+	engfunc(EngFunc_MakeVectors, ang);
+	global_get(glb_v_forward, fwd);
+	pev(g_ent[s], pev_origin, bo);
+	bo[2] += 8.0;
+	new Float:dk = get_distance_f(eye, ko), Float:db = get_distance_f(eye, bo);
+	if (dk > 120.0 || dk < 1.0 || db < 1.0)
+		return false;
+	new Float:fk = ((ko[0] - eye[0]) * fwd[0] + (ko[1] - eye[1]) * fwd[1] + (ko[2] - eye[2]) * fwd[2]) / dk;
+	new Float:fb = ((bo[0] - eye[0]) * fwd[0] + (bo[1] - eye[1]) * fwd[1] + (bo[2] - eye[2]) * fwd[2]) / db;
+	return fk >= fb - 0.05;
 }
 
 /* ---- pickups: a mode drops one (ls_pickup_spawn); a player walking over takes it ---- */
