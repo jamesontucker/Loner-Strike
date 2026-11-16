@@ -688,7 +688,7 @@ function Studio({ maps }: ToolProps) {
         ) : !list ? (
           <Loading text="Reading your modes…" />
         ) : list.length === 0 ? (
-          <p className="st-muted">None yet.</p>
+          <p className="st-muted">None yet: start a Blank mode, or open an example and press Make it mine.</p>
         ) : (
           <YourModes list={list} onOpen={(g) => void openId(g.id)} onUninstall={(g) => void uninstall(g)} onDelete={(g) => void removeGraph(g)} />
         )}

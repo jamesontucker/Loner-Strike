@@ -207,7 +207,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
     const list = vars.filter((v) => !p.varType || v.type === p.varType || (p.varType === "struct" && v.type.startsWith("struct:")) || (p.varType === "array" && v.type.startsWith("array<")));
     return (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{list.length ? "Pick one…" : "Add a variable under This mode first"}</option>
+        <option value="">{list.length ? "Pick one…" : "Add one under My mode > Variables first"}</option>
         {list.map((v) => (
           <option key={v.id} value={v.id}>
             {v.name} ({typeLabel(graph, v.type)}
@@ -272,7 +272,7 @@ function ModeSettings() {
           </li>
         ))}
       </ul>
-      <button type="button" className="btn small" disabled={list.length >= 32 || !choices.length} onClick={() => put([...list, { cvar: choices[0][0], value: 1 }])}>
+      <button type="button" className="btn small" disabled={list.length >= 32 || !choices.length} title={list.length >= 32 ? "A mode has at most 32 game settings." : !choices.length ? "Every setting is already in the list." : undefined} onClick={() => put([...list, { cvar: choices[0][0], value: 1 }])}>
         Add a setting
       </button>
     </>
@@ -362,7 +362,7 @@ function Members({ graph, list, prefix, exec, containers = true, structs = true,
           </li>
         ))}
       </ul>
-      <button type="button" className="btn small" disabled={list.length >= max} onClick={() => onChange([...list, { id: freshMember(list, prefix), name: `${noun} ${list.length + 1}`, type: "number" }])}>
+      <button type="button" className="btn small" disabled={list.length >= max} title={list.length >= max ? `At most ${max}.` : undefined} onClick={() => onChange([...list, { id: freshMember(list, prefix), name: `${noun} ${list.length + 1}`, type: "number" }])}>
         Add {noun.toLowerCase()}
       </button>
     </>
@@ -460,14 +460,14 @@ function PartDetails({ id, embedded = false }: { id: string; embedded?: boolean 
               <li key={k} className="st-var">
                 <div className="st-var-row">
                   <TextField value={v} max={30} allowed={LABEL_CHARS} onChange={(x) => edit((g) => updateEnum(g, id, { values: en.values.map((y, j) => (j === k ? x : y)) }))} />
-                  <button type="button" className="btn small" aria-label={`Remove ${v}`} disabled={en.values.length <= 1} onClick={() => edit((g) => updateEnum(g, id, { values: en.values.filter((_, j) => j !== k) }))}>
+                  <button type="button" className="btn small" aria-label={`Remove ${v}`} disabled={en.values.length <= 1} title={en.values.length <= 1 ? "An enum needs at least one value." : undefined} onClick={() => edit((g) => updateEnum(g, id, { values: en.values.filter((_, j) => j !== k) }))}>
                     ×
                   </button>
                 </div>
               </li>
             ))}
           </ul>
-          <button type="button" className="btn small" disabled={en.values.length >= 32} onClick={() => edit((g) => updateEnum(g, id, { values: [...en.values, `Value ${en.values.length + 1}`] }))}>
+          <button type="button" className="btn small" disabled={en.values.length >= 32} title={en.values.length >= 32 ? "An enum has at most 32 values." : undefined} onClick={() => edit((g) => updateEnum(g, id, { values: [...en.values, `Value ${en.values.length + 1}`] }))}>
             Add value
           </button>
         </>
@@ -635,7 +635,7 @@ function MarkerDetails({ id }: { id: string }) {
           <MarkerKeyRow key={i} k={k} onChange={(x) => setKey(i, x)} onRemove={() => set({ keys: keys.filter((_, j) => j !== i) })} />
         ))}
       </ul>
-      <button type="button" className="btn small" disabled={keys.length >= 8} onClick={() => {
+      <button type="button" className="btn small" disabled={keys.length >= 8} title={keys.length >= 8 ? "At most 8 keys." : undefined} onClick={() => {
         let n = keys.length + 1;
         while (keys.some((k) => k.name === `key_${n}`)) n++;
         set({ keys: [...keys, { name: `key_${n}`, type: "number", default: 0, help: "" }] });

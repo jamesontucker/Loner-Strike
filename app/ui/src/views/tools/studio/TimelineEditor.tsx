@@ -337,7 +337,7 @@ export function TimelineEditor({ id }: { id: string }) {
         </label>
         <span className="st-grow" />
         {(["float", "vector", "color", "event"] as const).map((k) => (
-          <button key={k} type="button" className="btn small" onClick={() => set((t) => (t.tracks.length >= 8 ? t : { ...t, tracks: [...t.tracks, newTrack(t, k)] }))} disabled={tl.tracks.length >= 8}>
+          <button key={k} type="button" className="btn small" onClick={() => set((t) => (t.tracks.length >= 8 ? t : { ...t, tracks: [...t.tracks, newTrack(t, k)] }))} disabled={tl.tracks.length >= 8} title={tl.tracks.length >= 8 ? "A Timeline has at most 8 tracks." : undefined}>
             + {KIND_NAME[k]} track
           </button>
         ))}

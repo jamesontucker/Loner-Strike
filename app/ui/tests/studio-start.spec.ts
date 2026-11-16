@@ -48,7 +48,7 @@ test("someone new: the intro and the tour banner, Your modes last", async ({ pag
   await page.addInitScript(() => localStorage.removeItem("ls.studio.tour"));
   await stub(page, 0);
   await expect(page.getByTestId("studio-tour-offer")).toBeVisible();
-  await expect(page.getByText("None yet.")).toBeVisible();
+  await expect(page.getByText("None yet: start a Blank mode")).toBeVisible();
   const yours = await page.getByRole("heading", { name: "Your modes" }).boundingBox();
   const ex = await page.getByRole("heading", { name: "Example modes" }).boundingBox();
   expect(yours!.y).toBeGreaterThan(ex!.y);

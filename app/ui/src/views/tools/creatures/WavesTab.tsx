@@ -215,7 +215,7 @@ export function WavesTab() {
                 <span className="cs-mixbar" role="cell" title={cols.map((t) => `${t} ${Math.round((weight(r, t) / total) * 100)}%`).join(", ")}>
                   {cols.map((t, k) => (weight(r, t) > 0 ? <span key={t} style={{ flexGrow: weight(r, t), background: COLOURS[k % COLOURS.length] }} /> : null))}
                 </span>
-                <button type="button" className="btn small" aria-label={`Remove ${rowLabel(r)}`} disabled={w.rows.length <= 1} onClick={() => setW({ ...w, rows: w.rows.filter((_, j) => j !== i) })}>
+                <button type="button" className="btn small" aria-label={`Remove ${rowLabel(r)}`} disabled={w.rows.length <= 1} title={w.rows.length <= 1 ? "A wave needs at least one row." : undefined} onClick={() => setW({ ...w, rows: w.rows.filter((_, j) => j !== i) })}>
                   ×
                 </button>
               </div>

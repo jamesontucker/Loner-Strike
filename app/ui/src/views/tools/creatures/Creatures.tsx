@@ -318,7 +318,7 @@ export default function Creatures() {
               <button type="button" className="btn small" disabled={!t} onClick={() => t && void addFrom(t.name)}>
                 Duplicate
               </button>
-              <button type="button" className={`btn small${t && !isBuiltin(t.name) ? " danger" : ""}`} disabled={!t || (isBuiltin(t.name) && !changedFromShipped(t) && !rowOf(t.name)?.inFile)} onClick={remove}>
+              <button type="button" className={`btn small${t && !isBuiltin(t.name) ? " danger" : ""}`} disabled={!t || (isBuiltin(t.name) && !changedFromShipped(t) && !rowOf(t.name)?.inFile)} title={t && isBuiltin(t.name) && !changedFromShipped(t) && !rowOf(t.name)?.inFile ? "It's as it came with the app: nothing to put back" : undefined} onClick={remove}>
                 {t && isBuiltin(t.name) ? "Put back" : "Remove"}
               </button>
               {t && !isBuiltin(t.name) && !st.server && (
