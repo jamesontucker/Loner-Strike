@@ -83,7 +83,8 @@
 @media (max-width: 700px) { .cm-copy { grid-template-columns: minmax(0, 1fr) auto; } .cm-copy > span { grid-column: 1 / -1; } }
 .cm-copy input, .cm-copy textarea { width: 100%; min-width: 0; font-size: 13px; }
 .cm-register { margin-top: 6px; flex-wrap: wrap; }
-.cm-register input { flex: 1 1 260px; min-width: 0; }
+.cm-register input:not([type="checkbox"]) { flex: 1 1 260px; min-width: 0; }
+.cm-register .cm-agree input[type="checkbox"] { flex: none; width: auto; min-width: 0; }
 .cm-result { display: grid; gap: 8px; justify-items: start; }
 
 /* yours */
