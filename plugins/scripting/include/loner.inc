@@ -248,7 +248,8 @@ stock const LS_HUD_RGB[LsHud][3] = { {255, 220, 90}, {200, 230, 200}, {200, 230,
  */
 stock ls_hud(id, LsHud:slot, Float:secs, const fmt[], any:...)
 {
-	new msg[192];
+	/* (up to the engine's HUD text limit, about 480: 192 cut a long side block short) */
+	new msg[480];
 	vformat(msg, charsmax(msg), fmt, 5);
 	ls_hud_rgb(id, slot, LS_HUD_RGB[slot][0], LS_HUD_RGB[slot][1], LS_HUD_RGB[slot][2], secs, "%s", msg);
 }
@@ -258,7 +259,7 @@ stock ls_hud(id, LsHud:slot, Float:secs, const fmt[], any:...)
  */
 stock ls_hud_rgb(id, LsHud:slot, r, g, b, Float:secs, const fmt[], any:...)
 {
-	new msg[192];
+	new msg[480];
 	vformat(msg, charsmax(msg), fmt, 8);
 	if (!g_lsHudSync[slot])
 		g_lsHudSync[slot] = CreateHudSyncObj();

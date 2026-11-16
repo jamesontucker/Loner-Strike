@@ -7603,7 +7603,8 @@ stock w3_spectate(id, target)
 
 stock w3_match_hud()
 {
-	new zone[48], top[256], side[512];
+	/* (side: under the engine's HUD text limit, about 480) */
+	new zone[48], top[256], side[470];
 	new z = w3_zone_text(zone, charsmax(zone));
 	new alive = w3_alive_count(), Float:now = get_gametime();
 	/* the kill feed: lines from the last 8 s */

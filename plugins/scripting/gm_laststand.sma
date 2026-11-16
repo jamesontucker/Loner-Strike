@@ -1765,11 +1765,17 @@ stock hud()
 	if (nightmare() && g_phase != PH_IDLE)
 		format(top, charsmax(top), "%s   Lives %d", top, g_lives);
 	/* the team: who's up, who's down */
-	new team[400], name[24], len = 0, lines = 0;
-	for (new p = 1; p <= MaxClients && len < charsmax(team) - 40 && lines < 10; p++)
+	/* (at most 8 lines; more players: "+N more", so the block stays under the HUD's limit) */
+	new team[400], name[24], len = 0, lines = 0, more = 0;
+	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p) || cs_get_user_team(p) != CS_TEAM_CT)
 			continue;
+		if (lines >= 8 || len > charsmax(team) - 40)
+		{
+			more++;
+			continue;
+		}
 		lines++;
 		get_user_name(p, name, charsmax(name));
 		if (is_user_alive(p) && !is_down(p))
@@ -1781,6 +1787,8 @@ stock hud()
 		else
 			len += formatex(team[len], charsmax(team) - len, "%s  out^n", name);
 	}
+	if (more)
+		len += formatex(team[len], charsmax(team) - len, "+%d more^n", more);
 	new gates[200];
 	gates_text(gates, charsmax(gates));
 	for (new p = 1; p <= MaxClients; p++)
@@ -1801,8 +1809,15 @@ stock hud()
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s%s%s", top, tags[0] ? "^n" : "", tags);
 		/* the team and the nearest barricade on the right: menus open on the left, the
 		   radar is top left and chat bottom left, so nothing here ever sits under them */
-		new right[480];
-		formatex(right, charsmax(right), "%s%s", team, gates);
+		/* the gates first (what the team must hold), then the team: if anything is cut, it's the
+		   end of the list (the engine shows about 480 characters of a HUD message) */
+		new right[470], gs = 0;
+		while (gates[gs] == '^n')
+			gs++;
+		if (gates[gs])
+			formatex(right, charsmax(right), "%s^n^n%s", gates[gs], team);
+		else
+			copy(right, charsmax(right), team);
 		/* sent only when it changes (and now and then, so it never fades) */
 		if (!equal(right, g_rightShown[p]) || now - g_rightAt[p] > 8.0)
 		{
