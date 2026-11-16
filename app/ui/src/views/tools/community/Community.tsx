@@ -113,6 +113,8 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
   const [sort, setSort] = useState("new");
   // bot support (game modes): any, or at least so good
   const [botsAt, setBotsAt] = useState("any");
+  // only creations in the Loner-Strike list (their package passed the automatic checks)
+  const [checkedOnly, setCheckedOnly] = useState(false);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -134,6 +136,8 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
     refresh.current = true;
     list.refetch();
   };
+  const filtered = checkedOnly || botsAt !== "any";
+  const shown = (list.data?.items ?? []).filter((e) => (!checkedOnly || e.listed) && (botsAt === "any" || (e.kind === "mode" && (botsAt === "ok" ? e.bots === "great" || e.bots === "ok" : e.bots === botsAt))));
 
   return (
     <>
@@ -163,6 +167,10 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
             </select>
           </label>
         )}
+        <label className="cm-checkonly">
+          <input type="checkbox" checked={checkedOnly} onChange={(e) => setCheckedOnly(e.target.checked)} />
+          <span title={CHECKED_HELP}>Checked only</span>
+        </label>
         <BusyButton className="btn" busy={list.isFetching} label="Refresh" busyLabel="Loading…" onClick={again} />
       </div>
       {list.data && <SourceNote data={list.data} />}
@@ -170,18 +178,20 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
         <Loading text="Finding creations…" />
       ) : list.isError ? (
         <LoadError text={errorText(list.error, "Couldn't load the community list.")} onRetry={again} />
-      ) : list.data.items.length === 0 ? (
+      ) : shown.length === 0 ? (
         <Empty
-          title={q || kind !== "all" ? "Nothing matches" : "Nothing here yet"}
+          title={q || kind !== "all" || filtered ? "Nothing matches" : "Nothing here yet"}
           text={
-            q || kind !== "all"
+            filtered && list.data.items.length > 0
+              ? "Nothing here passes those filters. Turn off Checked only, or set Bots to Any."
+              : q || kind !== "all"
               ? "Try other words, or All."
               : <>Nobody has published with Loner-Strike yet. Be the first: Publish packages your map. On GameBanana's Technical tab, under Tags, add a Custom Tag with the value <code>LonerStrike</code> (the title can stay empty), then press + and save, and it shows up here.</>
           }
         />
       ) : (
         <ul className="cm-grid" aria-label="Creations">
-          {list.data.items.filter((e) => botsAt === "any" || (e.kind === "mode" && (botsAt === "ok" ? e.bots === "great" || e.bots === "ok" : e.bots === botsAt))).map((e) => (
+          {shown.map((e) => (
             <li key={e.key}>
               <Card e={e} onOpen={() => onOpen(e)} />
             </li>
@@ -269,9 +279,12 @@ function ModeNeeds({ needs }: { needs: Needs }) {
   );
 }
 
-function Badges({ list, trust }: { list: Entry["badges"]; trust?: Trust }) {
+const CHECKED_HELP = "Its package passed Loner-Strike's automatic checks.";
+
+function Badges({ list, trust, listed }: { list: Entry["badges"]; trust?: Trust; listed?: boolean }) {
   return (
     <span className="cm-badges">
+      {listed && <span className="tag cm-badge cm-badge-listed" data-testid="cm-checked" title={CHECKED_HELP}>✓ Checked</span>}
       {list.map((b) => (
         <span key={b} className={`tag cm-badge cm-badge-${b}`} title={BADGE_LABEL[b].help}>{BADGE_LABEL[b].label}</span>
       ))}
@@ -307,7 +320,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
         )}
         {e.kind === "mode" && e.bots && <span className={`bots-note ${e.bots}`} title={BOT_RATING_INFO}>{BOT_NOTE[e.bots]}</span>}
         {e.otherGame && <span className="tag cm-risk" title="Made for the other game: it may not work in yours. You're asked before it installs.">For {(e.games ?? []).includes("czero") ? "Condition Zero" : "Counter-Strike 1.6"}</span>}
-        <Badges list={e.badges} trust={e.trust} />
+        <Badges list={e.badges} trust={e.trust} listed={e.listed} />
       </span>
     </button>
   );
@@ -488,7 +501,7 @@ function Creation({ d }: { d: Details }) {
         )}
       </div>
       <div className="cm-info stack-tight">
-        <Badges list={(d.item ? badgesOf(d) : [])} trust={d.trust} />
+        <Badges list={(d.item ? badgesOf(d) : [])} trust={d.trust} listed={!!d.item && d.item.status === "listed"} />
         {d.item?.summary && <p className="cm-summary">{d.item.summary}</p>}
         <TrustNote trust={d.trust} listed={!!d.item} />
         {d.item?.map && <BotFacts d={d} />}

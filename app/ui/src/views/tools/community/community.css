@@ -18,6 +18,8 @@
 .cm-badge, .cm-trust { font-size: 11px; padding: 0 6px; white-space: nowrap; }
 .cm-badge-bots, .cm-badge-checked { background: var(--ok); color: var(--signal-ink); }
 .cm-badge-featured { background: var(--signal); color: var(--signal-ink); }
+.cm-badge-listed { background: transparent; color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.cm-checkonly { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
 .cm-trust-verified { background: var(--warn); color: var(--signal-ink); }
 .cm-trust-unreviewed { background: var(--weak); color: var(--signal-ink); }
 .cm-risk { font-size: 11px; padding: 0 6px; white-space: nowrap; background: var(--warn); color: var(--signal-ink); } /* MCP: what a mode does beyond its own game */

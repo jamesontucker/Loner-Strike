@@ -989,7 +989,7 @@ pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
         return t("content", "Content", true, None, "Only map content is installed (maps, textures, models, sounds); nothing that runs code.");
     }
     let Some(mode) = item.and_then(|i| i.mode.as_ref()) else {
-        return t("unreviewed", "Not checked", false, None, "This mode isn't in Loner-Strike's list yet, so nobody has said what's inside it.");
+        return t("unreviewed", "Not checked", false, None, "This mode isn't in the Loner-Strike list yet, so it can't be tried. Its creator can add it with Add to Community.");
     };
     if mode.plugins.is_empty() {
         let risks = risk_words(&mode.capabilities);
