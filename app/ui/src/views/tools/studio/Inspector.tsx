@@ -624,7 +624,7 @@ function MarkerDetails({ id }: { id: string }) {
           <span>Icon</span>
           <select className="st-field" value={m.icon || "flag"} onChange={(e) => set({ icon: e.target.value })}>
             {ICONS.map((i) => (
-              <option key={i} value={i}>{i}</option>
+              <option key={i} value={i}>{i[0].toUpperCase() + i.slice(1)}</option>
             ))}
           </select>
         </label>

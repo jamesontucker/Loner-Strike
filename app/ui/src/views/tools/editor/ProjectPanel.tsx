@@ -276,6 +276,7 @@ export function ProjectPanel() {
                     type="button"
                     className="linklike"
                     disabled={!f.found}
+                    title={f.found ? undefined : "This file isn't there any more (moved or deleted)"}
                     onClick={async () => {
                       const d = useEditor.getState().doc;
                       if (d?.dirty && !(await ask(`“${d.name}” has unsaved changes. Leave them and open ${f.name}?`, { ok: "Leave them", danger: true }))) return;

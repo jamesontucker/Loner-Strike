@@ -256,7 +256,8 @@ function MapProperties({ onClose }: { onClose: () => void }) {
           ))}
           {!wads.length && <li className="muted">None: the compiler won't find any textures.</li>}
         </ul>
-        {gameWads && (
+        {/* (nothing left to add: no picker with only its placeholder) */}
+        {gameWads && gameWads.some((w) => !listed.has(w.name.toLowerCase())) && (
           <div className="ed-inline">
             <select className="ed-grow" value={adding} onChange={(e) => setAdding(e.target.value)} aria-label="Add a WAD">
               <option value="">Add a WAD…</option>
