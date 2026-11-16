@@ -7602,14 +7602,12 @@ stock w3_match_hud()
 		if (g_alive[p])
 		{
 			new extra[200], el = 0, nz[64], zl[48];
+			/* one zone status (the next zone's words are folded in; w3_next_zone still puts its
+			   middle on the radar) */
+			w3_next_zone(p, z, nz, charsmax(nz));
 			w3_zone_line(p, z, zl, charsmax(zl));
 			if (zl[0])
 				el += formatex(extra[el], charsmax(extra) - el, "%s", zl);
-			w3_next_zone(p, z, nz, charsmax(nz));
-			if (nz[0] && el)
-				el += formatex(extra[el], charsmax(extra) - el, "    ");
-			if (nz[0])
-				el += formatex(extra[el], charsmax(extra) - el, "%s", nz);
 			/* (armor and heals are in the gear panel when it's on) */
 			if (g_gearOff[p] && get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
 				el += formatex(extra[el], charsmax(extra) - el, "%sVest %d  Helmet %d", el ? "    " : "", g_w3Vest[p], g_w3Helm[p]);
@@ -7676,8 +7674,24 @@ stock w3_zone_line(p, z, out[], len)
 	new Float:r = zone_radius_now(z), Float:d = dist2d(g_porg[p], g_va[z]), w[4];
 	w3_heading_word(w3_bearing(p, g_va[z]), w, charsmax(w));
 	if (d > r)
+	{
 		formatex(out, len, "Safe zone: %d m %s", floatround((d - r) * 0.0254), w);
-	else if (r - d < floatmax(400.0, r * 0.15))
+		return;
+	}
+	/* a next circle coming: inside it too, or how far to it */
+	if (g_pf[z][Z_TOR] < g_val[z] - 1.0)
+	{
+		new Float:dn = dist2d(g_porg[p], g_vb[z]);
+		if (dn <= g_pf[z][Z_TOR])
+			copy(out, len, "Safe: inside the next zone too");
+		else
+		{
+			w3_heading_word(w3_bearing(p, g_vb[z]), w, charsmax(w));
+			formatex(out, len, "Next zone: %d m %s", floatround((dn - g_pf[z][Z_TOR]) * 0.0254), w);
+		}
+		return;
+	}
+	if (r - d < floatmax(400.0, r * 0.15))
 		formatex(out, len, "Zone edge: %d m (center %s)", floatround((r - d) * 0.0254), w);
 	else
 		copy(out, len, "In the zone");
