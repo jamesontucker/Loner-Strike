@@ -570,8 +570,13 @@ public task_round_fallback()
 		round_begin();
 }
 
+/* the map's env_fog density (from its keys), and the draw distance the drop phase put aside */
+new g_kvDensityEnt, Float:g_kvDensity, Float:g_zmaxOld;
+
 public plugin_end()
 {
+	/* the drop's short draw distance never outlives the map */
+	w3_zmax(false);
 	for (new s = 0; s < MAX_COMP; s++)
 		if (g_keys[s] != Invalid_Trie)
 			TrieDestroy(g_keys[s]);
@@ -663,6 +668,12 @@ public fm_keyvalue(ent, kvd)
 	new key[32], val[512]; /* W1: long values (a shop's items) */
 	get_kvd(kvd, KV_KeyName, key, charsmax(key));
 	get_kvd(kvd, KV_Value, val, charsmax(val));
+	/* an env_fog's density (the game keeps it to itself): the drop haze puts the map's fog back */
+	if (equal(key, "density"))
+	{
+		g_kvDensityEnt = ent;
+		g_kvDensity = str_to_float(val);
+	}
 	if (equal(key, "classname"))
 	{
 		/* the engine sends classname twice: first on its own to pick the class (no class
@@ -5321,16 +5332,68 @@ stock w3_drop_fog(id, bool:on)
 		msgFog = get_user_msgid("Fog");
 	if (!msgFog || !is_user_connected(id) || is_user_bot(id))
 		return;
-	new bits = on ? (_:0.0016) : 0;
+	/* off: back to the map's own fog (an env_fog), else none */
+	new col[3], Float:dens = 0.0;
+	if (on)
+	{
+		col = { 150, 160, 170 };
+		dens = 0.0016;
+	}
+	else
+		dens = w3_map_fog(col);
+	new bits = _:dens;
 	message_begin(MSG_ONE_UNRELIABLE, msgFog, _, id);
-	write_byte(on ? 150 : 0);
-	write_byte(on ? 160 : 0);
-	write_byte(on ? 170 : 0);
+	write_byte(col[0]);
+	write_byte(col[1]);
+	write_byte(col[2]);
 	write_byte(bits & 255);
 	write_byte((bits >> 8) & 255);
 	write_byte((bits >> 16) & 255);
 	write_byte((bits >>> 24) & 255);
 	message_end();
+}
+
+/* the map's env_fog: its color and density (0 when there's none) */
+stock Float:w3_map_fog(col[3])
+{
+	col[0] = col[1] = col[2] = 0;
+	new e = engfunc(EngFunc_FindEntityByString, -1, "classname", "env_fog");
+	if (e <= 0)
+		return 0.0;
+	new Float:c[3];
+	pev(e, pev_rendercolor, c);
+	for (new i = 0; i < 3; i++)
+		col[i] = clamp(floatround(c[i]), 0, 255);
+	return e == g_kvDensityEnt ? g_kvDensity : 0.0;
+}
+
+stock bool:w3_anyone_falling()
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_w3Falling[p] && is_user_alive(p))
+			return true;
+	return false;
+}
+
+/* the drop phase: a short draw distance for everyone (sv_zmax 3000, server-wide) while anyone is
+   falling, the old one back afterwards (also at the map's end) */
+stock w3_zmax(bool:on)
+{
+	if (on)
+	{
+		if (g_zmaxOld > 0.0)
+			return;
+		g_zmaxOld = get_cvar_float("sv_zmax");
+		if (g_zmaxOld <= 0.0)
+			g_zmaxOld = 4096.0;
+		if (g_zmaxOld > 3000.0)
+			set_cvar_float("sv_zmax", 3000.0);
+		return;
+	}
+	if (g_zmaxOld <= 0.0)
+		return;
+	set_cvar_float("sv_zmax", g_zmaxOld);
+	g_zmaxOld = 0.0;
 }
 
 /* say /gear: the player's guns with their rarity and ammo, armor and heals, for a few seconds */
@@ -6008,6 +6071,9 @@ stock w3_tick(bool:sec)
 		w3_match_hud();
 	if (sec)
 		w3_squad_tick();
+	/* the drop phase is over once nobody is falling: the draw distance comes back */
+	if (sec && g_zmaxOld > 0.0 && !w3_anyone_falling())
+		w3_zmax(false);
 }
 
 /* a hurt bot heals when nobody has hurt it for 4 s and no enemy is in sight (W2 may take this over) */
@@ -7693,6 +7759,7 @@ stock bool:w3_drop_in(id, const Float:spot[3], Float:height)
 	set_user_gravity(id, 0.2);
 	g_w3Falling[id] = true;
 	w3_drop_fog(id, true);
+	w3_zmax(true);
 	g_w3FallAt[id] = get_gametime();
 	if (!is_user_bot(id))
 		toast_add(id, 255, 200, 60, 4.0, "Pick your landing! (steer as you fall)", false);
