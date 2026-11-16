@@ -1468,9 +1468,19 @@ fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<
 
 /// Writes the document as a .map in the game's code page (Western, or Cyrillic when its text
 /// needs it); the size, and a note when some characters couldn't be kept.
-fn export_map(s: &Session, path: &Path) -> Result<(usize, Option<String>), String> {
+fn export_map(s: &Session, path: &Path, dirs: &[PathBuf]) -> Result<(usize, Option<String>), String> {
+    // a model's Collision box as a real brush, so Hammer or J.A.C.K. compile it the same
+    // (editor/collision.rs; the model's file from the map's folder, then the game's)
+    let read = |rel: &str| -> Option<Vec<u8>> {
+        let rel = rel.replace('\\', "/");
+        if rel.contains("..") || rel.starts_with('/') {
+            return None;
+        }
+        s.folder.iter().chain(dirs.iter()).map(|d| d.join(&rel)).find(|f| f.is_file()).and_then(|f| std::fs::read(f).ok())
+    };
+    let (doc, _) = crate::editor::collision::for_export(&s.doc, &read);
     // groups and TrenchBroom layers kept, "omit from export" layers left out (EditorCoverage TB-2, TB-3)
-    let text = mapfile::write_map(&s.doc, &mapfile::WriteOptions::export())?;
+    let text = mapfile::write_map(&doc, &mapfile::WriteOptions::export())?;
     let (bytes, cp, lost) = mapfile::encode_for_game(&text);
     write_atomic(path, &bytes)?;
     Ok((bytes.len(), code_page_note(cp, &lost)))
@@ -1940,7 +1950,7 @@ async fn api_export(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: H
         let Some(path) = dialog(&st, Pick::ExportMap, &name)? else { return Ok(json!({"cancelled": true})) };
         let g = ed.lock();
         let s = g.as_ref().ok_or(NO_DOC)?;
-        let (bytes, note) = export_map(s, &path)?;
+        let (bytes, note) = export_map(s, &path, &wad_dirs(&st))?;
         Ok(json!({"exported": true, "file": path.file_name().map(|n| n.to_string_lossy().to_string()), "bytes": bytes, "note": note}))
     })
     .await
@@ -2967,7 +2977,7 @@ mod tests {
         assert_eq!(back.brushes.len(), 7);
 
         let map = dir.join("room.map");
-        export_map(s, &map).unwrap();
+        export_map(s, &map, &[]).unwrap();
         let (m, is_project) = load_file(&map).unwrap();
         assert!(!is_project);
         assert_eq!(m.brushes.len(), 7);
@@ -3018,7 +3028,7 @@ mod tests {
         let out = root.join("russian.map");
         {
             let g = t.ed.lock();
-            let (_, note) = export_map(g.as_ref().unwrap(), &out).unwrap();
+            let (_, note) = export_map(g.as_ref().unwrap(), &out, &[]).unwrap();
             assert!(note.is_none());
         }
         let raw = std::fs::read(&out).unwrap();

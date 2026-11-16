@@ -83,24 +83,39 @@ pub fn world_box(e: &Entity, b: ([f32; 3], [f32; 3])) -> Option<(Vec3, Vec3)> {
 /// a box (`read` gives a model file's bytes by its game path), and notes for models it couldn't
 /// read. A document without the key comes back unchanged.
 pub fn with_boxes(doc: &MapDocument, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> (MapDocument, Vec<String>) {
+    boxes(doc, read, false)
+}
+
+/// For File › Export a .map: the boxes as real brushes (so Hammer or J.A.C.K. compile it the
+/// same), and those models' Collision set to Custom (opened here again, no second box is made).
+pub fn for_export(doc: &MapDocument, read: &dyn Fn(&str) -> Option<Vec<u8>>) -> (MapDocument, Vec<String>) {
+    boxes(doc, read, true)
+}
+
+fn boxes(doc: &MapDocument, read: &dyn Fn(&str) -> Option<Vec<u8>>, export: bool) -> (MapDocument, Vec<String>) {
     let mut d = doc.clone();
     let mut notes = Vec::new();
-    let want: Vec<(Entity, bool)> = doc
+    let want: Vec<(super::doc::EntityId, Entity, bool)> = doc
         .entities
-        .values()
-        .filter_map(|e| match e.get(KEY).map(str::trim) {
-            Some("box") => Some((e.clone(), false)),
-            Some("box_bullets") => Some((e.clone(), true)),
+        .iter()
+        .filter_map(|(id, e)| match e.get(KEY).map(str::trim) {
+            Some("box") => Some((*id, e.clone(), false)),
+            Some("box_bullets") => Some((*id, e.clone(), true)),
             _ => None,
         })
         .collect();
-    for (e, bullets) in want {
+    for (eid, e, bullets) in want {
         let Some(model) = e.get("model").map(str::trim).filter(|m| m.to_ascii_lowercase().ends_with(".mdl")) else { continue };
         let Some(b) = read(model).as_deref().and_then(model_box) else {
             notes.push(format!("{model}: its collision box wasn't made (the model couldn't be read), so it blocks nothing."));
             continue;
         };
         let Some((lo, hi)) = world_box(&e, b) else { continue };
+        if export {
+            if let Some(x) = d.entities.get_mut(&eid) {
+                x.set(KEY, "custom");
+            }
+        }
         if bullets {
             let mut w = Entity::new("func_wall");
             w.set("rendermode", "0");
@@ -217,6 +232,10 @@ mod tests {
             d.insert_entity(e);
         }
         let (out, notes) = with_boxes(&d, &|_| Some(mdl.clone()));
+        // (an export: the same brushes, the models set to Custom)
+        let (ex, _) = for_export(&d, &|_| Some(mdl.clone()));
+        assert_eq!(ex.brushes.len(), out.brushes.len());
+        assert_eq!(ex.entities.values().filter(|e| e.get(KEY) == Some("custom")).count(), 3);
         assert!(notes.is_empty(), "{notes:?}");
         std::fs::write(std::env::var("LS_COLL_MAP").unwrap(), crate::editor::mapfile::write_map(&out, &crate::editor::mapfile::WriteOptions::compile()).unwrap()).unwrap();
     }

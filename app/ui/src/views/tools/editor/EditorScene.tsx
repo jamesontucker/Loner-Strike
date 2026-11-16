@@ -295,8 +295,26 @@ function Entities() {
   useKits((k) => k.kits); // P5: markers take their kit's colour when the kits arrive
   const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
   // Parity A: drawn batched (a few draws for all of them; the picked ones too, in PickedEntities)
-  const list = useMemo(() => pointEntities(ents).filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group))), [ents, sel, hiddenHere, hidden]);
-  return <EntityBatch ents={list} look={entityLook} yaw={yawOf} />;
+  const shown = useMemo(() => pointEntities(ents).filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group))), [ents, sel, hiddenHere, hidden]);
+  // the Collision style: a model that blocks nothing (Collision: None, or none set) is a ghost
+  const collisionView = usePaneMode() === "collision";
+  const isGhost = (e: DocEntity) => /^cycler(_sprite)?$/.test(e.classname) && /\.mdl$/i.test(keyOf(e.keys, "model") ?? "") && !/^box/.test(keyOf(e.keys, "ls_collision") ?? "");
+  const list = collisionView ? shown.filter((e) => !isGhost(e)) : shown;
+  const ghosts = collisionView ? shown.filter(isGhost) : [];
+  return (
+    <>
+      <EntityBatch ents={list} look={entityLook} yaw={yawOf} />
+      {ghosts.map((e) => {
+        const o = originOf(e.keys);
+        return o ? (
+          <mesh key={e.id} position={[o[0], o[1], o[2] + 16]} userData={{ kind: "entity", id: e.id }}>
+            <boxGeometry args={[32, 32, 32]} />
+            <meshBasicMaterial color="#c8ccc2" transparent opacity={0.08} depthWrite={false} />
+          </mesh>
+        ) : null;
+      })}
+    </>
+  );
 }
 
 function PickedEntities() {
