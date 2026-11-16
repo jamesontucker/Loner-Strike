@@ -14,9 +14,10 @@ pub const HEAD_SIZE: usize = 44;
 pub const PAIR_SIZE: usize = 6;
 pub const BANG_SIZE: usize = 6;
 pub const AREA_SIZE: usize = 315;
-/// The brain gives maps with more areas no knowledge.
-pub const MAX_AREAS: usize = 6000;
-/// The biggest .lsv a 6000-area map could have, and some.
+/// The brain gives maps with more areas no knowledge (cs_bot_ls.cpp MAX_AREAS: 10,000 from ls23,
+/// 6,000 before; br_valley's nav has 8,723).
+pub const MAX_AREAS: usize = 10000;
+/// The biggest .lsv read here.
 pub const MAX_LSV: u64 = 512 << 20;
 
 pub const DIRS: usize = 16;
@@ -190,7 +191,7 @@ impl Lsv {
             return Err(Error::damaged(WHAT, format!("stage {}", head.stage)));
         }
         let bits = (n * n + 7) / 8;
-        // (n <= 6000 and pairs/bangs are u32: no overflow in u64)
+        // (n <= MAX_AREAS and pairs/bangs are u32: no overflow in u64)
         let want = HEAD_SIZE as u64 + bits as u64 + head.pairs as u64 * PAIR_SIZE as u64 + head.bangs as u64 * BANG_SIZE as u64 + (n * AREA_SIZE) as u64;
         if want != b.len() as u64 {
             return Err(Error::damaged(WHAT, format!("{} bytes where its counts say {want}", b.len())));
@@ -491,6 +492,19 @@ mod tests {
 
     /// LS_TEST_SIM: the shipped and fixed knowledge files read, write back exactly, and their
     /// keys match their navs.
+    /// br_valley's shipped knowledge (8,723 areas: more than the old 6,000 cap) reads, writes back
+    /// byte for byte, and is for the shipped nav.
+    #[test]
+    fn br_valley_reads() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../plugins/game/maps/");
+        let Ok(b) = std::fs::read(format!("{dir}br_valley.lsv")) else { return };
+        let l = Lsv::parse(&b).unwrap();
+        assert!(l.head.count as usize > 6000 && l.head.count as usize <= MAX_AREAS, "{}", l.head.count);
+        assert_eq!(l.write(), b);
+        let nav = Nav::parse(&std::fs::read(format!("{dir}br_valley.nav")).unwrap()).unwrap();
+        assert_eq!((l.head.count as usize, l.head.key), (nav.areas.len(), nav_key(&nav)));
+    }
+
     #[test]
     fn real_files() {
         let Ok(sim) = std::env::var("LS_TEST_SIM") else { return };

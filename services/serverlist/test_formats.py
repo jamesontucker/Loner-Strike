@@ -124,5 +124,36 @@ class Formats(unittest.TestCase):
         self.assertEqual(corpus_check.main(os.environ["LS_CORPUS"].split(os.pathsep)), 0)
 
 
+class LsvRules(unittest.TestCase):
+    """The bot brain's Load() rules (cs_bot_ls.cpp, ls23): br_valley's knowledge (8,723 areas,
+    32,011,845 bytes, stage DONE) passes; the counts must add up exactly."""
+
+    def head(self, count, stage=4, ci=0, cj=0, pairs=0, bangs=0, version=6):
+        return struct.pack("<9I", 0x3256534C, version, 1, count, stage, ci, cj, pairs, bangs) + b"\0" * 8
+
+    def run_check(self, head, size):
+        return formats.check("maps/x.lsv", io.BytesIO(head), size)
+
+    def test_br_valley_passes(self):
+        self.assertEqual(self.run_check(self.head(8723, pairs=3220838, bangs=71281), 32011845), "knowledge")
+
+    def test_the_brains_limits(self):
+        want = lambda n, p=0, b=0: 44 + (n * n + 7) // 8 + p * 6 + b * 6 + n * 315
+        self.assertEqual(self.run_check(self.head(10000), want(10000)), "knowledge", "the brain's 10,000 areas")
+        for head, size, why in [
+            (self.head(10001), want(10001), "more than the bot brain reads"),
+            (self.head(100, stage=5), want(100), "stage"),
+            (self.head(100, pairs=100 * 100 + 1), want(100, 100 * 100 + 1), "more sightlines"),
+            (self.head(100, stage=0, ci=5, cj=3), want(100), "carry on from"),
+            (self.head(100), want(100) + 1, "where its counts say"),
+            (self.head(8723, pairs=11_000_000), want(8723, 11_000_000), "MB, more than"),
+        ]:
+            with self.assertRaises(formats.FormatError, msg=why) as e:
+                self.run_check(head, size)
+            self.assertIn(why, str(e.exception))
+        self.assertEqual(self.run_check(self.head(100, stage=0, ci=3, cj=7), want(100)), "knowledge", "pairs still going")
+        self.assertEqual(self.run_check(self.head(5, version=5), 999), "knowledge", "an older version: the brain rebuilds it")
+
+
 if __name__ == "__main__":
     unittest.main()

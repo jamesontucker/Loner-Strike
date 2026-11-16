@@ -503,18 +503,32 @@ def check_nav(r):
     return "nav"
 
 
+# the bot brain's map knowledge (cs_bot_ls.cpp Load(), ls-next3/ls23; the app's goldsrc/lsv.rs):
+# a 44-byte head (magic, version, key, count, stage, ci, cj, pairs, bangs, traces, spentMs), then the
+# sight bits ((count^2 + 7) / 8 bytes), the pairs and bangs (6 bytes each) and 315 bytes an area
+LSV_MAGIC = 0x3256534C
+LSV_VERSION = 6
+LSV_MAX_AREAS = 10000       # the brain's MAX_AREAS (6000 before ls23; br_valley's nav has 8,723)
+LSV_MAX_BYTES = 64 << 20    # br_valley's is 32 MB
+LSV_STAGE_DONE = 4          # STAGE_PAIRS, AREAS, ANGLES, EXPOSURE, DONE
+
+
 def check_lsv(r):
     _need(r.size >= 8, "it's too small to be a map knowledge file")
     magic, version = r.ints(0, "II")
-    _need(magic == 0x3256534C, "it isn't a map knowledge file")
+    _need(magic == LSV_MAGIC, "it isn't a map knowledge file")
     _need(1 <= version <= 64, "its version is one the bot brain doesn't read")
-    _need(r.size <= 512 << 20, "it's too big for a map knowledge file")
-    if version != 6:
+    _need(r.size <= LSV_MAX_BYTES, f"it's {r.size >> 20} MB, more than a map knowledge file can be ({LSV_MAX_BYTES >> 20} MB)")
+    if version != LSV_VERSION:
         return "knowledge"  # another version: the brain rebuilds it rather than reading it
-    # version 6 (goldsrc/lsv.rs): the length must match the counts exactly
+    # the brain's own checks before it reads a byte by the counts: the length matches them exactly
     _need(r.size >= 44, "it ends early")
-    count, stage, _ci, _cj, pairs, bangs = r.ints(12, "6I")
-    _need(count <= 6000 and stage < 5, "it's damaged")
+    count, stage, ci, cj, pairs, bangs = r.ints(12, "6I")
+    _need(count <= LSV_MAX_AREAS, f"it says {count} areas, more than the bot brain reads ({LSV_MAX_AREAS})")
+    _need(stage <= LSV_STAGE_DONE, f"its stage ({stage}) is one the bot brain doesn't know")
+    _need(pairs <= count * count and bangs <= count * count, "it says more sightlines than its areas can have")
+    resume_ok = (ci + 1 >= count or ci < cj < count) if stage == 0 else ci <= count
+    _need(resume_ok, "where it would carry on from isn't a real place")
     want = 44 + (count * count + 7) // 8 + pairs * 6 + bangs * 6 + count * 315
     _need(want == r.size, f"it's {r.size} bytes where its counts say {want}")
     return "knowledge"

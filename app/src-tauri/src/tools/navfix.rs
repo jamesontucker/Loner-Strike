@@ -41,7 +41,7 @@ const CHANGED: &str = "The nav file changed on disk since you opened it (the gam
 
 /// Most undo steps kept per map.
 const MAX_UNDO: usize = 300;
-/// The most areas a nav may grow to here (the brain's knowledge stops at 6000).
+/// The most areas a nav may grow to here (the brain's knowledge stops at 10,000: lsv::MAX_AREAS).
 const MAX_AREAS: usize = 20_000;
 /// Coordinates stay inside the GoldSrc world.
 const WORLD: f32 = 32768.0;
