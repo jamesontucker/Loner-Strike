@@ -1254,16 +1254,17 @@ KIND_WORDS = {"map": "Map", "mode": "Game mode", "prefab": "Prefab", "spray": "S
 def public_card(item, update):
     """The public card for a creation: its first picture, name, kind, author, a one-line summary,
     and links to its page and to installing it from the app. No moderation buttons."""
-    def plain(s, n):
-        # (embed text: one line, capped, no mentions)
-        return one_line(str(s or ""), n).replace("@", "@​")
+    # (everything the creator wrote: markdown escaped and mentions broken, as on the mod card;
+    # only the links we build are links)
+    plain = lambda s, n: discord_text(str(s or ""), n)
     link = gb_link(item["model"], item["gb"])
     kind = KIND_WORDS.get(item.get("kind", ""), "Creation")
     embed = {"title": plain(item.get("name") or "A new creation", 200), "url": link,
              "fields": [{"name": "Kind", "value": kind, "inline": True}, {"name": "By", "value": plain(item.get("author") or "unknown", 60), "inline": True}],
              "footer": {"text": "A new version, checked again" if update else "New on Community: passed Loner-Strike's automatic checks"},
              "color": 0x7C9A5B}
-    summary = plain(item.get("summary"), 200)
+    # (and no links of its own: a public channel isn't a place for a creator's download links)
+    summary = plain(re.sub(r"(?i)(https?://|www\.|discord(app)?\.(gg|com)/)\S*", "", str(item.get("summary") or "")), 200)
     if summary:
         embed["description"] = summary
     shot = next((u for u in item.get("screenshots") or [] if isinstance(u, str) and u.startswith("https://")

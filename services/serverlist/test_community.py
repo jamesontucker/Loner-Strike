@@ -1469,6 +1469,20 @@ class FileChoice(unittest.TestCase):
         c.submit(body(map_item()), "d")
         self.assertEqual(len(posts), 2, "that new file again: no card")
 
+    def test_the_public_card_takes_no_links_or_mentions_from_the_creator(self):
+        bad = "[Download fix](https://evil.example/x) @everyone"
+        card = cm.public_card({"model": "Mod", "gb": 5, "kind": "map", "name": bad, "author": bad,
+                               "summary": bad + " get it at www.evil.example or https://evil.example/y discord.gg/abc"}, update=False)
+        e = card["embeds"][0]
+        for text in (e["title"], e["fields"][1]["value"], e["description"]):
+            self.assertNotIn("](", text, "no masked link")
+            self.assertNotIn("@everyone", text, "no mention")
+        for gone in ("evil.example/x", "https://", "www.", "discord.gg"):
+            self.assertNotIn(gone, e["description"])
+        # our own links stay ours
+        self.assertEqual(e["url"], "https://gamebanana.com/mods/5")
+        self.assertEqual([b["url"] for b in card["components"][0]["components"]], ["https://gamebanana.com/mods/5", cm.INSTALL_LINK])
+
     def test_the_public_feed_waits_for_a_moderator(self):
         c, _ = make()
         posts = []
