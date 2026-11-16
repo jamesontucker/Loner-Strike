@@ -197,13 +197,15 @@ export type Installed = {
   maps: string[]; prefabs: string[]; mode: string; installed: number; url: string; update: number | null; pulled: boolean; gone?: string | null; remixOf: Credit | null;
   /** a newer file waiting for the map or mode to be free */
   pending: number; previousFile: number; canGoBack: boolean;
+  /** a map that comes with Loner-Strike: Remove only forgets the Community record */
+  builtin?: boolean;
 };
 export type { Chip } from "./chip";
 import type { Chip } from "./chip";
 export type Library = { items: Installed[]; maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip>; updates: number; waiting: number };
 
 export const library = (signal?: AbortSignal) => get<Library>(`${base}/library`, signal);
-export const uninstall = (key: string) => post<{ ok: boolean; removed: string[] }>(`${base}/uninstall`, { key });
+export const uninstall = (key: string) => post<{ ok: boolean; removed: string[]; kept?: string[] }>(`${base}/uninstall`, { key });
 export const update = (key: string) => post<{ ok: boolean; job?: string; kind?: string; state?: "waiting" | "installing" | "done"; message?: string }>(`${base}/update`, { key });
 export const updateAll = () => post<{ ok: boolean; updates: { key: string; name: string; result: { state?: string } | null; error: string | null }[] }>(`${base}/update-all`, {});
 export const goBack = (key: string) => post<{ ok: boolean; state?: string; job?: string }>(`${base}/go-back`, { key });

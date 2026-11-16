@@ -1252,18 +1252,23 @@ impl MapStore {
     // ---- uninstalling ---------------------------------------------------
     /// Removes a map download (kept for setup): the maps it removed.
     pub fn uninstall(&self, mod_id: i64) -> Result<Vec<String>, StoreError> {
-        self.uninstall_maps(mod_id)
+        self.uninstall_maps(mod_id).map(|(gone, _)| gone)
     }
 
     /// Removes a download: {"maps": [...]} for a map download, {"maps": [], "files": [...]} for the rest.
     pub fn uninstall_section(&self, section: &str, mod_id: i64) -> Result<Value, StoreError> {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
         if sec.key == "maps" {
-            let maps = self.uninstall_maps(mod_id)?;
+            let (maps, kept) = self.uninstall_maps(mod_id)?;
             // the shared creatures it brought (its block in creatures.ini; types another item brings stay)
             let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
             let files = crate::tools::creaturepack::uninstall_pack(&self.cstrike, &key).map_err(StoreError::Bad)?;
-            return Ok(if files.is_empty() { json!({"maps": maps}) } else { json!({"maps": maps, "files": files}) });
+            let mut v = if files.is_empty() { json!({"maps": maps}) } else { json!({"maps": maps, "files": files}) };
+            // maps that come with Loner-Strike: their files stay (the app's own), only the download is forgotten
+            if !kept.is_empty() {
+                v["kept"] = json!(kept);
+            }
+            return Ok(v);
         }
         if self.server && (sec.key == "skins" || sec.key == "players") {
             let files = crate::servercontent::remove(&self.game_dir, sec.key, mod_id).map_err(StoreError::Bad)?;
@@ -1279,7 +1284,9 @@ impl MapStore {
         Ok(json!({"maps": [], "files": files}))
     }
 
-    fn uninstall_maps(&self, mod_id: i64) -> Result<Vec<String>, StoreError> {
+    /// (the maps it took out, the maps that come with Loner-Strike and stayed)
+    fn uninstall_maps(&self, mod_id: i64) -> Result<(Vec<String>, Vec<String>), StoreError> {
+        let builtin = AppFiles::open(&self.game_dir, &self.cstrike);
         let maps = {
             let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
             let mut rec = self.records();
@@ -1291,7 +1298,9 @@ impl MapStore {
                 .map(|f| s(f).to_lowercase())
                 .collect();
             for dest in r["files"].as_array().into_iter().flatten().map(s) {
-                if needed.contains(&dest.to_lowercase()) || crate::maps::is_stock_file(&dest) {
+                // (and never a file Loner-Strike itself put there: br_valley tried from Community, then
+                // removed, keeps the built-in map)
+                if needed.contains(&dest.to_lowercase()) || crate::maps::is_stock_file(&dest) || builtin.has(&dest) {
                     continue;
                 }
                 if let Some(full) = inside(&self.cstrike, &dest) {
@@ -1302,7 +1311,8 @@ impl MapStore {
             }
             let maps: Vec<String> = r["maps"].as_array().into_iter().flatten().map(s).collect();
             for m in &maps {
-                if !archive::safe_map(m) {
+                // (a built-in map's bot navigation and knowledge are the app's: they stay)
+                if !archive::safe_map(m) || crate::maps::ships_with_app(m) {
                     continue;
                 }
                 // navigation the bots learned for it, and the cached picture
@@ -1322,7 +1332,31 @@ impl MapStore {
             maps
         };
         *self.maps_cache.lock().unwrap() = None;
-        Ok(maps)
+        let (kept, gone): (Vec<String>, Vec<String>) = maps.into_iter().partition(|m| crate::maps::ships_with_app(m));
+        Ok((gone, kept))
+    }
+}
+
+/// The files Loner-Strike itself put in a game: its own maps (maps/ and overviews/ files named
+/// for maps::LONER_MAPS) and everything setup's install record lists. A community download's
+/// Remove never takes them (W2).
+struct AppFiles(HashSet<String>);
+
+impl AppFiles {
+    fn open(game_dir: &Path, cstrike: &Path) -> AppFiles {
+        let mut set = HashSet::new();
+        for d in [game_dir, cstrike] {
+            set.extend(crate::setup::record::Record::open(d).data.files.keys().map(|k| k.replace('\\', "/").to_lowercase()));
+        }
+        AppFiles(set)
+    }
+
+    fn has(&self, rel: &str) -> bool {
+        let r = rel.replace('\\', "/").to_lowercase();
+        let named_for_ours = ["maps/", "overviews/"].iter().any(|d| {
+            r.strip_prefix(d).is_some_and(|f| !f.contains('/') && crate::maps::ships_with_app(f.split('.').next().unwrap_or("")))
+        });
+        named_for_ours || self.0.contains(&r)
     }
 }
 
@@ -1430,6 +1464,37 @@ mod tests {
         assert_eq!(inside(base, "maps/../../x"), None);
         assert_eq!(inside(base, "C:/Windows/x"), None);
         assert_eq!(inside(base, ""), None);
+    }
+
+    #[test]
+    fn uninstall_keeps_files_that_come_with_loner_strike() {
+        // br_valley installed by Community's Try it over the built-in one, then removed: the
+        // download is forgotten, the map's files, nav and knowledge stay; what only it added goes
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "store-builtin-").unwrap();
+        let hl = root.join("hl");
+        let app = root.join("app");
+        let cs = hl.join("cstrike");
+        for d in ["maps", "overviews", "models/gb1", "sound/loner", "addons/loner-strike"] {
+            std::fs::create_dir_all(cs.join(d)).unwrap();
+        }
+        std::fs::create_dir_all(&app).unwrap();
+        for f in ["maps/br_valley.bsp", "maps/br_valley.res", "maps/br_valley.nav", "maps/br_valley.lsv", "overviews/br_valley.bmp", "models/gb1/crate.mdl", "sound/loner/hi.wav"] {
+            std::fs::write(cs.join(f), b"x").unwrap();
+        }
+        // a file setup put in (the app's own), listed in its install record
+        std::fs::write(cs.join("addons/loner-strike/record.json"), r#"{"files": {"sound/loner/hi.wav": {}}}"#).unwrap();
+        let rec = json!({"741494": {"name": "br_valley", "author": "jamGB", "maps": ["br_valley"],
+            "files": ["maps/br_valley.bsp", "maps/br_valley.res", "overviews/br_valley.bmp", "models/gb1/crate.mdl", "sound/loner/hi.wav"], "shared": []}});
+        std::fs::write(app.join("installed_maps.json"), rec.to_string()).unwrap();
+        let store = MapStore::new(&hl, &cs, &app, Arc::new(Mutex::new(None)));
+        let v = store.uninstall_section("maps", 741494).unwrap();
+        assert_eq!(v, json!({"maps": [], "kept": ["br_valley"]}), "{v}");
+        for kept in ["maps/br_valley.bsp", "maps/br_valley.res", "maps/br_valley.nav", "maps/br_valley.lsv", "overviews/br_valley.bmp", "sound/loner/hi.wav"] {
+            assert!(cs.join(kept).exists(), "{kept} comes with Loner-Strike: it stays");
+        }
+        assert!(!cs.join("models/gb1/crate.mdl").exists(), "what only the download added goes");
+        assert!(!store.records().contains_key("741494"), "the download is forgotten");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

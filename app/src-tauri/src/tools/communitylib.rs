@@ -225,6 +225,8 @@ pub fn summary(items: &[Installed], idx: &Index) -> Value {
             // (the author unlisted it, or its page was withdrawn: a quiet note; it stays installed)
             v["gone"] = json!(idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb).and_then(|e| e.status.note()));
             v["canGoBack"] = json!(it.previous_file > 0 || lib_dir().join(it.key()).join("previous").join("meta.json").is_file());
+            // a map that comes with Loner-Strike (Remove only forgets the Community record)
+            v["builtin"] = json!(it.kind == Kind::Map && !it.maps.is_empty() && it.maps.iter().all(|m| crate::maps::ships_with_app(m)));
             v
         })
         .collect();
@@ -238,7 +240,10 @@ pub fn summary(items: &[Installed], idx: &Index) -> Value {
 pub fn uninstall(game: Option<&crate::game::Game>, dir: &Path, it: &Installed) -> Result<Value, String> {
     let removed = remove_files(game, it)?;
     forget(dir, it.model, it.gb);
-    Ok(json!({"ok": true, "removed": removed}))
+    // maps that come with Loner-Strike stay installed (the store keeps their files): only the
+    // Community record (and what only the download added) went
+    let kept: Vec<&String> = it.maps.iter().filter(|m| crate::maps::ships_with_app(m)).collect();
+    Ok(json!({"ok": true, "removed": removed, "kept": kept}))
 }
 
 /// Takes an installed creation's files out of the game (or the editor's library), keeping its

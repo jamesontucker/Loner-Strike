@@ -48,7 +48,8 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
       const r = await uninstall(it.key);
       setSure(false);
       if (r.error) return toast(r.error, true);
-      toast(`${it.name} removed.`);
+      // a map that comes with Loner-Strike: only Community's record went, the map stays
+      toast(r.kept?.length ? `${r.kept.join(", ")} comes with Loner-Strike, so it stays installed. It's no longer listed as installed from Community.` : `${it.name} removed.`);
       refresh();
     });
   const [notes, setNotes] = useState(false);
@@ -89,7 +90,7 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
           <button className="btn" disabled={working !== null} onClick={() => setSure(true)}>Remove</button>
         ) : (
           <span className="cm-confirm-inline" role="alertdialog" aria-label="Remove it?">
-            <span>Remove {it.name}{it.kind === "map" ? " and its files" : ""}? Servers carrying it drop it too.</span>
+            <span>{it.builtin ? <>Remove {it.name} from Community? It comes with Loner-Strike, so the map stays installed.</> : <>Remove {it.name}{it.kind === "map" ? " and its files" : ""}? Servers carrying it drop it too.</>}</span>
             <BusyButton className="btn danger" busy={working === "Removing…"} busyLabel="Removing…" label="Remove" onClick={remove} />
             <button className="btn" onClick={() => setSure(false)}>Keep it</button>
           </span>
