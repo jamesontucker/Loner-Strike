@@ -1922,7 +1922,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
     let steps = vec![
         setup::server_step(&g, "srv-machine", &format!("Setting up {host}: libraries, firewall, Valve's server"), 10.0),
         setup::server_step(&g, "srv-settings", "Copying settings and admins", 0.3),
-        setup::server_step(&g, "srv-upload", "Uploading Loner-Strike to the server", 1.5),
+        setup::server_step(&g, "srv-upload", "Uploading Loner-Strike to the server (this can take a few minutes)", 1.5),
         setup::server_step(&g, "srv-service", "Starting it as a service", 0.3),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
@@ -2011,7 +2011,7 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
         let host = r.host.clone();
         let steps = vec![
             setup::server_step(&g, "srv-machine", &format!("Updating {host}: Valve's server files"), 10.0),
-            setup::server_step(&g, "srv-upload", "Sending Loner-Strike's files again", 1.5),
+            setup::server_step(&g, "srv-upload", "Sending Loner-Strike's files again (this can take a few minutes)", 1.5),
             setup::server_step(&g, "srv-control", "Updating the service and shared control", 0.2),
         ];
         let res = res.ok_or("Loner-Strike's mod files are missing from the app. Reinstalling the app should fix it.")?;
@@ -4309,7 +4309,6 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&file).unwrap().trim().len(), 24);
         let _ = std::fs::remove_dir_all(&root);
     }
-
 
     /// Shared creatures reach a Linux server with the next upload: creatures.ini and the models
     /// and sounds the app copies into its folder here go up, and come off when they're gone.

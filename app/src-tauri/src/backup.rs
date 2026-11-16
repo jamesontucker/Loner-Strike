@@ -1720,7 +1720,7 @@ impl Restore {
         }
         v.push(s("rs-files", "Restoring settings and files".into(), 1.0));
         if self.entry().is_some_and(|e| e.remote.is_some()) {
-            v.push(s("srv-upload", "Uploading to the server".into(), 1.5));
+            v.push(s("srv-upload", "Uploading to the server (this can take a few minutes)".into(), 1.5));
         }
         if matches!(self.target, Target::NewRemote(_)) {
             v.push(s("srv-service", "Starting it as a service".into(), 0.3));
