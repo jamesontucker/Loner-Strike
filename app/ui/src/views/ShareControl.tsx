@@ -335,6 +335,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
   }, "Asking your router…");
   };
   const [portText, setPortText] = useState("");
+  const [changingPort, setChangingPort] = useState(false);
   const setPort = async () => {
     const p = Number(portText);
     if (!Number.isInteger(p) || p < 1024 || p > 65535 || (p >= 27015 && p <= 27020)) return toast("Pick a port from 1024 to 65535 that isn't a game port (27015 to 27020).", true);
@@ -343,6 +344,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
     const r = await post("/api/control/port", { port: p });
     if (r.error) return toast(r.error, true);
     setPortText("");
+    setChangingPort(false);
     toast(`Friends' apps now reach this computer on port ${p}. Send new invites: older ones, and people who had access, use the old port.`);
     load();
   });
@@ -408,10 +410,17 @@ export function ShareControl({ server }: { server: ServerInfo }) {
             <input id="share-addresses" className="search" placeholder="Your internet address, or a virtual LAN address" value={addresses} onChange={(e) => setAddresses(e.target.value)} spellCheck={false} />
             <span className="row">
               <BusyButton className="btn small" busy={busy("share:upnp")} label="Open the port on my router" busyLabel="Asking…" onClick={openPort} />
-              <span className="muted small-note">Port {c?.port ?? 27030} (TCP){c?.listening || (!members.length && !c?.invites?.length) ? "" : " · not listening: another program may be using this port. Pick another below."}</span>
-              <input className="search narrow" type="number" min={1024} max={65535} placeholder="Change" aria-label="Sharing port" value={portText} onChange={(e) => setPortText(e.target.value)} />
-              {portText && <BusyButton className="btn small" busy={busy("share:port")} label="Use it" busyLabel="Moving…" onClick={setPort} />}
+              <span className="muted small-note">Port {c?.port ?? 27030} (TCP){c?.listening || (!members.length && !c?.invites?.length) ? "" : " · not listening: another program may be using this port. Change it to another."}</span>
+              {!changingPort && <button type="button" className="btn small" onClick={() => setChangingPort(true)}>Change port</button>}
             </span>
+            {changingPort && (
+              <span className="row" style={{ alignItems: "center" }}>
+                <span className="small-note">New port</span>
+                <input className="search narrow" style={{ width: 110, flex: "none" }} type="number" min={1024} max={65535} placeholder={String(c?.port ?? 27030)} aria-label="Sharing port" value={portText} onChange={(e) => setPortText(e.target.value)} autoFocus />
+                <BusyButton className="btn small" busy={busy("share:port")} disabled={!portText} label="Use it" busyLabel="Moving…" onClick={setPort} />
+                <button type="button" className="btn small" onClick={() => { setChangingPort(false); setPortText(""); }}>Cancel</button>
+              </span>
+            )}
             {suggest.length > 0 && (
               <small>
                 On this computer:{" "}
