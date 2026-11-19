@@ -204,6 +204,11 @@ export function CompilePanel() {
 
   const running = !!job?.running || starting || playing;
 
+  // 1.0.1: the running step or stage kept in sight (under the sticky row) as the playtest goes on
+  useEffect(() => {
+    document.querySelector(".compile-panel .compile-step.is-running, .compile-panel .compile-stage.is-running")?.scrollIntoView({ block: "nearest" });
+  }, [steps, job?.stage]);
+
   const refreshLast = useCallback(async (map: string) => {
     if (!map || mapNameProblem(map)) return setLast(null);
     const r = await api.lastLogs(map);
@@ -652,6 +657,11 @@ export function CompilePanel() {
   const compiling = job?.kind === "compile" && job.running;
   const stages = job?.kind === "compile" ? job.stages ?? [] : [];
   const teaching = !!steps?.some((x) => x.id === "teach" && x.state === "running");
+  // 1.0.1: the sticky row's words: the running step (a playtest) or stage (a compile), and its time
+  const runStep = playing ? steps?.find((x) => x.state === "running") : undefined;
+  const runStage = stages.find((r) => r.state === "running");
+  const liveName = ptAsked === "stop" || stopping ? "Stopping…" : ptAsked === "skip" ? "Skipping…" : runStep && runStep.id !== "compile" ? runStep.label : runStage ? (playing ? `Compile: ${runStage.name}` : runStage.name) : playing ? phase ?? "Compile" : job?.label ?? "Compiling";
+  const liveSecs = runStep && runStep.id !== "compile" ? (runStep.started ? Math.max(0, Math.round((now - runStep.started) / 1000)) : null) : runStage?.seconds ?? (compiling ? job?.seconds ?? null : null);
   const nameWhy = mapNameProblem(name.trim());
   const nameBad = !!nameWhy;
   const problems = job?.kind === "compile" ? job.problems : [];
@@ -661,6 +671,26 @@ export function CompilePanel() {
 
   return (
     <section className="tools-panel compile-panel">
+      {(compiling || playing) && (
+        // 1.0.1: what's running and its Stop (and Skip teaching) always in sight, however short the dock
+        <div className="compile-live" role="status" aria-label="Running now">
+          <span className="compile-live-name">
+            <span className="spinner" aria-hidden="true" />
+            {liveName}
+          </span>
+          {liveSecs != null && <span className="compile-live-time">{secs(liveSecs)}</span>}
+          <span className="compile-live-actions">
+            {playing ? (
+              <>
+                {teaching && <BusyButton className="btn small" busy={ptAsked === "skip"} label="Skip teaching, play now" busyLabel="Skipping…" disabled={!!ptAsked} title="Starts the game now. Bots will wander until they learn the map." onClick={skipTeaching} />}
+                <BusyButton className="btn small" busy={ptAsked === "stop"} label="Stop" busyLabel="Stopping…" disabled={!!ptAsked} onClick={() => void stopPlaytest()} />
+              </>
+            ) : (
+              <BusyButton className="btn small" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={() => void stop()} />
+            )}
+          </span>
+        </div>
+      )}
       {!status.canRun && status.cantRun && <p className="small-note compile-bad">{status.cantRun}</p>}
 
       <h4 className="compile-head">Compile</h4>
@@ -711,7 +741,6 @@ export function CompilePanel() {
 
       <div className="editor-row wrap">
         <BusyButton className="btn primary" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun || nameBad} onClick={() => void onCompile()} />
-        {compiling && !playing && <BusyButton className="btn small" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={() => void stop()} />}
       </div>
 
       <fieldset className="compile-playtest" disabled={running || !status.canRun}>
@@ -831,12 +860,6 @@ export function CompilePanel() {
                   {choice.no}
                 </button>
               </div>
-            </div>
-          )}
-          {playing && (
-            <div className="editor-row wrap compile-pt-actions">
-              <BusyButton className="btn small" busy={ptAsked === "stop"} label="Stop" busyLabel="Stopping…" disabled={!!ptAsked} onClick={() => void stopPlaytest()} />
-              {teaching && <BusyButton className="btn small" busy={ptAsked === "skip"} label="Skip teaching, play now" busyLabel="Skipping…" disabled={!!ptAsked} onClick={skipTeaching} />}
             </div>
           )}
           {playing && teaching && !ptAsked && <p className="small-note muted">Skip starts the game now. Bots will wander until they learn the map.</p>}

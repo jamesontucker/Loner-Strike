@@ -123,20 +123,22 @@ test("playtest on a map bots don't know: teaching shows its time, Skip teaching 
   await expect(step(page, "Compile")).toContainText("Done");
   await expect(step(page, "Start the game")).toContainText("Waiting");
   const box = page.locator(".compile-steps-box");
-  await expect(box.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
-  await expect(box.getByRole("button", { name: "Skip teaching, play now" })).toBeVisible();
+  const live = page.locator(".compile-live");
+  await expect(live).toContainText("Teach bots the map");
+  await expect(live.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+  await expect(live.getByRole("button", { name: "Skip teaching, play now" })).toBeVisible();
   await expect(box).toContainText("Skip starts the game now. Bots will wander until they learn the map.");
   // the time ticks
   await expect(teach.locator(".compile-step-time")).toHaveText(/^[1-9]\d* s$/, { timeout: 4000 });
   await shot(page, "03-teaching", ".compile-steps-box");
-  await box.getByRole("button", { name: "Skip teaching, play now" }).click();
+  await live.getByRole("button", { name: "Skip teaching, play now" }).click();
   await expect.poll(() => calls.some((c) => c.name === "learn-stop")).toBe(true);
   await expect(teach).toContainText("Skipped", { timeout: 20_000 });
   await expect(teach).toContainText("Skipped: bots will wander until they learn the map.");
   await expect.poll(() => calls.some((c) => c.name === "launch"), { timeout: 15_000 }).toBe(true);
   await expect(step(page, "Start the game")).toContainText("Done");
   await expect(page.locator(".compile-steps-box")).toContainText("Playtest steps", { timeout: 10_000 });
-  await expect(box.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
+  await expect(live).toHaveCount(0);
   const log = calls.find((c) => c.name === "playtest-log")?.body as { map: string; outcome: string; lines: string[]; learner: boolean };
   expect(log.map).toBe("qa_room");
   expect(log.outcome).toBe("ok");
@@ -151,7 +153,7 @@ test("Stop while bots learn ends the playtest: no game started", async ({ page }
   await playtest(page);
   const teach = step(page, "Teach bots the map");
   await expect(teach).toContainText("Running", { timeout: 15_000 });
-  await page.locator(".compile-steps-box").getByRole("button", { name: "Stop", exact: true }).click();
+  await page.locator(".compile-live").getByRole("button", { name: "Stop", exact: true }).click();
   await expect(teach).toContainText("Stopped while bots were learning the map.", { timeout: 20_000 });
   await expect(step(page, "Start the game")).toContainText("Not run");
   expect(calls.some((c) => c.name === "launch")).toBe(false);
@@ -162,7 +164,7 @@ test("Stop while bots learn ends the playtest: no game started", async ({ page }
 test("Stop during the playtest's compile stops the compile (Stop stays through the steps)", async ({ page }) => {
   const { calls } = await setUp(page, { holdCompile: true });
   await playtest(page);
-  const box = page.locator(".compile-steps-box");
+  const box = page.locator(".compile-live");
   await expect(step(page, "Compile")).toContainText("Running");
   // one Stop only: the playtest's (the Compile row's is for a plain compile)
   await expect(page.locator(".compile-panel").getByRole("button", { name: "Stop", exact: true })).toHaveCount(1);
@@ -223,4 +225,44 @@ test("the map's last compile and playtest: errors shown, and the full logs open"
   await box.getByRole("button", { name: "Open the full log" }).click();
   await box.getByRole("button", { name: "Open the playtest log" }).click();
   await expect.poll(() => calls.filter((c) => c.name === "open").map((c) => c.body)).toEqual([{ map: "qa_room", which: "compile" }, { map: "qa_room", which: "playtest" }]);
+});
+
+/** The dock as short as a small window can make it (about 150 px), and Stop (and Skip) still in sight. */
+async function shortDock(page: Page) {
+  await page.evaluate(() => {
+    const area = document.querySelector(".compile-panel")!.closest(".ed-dock-bottom-area") as HTMLElement | null;
+    if (area) area.style.height = "150px";
+  });
+}
+async function inSight(page: Page, name: string) {
+  const b = page.locator(".compile-live").getByRole("button", { name, exact: true });
+  await expect(b).toBeVisible();
+  const body = await page.locator(".compile-panel").evaluate((el) => {
+    const r = el.closest(".ed-dock-body")!.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom };
+  });
+  const r = (await b.boundingBox())!;
+  expect(r.y).toBeGreaterThanOrEqual(body.top - 1);
+  expect(r.y + r.height).toBeLessThanOrEqual(body.bottom + 1);
+}
+
+test("a very short dock: Stop and Skip stay in sight above the steps, the running step scrolled in", async ({ page }) => {
+  await setUp(page, { nav: "none", hasNav: false, holdCompile: true });
+  await shortDock(page);
+  await page.locator(".compile-panel").getByRole("button", { name: "Compile", exact: true }).click();
+  await inSight(page, "Stop");
+  await expect(page.locator(".compile-live")).toContainText("Visibility (VIS)");
+  await shot(page, "09-short-dock-compile", ".compile-live");
+});
+
+test("a very short dock during a playtest: Stop and Skip teaching in sight, the running step under them", async ({ page }) => {
+  const { ctl } = await setUp(page, { nav: "none", hasNav: false });
+  await shortDock(page);
+  await playtest(page);
+  await expect(step(page, "Teach bots the map")).toContainText("Running", { timeout: 15_000 });
+  await inSight(page, "Stop");
+  await inSight(page, "Skip teaching, play now");
+  await expect(step(page, "Teach bots the map")).toBeInViewport();
+  await shot(page, "10-short-dock-teaching", ".compile-live");
+  ctl.learnDone = true;
 });
