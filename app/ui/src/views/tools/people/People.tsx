@@ -70,28 +70,19 @@ function KindForm({ arch, index, people, catalog, groups, problems, who, onChang
     <div className="pp-form">
       <ProblemList list={problems} />
       <Rows bare>
-        <Row name="Name" note="Letters, digits and _ only. Bots remember their kind by this name">
-          <input className="search pp-name" value={arch.name} maxLength={31} aria-label="Name" onChange={(e) => onChange({ ...arch, name: e.target.value.replace(/\s/g, "_") })} />
-        </Row>
-        <Row name="How common" note={arch.weight === 0 ? "Never picked for a new bot" : `About ${share < 1 ? share.toFixed(1) : Math.round(share)} in every 100 new bots`}>
-          <span className="pp-num">
-            <input type="range" min={0} max={120} value={Math.min(arch.weight, 120)} aria-label="How common" onChange={(e) => onChange({ ...arch, weight: Number(e.target.value) })} />
-            <input className="search pp-numbox" type="number" min={0} max={1000} value={arch.weight} aria-label="How common (number)" onChange={(e) => onChange({ ...arch, weight: Math.max(0, Math.min(1000, Math.round(Number(e.target.value) || 0))) })} />
-          </span>
-        </Row>
         <Row name="Chats like" info="The chat personality the bot talks with: which lines in botchat.ini it says. Each kind acts as one.">
           <select value={arch.letter} aria-label="Chats like" onChange={(e) => onChange({ ...arch, letter: e.target.value })}>
             {!catalog.letters.some((l) => l.letter === arch.letter) && <option value={arch.letter}>Pick one</option>}
             {catalog.letters.map((l) => (
               <option key={l.letter} value={l.letter}>
-                {l.desc[0].toUpperCase() + l.desc.slice(1)} ({l.letter})
+                {l.desc[0].toUpperCase() + l.desc.slice(1)}
               </option>
             ))}
           </select>
         </Row>
-        <Row name={TRAIT_WORDS.style.label} note={arch.style === "-" ? "Rolled: any style, by how common each is" : STYLE_NOTES[arch.style]} info={TRAIT_WORDS.style.info}>
+        <Row name={TRAIT_WORDS.style.label} note={arch.style === "-" ? "Random: any style, by how common each is" : STYLE_NOTES[arch.style]} info={TRAIT_WORDS.style.info}>
           <select value={arch.style} aria-label="Plays like" onChange={(e) => onChange({ ...arch, style: e.target.value })}>
-            <option value="-">Any (rolled)</option>
+            <option value="-">Any (random)</option>
             {catalog.traits.find((t) => t.key === "style")?.values.map((v) => (
               <option key={v} value={v}>
                 {word(v)}
@@ -99,26 +90,35 @@ function KindForm({ arch, index, people, catalog, groups, problems, who, onChang
             ))}
           </select>
         </Row>
-        <Row name="Heading" note="Where it's listed in people.ini">
+        <Row name="Weight" info="Bigger is more common: each kind's weight against the others' total gives its share of new bots." note={arch.weight === 0 ? "Never picked for a new bot" : `About ${share < 1 ? share.toFixed(1) : Math.round(share)} in every 100 new bots`}>
+          <span className="pp-num">
+            <input type="range" min={0} max={120} value={Math.min(arch.weight, 120)} aria-label="Weight" onChange={(e) => onChange({ ...arch, weight: Number(e.target.value) })} />
+            <input className="search pp-numbox" type="number" min={0} max={1000} value={arch.weight} aria-label="Weight (number)" onChange={(e) => onChange({ ...arch, weight: Math.max(0, Math.min(1000, Math.round(Number(e.target.value) || 0))) })} />
+          </span>
+        </Row>
+        <Row name="Name" note="Letters, digits and _ only. Bots remember their kind by this name">
+          <input className="search pp-name" value={arch.name} maxLength={31} aria-label="Name" onChange={(e) => onChange({ ...arch, name: e.target.value.replace(/\s/g, "_") })} />
+        </Row>
+        <Row name="Group" note="Which group it's listed under, here and in the file">
           {newGroup ? (
-            <input className="search" autoFocus placeholder="A new heading" aria-label="New heading" onBlur={(e) => {
+            <input className="search" autoFocus placeholder="A new group" aria-label="New group" onBlur={(e) => {
               setNewGroup(false);
               if (e.target.value.trim()) onChange({ ...arch, group: `; ---- ${e.target.value.trim()}` });
             }} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
           ) : (
-            <select value={arch.group} aria-label="Heading" onChange={(e) => (e.target.value === "\u0000new" ? setNewGroup(true) : onChange({ ...arch, group: e.target.value }))}>
+            <select value={arch.group} aria-label="Group" onChange={(e) => (e.target.value === "\u0000new" ? setNewGroup(true) : onChange({ ...arch, group: e.target.value }))}>
               {groups.map((g) => (
                 <option key={g} value={g}>
                   {groupLabel(g)}
                 </option>
               ))}
-              <option value={"\u0000new"}>New heading…</option>
+              <option value={"\u0000new"}>New group…</option>
             </select>
           )}
         </Row>
       </Rows>
       <h4 className="pp-sub">
-        Fixed traits <Info text="A fixed trait is the same for every bot of this kind. Left on Rolled, it's rolled for each bot by how common each value is (the next tab). Fix only what makes the kind what it is: two or three at most." />
+        Fixed traits <Info text="A fixed trait is the same for every bot of this kind. Left on Random, each bot gets one at random, by how common each value is (the next tab). Fix only what makes the kind what it is: two or three at most." />
       </h4>
       <Rows bare>
         {catalog.traits
@@ -127,7 +127,7 @@ function KindForm({ arch, index, people, catalog, groups, problems, who, onChang
             <Row key={t.key} name={TRAIT_WORDS[t.key]?.label ?? t.key} info={TRAIT_WORDS[t.key]?.info}>
               {t.values.length > 5 ? (
                 <select value={fixed(t.key)} aria-label={TRAIT_WORDS[t.key]?.label ?? t.key} onChange={(e) => setFixed(t.key, e.target.value)}>
-                  <option value="">Rolled</option>
+                  <option value="">Random</option>
                   {t.values.map((v) => (
                     <option key={v} value={v}>
                       {word(v)}
@@ -135,13 +135,13 @@ function KindForm({ arch, index, people, catalog, groups, problems, who, onChang
                   ))}
                 </select>
               ) : (
-                <Segmented label={TRAIT_WORDS[t.key]?.label ?? t.key} values={["-", ...t.values].join(" ")} labels={["Rolled", ...t.values.map(word)].join("|")} current={fixed(t.key) || "-"} onPick={(v) => setFixed(t.key, v === "-" ? "" : v)} />
+                <Segmented label={TRAIT_WORDS[t.key]?.label ?? t.key} values={["-", ...t.values].join(" ")} labels={["Random", ...t.values.map(word)].join("|")} current={fixed(t.key) || "-"} onPick={(v) => setFixed(t.key, v === "-" ? "" : v)} />
               )}
             </Row>
           ))}
         <Row name="Hobby" info="Something they bring up now and then. Everyone has two; this fixes one of them.">
           <select value={fixed("hobby")} aria-label="Hobby" onChange={(e) => setFixed("hobby", e.target.value)}>
-            <option value="">Rolled</option>
+            <option value="">Random</option>
             {catalog.hobbies.map((h) => (
               <option key={h} value={h}>
                 {word(h)}
@@ -164,7 +164,7 @@ function KindForm({ arch, index, people, catalog, groups, problems, who, onChang
 function WeightsTab({ people, catalog, problems, onChange }: { people: PeopleModel; catalog: Catalog; problems: Problem[]; onChange: (p: PeopleModel) => void }) {
   return (
     <div className="pp-weights">
-      <p className="muted pp-hint">When a kind of person doesn't fix a trait, each bot gets one rolled: the bigger the number, the more bots get that value. Most people sit in the middle; only the extremes stand out.</p>
+      <p className="muted pp-hint">When a kind of person doesn't fix a trait, each bot gets one at random: the bigger the number, the more bots get that value. Most people sit in the middle; only the extremes stand out.</p>
       {catalog.traits.map((t) => {
         const w = people.weights.find((x) => x.trait === t.key);
         const vals = t.values.map((_, i) => w?.weights[i] ?? 0);
@@ -230,7 +230,7 @@ function NeverTab({ people, catalog, problems, onChange }: { people: PeopleModel
   };
   return (
     <div className="panel">
-      <p className="muted pp-hint">A bot never has both of a pair: a rolled trait that would clash is rolled again. A kid who's an ex-clan pro, a silent troll.</p>
+      <p className="muted pp-hint">A bot never has both of a pair: a random trait that would clash is picked again. A kid who's an ex-clan pro, a silent troll.</p>
       <ProblemList list={problems.filter((p) => p.where.startsWith("conflict:"))} />
       <div className="pp-never">
         {people.conflicts.map((_, i) => (

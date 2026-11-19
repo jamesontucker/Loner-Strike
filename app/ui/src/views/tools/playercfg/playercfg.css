@@ -60,7 +60,13 @@
 .pc-swatch { width: 28px; height: 28px; border-radius: 3px; border: 2px solid rgba(0, 0, 0, .5); cursor: pointer; padding: 0; }
 .pc-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bone); }
 .pc-swatch:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.pc-custom input { width: 40px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
+/* Custom…: a dashed "+" box over the browser's color picker (which stays clickable, see-through) */
+.pc-custom { position: relative; display: inline-grid; place-items: center; width: 28px; height: 28px; border: 2px dashed var(--bone-faint); border-radius: 3px; color: var(--bone); cursor: pointer; }
+.pc-custom:hover { border-color: var(--bone); }
+.pc-custom[data-on] { border-style: solid; border-color: rgba(0, 0, 0, .5); box-shadow: 0 0 0 2px var(--bone); }
+.pc-custom > span { font: 700 18px/1 var(--text); pointer-events: none; text-shadow: 0 0 2px rgba(0, 0, 0, .8); }
+.pc-custom:focus-within { outline: 2px solid var(--signal); outline-offset: 2px; }
+.pc-custom input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; opacity: 0; }
 
 .pc-num { display: inline-flex; align-items: center; gap: 8px; width: 100%; }
 .pc-num input[type="range"] { flex: 1 1 100px; min-width: 60px; }

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useActions } from "../../api";
 import { useNav } from "../../store";
 import { useTools } from "../../stores/tools";
-import { BusyButton, LoadError, Skeleton, useToast } from "../../ui";
+import { BusyButton, Info, LoadError, Skeleton, useToast } from "../../ui";
 import { Empty, Loading } from "./common";
 import { Viewer } from "./MapViewer";
 import { openRecording, ToolsError, useRecordings, useReplay, useTrace } from "./toolsApi";
@@ -60,8 +60,15 @@ function RecordingList() {
           title="No recordings yet"
           text={
             <>
-              Run the map simulator to make one: bots play the map and the match is recorded for you to watch here. Recordings from the gm_simrec plugin (a .csv per match) work too
-              {list.data?.folders?.[0] ? <>: open one, or put them in <span className="mono">{list.data.folders[0]}</span></> : ""}.
+              Replays come from the Map simulator: bots play a map and you watch where they went.
+              <Info
+                text={
+                  <>
+                    A recording is a .csv file per match, written by the gm_simrec plugin while the simulator runs. Open one with Open a recording…
+                    {list.data?.folders?.[0] ? <>, or put them in <span className="mono">{list.data.folders[0]}</span> and they show up here</> : ""}.
+                  </>
+                }
+              />
             </>
           }
         >

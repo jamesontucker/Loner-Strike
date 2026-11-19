@@ -2047,3 +2047,5 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .mode-src { display: block; }
 .src-badge.src-builtin { opacity: .75; }
 .src-filter { margin: 0 0 10px; }
+/* the map viewer's "In this map": a class's words first, its classname small and quiet beside them (tools/panels/Inspector.tsx) */
+.tools-groups summary .tools-cls.mono { font-size: 11px; color: var(--bone-faint); opacity: .75; margin-left: 4px; }

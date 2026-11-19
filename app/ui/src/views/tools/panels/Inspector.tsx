@@ -16,6 +16,82 @@ import { matches, searchWords } from "../common/search";
 /** Keys whose value names another entity's targetname. */
 const LINK_KEYS = new Set(["target", "killtarget", "master", "netname"]);
 
+/** "In this map": what each class is, in words (the classname stays beside it, small). */
+const CLASS_WORDS: Record<string, string> = {
+  info_player_start: "CT spawns",
+  info_player_deathmatch: "T spawns",
+  info_vip_start: "VIP start",
+  func_bomb_target: "Bomb sites",
+  info_bomb_target: "Bomb sites (points)",
+  func_buyzone: "Buy zones",
+  func_hostage_rescue: "Hostage rescue zones",
+  info_hostage_rescue: "Hostage rescue points",
+  hostage_entity: "Hostages",
+  func_vip_safetyzone: "VIP escape zones",
+  func_escapezone: "Escape zones",
+  armoury_entity: "Weapons on the floor",
+  game_player_equip: "Starting gear",
+  info_map_parameters: "Map rules",
+  func_breakable: "Breakables",
+  func_pushable: "Pushables",
+  func_door: "Doors",
+  func_door_rotating: "Rotating doors",
+  func_button: "Buttons",
+  func_rot_button: "Rotating buttons",
+  func_wall: "Solid walls (entities)",
+  func_wall_toggle: "Walls that turn on and off",
+  func_illusionary: "Not solid",
+  func_water: "Water",
+  func_ladder: "Ladders",
+  func_rotating: "Spinning parts",
+  func_train: "Moving trains",
+  func_tracktrain: "Drivable trains",
+  func_conveyor: "Conveyors",
+  func_plat: "Lifts",
+  func_mortar_field: "Mortar fields",
+  func_friction: "Slippery areas",
+  light: "Lights",
+  light_spot: "Spotlights",
+  light_environment: "Sun",
+  ambient_generic: "Sounds",
+  env_sound: "Echo zones",
+  env_sprite: "Sprites",
+  env_glow: "Glows",
+  env_beam: "Beams",
+  env_laser: "Lasers",
+  env_spark: "Sparks",
+  env_shake: "Screen shakes",
+  env_fade: "Screen fades",
+  env_explosion: "Explosions",
+  env_render: "Look changers",
+  env_fog: "Fog",
+  cycler_sprite: "Models",
+  cycler: "Models",
+  info_target: "Target points",
+  info_null: "Spot markers",
+  info_teleport_destination: "Teleport exits",
+  info_intermission: "End-of-map cameras",
+  path_corner: "Path points",
+  path_track: "Track points",
+  trigger_multiple: "Triggers",
+  trigger_once: "One-time triggers",
+  trigger_hurt: "Hurt zones",
+  trigger_push: "Push zones",
+  trigger_teleport: "Teleports",
+  trigger_gravity: "Gravity zones",
+  trigger_camera: "Cameras",
+  trigger_relay: "Relays",
+  trigger_changetarget: "Target changers",
+  trigger_auto: "Start-of-map triggers",
+  multi_manager: "Event timers",
+  multisource: "Locks (all of)",
+  game_text: "On-screen messages",
+  game_end: "Map enders",
+  game_score: "Score givers",
+  weaponbox: "Dropped weapons",
+};
+const classWords = (cls: string) => CLASS_WORDS[cls] ?? cls;
+
 const nameOf = (e: MapEntity) => e.keys.targetname || (e.origin ? fmtVec(e.origin) : e.model ?? `#${e.index}`);
 
 export function Inspector({ entities, meshes, overlays }: { entities: MapEntity[]; meshes: ModelMesh[]; overlays: Overlays }) {
@@ -119,10 +195,11 @@ function EntityList({ entities, onPick }: { entities: MapEntity[]; onPick: (e: M
     for (const e of entities) {
       if (e.classname === "worldspawn") continue;
       // class, its names and links, the model, and any key's value ("bombtarget", "hostage")
-      if (w.length && !matches(w, e.classname, e.model, ...Object.values(e.keys))) continue;
+      if (w.length && !matches(w, e.classname, classWords(e.classname), e.model, ...Object.values(e.keys))) continue;
       m.set(e.classname, [...(m.get(e.classname) ?? []), e]);
     }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // the ones with words first, by those words; then the rest by classname
+    return [...m.entries()].sort((a, b) => Number(!(a[0] in CLASS_WORDS)) - Number(!(b[0] in CLASS_WORDS)) || classWords(a[0]).localeCompare(classWords(b[0])));
   }, [entities, q]);
   return (
     <section className="tools-panel" aria-label="Entities">
@@ -133,7 +210,15 @@ function EntityList({ entities, onPick }: { entities: MapEntity[]; onPick: (e: M
         {groups.map(([cls, list]) => (
           <details key={cls} open={!!q.trim() && groups.length <= 3}>
             <summary>
-              <span className="mono">{cls}</span> <span className="muted">{list.length}</span>
+              {cls in CLASS_WORDS ? (
+                <>
+                  {classWords(cls)} <span className="muted">({list.length})</span> <span className="tools-cls mono">{cls}</span>
+                </>
+              ) : (
+                <>
+                  <span className="mono">{cls}</span> <span className="muted">({list.length})</span>
+                </>
+              )}
             </summary>
             <ul className="tools-links">
               {list.slice(0, 200).map((e) => (

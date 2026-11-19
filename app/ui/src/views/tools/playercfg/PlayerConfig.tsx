@@ -243,8 +243,10 @@ export default function PlayerConfig() {
             {COLOURS.map(([name, c]) => (
               <button key={c} type="button" className="pc-swatch" style={{ background: toHex(c) }} aria-pressed={s.cl_crosshair_color === c} aria-label={name} title={name} onClick={() => set("cl_crosshair_color", c)} />
             ))}
-            <label className="pc-custom" title="Any color">
-              <input type="color" value={toHex(s.cl_crosshair_color)} aria-label="Any color" onChange={(e) => set("cl_crosshair_color", fromHex(e.target.value))} />
+            {/* any other color: a "+" box (the picked color shows in it), not another swatch */}
+            <label className="pc-custom" title="Custom…" data-on={!COLOURS.some(([, c]) => c === s.cl_crosshair_color) || undefined} style={COLOURS.some(([, c]) => c === s.cl_crosshair_color) ? undefined : { background: toHex(s.cl_crosshair_color) }}>
+              <span aria-hidden="true">+</span>
+              <input type="color" value={toHex(s.cl_crosshair_color)} aria-label="Custom color" onChange={(e) => set("cl_crosshair_color", fromHex(e.target.value))} />
             </label>
           </span>
         </Row>
