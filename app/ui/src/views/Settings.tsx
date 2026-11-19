@@ -484,7 +484,7 @@ export function SettingsPage({
           </label>
         )}
         {count > 6 && (
-          <input className="search full" type="search" placeholder={`Filter ${count} settings, like "round" or "gravity"`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter settings" />
+          <input className="search full" type="search" placeholder={`Filter ${count} settings, like ${FILTER_EXAMPLES[cat] ?? '"time"'}`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter settings" />
         )}
         {tabs.length > 1 && !searching && (
           <div className="chips rule-tabs" role="tablist" aria-label={`${title} sections`}>
@@ -509,6 +509,9 @@ export function SettingsPage({
 }
 
 /** Rules and Fun & effects with no game running: the next game's settings. */
+/** The filter box's examples: settings that are on that page (Bots, Rules, Fun & effects). */
+const FILTER_EXAMPLES: Record<number, string> = { 1: '"difficulty" or "weapons"', 2: '"round" or "respawn"', 3: '"gravity" or "ammo"' };
+
 export function SavedSettingsPage({ cat }: { cat: 2 | 3 }) {
   const title = cat === 2 ? "Rules" : "Fun & effects";
   return (

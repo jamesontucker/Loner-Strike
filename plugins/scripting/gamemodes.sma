@@ -224,7 +224,7 @@ new const SETTINGS[][SettingData] =
 	{ "zp_surv_enabled",    "Survivor rounds",  "1 0",                       "On Off",                              CAT_MATCH,  SC_MODE,   "" },
 
 	{ "gm_weapons",         "Weapons",          "0 1 2 3 4 5",              "All Knives Pistols Deagle AWP Scout", CAT_FUN,    SC_MODE,   "w" },
-	{ "sv_gravity",         "Gravity",          "800 600 400 210",          "Normal|Low|Lower|Scoutzknivez",       CAT_FUN,    SC_MODE,   "" },
+	{ "sv_gravity",         "Gravity",          "800 600 400 210",          "Normal|Low|Lower|Scoutz & Knivez",    CAT_FUN,    SC_MODE,   "" },
 	{ "sv_airaccelerate",   "Air control",      "10 100",                   "Normal|Surf / bhop",                  CAT_FUN,    SC_MODE,   "" },
 	{ "gm_infammo",         "Unlimited ammo",   "0 1",                      "Off On",                              CAT_FUN,    SC_MODE,   "" },
 	{ "gm_hsonly",          "Headshots only",   "0 1",                      "Off On",                              CAT_FUN,    SC_MODE,   "" },

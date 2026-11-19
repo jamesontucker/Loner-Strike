@@ -7,7 +7,7 @@ import { reloadAppInfo, reloadScan, useTarget } from "../queries";
 import { useNav } from "../store";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { Banner, BusyButton, Info, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
 import { CommunityLink, modeSource, SourceBadge, SourceFilter, useCommunity, useOrigins, type SourceKind } from "./tools/community/chip";
 import { DocsLink } from "./DocsLink";
@@ -25,13 +25,15 @@ const STUCK_MS = 20000;
 
 /** The game modes as cards, each saying how well bots play it: the same before a game (to
  *  pick the one to start in) and in one (to switch). */
-function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void }) {
+function ModeCards({ modes, current, busy, onPick, live }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void; live?: boolean }) {
   const community = useCommunity(); // (community chip)
   const origins = useOrigins(); // (origin: your own and remixed Studio modes)
   // where each came from (Built-in, Made by you, Community), with a filter on a long list
   const [only, setOnly] = useState<SourceKind | "all">("all");
   const listed = [...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => ({ m, src: modeSource(m.id, community, origins) }));
   const shown = listed.filter((x) => only === "all" || x.src.kind === only || x.m.id === current);
+  // (where a mode came from only says something when they don't all come from the same place)
+  const mixed = new Set(listed.map((x) => x.src.kind)).size > 1;
   return (
     <>
     {listed.length > 6 && <SourceFilter label="Show modes" kinds={listed.map((x) => x.src.kind)} value={only} onChange={setOnly} />}
@@ -43,9 +45,10 @@ function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name
             <span className="mode-icon">
               <Icon name={m.id} size={26} />
             </span>
+            {live && current === m.id && <span className="tag mode-now">Playing now</span>}
             <span className="mode-name">{busy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
             {m.desc && <span className="mode-desc">{m.desc}</span>}
-            <span className="mode-src"><SourceBadge s={src} /></span>
+            {mixed && <span className="mode-src"><SourceBadge s={src} /></span>}
             <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
           </button>
         );
@@ -163,7 +166,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
       <div className="idle">
         <div className="idle-hero">
           <h1>Not set up yet</h1>
-          <p>Loner-Strike adds the bots, the modes and the Game Mode Menu to {game}. Setup takes a couple of minutes, and everything it changes is backed up.</p>
+          <p>Loner-Strike adds the bots, the modes and the Game Mode Menu to {game}. Setup usually takes 2 to 8 minutes, depending on what you pick, and everything it changes is backed up.</p>
           {ON_THIS_COMPUTER ? (
             <button className="btn launch" onClick={openSetup}>
               <Icon name="play" size={22} />
@@ -221,8 +224,22 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           </Banner>
         )}
         <div className="start-box">
-          {optsQ.isError && !opts && (
-            <LoadError text="Couldn't load the modes and bot settings. Starting now uses the game's last settings." onRetry={() => optsQ.refetch()} />
+          {/* the modes didn't load (or came back unreadable): said where the Mode picker goes, with Retry */}
+          {!opts && !optsQ.isLoading && !optsQ.isFetching && (
+            <div className="field">
+              <span>Mode<Info text="Starting now uses the game's last mode and settings." /></span>
+              <div className="mode-load-error" role="alert">
+                <span>Couldn't load modes</span>
+                <span aria-hidden="true">·</span>
+                <button type="button" className="link inline" onClick={() => void optsQ.refetch()}>Retry</button>
+              </div>
+            </div>
+          )}
+          {!opts && optsQ.isFetching && !optsQ.isLoading && (
+            <div className="field">
+              <span>Mode</span>
+              <div className="mode-load-error" aria-live="polite"><span className="spinner" aria-hidden="true" /> Loading modes…</div>
+            </div>
           )}
           {optsQ.isLoading && <div className="start-skeleton"><Skeleton rows={2} /></div>}
           {modes.length > 0 && mode && (
@@ -248,7 +265,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             </Sheet>
           )}
           <div className="field">
-            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favorites. Open the list and type to search." /></span>
+            <span id="start-map">Map<Info text="Recently played maps and favorites come first, then maps made for this mode. Open the list and type to search." /></span>
             <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={(m) => setDraft({ map: m })} labelledBy="start-map" />
           </div>
         </div>
@@ -376,7 +393,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
       )}
       <section>
         <SectionHead docs="playing" title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
-        <ModeCards modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
+        <ModeCards live modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
         {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link /></p>}{/* (community) */}
       </section>
       {recent.length > 0 && (
@@ -403,7 +420,7 @@ const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20",
 /** A touch screen: the search box doesn't take focus by itself (that opens the keyboard over the list). */
 const TOUCH = window.matchMedia("(pointer: coarse)").matches;
 
-/** A map list you can type into: the mode's maps, recent and favorites first. */
+/** A map list you can type into: recent and favorites first, then the mode's maps. */
 function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelledBy }: { value: string; maps: MapInfo[]; mode?: string; modeName?: string; recent: MapInfo[]; favs: MapInfo[]; onPick: (m: string) => void; labelledBy: string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -428,9 +445,9 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
   const groups: [string, MapInfo[]][] = query
     ? [["", found]]
     : [
-        [`Maps for ${modeName ?? "this mode"}`, forMode],
         ["Recently played", recent],
         ["Favorites", favs],
+        [`Maps for ${modeName ?? "this mode"}`, forMode],
         ["All maps", have],
       ];
   const shown = groups.map(([label, list]) => [label, list.slice(0, query ? 80 : 200)] as [string, MapInfo[]]).filter(([, l]) => l.length);

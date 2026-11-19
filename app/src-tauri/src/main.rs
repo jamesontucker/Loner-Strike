@@ -267,6 +267,14 @@ async fn check_for_update(app: tauri::AppHandle) {
 
     let Ok(updater) = app.updater_builder().on_before_exit(before_update_exit).build() else { return };
     let Ok(Some(update)) = updater.check().await else { return };
+    // the app shows it too (a line at the top and Settings), so "Later" isn't the last word on it
+    *app_api::PENDING.lock().unwrap() = Some(update.clone());
+    {
+        use tauri::Manager;
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.eval("window.dispatchEvent(new CustomEvent('ls-app-changed'))");
+        }
+    }
     // (the same rule as Settings' Install: never in the middle of a setup or a restore, which
     // the exit would cut off)
     let busy = || crate::setup::current().state == "running" || crate::backup::restoring_any();

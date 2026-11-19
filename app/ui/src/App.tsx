@@ -8,7 +8,7 @@ import { confirmLeave, forgetUnsavedEdits, hasUnsavedEdits, isPageEntry, useNav,
 import { usePlayDrafts } from "./stores/playDraft";
 import { useToolPage } from "./stores/toolPage";
 import { waitsForRestart, type AppInfo, type GameState, type Online, type ServerInfo } from "./types";
-import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
+import { applyScale, BusyButton, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
@@ -195,6 +195,13 @@ function Shell() {
     void take();
     window.addEventListener("ls-open", take);
     return () => window.removeEventListener("ls-open", take);
+  }, []);
+
+  // the app found something new by itself (an update, at start): /api/app again
+  useEffect(() => {
+    const changed = () => reloadAppInfo();
+    window.addEventListener("ls-app-changed", changed);
+    return () => window.removeEventListener("ls-app-changed", changed);
   }, []);
 
   // the macOS menu bar: "section:<id>" or "updates"
@@ -415,7 +422,7 @@ function Shell() {
             ))}
           </div>
         )}
-        <nav className="nav" aria-label="Sections">
+        <FadingNav>
           {/* with a server open, these still go to your own game: said, and a little dimmer */}
           {openServer && (
             <div className="nav-mine-head" title={`These pages are your own game${myGameName ? ` (${myGameName})` : ""}, not ${current?.name ?? "the server"}`}>
@@ -456,7 +463,7 @@ function Shell() {
               )}
             </div>
           ))}
-        </nav>
+        </FadingNav>
         {/* Settings stays in view however short the window is */}
         <div className="nav-pinned">{navButton(NAV.find((n) => n.id === "settings")!)}</div>
         <div className="side-foot">
@@ -481,6 +488,7 @@ function Shell() {
           {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
           <WhatsNew version={app?.version} />
+          {section !== "settings" && <AppUpdateBar app={localApp} />}
           {/* (not on the servers list: it's about your servers, which show their own updates) */}
           {!setupOpen && !current?.shared && !(section === "servers" && !openServer) && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} withOthers={!openServer && section !== "servers"} />}
           {state === null ? (
@@ -593,6 +601,84 @@ function Shell() {
 }
 
 /** How many servers the sidebar lists before "All servers" */
+/** A newer Loner-Strike: one line at the top of every page (Settings has its own Updates
+ *  section), with the same install as Settings. Hidden for that version once closed. */
+const UPDATE_HIDDEN = "ls.updateHidden";
+function AppUpdateBar({ app }: { app: AppInfo | null }) {
+  const toast = useToast();
+  const { run, busy } = useActions();
+  const version = app?.update?.version;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(UPDATE_HIDDEN);
+    } catch {
+      return null;
+    }
+  });
+  // the update installed and the app is restarting: the button stays busy until it does
+  const [restarting, setRestarting] = useState(false);
+  if (!ON_THIS_COMPUTER || !version || hidden === version) return null;
+  const hide = () => {
+    try {
+      localStorage.setItem(UPDATE_HIDDEN, version);
+    } catch {
+      /* (not remembered: hidden until the app starts again) */
+    }
+    setHidden(version);
+  };
+  // (the same key and words as Settings' Install, so both show it's going in)
+  const install = () => run("app:update:install", async () => {
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/update/install").catch(() => ({ error: "The update didn't install." }));
+    if (r.error) toast(r.error, true);
+    else {
+      setRestarting(true);
+      toast("Installed. Restarting…");
+    }
+  }, `Installing Loner-Strike ${version}…`);
+  return (
+    <div className="files-bar app-update-bar" role="status">
+      <span>Loner-Strike {version} is out</span>
+      <span className="files-bar-actions">
+        <button type="button" className="btn small" onClick={() => useNav.getState().go("settings", "updates")}>Details</button>
+        <BusyButton className="btn small primary" busy={busy("app:update:install") || restarting} label="Install" busyLabel={restarting ? "Restarting…" : "Installing…"} onClick={install} />
+        <button type="button" className="files-bar-close" aria-label={`Hide until the next update`} title="Hide until the next update" onClick={hide}>×</button>
+      </span>
+    </div>
+  );
+}
+
+/** The sidebar's sections, fading out at the bottom while more of them are below (a Mac's
+ *  overlay scrollbar shows nothing until you scroll, styles.css .nav[data-more]). */
+function FadingNav({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const n = ref.current;
+    if (!n) return;
+    const check = () => {
+      if (n.scrollHeight - n.scrollTop - n.clientHeight > 4) n.dataset.more = "below";
+      else delete n.dataset.more;
+    };
+    // (the nav's own size, and each part of it: folding Servers or Tools changes what's below)
+    const sizes = new ResizeObserver(check);
+    const watchKids = () => {
+      sizes.disconnect();
+      sizes.observe(n);
+      for (const c of n.children) sizes.observe(c);
+      check();
+    };
+    const kids = new MutationObserver(watchKids);
+    kids.observe(n, { childList: true });
+    watchKids();
+    n.addEventListener("scroll", check, { passive: true });
+    return () => {
+      sizes.disconnect();
+      kids.disconnect();
+      n.removeEventListener("scroll", check);
+    };
+  }, []);
+  return <nav ref={ref} className="nav" aria-label="Sections">{children}</nav>;
+}
+
 const SIDE_SERVERS = 8;
 const SERVERS_FOLD = "ls.serversOpen";
 
@@ -856,9 +942,9 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
           <div className="strip-meta">
             {mode} ·{" "}
             <button type="button" className="strip-link" title="Players" onClick={() => openPage("players")}>
-              {st.humans} {st.humans === 1 ? "person" : "people"}, {st.bots} {st.bots === 1 ? "bot" : "bots"}
+              {st.humans + st.bots}/{st.maxplayers} players
             </button>
-            <span className="strip-slots"> of {st.maxplayers}</span>
+            {st.bots > 0 && <span className="strip-slots"> ({st.bots} {st.bots === 1 ? "bot" : "bots"})</span>}
             {st.timelimit > 0 && st.timeleft >= 0 ? ` · ${clock(st.timeleft)} left` : ""}
             {st.nextmap ? <span className="strip-next"> · next {st.nextmap}</span> : null}
             {st.paused ? <span className="strip-pill">Paused</span> : null}

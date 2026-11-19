@@ -143,7 +143,7 @@ export function ServerBrowser() {
       <SectionHead
         docs="find-servers"
         title="Find servers"
-        note="Servers other Loner-Strike players share, your favorites and the ones you've played on, and games on your own network. Double-click a server to join it."
+        note="Servers other Loner-Strike players share, your favorites and the ones you've played on, and games on your own network. Double-click a server to join."
       >
         <DiscordButton />
       </SectionHead>
@@ -194,7 +194,7 @@ export function ServerBrowser() {
                     <span className="c-players" role="gridcell" title={i ? `${humans(i)} ${humans(i) === 1 ? "person" : "people"} of ${i.max_players} slots` : undefined}>{i ? `${humans(i)} / ${i.max_players}` : ""}</span>
                     <span className="c-bots" role="gridcell">{i ? i.bots : ""}</span>
                     <span className="c-map" role="gridcell">{i?.map ?? ""}</span>
-                    <span className="c-ping" role="gridcell">{r.answered && r.ping !== null ? `${r.ping} ms` : r.answered ? "" : "Not answering"}</span>
+                    <span className="c-ping" role="gridcell">{r.answered && r.ping !== null ? `${r.ping} ms` : r.answered ? "" : "No reply"}</span>
                     {tab === "history" && <span className="c-last" role="gridcell">{r.last_played ? ago(r.last_played) : ""}</span>}
                   </div>
                 );
@@ -217,7 +217,7 @@ export function ServerBrowser() {
             )}
             <button type="button" className="btn small" disabled={!row} onClick={() => row && setDetails(row.address)}>Server info</button>
             <BusyButton className="btn small" busy={loading} label="Refresh all" busyLabel="Refreshing…" onClick={() => refresh()} />
-            <BusyButton className="btn primary small" busy={busy("browser:connect")} disabled={!row} label="Connect" busyLabel="Joining…" onClick={() => row && join(row)} />
+            <BusyButton className="btn primary small" busy={busy("browser:connect")} disabled={!row} label="Join" busyLabel="Joining…" onClick={() => row && join(row)} />
           </div>
         </div>
       </div>
@@ -301,13 +301,14 @@ function ServerInfo({ address, row, onClose, onConnect, joining, onFresh }: { ad
           {d?.ping !== undefined && <div><dt>Latency</dt><dd>{d.ping} ms</dd></div>}
           {info && <div><dt>Valve Anti-Cheat</dt><dd>{info.secure ? "Secure" : "Not secure"}</dd></div>}
         </dl>
-        <div className="browser-table">
+        {/* (a server that didn't answer has nobody to list: the error above says it, no empty table) */}
+        {!(d?.error && !(d.players ?? []).length) && <div className="browser-table">
           <div className="browser-row head players-row" role="row">
             <span role="columnheader">Player name</span><span role="columnheader">Score</span><span role="columnheader">Time</span>
           </div>
           <div className="browser-body short">
             {!d ? <div className="browser-note"><Skeleton rows={2} /></div> : (d.players ?? []).length === 0 ? (
-              <p className="browser-note">{d.error ? "" : "Nobody's on right now."}</p>
+              <p className="browser-note">Nobody's on right now.</p>
             ) : (
               d.players!.map((p, n) => (
                 <div key={`${p.name}:${n}`} className="browser-row players-row" role="row">
@@ -316,7 +317,7 @@ function ServerInfo({ address, row, onClose, onConnect, joining, onFresh }: { ad
               ))
             )}
           </div>
-        </div>
+        </div>}
         {info?.password && (
           <label className="field">
             <span>Password</span>
@@ -324,7 +325,7 @@ function ServerInfo({ address, row, onClose, onConnect, joining, onFresh }: { ad
           </label>
         )}
         <div className="row">
-          <BusyButton className="btn primary" busy={joining} disabled={!info || (info.password && !password.trim())} label="Join game" busyLabel="Joining…" onClick={() => onConnect(row ?? { address, info, ping: d?.ping ?? null, answered: !!d?.info }, password)} />
+          <BusyButton className="btn primary" busy={joining} disabled={!info || (info.password && !password.trim())} label="Join" busyLabel="Joining…" onClick={() => onConnect(row ?? { address, info, ping: d?.ping ?? null, answered: !!d?.info }, password)} />
           <BusyButton className="btn" busy={busy(`browser:info:${address}`)} label="Refresh" busyLabel="Refreshing…" onClick={load} />
           <button type="button" className="btn" onClick={onClose}>Close</button>
         </div>

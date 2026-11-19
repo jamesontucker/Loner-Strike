@@ -247,7 +247,8 @@ async fn api_phone_set(State(st): State<Shared>, headers: HeaderMap, on: Option<
 }
 
 // ---- version and updates ---------------------------------------------------
-static PENDING: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
+/// The update found (by Settings' check, the menu's or the one at start), ready to install.
+pub(crate) static PENDING: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
 
 async fn api_app(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();

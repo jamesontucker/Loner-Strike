@@ -18,6 +18,8 @@
      were dim #c2c9b7 4.4 / 3.4, faint #aeb7a2 3.6 / 2.8, signal #c4b550 3.6 / 2.8 */
   --bone-dim: #d0d6c8;
   --bone-faint: #c9cfc1;
+  /* placeholder text in fields: clearly dimmer than a typed value (3.4:1 on --bg), and italic */
+  --placeholder: #959c8e;
   --signal: #d9cf8d;
   --signal-ink: #26240f;
   /* 4.5:1 on --panel-2 too (were 3.2-4.1 on --panel, 2.5-3.2 on --panel-2) */
@@ -86,14 +88,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--bone-faint);
   font-size: 13px; font-weight: 600;
 }
-/* a short window (a 13" laptop): a little tighter, so every section still fits */
-@media (min-width: 761px) and (max-height: 1000px) {
-  .nav-item { padding-top: 3px; padding-bottom: 3px; }
-  .nav-group { margin-top: 14px; margin-bottom: 3px; }
-  .brand { padding-bottom: 8px; }
-  .game-switch { margin-bottom: 6px; }
-  .drag-strip { height: 32px; }
-}
 .nav-item {
   width: 100%;
   display: flex; align-items: center; gap: 11px;
@@ -107,6 +101,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .nav-item:hover { background: rgba(233, 227, 207, .06); color: var(--bone); }
 .nav-item[aria-current="page"] { background: var(--panel); color: var(--bone); box-shadow: var(--raised); }
 .nav-item[aria-current="page"] svg { color: var(--signal); }
+/* a short window (a 13" laptop, 1440x900): tighter, so every section still fits. (After .nav-item:
+   before it, the base rule won and nothing got tighter.) */
+@media (min-width: 761px) and (max-height: 1000px) {
+  .nav-item { padding-top: 2px; padding-bottom: 2px; }
+  .nav-group { margin-top: 10px; margin-bottom: 2px; }
+  .brand { padding-bottom: 8px; }
+  .game-switch { margin-bottom: 6px; }
+  .drag-strip { height: 32px; }
+}
+/* more sections below than fit: the list fades out at the bottom (App.tsx sets data-more; an
+   overlay scrollbar, as on a Mac, shows nothing until you scroll) */
+.nav[data-more="below"] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), rgba(0,0,0,.08)); mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), rgba(0,0,0,.08)); }
 /* Servers: a header that folds the list of servers under it (App.tsx ServersNav) */
 .nav-fold .fold-caret { margin-left: auto; flex: none; color: var(--bone-faint); }
 .nav-fold .attn + .fold-caret { margin-left: 6px; }
@@ -305,6 +311,11 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 }
 .mode:hover { background: var(--panel-2); }
 .mode[aria-pressed="true"] { border-color: var(--signal); background: var(--panel-2); }
+.mode { position: relative; }
+.mode > .bots-note { align-self: end; }
+/* Play: the modes didn't load, said where the Mode picker goes */
+.mode-load-error { display: flex; align-items: center; gap: 8px; min-width: 240px; height: 40px; box-sizing: border-box; padding: 0 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; border-left: 3px solid #d9826b; color: var(--bone); }
+.tag.mode-now { position: absolute; top: 12px; right: 12px; background: var(--signal); color: var(--signal-ink); }
 .mode:disabled, .preset:disabled { cursor: progress; }
 .mode:disabled:not([aria-busy="true"]), .preset:disabled:not([aria-busy="true"]) { opacity: .6; }
 .mode-icon { color: var(--bone-dim); margin-bottom: 6px; }
@@ -405,7 +416,7 @@ select, .search {
   box-shadow: var(--sunken); padding: 7px 10px; font: inherit; font-size: 15px;
 }
 .search { flex: 1 1 260px; max-width: 420px; }
-.search::placeholder { color: var(--bone-faint); }
+.search::placeholder { color: var(--placeholder); font-style: italic; }
 /* Maps: the search gives way first, so Show, Sort and "More maps from Community" stay on its line */
 .search.maps-search { flex-basis: 130px; min-width: 130px; }
 /* Every text field the app's look by default, so a field without a class is never the browser's
@@ -417,7 +428,7 @@ select, .search {
   background: var(--bg); color: var(--bone); border: 0; border-radius: 2px;
   box-shadow: var(--sunken); padding: 0.3em 0.55em; font: inherit; line-height: 1.35;
 }
-:where(input, textarea)::placeholder { color: var(--bone-faint); opacity: 1; }
+:where(input, textarea)::placeholder { color: var(--placeholder); font-style: italic; opacity: 1; }
 :where(input, textarea, select):disabled { opacity: .55; cursor: default; }
 :where(input, textarea, select):focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
 :where(input, textarea)[readonly] { color: var(--bone-dim); }
@@ -561,6 +572,7 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 .feed { list-style: none; padding: 0; margin: 0; }
 .feed li { display: grid; grid-template-columns: 54px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(41,44,33,.6); font-size: 15px; }
 .feed time { color: var(--bone-faint); font-size: 13px; }
+.feed li.empty { display: block; border-bottom: 0; padding: 10px 0; }
 .feed b { font-weight: 700; }
 .feed .t { color: var(--t); }
 .feed .ct { color: var(--ct); }
@@ -734,8 +746,12 @@ fieldset.plain { display: contents; border: 0; margin: 0; padding: 0; min-width:
 .setup-steps li.done span { background: var(--ok); color: #1f2412; box-shadow: none; }
 .setup-pane h1 { font: 400 46px/1 var(--stencil); margin: 14px 0 10px; }
 .setup-pane h2 { margin-bottom: 16px; font-size: 26px; }
-.setup-pane.welcome { text-align: center; justify-content: center; align-items: center; gap: 4px; padding: 10px 0; }
+.setup-pane.welcome { text-align: center; justify-content: flex-start; align-items: center; gap: 4px; padding: 10px 0; }
 .setup-pane.welcome p { max-width: 560px; }
+/* centered when it fits, and scrolls from the top (the logo) when it doesn't: auto margins, not
+   justify-content: center, which would push the top out of reach in a short window */
+.setup-pane.welcome > :first-child { margin-top: auto; }
+.setup-pane.welcome > :last-child { margin-bottom: auto; }
 .tagline { color: var(--signal); font-weight: 700; font-size: 18px; }
 .big-btn { font-size: 18px; padding: 12px 26px; }
 .setup-nav { display: flex; justify-content: space-between; margin-top: auto; flex: none; padding-top: 16px; border-top: 1px solid var(--bevel-lo); }
@@ -938,7 +954,7 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 
 /* short windows: tighter still, so the sidebar never needs to scroll */
 @media (max-height: 760px) {
-  .nav-item { padding: 4px 10px; }
+  .nav-item { padding: 2px 10px; }
   .nav-group { margin: 6px 10px 1px; font-size: 12px; }
   .brand { padding-bottom: 10px; font-size: 21px; }
 }
