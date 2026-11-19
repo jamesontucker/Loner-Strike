@@ -145,6 +145,35 @@ class Tests(unittest.TestCase):
         again = sl.Registry(r.path)
         self.assertEqual(again.servers["a:1"]["off"], 1, "the count is kept over a restart of the list")
 
+    def test_one_server_by_name_and_ip_is_listed_once(self):
+        info = sl.parse_info(INFO_BODY)
+        on = {"ls_list": "1"}
+        # by IP first, then by name: the name takes over, keeping when it joined
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        self.assertTrue(r.update("8.8.8.8:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertTrue(r.update("play.example.com:27015", info, on, 1010, "8.8.8.8:27015"))
+        self.assertEqual(r.addresses(), ["play.example.com:27015"])
+        self.assertEqual(r.public(1020)[0]["since"], 1000)
+        # the IP again (the app signing up by IP): still the one, under its name
+        self.assertTrue(r.update("8.8.8.8:27015", info, on, 1030, "8.8.8.8:27015"))
+        self.assertEqual(r.addresses(), ["play.example.com:27015"])
+        # a second name for it: the first stays
+        self.assertTrue(r.update("cs.example.com:27015", info, on, 1040, "8.8.8.8:27015"))
+        self.assertEqual(r.addresses(), ["play.example.com:27015"])
+        # another port on the same machine is another server
+        self.assertTrue(r.update("8.8.8.8:27016", info, on, 1050, "8.8.8.8:27016"))
+        self.assertEqual(sorted(r.addresses()), ["8.8.8.8:27016", "play.example.com:27015"])
+        # a list saved before this (both kept): shown once, by name
+        old = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        old.servers = {"8.8.8.8:27015": {"since": 1, "seen": 1000, "info": info},
+                       "play.example.com:27015": {"since": 2, "seen": 1000, "info": info, "ip": "8.8.8.8:27015"}}
+        self.assertEqual([s["address"] for s in old.public(1000)], ["play.example.com:27015"])
+        # and its next poll keeps just the name, from the older of the two
+        self.assertTrue(old.update("play.example.com:27015", info, on, 1100, "8.8.8.8:27015"))
+        self.assertEqual(old.addresses(), ["play.example.com:27015"])
+        self.assertEqual(old.servers["play.example.com:27015"]["since"], 1)
+        self.assertTrue(sl._is_ip("8.8.8.8:27015") and not sl._is_ip("play.example.com:27015"))
+
     def test_rate_limit(self):
         lim = sl.RateLimit(2)
         self.assertTrue(lim.allow("x", 0) and lim.allow("x", 1))
