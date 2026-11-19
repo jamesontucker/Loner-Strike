@@ -518,7 +518,10 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
   await page.getByTestId("studio-test").click();
   const tab = page.getByTestId("studio-testrun");
   await expect(tab).toContainText("Starting a hidden server on de_dust2… ");
+  // (narrow: the running spinner sits in the More menu with the Test run button)
+  await more(page);
   await expect(page.getByTestId("studio-testing")).toContainText("Test run…");
+  if (await page.getByTestId("studio-more").isVisible()) await page.keyboard.press("Escape");
   await tab.getByRole("button", { name: "Cancel" }).click();
   expect(cancelled).toBe(true);
   phase = "done";
