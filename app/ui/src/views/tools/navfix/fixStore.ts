@@ -34,7 +34,19 @@ type FixView = {
   setHover: (area: number | null, point: Vec3 | null, view: ViewKind | null, mouse: { x: number; y: number } | null) => void;
   setDraft: (d: DraftInfo) => void;
   look: (point: Vec3, size?: number) => void;
+  /** the 3D view flies (hold right mouse + WASD) instead of orbiting; kept on this computer */
+  fly: boolean;
+  setFly: (fly: boolean) => void;
 };
+
+const FLY_KEY = "ls.navfix.fly";
+function savedFly(): boolean {
+  try {
+    return localStorage.getItem(FLY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export const useFix = create<FixView>((set, get) => ({
   mode: "select",
@@ -56,6 +68,15 @@ export const useFix = create<FixView>((set, get) => ({
     set({ draft });
   },
   look: (point, size = 96) => set({ focus: { point, size, at: performance.now() } }),
+  fly: savedFly(),
+  setFly: (fly) => {
+    try {
+      localStorage.setItem(FLY_KEY, fly ? "1" : "0");
+    } catch {
+      /* private window */
+    }
+    set({ fly });
+  },
 }));
 
 /** Where the camera was last put (by you or a focus), in three's units (y up): the point it

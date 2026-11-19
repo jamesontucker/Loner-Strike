@@ -37,7 +37,7 @@ function NavHint() {
   const preset = useNav((s) => s.preset);
   const seen = useNav((s) => s.hintDone);
   if (seen) return null;
-  const text = preset === "unreal" ? "Hold right mouse + WASD to fly · Alt+drag to orbit · F to frame" : preset === "hammer" ? "Z for mouse-look + WASD · drag to look · right-drag to move" : "Drag to orbit · right-drag to pan · scroll to zoom · F to fly";
+  const text = preset === "unreal" ? "Hold right mouse + WASD to fly · Alt+drag to orbit · F to frame" : preset === "hammer" ? "Hold left mouse + WASD to fly · Z for mouse-look · right-drag to move" : "Drag to orbit · right-drag to pan · scroll to zoom · F to fly";
   return (
     <div className="ed-nav-hint" role="note">
       {text}
@@ -54,6 +54,7 @@ function NavHud() {
   const speed = useNav((s) => s.speed);
   const looking = useNav((s) => s.looking);
   const preset = useNav((s) => s.preset);
+  const held = useNav((s) => s.held);
   const scale = useNav((s) => s.mapScale);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -66,7 +67,7 @@ function NavHud() {
   return (
     <div className="ed-nav-hud" aria-live="polite">
       Speed {speed + 1} <span className="muted">· {Math.round(SPEEDS[speed] * scale)} u/s</span>
-      {looking && <span className="muted"> · {preset === "hammer" ? "Z or Esc to stop" : "scroll: speed"}</span>}
+      {looking && <span className="muted"> · {preset === "hammer" ? (held ? "let go to stop" : "Z or Esc to stop") : "scroll: speed"}</span>}
     </div>
   );
 }

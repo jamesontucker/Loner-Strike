@@ -239,7 +239,7 @@ function NavChoice() {
         {NAV_PRESETS.map((n) => (
           <button key={n.id} type="button" aria-pressed={preset === n.id} title={n.tip} onClick={() => setNavPreset(n.id)}>
             {n.label}
-            {n.id === "unreal" ? " (hold right mouse + WASD)" : n.id === "blender" ? " (drag to orbit)" : " (Z to look)"}
+            {n.id === "unreal" ? " (hold right mouse + WASD)" : n.id === "blender" ? " (drag to orbit)" : " (hold left mouse + WASD)"}
           </button>
         ))}
       </div>

@@ -105,6 +105,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const q = useQuery({ queryKey: key, queryFn: ({ signal }) => openFix(map, signal), retry: false, refetchOnWindowFocus: false, staleTime: Infinity, gcTime: 0, structuralSharing: false });
   const st = q.data;
 
+  const fly = useFix((s) => s.fly);
   const [layout, setLayoutState] = useState<Layout>(savedLayout);
   const setLayout = (l: Layout) => (setLayoutState(l), saveLayout(l));
   const [links, setLinksState] = useState<LinkShow>(savedLinks);
@@ -385,7 +386,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                   </div>
                 </SceneBoundary>
               )}
-              {ready && !lost && <ModeChip mode={mode} linkFrom={linkFrom} oneWay={oneWay} setOneWay={setOneWay} onDone={() => setMode("select")} />}
+              {ready && !lost && <ModeChip mode={mode} linkFrom={linkFrom} oneWay={oneWay} setOneWay={setOneWay} onDone={() => setMode("select")} fly={fly && layout !== "top"} />}
               {ready && (
                 <div className="navfix-cam">
                   <Segmented
@@ -398,6 +399,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                     onPick={(v) => setLayout(v as Layout)}
                     label="View"
                   />
+                  {layout !== "top" && <FlySwitch />}
                 </div>
               )}
               {ready && st && <CursorHint st={st} mode={mode} linkFrom={linkFrom} oneWay={oneWay} />}
@@ -408,7 +410,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                 </div>
               )}
             </div>
-            <Status mode={mode} linkFrom={linkFrom} oneWay={oneWay} />
+            <Status mode={mode} linkFrom={linkFrom} oneWay={oneWay} fly={fly && layout !== "top"} />
           </div>
           <aside className="tools-side">
             {!st ? (
@@ -425,7 +427,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                         <Check checked={oneWay} onChange={setOneWay} label="One way (a drop)" title="A drop bots can't climb back up" />
                       </>
                     ) : (
-                      <p className="small-note">Drag on the floor. Corners snap to the grid and to the edges next door (Alt: no snapping). Right-drag moves the view.</p>
+                      <p className="small-note">Drag on the floor. Corners snap to the grid and to the edges next door (Alt: no snapping). {fly && layout !== "top" ? "Middle" : "Right"}-drag moves the view.</p>
                     )}
                   </section>
                 )}
@@ -451,26 +453,47 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   );
 }
 
-function Status({ mode, linkFrom, oneWay }: { mode: Mode; linkFrom: number | null; oneWay: boolean }) {
+/** The 3D view's camera: orbit round a point, or fly (hold right mouse + WASD) like the Map Viewer. */
+function FlySwitch() {
+  const fly = useFix((s) => s.fly);
+  const setFly = useFix((s) => s.setFly);
+  return (
+    <Segmented
+      options={[
+        ["orbit", <span key="o" title="Drag to turn round a point">Orbit</span>],
+        ["fly", <span key="f" title="Hold right mouse to look, WASD to fly, Q/E down and up, Shift faster">Fly</span>],
+      ]}
+      current={fly ? "fly" : "orbit"}
+      onPick={(v) => setFly(v === "fly")}
+      label="3D camera"
+    />
+  );
+}
+
+function Status({ mode, linkFrom, oneWay, fly }: { mode: Mode; linkFrom: number | null; oneWay: boolean; fly: boolean }) {
   const hover = useTools((s) => s.hover);
+  // Fly (a 3D view on screen): the right button looks, so drawing pans with the middle button or Shift+drag
+  const hint = fly
+    ? `${HINTS[mode].replace("right-drag pans", "middle-drag pans")}\u00a0· Hold right mouse + WASD to fly`
+    : HINTS[mode];
   return (
     <div className="tools-status" aria-live="off">
       <span className="mono">{mode === "link" && linkFrom !== null ? `Linking from ${linkFrom}${oneWay ? " (one way)" : ""}` : ""}</span>
       <span className="tools-hover mono">{hover ? <>{hover.label}{hover.point && <span className="muted"> at {fmtVec(hover.point)}</span>}</> : ""}</span>
-      <span className="tools-hint">{HINTS[mode]}</span>
+      <span className="tools-hint">{hint}</span>
     </div>
   );
 }
 
 /** What clicks do now, on the view itself: easy to miss in the bar when you're looking at the map. */
-function ModeChip({ mode, linkFrom, oneWay, setOneWay, onDone }: { mode: Mode; linkFrom: number | null; oneWay: boolean; setOneWay: (v: boolean) => void; onDone: () => void }) {
+function ModeChip({ mode, linkFrom, oneWay, setOneWay, onDone, fly }: { mode: Mode; linkFrom: number | null; oneWay: boolean; setOneWay: (v: boolean) => void; onDone: () => void; fly: boolean }) {
   if (mode === "select") return null;
   return (
     <div className={`navfix-chip navfix-chip-${mode}`} role="status" data-mode={mode}>
       <strong>{mode === "draw" ? "Drawing areas" : "Linking"}</strong>
       <span className="navfix-chip-text">
         {mode === "draw"
-          ? "Drag on the floor · right-drag pans · Alt: no snapping"
+          ? `Drag on the floor · ${fly ? "middle" : "right"}-drag pans · Alt: no snapping`
           : linkFrom === null
             ? "Click the area to link from"
             : `From ${linkFrom}: click the area it leads to`}

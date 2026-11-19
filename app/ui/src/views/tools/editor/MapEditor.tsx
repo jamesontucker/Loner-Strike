@@ -280,7 +280,7 @@ function Status() {
       : navPreset === "unreal"
         ? "Hold right mouse to look, WASD/QE to fly, scroll for speed. Alt+drag orbits, middle-drag pans. F: focus."
         : navPreset === "hammer"
-          ? "Z: mouse-look (WASD). Drag to look, right-drag to move, middle-drag to pan."
+          ? "Hold left + WASD to fly, Z: mouse-look. Right-drag moves, middle-drag pans."
           : camera === "fly"
             ? "Fly: WASD to move, Esc lets go of the mouse. F: orbit."
             : "Drag to turn, right-drag to pan, scroll to zoom. F: fly.";
@@ -299,7 +299,8 @@ function Status() {
         </span>
         <SelectionSize /> {/* P5 */}
       </span>
-      <span className="tools-hint">
+      {/* one line here (editor.css), so the full text shows on hover when the bar is narrow */}
+      <span className="tools-hint" title={`${hover?.label ? hover.label : `${t?.label}: ${t?.tip}`} ${camHint}`}>
         {hover?.label ? hover.label : `${t?.label}: ${t?.tip}`} {camHint}
       </span>
       <span>

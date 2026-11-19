@@ -50,7 +50,7 @@ import { chainOf, ioLinks } from "./ioGraph"; // P5
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
-import { NavCamera } from "./NavCamera";
+import { NavCamera, navTookPress } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
@@ -970,7 +970,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         useTools.getState().setHover(null);
         return;
       }
-      if (moved) return; // the camera turned
+      if (moved || navTookPress()) return; // the camera turned (or flew: a Hammer left-hold + WASD)
       if (!hit || hit.kind === "plane") {
         if (!additive) s.select({ brushes: [], entities: [], face: null });
       } else if (hit.kind === "brush") pickBrush(hit.id, additive);

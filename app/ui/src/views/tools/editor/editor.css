@@ -1,5 +1,8 @@
 /* The map editor (views/tools/editor). Built on the viewer's .tools-* layout. */
 .editor-page .editor-bar { gap: 8px; }
+/* the editor's hint changes as the mouse moves (hover labels, the coordinates appear): kept to one line so the
+   bar's height (and the views above it) doesn't jump, which would also cut off a right-mouse look mid-drag */
+.editor-page .tools-status > span.tools-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .editor-files { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .editor-dirty { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--signal); vertical-align: 3px; }
 .editor-busy { display: inline-flex; align-items: center; font-size: 13px; color: var(--bone-dim); white-space: nowrap; }

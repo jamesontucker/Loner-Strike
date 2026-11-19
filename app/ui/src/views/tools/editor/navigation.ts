@@ -3,7 +3,8 @@
 //                      Alt+right dolly, middle pan, left-drag on empty space moves forward and turns,
 //                      scroll moves forward/back, F focuses what's picked
 //   Blender            orbit with left-drag, right-drag pans, scroll zooms, F for fly (the old way)
-//   Hammer             Z turns mouse-look on/off (WASD while on), left-drag on empty space looks,
+//   Hammer             Z turns mouse-look on/off (WASD while on), left-drag on empty space looks
+//                      (WASD/QE fly while the left button is held, like J.A.C.K.),
 //                      right-drag moves forward/back, middle pan, scroll forward/back
 // Kept on this computer; chosen once on first open (View menu later).
 
@@ -13,7 +14,7 @@ export type NavPreset = "unreal" | "blender" | "hammer";
 export const NAV_PRESETS: { id: NavPreset; label: string; tip: string }[] = [
   { id: "unreal", label: "Unreal", tip: "Hold right mouse to look and WASD to fly, scroll for speed; Alt+drag to orbit" },
   { id: "blender", label: "Blender", tip: "Drag to orbit, right-drag to pan, scroll to zoom; F to fly" },
-  { id: "hammer", label: "Hammer", tip: "Z for mouse-look with WASD; drag to look, right-drag to move" },
+  { id: "hammer", label: "Hammer", tip: "Hold left mouse and WASD to fly, or Z for mouse-look; right-drag to move" },
 ];
 
 /** The camera speed steps (Unreal's 1-8), units per second at each. */
@@ -28,6 +29,8 @@ type NavState = {
   hudUntil: number;
   /** right mouse (Unreal) or Z (Hammer) look is on: keys go to the camera */
   looking: boolean;
+  /** Hammer: that look is a left-mouse hold (it ends when the button comes up, not with Z) */
+  held: boolean;
   /** big maps fly faster: 1 up to 4 (a map's size / 3000 units), times the speed step */
   mapScale: number;
   /** the "how to move" hint has done its job (flown once, or closed) */
@@ -51,6 +54,7 @@ export const useNav = create<NavState>((set, get) => ({
   ...load(),
   hudUntil: 0,
   looking: false,
+  held: false,
   mapScale: 1,
   hintDone: (() => {
     try {

@@ -4,6 +4,8 @@
 //            flies through it), double-click a spot to go there, F for what's picked
 //  Top-down  north up; drag (right- or middle-drag while drawing) to pan, scroll zooms
 //            toward the mouse
+//  Fly       (the 3D view's other camera) hold right mouse to look round and WASD to fly, Q/E down
+//            and up, Shift faster; left-drag looks too, middle- or Shift+drag pans, scroll as above
 // Moves glide to where they're going (a short ease), so pans, zooms and focus don't jump.
 // Both views write where they are to viewMemory, so switching keeps the same spot in view.
 
@@ -33,6 +35,8 @@ export function visibleHit(h: THREE.Intersection): boolean {
 
 /** read on each press: the page's mode is up to date there before this view's props are */
 const drawingNow = () => useFix.getState().mode === "draw";
+const flyNow = () => useFix.getState().fly;
+const FLY_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight"];
 
 type Home = { centre: THREE.Vector3; radius: number; lo: THREE.Vector3; hi: THREE.Vector3 };
 type Common = { map: string; bounds: [Vec3, Vec3] };
@@ -73,7 +77,7 @@ function usePointer() {
   }, [gl, scene, raycaster]);
 }
 
-type Drag = { kind: "turn" | "pan"; x: number; y: number; moved: boolean; button: number; depth: number };
+type Drag = { kind: "turn" | "look" | "pan"; x: number; y: number; moved: boolean; button: number; depth: number };
 
 // ---- 3D ----------------------------------------------------------------------------------------
 
@@ -84,6 +88,9 @@ function Orbit({ map, home }: Common & { home: Home }) {
   const cur = useRef({ pos: new THREE.Vector3(), target: new THREE.Vector3() });
   const goal = useRef({ pos: new THREE.Vector3(), target: new THREE.Vector3() });
   const applied = useRef(0);
+  /** Fly: the right button is held (keys fly the camera) and which keys are down */
+  const flying = useRef(false);
+  const keys = useRef(new Set<string>());
 
   const save = (touch = true) => {
     const g = goal.current;
@@ -169,6 +176,19 @@ function Orbit({ map, home }: Common & { home: Home }) {
         sph.phi = Math.max(0.03, Math.min(Math.PI * 0.94, sph.phi - dy * 0.006));
         s.pos.copy(s.target).add(new THREE.Vector3().setFromSpherical(sph));
       });
+    // Fly: turn where you're looking, standing still (the point looked at swings round you)
+    const look = (dx: number, dy: number) =>
+      both((s) => {
+        const off = s.target.clone().sub(s.pos);
+        const sph = new THREE.Spherical().setFromVector3(off);
+        sph.theta -= dx * 0.004;
+        sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + dy * 0.004));
+        s.target.copy(s.pos).add(new THREE.Vector3().setFromSpherical(sph));
+      });
+    const stopFlying = () => {
+      flying.current = false;
+      keys.current.clear();
+    };
     const pan = (dx: number, dy: number, depth: number) => {
       const h = Math.max(1, el.getBoundingClientRect().height);
       const k = (depth * 2 * TAN) / h;
@@ -181,6 +201,13 @@ function Orbit({ map, home }: Common & { home: Home }) {
       });
     };
     const down = (e: PointerEvent) => {
+      if (flyNow() && e.button === 2) {
+        drag = { kind: "look", x: e.clientX, y: e.clientY, moved: false, button: 2, depth: 0 };
+        flying.current = true;
+        // the keys come here now, wherever focus was
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        return;
+      }
       const panning = e.button === 1 || e.button === 2 || (e.button === 0 && e.shiftKey);
       if (e.button === 0 && drawingNow() && !e.shiftKey) return; // the left button draws
       if (!panning && e.button !== 0) return;
@@ -190,23 +217,36 @@ function Orbit({ map, home }: Common & { home: Home }) {
         const hit = ptr.surface(camera, ptr.ndc(e));
         if (hit) depth = hit.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3()));
       }
-      drag = { kind: panning ? "pan" : "turn", x: e.clientX, y: e.clientY, moved: false, button: e.button, depth: Math.max(MIN_DIST, depth) };
+      drag = { kind: panning ? "pan" : flyNow() ? "look" : "turn", x: e.clientX, y: e.clientY, moved: false, button: e.button, depth: Math.max(MIN_DIST, depth) };
     };
     const move = (e: PointerEvent) => {
       if (!drag) return;
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      if (!drag.moved && Math.hypot(dx, dy) < (drag.kind === "look" ? 2 : 5)) return;
       drag.moved = true;
       drag.x = e.clientX;
       drag.y = e.clientY;
       if (drag.kind === "turn") turn(dx, dy);
+      else if (drag.kind === "look") look(dx, dy);
       else pan(dx, dy, drag.depth);
       save();
       invalidate();
     };
     const up = (e: PointerEvent) => {
+      if (e.button === 2) stopFlying();
       if (drag && e.button === drag.button) drag = null;
+    };
+    // while the right button is held in Fly, WASD/QE/Shift are the camera's (not the tools' V/D/S...)
+    const keyDown = (e: KeyboardEvent) => {
+      if (!flying.current || !FLY_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      keys.current.add(e.code);
+      invalidate();
+    };
+    const keyUp = (e: KeyboardEvent) => {
+      if (keys.current.delete(e.code)) e.stopImmediatePropagation();
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -245,7 +285,13 @@ function Orbit({ map, home }: Common & { home: Home }) {
     el.addEventListener("wheel", wheel, { passive: false });
     el.addEventListener("dblclick", dbl);
     el.addEventListener("contextmenu", menu);
+    window.addEventListener("keydown", keyDown, true);
+    window.addEventListener("keyup", keyUp, true);
+    window.addEventListener("blur", stopFlying);
     return () => {
+      window.removeEventListener("keydown", keyDown, true);
+      window.removeEventListener("keyup", keyUp, true);
+      window.removeEventListener("blur", stopFlying);
       el.removeEventListener("pointerdown", down);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -259,6 +305,31 @@ function Orbit({ map, home }: Common & { home: Home }) {
   useFrame((_, dt) => {
     const c = cur.current;
     const g = goal.current;
+    // Fly: the held keys move the camera and the point it looks at together (no glide)
+    const k = keys.current;
+    if (k.size) {
+      const fwd = g.target.clone().sub(g.pos).normalize();
+      const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+      const mv = new THREE.Vector3();
+      if (k.has("KeyW")) mv.add(fwd);
+      if (k.has("KeyS")) mv.sub(fwd);
+      if (k.has("KeyD")) mv.add(right);
+      if (k.has("KeyA")) mv.sub(right);
+      if (k.has("KeyE")) mv.y += 1;
+      if (k.has("KeyQ")) mv.y -= 1;
+      if (mv.lengthSq() > 0) {
+        const fast = k.has("ShiftLeft") || k.has("ShiftRight") ? 3 : 1;
+        // big maps fly faster: about 400 units a second, up to 1200 on the biggest
+        const speed = Math.max(400, Math.min(1200, home.radius / 4)) * fast;
+        mv.normalize().multiplyScalar(speed * Math.min(dt, 0.1));
+        for (const s of [g, c]) {
+          s.pos.add(mv);
+          s.target.add(mv);
+        }
+        save();
+      }
+      invalidate();
+    }
     const left = c.pos.distanceTo(g.pos) + c.target.distanceTo(g.target);
     if (left > 0.05) {
       const a = 1 - Math.exp(-Math.min(dt, 0.1) * EASE);

@@ -29,7 +29,9 @@
 .tools-crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 1px rgba(0,0,0,.6); pointer-events: none; }
 .tools-status { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 5px 10px; font-size: 13px; color: var(--bone-dim); background: var(--side); border-top: 1px solid var(--bevel-lo); min-height: 28px; }
 .tools-status .mono { word-break: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tools-hint { color: var(--bone-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the hint wraps to a second line when the bar is narrow, so its end (often the useful part) isn't cut off */
+.tools-hint { color: var(--bone-faint); line-height: 1.35; text-wrap: pretty; }
+.tools-status > span.tools-hint { white-space: normal; overflow: visible; text-overflow: clip; }
 .tools-side { min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 10px; }
 .tools-panel { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
 .tools-panel h3 { margin: 0; font-size: 16px; }

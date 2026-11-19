@@ -16,7 +16,7 @@
 .navfix-tools button:hover { color: var(--bone); }
 .navfix-tools button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--raised); }
 .navfix-tools kbd { font: 600 11px/1 var(--text); padding: 2px 4px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
-.navfix-cam { position: absolute; top: 8px; right: 8px; }
+.navfix-cam { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .navfix-cam .seg { background: rgba(20, 24, 17, .8); }
 .navfix-page .tools-status { grid-template-columns: auto minmax(0, 1fr) minmax(0, auto); }
 .navfix-page .tools-status > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

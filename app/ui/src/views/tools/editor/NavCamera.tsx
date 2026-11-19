@@ -23,9 +23,16 @@ class NavControls extends THREE.EventDispatcher<{ change: object }> {
   }
 }
 
+/** Hammer: the left button is down on empty 3D space (a camera hold if a move key comes) */
+let hammerLeftDown = false;
+/** Hammer: this left press became a camera hold (so letting go doesn't also pick what's under it) */
+let hammerHeld = false;
+export const navTookPress = () => hammerHeld;
+
 /** True when the key belongs to the camera right now (Shortcuts.ts leaves it alone). */
 export function navWantsKey(e: KeyboardEvent): boolean {
   const n = useNav.getState();
+  if (hammerLeftDown && n.preset === "hammer" && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) return true;
   if (n.looking && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) return true;
   if (n.preset === "hammer" && e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && useEditor.getState().view === "3d") return true;
   return false;
@@ -129,7 +136,8 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     };
     const stepScale = () => flySpeed() / 512;
 
-    type Drag = { kind: "look" | "move" | "orbit" | "dolly" | "pan" | "pending-left"; x: number; y: number; moved: boolean; pivot?: THREE.Vector3; button: number };
+    // held: a Hammer left-drag look that hands WASD to the camera until the button comes up (like J.A.C.K.)
+    type Drag = { kind: "look" | "move" | "orbit" | "dolly" | "pan" | "pending-left"; x: number; y: number; moved: boolean; pivot?: THREE.Vector3; button: number; held?: boolean };
     let drag: Drag | null = null;
     const locked = () => document.pointerLockElement === el;
     const lock = () => {
@@ -147,8 +155,17 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       return ctl.target.clone();
     };
 
+    // Hammer: while the left button turns the camera, WASD/QE fly too (Z mouse-look stays as it was)
+    const holdLook = (d: Drag) => {
+      if (nav().looking) return;
+      d.held = true;
+      hammerHeld = true;
+      useNav.getState().set({ looking: true, held: true });
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    };
     const down = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest?.(".ed-pane-head")) return;
+      if (e.button === 0) hammerHeld = false;
       const p = nav().preset;
       if (e.button === 1) {
         e.preventDefault();
@@ -166,7 +183,10 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       } else if (e.button === 0) {
         if (p === "unreal" && e.altKey) drag = { kind: "orbit", x: e.clientX, y: e.clientY, moved: false, pivot: pivotNow(), button: 0 };
         // a plain left-drag is the tools' first; it moves the camera only if they let it go
-        else drag = { kind: "pending-left", x: e.clientX, y: e.clientY, moved: false, button: 0 };
+        else {
+          drag = { kind: "pending-left", x: e.clientX, y: e.clientY, moved: false, button: 0 };
+          hammerLeftDown = p === "hammer";
+        }
       }
     };
     const move = (e: PointerEvent) => {
@@ -180,10 +200,12 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3 && !locked()) return;
       if (drag.kind === "pending-left") {
         if (!ctl.enabled) {
+          hammerLeftDown = false;
           drag = null; // a tool took this drag
           return;
         }
         drag.kind = nav().preset === "hammer" ? "look" : "move";
+        if (drag.kind === "look") holdLook(drag);
       }
       if (!drag.moved && drag.kind !== "look" && !ctl.enabled) {
         drag = null;
@@ -214,7 +236,12 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       }
     };
     const up = (e: PointerEvent) => {
+      if (e.button === 0) hammerLeftDown = false;
       if (!drag || e.button !== drag.button) return;
+      if (drag.held) {
+        useNav.getState().set({ looking: false });
+        keys.current.clear();
+      }
       if (drag.kind === "look" && nav().preset === "unreal") {
         useNav.getState().set({ looking: false });
         keys.current.clear();
@@ -235,7 +262,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
         e.preventDefault();
         e.stopImmediatePropagation();
         const on = !nav().looking;
-        useNav.getState().set({ looking: on });
+        useNav.getState().set({ looking: on, held: false });
         if (on) lock();
         else {
           unlock();
@@ -248,6 +275,11 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
         keys.current.clear();
         unlock();
         return;
+      }
+      // Hammer: left button held still on empty space, then a move key: that's a camera hold too
+      if (drag?.kind === "pending-left" && hammerLeftDown && ctl.enabled && nav().preset === "hammer" && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) {
+        drag.kind = "look";
+        holdLook(drag);
       }
       if (nav().looking && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
@@ -265,6 +297,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       }
     };
     const blur = () => {
+      hammerLeftDown = false;
       keys.current.clear();
       if (nav().looking) useNav.getState().set({ looking: false });
     };
