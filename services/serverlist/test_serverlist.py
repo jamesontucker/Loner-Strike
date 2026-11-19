@@ -145,34 +145,73 @@ class Tests(unittest.TestCase):
         again = sl.Registry(r.path)
         self.assertEqual(again.servers["a:1"]["off"], 1, "the count is kept over a restart of the list")
 
-    def test_one_server_by_name_and_ip_is_listed_once(self):
+    def test_one_server_by_name_and_ip_is_shown_once(self):
         info = sl.parse_info(INFO_BODY)
         on = {"ls_list": "1"}
-        # by IP first, then by name: the name takes over, keeping when it joined
         r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
         self.assertTrue(r.update("8.8.8.8:27015", info, on, 1000, "8.8.8.8:27015"))
         self.assertTrue(r.update("play.example.com:27015", info, on, 1010, "8.8.8.8:27015"))
-        self.assertEqual(r.addresses(), ["play.example.com:27015"])
-        self.assertEqual(r.public(1020)[0]["since"], 1000)
-        # the IP again (the app signing up by IP): still the one, under its name
-        self.assertTrue(r.update("8.8.8.8:27015", info, on, 1030, "8.8.8.8:27015"))
-        self.assertEqual(r.addresses(), ["play.example.com:27015"])
-        # a second name for it: the first stays
-        self.assertTrue(r.update("cs.example.com:27015", info, on, 1040, "8.8.8.8:27015"))
-        self.assertEqual(r.addresses(), ["play.example.com:27015"])
+        self.assertEqual(sorted(r.addresses()), ["8.8.8.8:27015", "play.example.com:27015"], "both kept as registered")
+        self.assertEqual([(s["address"], s["since"]) for s in r.public(1020)], [("8.8.8.8:27015", 1000)], "one row: the IP's")
         # another port on the same machine is another server
-        self.assertTrue(r.update("8.8.8.8:27016", info, on, 1050, "8.8.8.8:27016"))
-        self.assertEqual(sorted(r.addresses()), ["8.8.8.8:27016", "play.example.com:27015"])
-        # a list saved before this (both kept): shown once, by name
-        old = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
-        old.servers = {"8.8.8.8:27015": {"since": 1, "seen": 1000, "info": info},
-                       "play.example.com:27015": {"since": 2, "seen": 1000, "info": info, "ip": "8.8.8.8:27015"}}
-        self.assertEqual([s["address"] for s in old.public(1000)], ["play.example.com:27015"])
-        # and its next poll keeps just the name, from the older of the two
-        self.assertTrue(old.update("play.example.com:27015", info, on, 1100, "8.8.8.8:27015"))
-        self.assertEqual(old.addresses(), ["play.example.com:27015"])
-        self.assertEqual(old.servers["play.example.com:27015"]["since"], 1)
-        self.assertTrue(sl._is_ip("8.8.8.8:27015") and not sl._is_ip("play.example.com:27015"))
+        self.assertTrue(r.update("8.8.8.8:27016", info, on, 1030, "8.8.8.8:27016"))
+        self.assertEqual(len(r.public(1040)), 2)
+        # two names for one machine with no IP entry: both shown (names never fold together)
+        n = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        n.update("a.example.com:27015", info, on, 1000, "8.8.8.8:27015")
+        n.update("b.example.com:27015", info, on, 1000, "8.8.8.8:27015")
+        self.assertEqual(len(n.public(1000)), 2)
+
+    def test_a_name_pointed_at_someone_elses_server_changes_nothing_of_theirs(self):
+        on = {"ls_list": "1"}
+        victim = dict(sl.parse_info(INFO_BODY), name="Victim")
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        self.assertTrue(r.update("8.8.8.8:27015", victim, on, 1000, "8.8.8.8:27015"))
+        before = json.loads(json.dumps(r.servers["8.8.8.8:27015"]))
+        # the attacker's name resolves to the victim's IP
+        self.assertTrue(r.update("evil.example.com:27015", victim, on, 1005, "8.8.8.8:27015"))
+        self.assertEqual(r.servers["8.8.8.8:27015"], before, "the victim's entry is untouched")
+        self.assertEqual([(s["address"], s["name"], s["since"]) for s in r.public(1010)], [("8.8.8.8:27015", "Victim", 1000)])
+        # then points it at its own server: its own row, the victim's still the same
+        mine = dict(victim, name="Evil")
+        self.assertTrue(r.update("evil.example.com:27015", mine, on, 1130, "9.9.9.9:27015"))
+        self.assertTrue(r.update("8.8.8.8:27015", victim, on, 1130, "8.8.8.8:27015"))
+        rows = {s["address"]: s["name"] for s in r.public(1140)}
+        self.assertEqual(rows, {"8.8.8.8:27015": "Victim", "evil.example.com:27015": "Evil"})
+
+    def test_a_name_that_moves_between_polls_isnt_folded(self):
+        info = sl.parse_info(INFO_BODY)
+        on = {"ls_list": "1"}
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        r.update("8.8.8.8:27015", info, on, 1000, "8.8.8.8:27015")
+        r.update("play.example.com:27015", info, on, 1000, "8.8.8.8:27015")
+        self.assertEqual(len(r.public(1000)), 1)
+        # next poll the name answers from elsewhere: two rows again
+        r.update("play.example.com:27015", info, on, 1120, "9.9.9.9:27015")
+        r.update("8.8.8.8:27015", info, on, 1120, "8.8.8.8:27015")
+        self.assertEqual(len(r.public(1130)), 2)
+        # the name points back, but the IP's last answer is from an older poll: not folded
+        r.update("play.example.com:27015", info, on, 1500, "8.8.8.8:27015")
+        self.assertEqual(len(r.public(1510)), 2)
+
+    def test_check_asks_the_address_it_keeps(self):
+        srv = FakeServer({"ls_list": "1"})
+        try:
+            calls = []
+            real = sl.socket.getaddrinfo
+            sl.socket.getaddrinfo = lambda *a, **k: calls.append(a) or [(0, 0, 0, "", srv.addr)]
+            old_global = sl.ipaddress.IPv4Address.is_global
+            sl.ipaddress.IPv4Address.is_global = property(lambda self: True)
+            try:
+                info, rules, ip = sl.check("play.example.com:%d" % srv.addr[1])
+            finally:
+                sl.socket.getaddrinfo = real
+                sl.ipaddress.IPv4Address.is_global = old_global
+            self.assertEqual(len(calls), 1, "one lookup")
+            self.assertEqual(ip, "%s:%d" % srv.addr)
+            self.assertEqual(rules.get("ls_list"), "1")
+        finally:
+            srv.on = False
 
     def test_rate_limit(self):
         lim = sl.RateLimit(2)

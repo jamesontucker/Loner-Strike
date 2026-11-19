@@ -217,12 +217,6 @@ def clean_address(text):
     return f"{host}:{port}", (ip, port)
 
 
-def machine(listed):
-    """The "ip:port" a listed address reaches (a host name looked up), or None."""
-    found = clean_address(listed)
-    return f"{found[1][0]}:{found[1][1]}" if found else None
-
-
 def _is_ip(listed):
     try:
         ipaddress.ip_address(listed.rpartition(":")[0])
@@ -232,14 +226,16 @@ def _is_ip(listed):
 
 
 def check(listed):
-    """Asks a server for its details and its ls_list setting: (info or None, rules or None)."""
+    """Asks a server for its details and its ls_list setting: (info or None, rules or None,
+    "ip:port" asked or None). A host name is looked up once, and that one address is both
+    the one asked and the one kept, so the answer and the address always belong together."""
     found = clean_address(listed)
     if not found:
-        return None, None
+        return None, None, None
     _, addr = found
     info = ask(addr, INFO, parse_info)
     rules = ask(addr, RULES, parse_rules) if info else None
-    return info, rules
+    return info, rules, f"{addr[0]}:{addr[1]}"
 
 
 # ---- the list -----------------------------------------------------------------------------
@@ -264,27 +260,12 @@ class Registry:
         except OSError:
             pass
 
-    def _same(self, listed, ip):
-        """Another entry that reaches the same server (registered by its IP and by a host name)."""
-        if not ip:
-            return None
-        return next((a for a, e in self.servers.items() if a != listed and (e.get("ip") == ip or a == ip)), None)
-
     def update(self, listed, info, rules, now, ip=None):
-        """Takes in what a server said (ip: the "ip:port" its address reaches, so one server
-        registered by its IP and by a host name is listed once, under the host name). True
-        while it's on the list."""
+        """Takes in what a server said (ip: the "ip:port" that answered, kept with the answer
+        for public()'s one row per server). Entries are never merged or removed because of
+        where a name points: each stays as it was registered. True while it's on the list."""
         with self.lock:
             entry = self.servers.get(listed)
-            if not entry and info and rules is not None and rules.get("ls_list") == "1":
-                same = self._same(listed, ip)
-                if same and (_is_ip(listed) or not _is_ip(same)):
-                    # the IP of a server listed by name (or a second name): the one there stays
-                    listed, entry = same, self.servers[same]
-                elif same:
-                    # a name for a server listed by its IP: the name takes over, from when it joined
-                    entry = self.servers.pop(same)
-                    self.servers[listed] = entry
             if info and rules is not None and rules.get("ls_list") != "1":
                 # the host turned the list off (or never turned it on); a listed server only
                 # leaves after OFF_POLLS polls in a row say so (not the moment after a start)
@@ -303,9 +284,8 @@ class Registry:
                 entry.update(info=info, seen=now, off=0)
                 if ip:
                     entry["ip"] = ip
-                    if not _is_ip(listed) and ip in self.servers:
-                        # the same server also kept by its IP (a list from before): one entry
-                        entry["since"] = min(entry["since"], self.servers.pop(ip).get("since", now))
+                else:
+                    entry.pop("ip", None)
                 self._save()
                 return True
             if entry and now - entry.get("seen", 0) > GONE_SECS:
@@ -315,17 +295,17 @@ class Registry:
 
     def public(self, now):
         with self.lock:
-            # one per server: a list from before (or a name that changed where it points) can
-            # hold it twice; the host name is shown over the IP
-            by_machine = {}
-            for a, e in self.servers.items():
-                if now - e.get("seen", 0) > FRESH_SECS:
-                    continue
-                key = e.get("ip") or a
-                had = by_machine.get(key)
-                if had is None or (_is_ip(had[0]) and not _is_ip(a)):
-                    by_machine[key] = (a, e)
-            out = [dict(e["info"], address=a, since=e["since"]) for a, e in by_machine.values()]
+            fresh = {a: e for a, e in self.servers.items() if now - e.get("seen", 0) <= FRESH_SECS}
+            # One row per server, decided here only (nothing stored changes). The rule: a host
+            # name's row is left out when its last answer came from an IP that is itself
+            # listed, and that IP answered in the same poll (seen within one poll of each
+            # other). The IP's own row stays as it is, with its own details, address and age,
+            # so a name someone points at another person's server can only hide itself, never
+            # change or remove that server's row. Names are never folded into each other.
+            def same_server(a, e):
+                ip_entry = fresh.get(e.get("ip") or "")
+                return not _is_ip(a) and ip_entry is not None and e["ip"] != a and abs(e.get("seen", 0) - ip_entry.get("seen", 0)) <= POLL_SECS
+            out = [dict(e["info"], address=a, since=e["since"]) for a, e in fresh.items() if not same_server(a, e)]
         out.sort(key=lambda s: (-(s["players"] - s["bots"]), -s["players"], s["name"].lower()))
         return out
 
@@ -338,7 +318,7 @@ class Registry:
             started = time.time()
             with ThreadPoolExecutor(max_workers=16) as pool:
                 listed_now = self.addresses()
-                for listed, (info, rules), ip in zip(listed_now, pool.map(check, listed_now), pool.map(machine, listed_now)):
+                for listed, (info, rules, ip) in zip(listed_now, pool.map(check, listed_now)):
                     self.update(listed, info, rules, time.time(), ip)
             time.sleep(max(5, POLL_SECS - (time.time() - started)))
 
@@ -432,14 +412,14 @@ def make_handler(registry, limit, asker=check, community=None):
             if not found:
                 return self._send(400, {"error": "That isn't an address on the internet, like play.example.com:27015."})
             listed = found[0]
-            info, rules = asker(listed)
+            # (the address that answered comes back with the answer: one lookup)
+            info, rules, ip = (tuple(asker(listed)) + (None,))[:3]
             if not info:
                 return self._send(200, {"ok": False, "error": "The server didn't answer from the internet. Check it's running and its port is open."})
             if rules is None:
                 return self._send(200, {"ok": False, "error": "The server answered but wouldn't say its settings. Try again in a minute."})
             if rules.get("ls_list") != "1":
                 return self._send(200, {"ok": False, "error": "The server isn't set to be listed yet. Its change takes effect from the next map."})
-            ip = f"{found[1][0]}:{found[1][1]}"
             if not registry.update(listed, info, rules, time.time(), ip):
                 return self._send(200, {"ok": False, "error": "The list is full right now."})
             self._send(200, {"ok": True, "address": listed})
