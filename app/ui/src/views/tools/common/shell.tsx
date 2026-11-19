@@ -397,6 +397,9 @@ export function FocusButton() {
   const [hint, setHint] = useState(false);
   useEffect(() => {
     if (!tool || focus || !FOCUS_HINT_TOOLS.includes(tool) || focusHintSeen().includes(tool)) return setHint(false);
+    // 1.0.1: in a small window the hint has no room (it pushed the header to two rows); it waits
+    // for a bigger one
+    if (window.innerWidth < 1200 || window.innerHeight < 720) return setHint(false);
     setHint(true);
     const t = window.setTimeout(() => {
       setHint(false);

@@ -4,6 +4,13 @@
 // Run in Chromium and WebKit: `npx playwright test studio-ux --project large --project webkit`.
 import { expect, test, type Page } from "@playwright/test";
 
+/** 1.0.1: in a narrow window (the "small" project) the toolbar's less-used controls are under More. */
+async function more(page: Page) {
+  const b = page.getByTestId("studio-more");
+  if ((await b.isVisible()) && (await b.getAttribute("aria-expanded")) !== "true") await b.click();
+}
+
+
 const H = { "X-Panel": "1" };
 // UX_SHOTS=<folder>: screenshots of what each test checks
 const shot = async (page: Page, name: string) => {
@@ -72,7 +79,11 @@ test("H2: the mode's Details come back after a My mode item (empty canvas, Escap
     await page.locator(".st-canvas").focus();
     await page.keyboard.press("Escape");
   });
-  await back(() => page.getByTestId("studio-mode-settings").click());
+  await back(async () => {
+    await more(page);
+    await page.getByTestId("studio-mode-settings").click();
+  });
+  await more(page);
   await expect(page.getByTestId("studio-mode-settings")).toHaveAttribute("aria-pressed", "true");
   // a node picked, then none: the mode again
   await page.locator(".react-flow__node").filter({ hasText: "Player Killed" }).first().click({ force: true });

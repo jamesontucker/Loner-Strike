@@ -63,7 +63,7 @@ const clone = (l: DockLayout): DockLayout => JSON.parse(JSON.stringify(l));
 function load(): DockLayout {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? "null") as DockLayout | null;
-    if (!v || typeof v !== "object" || !v.areas) return clone(DOCK_PRESETS.default.layout);
+    if (!v || typeof v !== "object" || !v.areas) return fresh();
     const out = clone(DOCK_PRESETS.default.layout);
     for (const a of AREAS) {
       const x = v.areas[a.id];
@@ -100,8 +100,17 @@ function load(): DockLayout {
     }
     return out;
   } catch {
-    return clone(DOCK_PRESETS.default.layout);
+    return fresh();
   }
+}
+
+/** The first layout: the default; in a short window the bottom dock starts folded to its tabs
+ *  (1.0.1: at 1024×680 the 3D view was 170px tall; a click on a tab opens the dock at its full
+ *  size, where the Content browser's rows fit; a lower dock cut them off). */
+function fresh(): DockLayout {
+  const l = clone(DOCK_PRESETS.default.layout);
+  if (typeof window !== "undefined" && window.innerHeight < 720) l.bottomFolded = true;
+  return l;
 }
 
 export const useDock = create<DockState>((set, get) => ({

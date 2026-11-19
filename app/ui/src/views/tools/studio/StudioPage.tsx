@@ -3,7 +3,7 @@
 // shows the nodes running. The graph is our own JSON (schema.ts); the app does the checks,
 // the Pawn and the compiling (app/src-tauri/src/tools/studio/).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import type { ToolProps } from "../registry";
 import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
@@ -190,6 +190,7 @@ function Studio({ maps }: ToolProps) {
   /** node help: null closed, "" the list, else a node's type */
   const [helpFor, setHelpFor] = useState<string | null>(null);
   const [versions, setVersions] = useState(false);
+  const narrow = useNarrow();
   const panels = usePanels();
   /** an example open to look at (its label), until Make it mine */
   const [exampleOpen, setExampleOpen] = useState<string | null>(null);
@@ -465,7 +466,7 @@ function Studio({ maps }: ToolProps) {
     if (s1.graph?.mode.id !== g.mode.id) return;
     if (r.error) {
       s1.setFull({ state: "failed", key, problems: [], message: r.error });
-      if (!quiet) toast(r.error, true);
+      if (!quiet) toast(`The compiler couldn't run: ${r.error}`, true);
       return;
     }
     if (r.problems) s1.setProblems(r.problems);
@@ -752,6 +753,99 @@ function Studio({ maps }: ToolProps) {
 
   const errors = problems.filter((p) => p.level === "error").length;
   const mapNames = maps.map((m) => m.name).sort();
+  // 1.0.1: in a narrow window (under 1200 px: the app's sidebar leaves the toolbar ~775 px) the
+  // less-used controls sit in a More menu, so the toolbar is one row and the canvas keeps its
+  // height. Each control is made once and placed in the row or in More, never both.
+  const modeSettingsBtn = (
+    <button
+      type="button"
+      className="btn"
+      onClick={() => st.showMode()}
+      aria-pressed={onMode}
+      title="The mode's name, description, game settings, mode settings and requirements, in Details (or click empty canvas, or Escape)"
+      data-testid="studio-mode-settings"
+    >
+      Mode settings
+    </button>
+  );
+  const undoBtn = (
+    <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title={`Undo (${MODK}Z)`}>
+      Undo
+    </button>
+  );
+  const redoBtn = (
+    <button type="button" className="btn" onClick={st.redo} disabled={!history.future.length} title={`Redo (${MODK}Shift+Z)`}>
+      Redo
+    </button>
+  );
+  const viewMenu = <ViewMenu onTidy={layout} />;
+  const versionsBtn = (
+    <button type="button" className="btn" aria-pressed={versions} onClick={() => setVersions(!versions)} title="The last 50 saves: compare and restore" data-testid="studio-versions-button">
+      Versions
+    </button>
+  );
+  const helpMenu = <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} />;
+  const testRunBtn =
+    testRun?.phase === "running" ? (
+      <span className="st-step" role="status" aria-live="polite" data-testid="studio-testing">
+        <span className="spinner" /> Test run…
+      </span>
+    ) : (
+      <button type="button" className="btn" data-testid="studio-test" onClick={() => void startTest()} disabled={!!working} title="Play the mode on a hidden server with bots for about two minutes and report what happened (your game isn't touched)">
+        Test run
+      </button>
+    );
+  const testStatusBtn = testRun && testRun.phase !== "running" && (
+    <button
+      type="button"
+      className={`st-test-status ${testRun.phase === "done" && !testStale ? (testRun.result?.verdict ?? "") : ""}`}
+      data-testid="studio-test-status"
+      onClick={() => st.showResults("testrun")}
+      title="Open the test run's results"
+    >
+      {testText(testRun, testStale, testNow)}
+    </button>
+  );
+  const onSaveBox = (
+    <label className="st-check-auto" title="Compile on save: compile in the background each time you save">
+      <input
+        type="checkbox"
+        aria-label="Compile on save"
+        checked={prefs.compileOnSave}
+        onChange={(e) => {
+          const p = { ...prefs, compileOnSave: e.target.checked };
+          setPrefs(p);
+          savePrefs(p);
+        }}
+      />
+      {narrow ? "Compile on save" : "on save"}
+    </label>
+  );
+  const mapPick = (
+    <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
+      {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (
+        <option key={m}>{m}</option>
+      ))}
+    </select>
+  );
+  const botsPick = (
+    <label className="st-bots" title="How many bots join a Playtest">
+      <input
+        className="st-field st-field-num"
+        type="number"
+        min={0}
+        max={31}
+        value={prefs.bots}
+        aria-label="Bots"
+        onChange={(e) => {
+          const n = Math.max(0, Math.min(31, Math.round(Number(e.target.value) || 0)));
+          setPrefs({ ...prefs, bots: n });
+          savePrefs({ ...prefs, bots: n });
+        }}
+      />
+      bots
+    </label>
+  );
   return (
     <div className={`st-page st-skin-${skin}${playing ? " playing" : ""}`}>
       <div className="st-toolbar tools-bar">
@@ -771,30 +865,15 @@ function Studio({ maps }: ToolProps) {
           {graph.mode.name}
           {dirty ? " •" : ""}
         </strong>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => st.showMode()}
-          aria-pressed={onMode}
-          title="The mode's name, description, game settings, mode settings and requirements, in Details (or click empty canvas, or Escape)"
-          data-testid="studio-mode-settings"
-        >
-          Mode settings
-        </button>
+        {!narrow && modeSettingsBtn}
         </span>
         <span className="st-tgroup">
-        <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title={`Undo (${MODK}Z)`}>
-          Undo
-        </button>
-        <button type="button" className="btn" onClick={st.redo} disabled={!history.future.length} title={`Redo (${MODK}Shift+Z)`}>
-          Redo
-        </button>
-        <ViewMenu onTidy={layout} />
-        <button type="button" className="btn" aria-pressed={versions} onClick={() => setVersions(!versions)} title="The last 50 saves: compare and restore" data-testid="studio-versions-button">
-          Versions
-        </button>
+        {!narrow && undoBtn}
+        {!narrow && redoBtn}
+        {!narrow && viewMenu}
+        {!narrow && versionsBtn}
         <FindBox graph={graph} onPick={(id) => focusRef.current(id)} />
-        <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} />
+        {!narrow && helpMenu}
         </span>
         <span className="st-tgroup run">
         <span className="st-check">
@@ -817,61 +896,12 @@ function Studio({ maps }: ToolProps) {
               </button>
             );
           })()}
-          {testRun?.phase === "running" ? (
-            <span className="st-step" role="status" aria-live="polite" data-testid="studio-testing">
-              <span className="spinner" /> Test run…
-            </span>
-          ) : (
-            <button type="button" className="btn" data-testid="studio-test" onClick={() => void startTest()} disabled={!!working} title="Play the mode on a hidden server with bots for about two minutes and report what happened (your game isn't touched)">
-              Test run
-            </button>
-          )}
-          {testRun && testRun.phase !== "running" && (
-            <button
-              type="button"
-              className={`st-test-status ${testRun.phase === "done" && !testStale ? (testRun.result?.verdict ?? "") : ""}`}
-              data-testid="studio-test-status"
-              onClick={() => st.showResults("testrun")}
-              title="Open the test run's results"
-            >
-              {testText(testRun, testStale, testNow)}
-            </button>
-          )}
-          <label className="st-check-auto" title="Compile on save: compile in the background each time you save">
-            <input
-              type="checkbox"
-              aria-label="Compile on save"
-              checked={prefs.compileOnSave}
-              onChange={(e) => {
-                const p = { ...prefs, compileOnSave: e.target.checked };
-                setPrefs(p);
-                savePrefs(p);
-              }}
-            />
-            on save
-          </label>
+          {!narrow && testRunBtn}
+          {!narrow && testStatusBtn}
+          {!narrow && onSaveBox}
         </span>
-        <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
-          {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-        <label className="st-bots" title="How many bots join a Playtest">
-        <input
-          className="st-field st-field-num"
-          type="number"
-          min={0}
-          max={31}
-          value={prefs.bots}
-          aria-label="Bots"
-          onChange={(e) => {
-            const n = Math.max(0, Math.min(31, Math.round(Number(e.target.value) || 0)));
-            setPrefs({ ...prefs, bots: n });
-            savePrefs({ ...prefs, bots: n });
-          }}
-        />
-        bots
-        </label>
+        {!narrow && mapPick}
+        {!narrow && botsPick}
         {step ? (
           <>
             <span className="st-step" role="status" aria-live="polite" data-testid="studio-step">
@@ -893,6 +923,27 @@ function Studio({ maps }: ToolProps) {
           <button type="button" className="btn primary st-playtest" data-testid="studio-playtest" onClick={() => void playtest()} disabled={!!working || errors > 0} title={errors > 0 ? "Fix the problems first (Results, below)" : "Compile with the debugger, then start the game in this mode with bots"}>
             Playtest
           </button>
+        )}
+        {narrow && (
+          <MoreMenu>
+            {modeSettingsBtn}
+            <span className="st-more-row">
+              {undoBtn}
+              {redoBtn}
+            </span>
+            {versionsBtn}
+            {viewMenu}
+            {helpMenu}
+            <span className="st-more-row">
+              {testRunBtn}
+              {testStatusBtn}
+            </span>
+            {onSaveBox}
+            <span className="st-more-row">
+              {mapPick}
+              {botsPick}
+            </span>
+          </MoreMenu>
         )}
         </span>
       </div>
@@ -1019,5 +1070,61 @@ export default function StudioPage(props: ToolProps) {
       {/* the browser's own right-click menu never shows in the Studio (text boxes keep theirs) */}
         <Studio {...props} />
     </ReactFlowProvider>
+  );
+}
+
+
+/** True under a window width (1.0.1: the toolbar's More menu). */
+function useNarrow(query = "(max-width: 1199px)") {
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener("change", on);
+    on();
+    return () => m.removeEventListener("change", on);
+  }, [query]);
+  return narrow;
+}
+
+/** The toolbar's overflow in a narrow window: the controls that didn't fit, one under another. */
+function MoreMenu({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <span className="st-more" ref={box}>
+      <button type="button" className="btn" data-testid="studio-more" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(!open)} title="The rest of the toolbar">
+        More ▾
+      </button>
+      {open && (
+        <div
+          className="st-more-list"
+          role="group"
+          aria-label="More"
+          onClickCapture={(e) => {
+            // a pick that opens something else (a submenu's item, Mode settings, Versions, Test run)
+            // closes More; Undo/Redo, the checkbox and the pickers keep it open
+            const t = (e.target as HTMLElement).closest<HTMLElement>("button, a");
+            if (!t || t.getAttribute("aria-haspopup")) return;
+            if (t.getAttribute("role") === "menuitem" || ["studio-mode-settings", "studio-versions-button", "studio-test"].includes(t.dataset.testid ?? "")) setTimeout(() => setOpen(false), 0);
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </span>
   );
 }

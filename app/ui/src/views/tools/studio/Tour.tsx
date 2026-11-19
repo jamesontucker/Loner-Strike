@@ -89,10 +89,11 @@ export function TourOffer({ onStart }: { onStart: () => void }) {
 
 type Box = { x: number; y: number; w: number; h: number } | null;
 
-/** Where a step's control is on screen (null: none, or not shown). */
+/** Where a step's control is on screen (null: none, or not shown). 1.0.1: a toolbar control that a
+ *  narrow window keeps under More (StudioPage.tsx MoreMenu) points at More instead. */
 function boxOf(sel?: string): Box {
   if (!sel) return null;
-  const el = document.querySelector(sel);
+  const el = document.querySelector(sel) ?? (sel.startsWith("[data-testid=studio-") ? document.querySelector("[data-testid=studio-more]") : null);
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return r.width && r.height ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;

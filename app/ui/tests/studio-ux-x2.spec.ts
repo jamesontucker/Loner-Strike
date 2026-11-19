@@ -5,6 +5,13 @@
 // `npx playwright test studio-ux-x2 --project large --project small --project webkit`.
 import { expect, test, type Page } from "@playwright/test";
 
+/** 1.0.1: in a narrow window (the "small" project) the toolbar's less-used controls are under More. */
+async function more(page: Page) {
+  const b = page.getByTestId("studio-more");
+  if ((await b.isVisible()) && (await b.getAttribute("aria-expanded")) !== "true") await b.click();
+}
+
+
 const H = { "X-Panel": "1" };
 // (one mode per project: the projects can run side by side)
 let ID = "pw_ux2";
@@ -65,6 +72,7 @@ test("H4, M1: side panels fold to rails (kept after a reload), the minimap is of
   await expect(page.getByRole("button", { name: "Fold My mode" })).toBeVisible();
   expect(await page.locator(".st-center").evaluate((el) => el.getBoundingClientRect().width)).toBeLessThan(wide);
   // the minimap from the View menu
+  await more(page);
   await page.getByTestId("studio-view-menu").click();
   await page.getByRole("menuitemcheckbox", { name: /Show the minimap/ }).click();
   await expect(page.locator(".st-minimap")).toBeVisible();
@@ -74,8 +82,20 @@ test("H4: the node list stays inside the window near the canvas's edge", async (
   await seed(page);
   await openIt(page);
   const pane = page.locator(".react-flow__pane");
+  await page.locator(".react-flow__edge").first().waitFor();
+  await page.waitForTimeout(400);
   const b = (await pane.boundingBox())!;
-  await pane.click({ button: "right", position: { x: b.width - 70, y: b.height - 30 } });
+  // an empty spot near the bottom-right corner (a taller canvas can have a wire where the first guess is)
+  const spots = [[70, 30], [40, 70], [110, 60], [160, 40], [60, 120]];
+  let at = spots[0];
+  for (const s of spots) {
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.classList.contains("react-flow__pane") ?? false, [b.x + b.width - s[0], b.y + b.height - s[1]]);
+    if (hit) {
+      at = s;
+      break;
+    }
+  }
+  await pane.click({ button: "right", position: { x: b.width - at[0], y: b.height - at[1] } });
   const pal = page.getByRole("dialog", { name: "Add a node" });
   await expect(pal).toBeVisible();
   const p = (await pal.boundingBox())!;
@@ -120,6 +140,7 @@ test("M6: the toolbar's groups and plain labels", async ({ page }) => {
   await seed(page);
   await openIt(page);
   await expect(page.locator(".st-toolbar .st-tgroup")).toHaveCount(3);
+  await more(page);
   await expect(page.getByRole("checkbox", { name: "Compile on save" })).toBeVisible();
   await expect(page.locator(".st-bots")).toContainText("bots");
 });
@@ -197,10 +218,11 @@ test("QA4-B F6.1, F6.7: Mode settings shows the mode on a Timeline tab; an overs
   tpl.timelines = [{ id: "tl1", name: "Lift", length: 4, tick: 0.05, tracks: [{ id: "tr1", name: "Height", kind: "float", keys: [{ t: 0, v: 0, ease: "custom", tout: 400 }, { t: 4, v: 100 }] }] }];
   expect((await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H })).json()).ok).toBeTruthy();
   await page.goto(`/tools-dev.html?open=studio:${ID}/tl1`);
-  await expect(page.getByRole("button", { name: "Mode settings" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".st-toolbar")).toBeVisible({ timeout: 20_000 });
   // (a small window starts with Details folded)
   if (await page.getByTestId("studio-rail-right").isVisible()) await page.getByTestId("studio-rail-right").click();
   await expect(page.getByText("Details · Timeline")).toBeVisible();
+  await more(page);
   const modeBtn = page.getByTestId("studio-mode-settings");
   await expect(modeBtn).toHaveAttribute("aria-pressed", "false");
   await modeBtn.click();

@@ -4,6 +4,13 @@
 // Chromium and WebKit: `npx playwright test studio-help [--browser webkit]`.
 import { expect, test, type Page } from "@playwright/test";
 
+/** 1.0.1: in a narrow window (the "small" project) the toolbar's less-used controls are under More. */
+async function more(page: Page) {
+  const b = page.getByTestId("studio-more");
+  if ((await b.isVisible()) && (await b.getAttribute("aria-expanded")) !== "true") await b.click();
+}
+
+
 const H = { "X-Panel": "1" };
 const ID = "pw_help";
 const WRITES = ["compile", "check", "testrun", "testrun/cancel", "playtest", "switch", "source", "uninstall/**", "debug/command"];
@@ -38,6 +45,7 @@ test("node help: the ? menu, search, F1 on a node, an example dropped in", async
   await page.addInitScript(() => localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false })));
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
   await fitAll(page);
+  await more(page);
   await page.getByTestId("studio-help-menu").click();
   await page.getByRole("menuitem", { name: /Node help/ }).click();
   const help = page.getByTestId("studio-help");
@@ -90,6 +98,7 @@ test("example modes and the tour: offered once, every step, skip, again from the
   await tour.getByRole("button", { name: "Done" }).click();
   await expect(tour).toBeHidden();
   // not offered again; the ? menu starts it, and Skip ends it
+  await more(page);
   await page.getByTestId("studio-help-menu").click();
   await page.getByRole("menuitem", { name: "Take the Studio tour" }).click();
   await expect(tour).toContainText("Welcome");
@@ -137,6 +146,7 @@ test("deleting a variable in use: the choices, Find uses, one undo step", async 
   // the flow was joined: Player Killed runs Is CT again, so no "nothing runs" for it
   await expect(page.locator('.react-flow__node[data-id="is_ct"] .st-node-badge')).toHaveCount(0);
   // one undo brings it all back
+  await more(page);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.locator('.react-flow__node[data-id="addk"]')).toHaveCount(1);
   await expect(page.locator('.react-flow__node[data-id="getk"]')).toHaveCount(1);
@@ -215,6 +225,7 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   const after = (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
   const pos = (id: string) => after.nodes.find((x: { id: string }) => x.id === id).pos.x;
   expect(pos("give_m4")).toBe(pos("give_ak"));
+  await more(page);
   await page.getByTestId("studio-versions-button").click();
   const panel = page.getByTestId("studio-versions");
   await expect(panel.getByRole("option").first()).toBeVisible();
@@ -227,6 +238,7 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   await expect(page.locator(".st-node.st-mark-added").first()).toBeVisible();
   await panel.getByTestId("studio-version-restore").click();
   await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(0);
+  await more(page);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(1);
   expect(versions).toBeGreaterThanOrEqual(2);

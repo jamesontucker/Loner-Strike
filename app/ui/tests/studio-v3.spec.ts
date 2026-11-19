@@ -4,6 +4,13 @@
 // leaving with unsaved edits through each way out (asked once; Leave goes and stays gone).
 // Run in Chromium and WebKit: `npx playwright test studio-v3 [--browser webkit]`.
 import { expect, test, type Page } from "@playwright/test";
+
+/** 1.0.1: in a narrow window (the "small" project) the toolbar's less-used controls are under More. */
+async function more(page: Page) {
+  const b = page.getByTestId("studio-more");
+  if ((await b.isVisible()) && (await b.getAttribute("aria-expanded")) !== "true") await b.click();
+}
+
 import { readFileSync } from "node:fs";
 
 const H = { "X-Panel": "1" };
@@ -403,8 +410,10 @@ test("the Studio never scrolls as a whole (every-node graph: long panels scroll 
       await page.keyboard.press("Escape");
       await still("a menu");
       await page.locator(".st-find input").fill("print");
-      await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
       await still("the Find list");
+      // (Escape, not a click on the canvas: in a narrow window the list hangs over the canvas's corner)
+      await page.locator(".st-find input").press("Escape");
+      await still("the Find list closed");
       // the last items of the long list: scrolled to inside the panel
       await page.locator(".st-mb").getByRole("button", { name: "Export all" }).scrollIntoViewIfNeeded();
       await still("the end of My mode");
@@ -466,14 +475,17 @@ test("Compile: the full check's status, its problems tied to nodes, Compile on s
   await expect(icon).toHaveAttribute("data-state", "ok");
   expect(calls).toBe(before + 1);
   // off: a save doesn't
+  await more(page);
   await page.getByLabel("Compile on save").uncheck();
   // (an edit: Undo brings the deleted node back)
+  await more(page);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("ControlOrMeta+s");
   await page.waitForTimeout(800);
   expect(calls).toBe(before + 1);
   await expect(icon).toHaveAttribute("data-state", "none");
+  await more(page);
   await page.getByLabel("Compile on save").check();
 });
 
@@ -502,6 +514,7 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
   await page.route("**/api/tools/studio/testrun/cancel", (r) => ((cancelled = true), r.fulfill({ json: { ok: true } })));
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
   await fitAll(page);
+  await more(page);
   await page.getByTestId("studio-test").click();
   const tab = page.getByTestId("studio-testrun");
   await expect(tab).toContainText("Starting a hidden server on de_dust2… ");
@@ -516,11 +529,13 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
   await expect(node(page, "give_m4")).toHaveClass(/selected/);
   await tab.getByRole("button", { name: "Show them" }).click();
   await expect(tab.getByRole("button", { name: "Is Team" })).toBeVisible();
+  await more(page);
   await expect(page.getByTestId("studio-test-status")).toContainText("Tested with warnings just now");
   // an edit: the status says so
   await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
   await node(page, "give_m4").click();
   await page.keyboard.press("Delete");
+  await more(page);
   await expect(page.getByTestId("studio-test-status")).toContainText("(edited since)");
 });
 

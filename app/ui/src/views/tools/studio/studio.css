@@ -532,6 +532,14 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 .st-tgroup.run > select.st-field { max-width: 130px; }
 .st-tgroup.run .st-field-num { width: 46px; }
 .st-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 1.0.1: the toolbar's More menu in a narrow window (StudioPage.tsx MoreMenu): one row stays */
+.st-more { position: relative; }
+.st-more-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 260px; display: grid; gap: 6px; padding: 8px; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.st-more-list > .btn, .st-more-list > .st-help-menu > .btn, .st-more-list > .st-view-menu > .btn { width: 100%; text-align: left; }
+.st-more-row { display: flex; gap: 6px; align-items: center; }
+.st-more-row > .btn { flex: 1 1 auto; }
+.st-more-list .st-check-auto { margin: 0; }
+@media (max-width: 1199px) { .st-toolbar .st-name { max-width: 150px; } .st-toolbar .st-find .st-field { width: 110px; } }
 /* rows a CSV import refused, with why (TableEditor.tsx; QA4-B F5) */
 .st-table-refused { border: 1px solid var(--st-bad, #c55); border-radius: 6px; padding: 6px 10px; margin: 0 0 6px; font-size: 13px; background: color-mix(in srgb, var(--st-bad, #c55) 12%, transparent); }
 .st-table-refused ul { margin: 4px 0 0; padding-left: 18px; max-height: 140px; overflow-y: auto; }
