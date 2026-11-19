@@ -265,6 +265,13 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-dock-tabs [role="tab"] { flex: none; touch-action: none; user-select: none; white-space: nowrap; line-height: 1.2; }
 .ed-dock-tabs [role="tab"]:hover:not([aria-selected="true"]) { color: var(--bone); background: rgba(255, 255, 255, 0.04); }
 .ed-dock-tabs .push { flex: 1 1 auto; }
+/* 1.0.1: something running in the tab's panel (a compile or playtest): a pulsing dot in the tab's
+   corner, over its padding, so the tabs don't move when it comes and goes */
+.ed-dock-tabs [role="tab"] { position: relative; }
+.ed-tab-run { position: absolute; top: 2px; right: 1px; width: 6px; height: 6px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 1px var(--bg); pointer-events: none; animation: ed-tab-run 1.1s ease-in-out infinite; }
+@keyframes ed-tab-run { 50% { opacity: 0.3; transform: scale(0.75); } }
+@media (prefers-reduced-motion: reduce) { .ed-tab-run { animation: none; } }
+@media (max-width: 1100px) { .ed-tab-run { width: 5px; height: 5px; right: 0; } }
 .ed-dock-edge.v::after, .ed-dock-edge.h::after { content: ""; position: absolute; background: transparent; transition: background 0.1s; }
 .ed-dock-edge.v::after { left: 3px; top: 0; bottom: 0; width: 2px; }
 .ed-dock-edge.h::after { top: 3px; left: 0; right: 0; height: 2px; }

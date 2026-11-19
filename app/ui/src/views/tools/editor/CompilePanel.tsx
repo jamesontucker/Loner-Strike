@@ -92,13 +92,27 @@ export function CompilePanel() {
   const [status, setStatus] = useState<api.CompileStatus | null>(null);
   const [preset, setPreset] = useState<Preset>(() => pref<string>("ls.compile.preset", "normal") as Preset);
   const [name, setName] = useState("");
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJobHere] = useState<Job | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [partial, setPartial] = useState("");
   // the playtest's own steps after the compile ("Teaching bots the map…"), null when idle
   const [phase, setPhase] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  const [starting, setStartingHere] = useState(false);
+  const [playing, setPlayingHere] = useState(false);
+  // (also told to the Compile tab: it shows a running dot, the panel folded or not; the async
+  // steps keep calling these after the panel closes, so the tab stays right)
+  const setJob = (j: Job) => {
+    setJobHere(j);
+    api.useCompileRun.setState({ job: j.running });
+  };
+  const setStarting = (v: boolean) => {
+    setStartingHere(v);
+    api.useCompileRun.setState({ starting: v });
+  };
+  const setPlaying = (v: boolean) => {
+    setPlayingHere(v);
+    api.useCompileRun.setState({ playing: v });
+  };
   const [stopping, setStopping] = useState(false);
   const [modes, setModes] = useState<api.Mode[]>([]);
   const [mode, setMode] = useState<string>(() => pref<string>("ls.compile.mode", "classic"));

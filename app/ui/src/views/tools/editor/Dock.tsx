@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useEditor } from "./store";
 import { AREAS, closePanel, dockTo, floatPanel, panelWindows, popOut, useDock, type AreaId, type Float } from "./dockState";
 import { DOCK_PANELS, panelById } from "./dockPanels";
+import { useCompileRun } from "./compileApi";
 
 
 /** One panel failing doesn't take the editor down with it: it says so, with a way back. */
@@ -76,6 +77,7 @@ function FoldButton() {
 function Tabs({ area }: { area: AreaId }) {
   const a = useDock((s) => s.areas[area]);
   useEditor((s) => s.checks); // the Checks tab's count
+  useCompileRun((s) => s.job || s.starting || s.playing); // the Compile tab's running dot
   const [menu, setMenu] = useState(false);
   const more = useRef<HTMLButtonElement>(null);
   const set = useDock.getState().set;
@@ -84,6 +86,7 @@ function Tabs({ area }: { area: AreaId }) {
       {a.tabs.map((id) => {
         const p = panelById(id);
         if (!p) return null;
+        const busy = p.busy?.() ?? false;
         return (
           <button
             key={id}
@@ -93,11 +96,13 @@ function Tabs({ area }: { area: AreaId }) {
             aria-selected={a.active === id}
             aria-pressed={a.active === id}
             className={p.bad?.() ? "editor-tab-bad" : undefined}
+            aria-label={busy ? `${p.label?.() ?? p.title} (running)` : undefined}
             title={`${p.subtitle ? `${p.subtitle}. ` : ""}Drag to move it: along the tabs, to another side, or onto the view to float it`}
             onPointerDown={(ev) => startPanelDrag(ev, id, () => set({ areas: { ...useDock.getState().areas, [area]: { ...useDock.getState().areas[area], active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) }))}
             onKeyDown={(ev) => ev.key === "Enter" && set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) })}
           >
             {p.label?.() ?? p.title}
+            {busy && <span className="ed-tab-run" aria-hidden="true" />}
           </button>
         );
       })}

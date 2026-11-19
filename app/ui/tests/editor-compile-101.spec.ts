@@ -6,7 +6,7 @@
 //   LS_VITE_PORT=5334 npx playwright test editor-compile-101 [--project=large|small]
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-const SHOTS = "/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b50-85a20aff9c24/scratchpad/p101/build";
+const SHOTS = process.env.LS_SHOTS ?? "/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b50-85a20aff9c24/scratchpad/p101/build";
 const STATUS = { installed: true, version: "1.3.1", bytes: 1, url: "", licence: "", folder: "", canRun: true, cantRun: null, suggestName: "qa_room", busy: false, cores: 12, threads: 10 };
 
 type Stage = { id: string; name: string; label: string; state: string; seconds: number | null };
@@ -265,4 +265,33 @@ test("a very short dock during a playtest: Stop and Skip teaching in sight, the 
   await expect(step(page, "Teach bots the map")).toBeInViewport();
   await shot(page, "10-short-dock-teaching", ".compile-live");
   ctl.learnDone = true;
+});
+
+test("folding the dock during a compile: the Compile tab shows it's running, and clears when it ends", async ({ page }) => {
+  const { ctl } = await setUp(page, { holdCompile: true });
+  const tab = page.locator("[data-dock-strip=bottom] [data-dock-tab=compile]");
+  const strip = page.locator("[data-dock-strip=bottom]");
+  await expect(tab.locator(".ed-tab-run")).toHaveCount(0);
+  const before = (await strip.boundingBox())!;
+  const tabBefore = (await tab.boundingBox())!;
+  await page.locator(".compile-panel").getByRole("button", { name: "Compile", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Compile (running)" })).toBeVisible();
+  await page.getByRole("button", { name: "Fold the bottom panels" }).click();
+  await expect(page.locator(".compile-panel")).toHaveCount(0);
+  await expect(tab.locator(".ed-tab-run")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Compile (running)" })).toBeVisible();
+  // one row, and the tab neither grew nor moved
+  const after = (await strip.boundingBox())!;
+  const tabAfter = (await tab.boundingBox())!;
+  expect(Math.round(after.height)).toBe(Math.round(before.height));
+  expect(Math.round(tabAfter.width)).toBe(Math.round(tabBefore.width));
+  expect(Math.round(tabAfter.x)).toBe(Math.round(tabBefore.x));
+  await shot(page, "11-folded-running", "[data-dock-strip=bottom]");
+  ctl.compileDone = true;
+  await expect(tab.locator(".ed-tab-run")).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("tab", { name: "Compile", exact: true })).toBeVisible();
+  await shot(page, "12-folded-done", "[data-dock-strip=bottom]");
+  // clicking the tab opens the dock again, on the Compile panel
+  await tab.click();
+  await expect(page.locator(".compile-panel")).toBeVisible();
 });

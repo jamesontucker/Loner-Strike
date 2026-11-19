@@ -9,6 +9,7 @@ import { ChecksPanel } from "./ChecksPanel"; // Checks: its own file now
 import { OutlinePanel } from "./OutlinePanel";
 import { LibraryPanel } from "./LibraryPanel";
 import { CompilePanel } from "./CompilePanel";
+import { compileRunning } from "./compileApi";
 import { ProjectPanel } from "./ProjectPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { ContentBrowser } from "./ContentBrowser";
@@ -17,7 +18,7 @@ import { useEditor } from "./store";
 
 /** `subtitle`: one line under the panel's tabs and in its tooltips (what it holds). Ids stay as
  *  saved layouts and key settings have them ("library" is the Gameplay panel). */
-export type DockPanel = { id: string; title: string; subtitle?: string; render: () => ReactNode; label?: () => string; bad?: () => boolean };
+export type DockPanel = { id: string; title: string; subtitle?: string; render: () => ReactNode; label?: () => string; bad?: () => boolean; busy?: () => boolean };
 
 function Library() {
   const arg = useToolArg();
@@ -41,7 +42,7 @@ export const DOCK_PANELS: DockPanel[] = [
   { id: "budget", title: "Budget", subtitle: "How close the map is to the engine's limits", render: () => <BudgetPanel /> }, // P5
   { id: "io", title: "I/O", subtitle: "What triggers what: targets, multi_managers, masters, broken links", render: () => <IOPanel /> }, // P5
   { id: "checks", title: "Checks", render: () => <ChecksPanel />, label: checksCount, bad: () => (useEditor.getState().checks?.issues.some((i) => i.level === "error") ?? false) },
-  { id: "compile", title: "Compile", render: () => <CompilePanel /> },
+  { id: "compile", title: "Compile", render: () => <CompilePanel />, busy: compileRunning }, // 1.0.1: a running dot
   { id: "project", title: "Project", render: () => <ProjectPanel /> },
   { id: "history", title: "History", render: () => <HistoryPanel /> },
 ];

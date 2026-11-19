@@ -107,7 +107,8 @@ function FindBox({ graph, onPick }: { graph: Graph; onPick: (id: string) => void
       <input
         className="st-field"
         type="search"
-        placeholder="Find in this mode"
+        placeholder="Find…"
+        title="Find in this mode"
         value={find}
         role="combobox"
         aria-expanded={open && !!find.trim()}

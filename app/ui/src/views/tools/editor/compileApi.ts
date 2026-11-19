@@ -172,6 +172,14 @@ export const useLeak = create<LeakState>((set) => ({
   },
 }));
 
+/** 1.0.1: a compile, setup or playtest going on, kept here (not in the panel) so the Compile tab
+ *  can show it while its panel is folded away or behind another tab. */
+export const useCompileRun = create<{ job: boolean; starting: boolean; playing: boolean }>(() => ({ job: false, starting: false, playing: false }));
+export const compileRunning = () => {
+  const s = useCompileRun.getState();
+  return s.job || s.starting || s.playing;
+};
+
 /** P5: a pointfile (.lin or .pts) from another compile, picked in the file dialog. */
 export const loadPointfile = () => post<LeakInfo & { cancelled?: boolean }>("/api/tools/editor/leak/load");
 export const clearLeak = () => post<LeakInfo>("/api/tools/editor/leak/clear");
