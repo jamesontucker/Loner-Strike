@@ -2,6 +2,52 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
+## 1.0.1
+
+Polish from the first week, and the fixes people asked for:
+- Map editor: Hammer users can fly with left mouse + WASD, a Brush menu, a right-click menu, and compiles that show each stage's time with Stop always in reach
+- Discord messages and fast downloads on a Linux server without needing a website
+- An in-app bar when an update is out
+- Clearer wording and layout across the app, especially in smaller windows
+
+### Map editor
+- Hammer navigation: hold the left mouse button in the 3D view and WASD/QE fly, like J.A.C.K. Z mouse-look still works.
+- A new Brush menu (Transform, Group, Tie to entity, Hollow, Carve, Snap to grid, Flip, and more), so nothing is hidden at the bottom of a long Edit menu.
+- Right-click in a view for a menu of what you can do with what's under the mouse.
+- F9 compiles in every key set. Keys that need something picked say so ("Pick a brush first to hollow it") instead of doing nothing.
+- One name for framing what's picked: Frame selection (F).
+- The Compile panel lists each stage with its time, and says which can take minutes on big maps. A playtest shows its steps, timed, with Stop and "Skip teaching, play now" pinned where you can always see them. The Compile tab shows when something is running, even folded.
+- Teaching bots shows how long it's been going and what it's doing, instead of "about a minute". Bots aren't re-taught when the map's layout hasn't changed, and you're asked when it has.
+- The last compile and playtest logs are kept for each map, with errors shown in the panel and a button to open the full log.
+- In smaller windows the 3D view gets much more room, and the bottom panel starts folded.
+- Remove missing maps from the Recent list.
+
+### Nav Fixer and other tools
+- The Nav Fixer has a Fly camera: hold right mouse to look, WASD to fly.
+- Problems name their areas ("areas 257, 1142 and 1143"), and Show me frames them from above.
+- Game Mode Studio fits smaller windows: one toolbar row with a More menu.
+- Map doctor uses one name for each fix. Clearer Replay, Bot people and Map viewer wording.
+
+### Servers
+- Website, downloads & Discord (was Website status): Discord messages work without a website. Fast downloads and shared control need a web address on your domain, but no site list.
+- Checks say what to do next when something fails.
+- The port shown before install is the one that gets used, also for a second server on the same machine.
+- Copy to my game for demos from a server on this computer.
+- Clearer server setup: no "This network" for a VPS, a note on reaching a home server from outside, plainer map rotation and vote settings.
+- The server list shows a server added by name and by address once.
+
+### Sharing
+- Publish asks "Did you make this map?" for downloaded maps and credits the maker.
+- Add to Community is the one name for adding a page. The Published tab is now Yours.
+
+### The app
+- A bar on every page when an update is out, with Install.
+- The sidebar fits at 1440x900 and fades when more is below.
+- Find servers: Join everywhere, and No reply for servers that don't answer.
+- The mode you're playing says Playing now. Recently played and favorite maps come first in the map picker.
+- Placeholders are dimmer, so empty fields don't look filled in.
+- Status hints wrap instead of being cut off, and many small wording fixes.
+
 ## 1.0.0
 
 The first full release:
