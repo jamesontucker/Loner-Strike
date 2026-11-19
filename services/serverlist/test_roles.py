@@ -91,6 +91,28 @@ def make():
     return r, mod, bot, fs, c
 
 
+class RealCheck(unittest.TestCase):
+    """A claim finishing through serverlist.check itself (its real return shape), against a
+    GoldSrc server on 127.0.0.1 that shows the claim's ls_claim."""
+
+    def test_claim_finish_with_the_real_check(self):
+        import serverlist as sl
+        from test_serverlist import FakeServer
+        srv = FakeServer({})
+        real_clean = sl.clean_address
+        sl.clean_address = lambda text: (text.strip().lower(), srv.addr) if text and text.strip() else None
+        try:
+            r, *_ = make()
+            r.asker = sl.check
+            st = r.claim_start({"address": "play.example.com:27015"}, "198.51.100.1")
+            srv.rules["ls_claim"] = st["nonce"]
+            done = r.claim_finish({"claim": st["claim"]}, "198.51.100.1")
+            self.assertTrue(done.get("token"), done)
+        finally:
+            sl.clean_address = real_clean
+            srv.on = False
+
+
 def claim(r, fs, address="play.example.com:27015"):
     st = r.claim_start({"address": address}, "198.51.100.1")
     fs.rules[address] = {"ls_claim": st["nonce"]}

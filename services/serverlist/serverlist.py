@@ -33,6 +33,8 @@ PLAYERS = HEADER + b"U"
 POLL_SECS = 120
 # shown while it answered this recently
 FRESH_SECS = 600
+# entries that may reach one ip:port (update())
+MAX_PER_SERVER = 2
 # taken off the list after not answering this long (a week: a server down for a day or two,
 # or a machine restarted, comes back on its own; it's only shown while it answers, FRESH_SECS)
 GONE_SECS = 7 * 24 * 3600
@@ -226,9 +228,15 @@ def _is_ip(listed):
 
 
 def check(listed):
-    """Asks a server for its details and its ls_list setting: (info or None, rules or None,
-    "ip:port" asked or None). A host name is looked up once, and that one address is both
-    the one asked and the one kept, so the answer and the address always belong together."""
+    """Asks a server for its details and its ls_list setting: (info or None, rules or None).
+    (roles.py's claims use this one.)"""
+    return check_at(listed)[:2]
+
+
+def check_at(listed):
+    """check(), with the "ip:port" it asked (or None): a host name is looked up once, and that
+    one address is both the one asked and the one kept, so the answer and the address always
+    belong together. For the list's own polls and sign-ups."""
     found = clean_address(listed)
     if not found:
         return None, None, None
@@ -279,6 +287,10 @@ class Registry:
                 if not entry:
                     if len(self.servers) >= MAX_SERVERS:
                         return False
+                    # at most two entries per ip:port (its IP and a name, the normal case), so
+                    # many names pointed at one server (wildcard DNS) can't fill the list
+                    if ip and sum(1 for a, e in self.servers.items() if a == ip or e.get("ip") == ip) >= MAX_PER_SERVER:
+                        return False
                     entry = {"since": now}
                     self.servers[listed] = entry
                 entry.update(info=info, seen=now, off=0)
@@ -318,7 +330,7 @@ class Registry:
             started = time.time()
             with ThreadPoolExecutor(max_workers=16) as pool:
                 listed_now = self.addresses()
-                for listed, (info, rules, ip) in zip(listed_now, pool.map(check, listed_now)):
+                for listed, (info, rules, ip) in zip(listed_now, pool.map(check_at, listed_now)):
                     self.update(listed, info, rules, time.time(), ip)
             time.sleep(max(5, POLL_SECS - (time.time() - started)))
 
@@ -343,7 +355,7 @@ class RateLimit:
             return True
 
 
-def make_handler(registry, limit, asker=check, community=None):
+def make_handler(registry, limit, asker=check_at, community=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "list"
         sys_version = ""

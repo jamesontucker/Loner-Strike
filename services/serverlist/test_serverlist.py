@@ -194,6 +194,18 @@ class Tests(unittest.TestCase):
         r.update("play.example.com:27015", info, on, 1500, "8.8.8.8:27015")
         self.assertEqual(len(r.public(1510)), 2)
 
+    def test_names_pointed_at_one_server_cant_fill_the_list(self):
+        info = sl.parse_info(INFO_BODY)
+        on = {"ls_list": "1"}
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        self.assertTrue(r.update("8.8.8.8:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertTrue(r.update("a.example.com:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertFalse(r.update("b.example.com:27015", info, on, 1000, "8.8.8.8:27015"), "a third for one ip:port")
+        self.assertFalse(r.update("c.example.com:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertEqual(sorted(r.addresses()), ["8.8.8.8:27015", "a.example.com:27015"])
+        self.assertTrue(r.update("a.example.com:27015", info, on, 1100, "8.8.8.8:27015"), "the ones there keep answering")
+        self.assertTrue(r.update("d.example.com:27015", info, on, 1100, "9.9.9.9:27015"), "another server is fine")
+
     def test_check_asks_the_address_it_keeps(self):
         srv = FakeServer({"ls_list": "1"})
         try:
@@ -203,7 +215,7 @@ class Tests(unittest.TestCase):
             old_global = sl.ipaddress.IPv4Address.is_global
             sl.ipaddress.IPv4Address.is_global = property(lambda self: True)
             try:
-                info, rules, ip = sl.check("play.example.com:%d" % srv.addr[1])
+                info, rules, ip = sl.check_at("play.example.com:%d" % srv.addr[1])
             finally:
                 sl.socket.getaddrinfo = real
                 sl.ipaddress.IPv4Address.is_global = old_global
