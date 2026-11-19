@@ -508,7 +508,7 @@
           "name": "Inspect",
           "what": "A form for what's picked, with help on every key: an entity's name, color, brightness, flags and other keys, or a brush's size, turn and textures. Pick several entities to change them together.",
           "commands": ["map.inspect", "panel.inspect"],
-          "good": "A model, sprite or sound key has Choose…, ↗ to show it in the Content Browser, and Use selected."
+          "good": "A model, sprite or sound key has Choose…, ↗ to show it in the Content browser, and Use selected."
         },
         {
           "id": "io",
@@ -540,7 +540,7 @@
       "cards": [
         {
           "id": "content-browser",
-          "name": "Content Browser",
+          "name": "Content browser",
           "what": "Every model, sprite, sound, texture and prefab you can use, from the game, your downloads, Community and your own folder. Drag a tile onto the map to place it.",
           "commands": ["view.content", "panel.content"],
           "good": "A dropped model becomes a cycler_sprite, a sprite an env_sprite and a sound an ambient_generic.",
@@ -551,27 +551,27 @@
           "name": "A model's Collision",
           "what": "What a model you placed blocks once the map is compiled (Inspect › Collision on a cycler_sprite or cycler): None (walk through); Box, players only (an invisible CLIP brush fitted to the model's box); Box, players and bullets (the same box as a func_wall with NULL faces); Custom (no box: draw your own brushes). The box is made when the map compiles, from the model's bounds, its scale and its turn, so it always follows the model; it never shows up as a brush to edit. While the model is picked its box is drawn as a wireframe.",
           "where": ["Inspect panel › Collision (a model entity)"],
-          "good": "A model dropped from the Content Browser starts as Box, players only. Models already in a map keep what they did (None). Spawn Prop and Spawn Entity in the Game Mode Studio have the same choices.",
+          "good": "A model dropped from the Content browser starts as Box, players only. Models already in a map keep what they did (None). Spawn Prop and Spawn Entity in the Game Mode Studio have the same choices.",
           "entities": ["cycler_sprite", "cycler"]
         },
         {
           "id": "content-drawer",
           "name": "Content drawer",
-          "what": "Slides the Content Browser up over the bottom panels; Esc or a click elsewhere puts it away.",
+          "what": "Slides the Content browser up over the bottom panels; Esc or a click elsewhere puts it away.",
           "commands": ["view.contentDrawer"]
         },
         {
           "id": "import-files",
           "name": "Import your own files",
           "what": "Copies your own models, sprites, sounds and texture files into the project's folder, so they go with Playtest, Publish and remixes. Sounds in .mp3, .ogg or .flac become a WAV the game plays well.",
-          "where": ["Content Browser › Import…", "Drop files from Finder or Explorer on the Content Browser"],
+          "where": ["Content browser › Import…", "Drop files from Finder or Explorer on the Content browser"],
           "good": "Save the project first: the files go next to it."
         },
         {
           "id": "prefabs",
           "name": "Prefabs",
           "what": "Ready-made pieces (a doorway, stairs, crates, a bombsite kit, a buy zone and more) and your own. Drag one in, or press Place and click; R turns it before you place it.",
-          "where": ["Content Browser › Prefabs"],
+          "where": ["Content browser › Prefabs"],
           "actions": [
             { "name": "Save what's picked…", "what": "Makes your own prefab." },
             { "name": "Share as a package…", "what": "Saves a prefab as a file to give to someone." },
@@ -583,7 +583,7 @@
           "id": "gamebanana",
           "name": "GameBanana",
           "what": "Finds models, sprites and sounds to download from GameBanana, with their terms first. Downloads land under Downloaded.",
-          "where": ["Content Browser › GameBanana"]
+          "where": ["Content browser › GameBanana"]
         }
       ]
     },
@@ -714,10 +714,10 @@
         },
         {
           "id": "zoom",
-          "name": "Zoom to selection or the whole map",
+          "name": "Frame selection or the whole map",
           "what": "Brings what's picked, or the whole map, into every view.",
           "actions": [
-            { "name": "Zoom to selection", "what": "", "command": "view.frame" },
+            { "name": "Frame selection", "what": "", "command": "view.frame" },
             { "name": "Zoom to the whole map", "what": "", "command": "view.frameAll" }
           ]
         },

@@ -319,7 +319,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
   <h2 id="new-build">Build</h2>
   <p>A new <a href="#tools">Tools</a> section (Beta):</p>
   <ul>
-    <li><a href="#map-editor">Map editor</a> with <a href="#compile-playtest">compile and playtest</a>, <a href="#map-import">Hammer, J.A.C.K. and TrenchBroom import</a> and a <a href="#content-browser">Content Browser</a>.</li>
+    <li><a href="#map-editor">Map editor</a> with <a href="#compile-playtest">compile and playtest</a>, <a href="#map-import">Hammer, J.A.C.K. and TrenchBroom import</a> and a <a href="#content-browser">Content browser</a>.</li>
     <li><a href="#game-mode-studio">Game Mode Studio</a> with five <a href="#studio-examples">example modes</a>, a tour, <a href="#studio-help">node help</a>, <a href="#studio-checks">three checks</a> (Quick check, Compile, Test run), <a href="#studio-timelines">Timelines</a>, <a href="#studio-tables">data tables</a> and <a href="#studio-live-tweaks">live tweaks</a>; <a href="#plugin-studio">Plugin Studio</a> and <a href="#creature-studio">Creature Studio</a>.</li>
     <li><a href="#map-doctor">Map doctor</a>, <a href="#map-simulator">Map simulator</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
     <li><a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a>.</li>
@@ -823,7 +823,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
   <h1>Map editor</h1>
   <p class="lead">Build maps with brushes and entities, like Hammer, in a 3D view. The map is checked as you go.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="The map editor: tools down the left, br_valley in 3D, the outline and map settings on the right, the Content Browser below" width="1440" height="900" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="The map editor: tools down the left, br_valley in 3D, the outline and map settings on the right, the Content browser below" width="1440" height="900" loading="lazy"></picture>
     <figcaption>br_valley in the editor: tools on the left, panels on the right and below.</figcaption>
   </figure>
   <h2 id="editor-start">Start a map</h2>
@@ -849,7 +849,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
   <ul>
     <li><b>The editor bar</b>: the menus, <b>Find a command</b> (<span class="kbd">Ctrl</span> <span class="kbd">K</span>), <b>Save</b>, <b>Playtest</b> and <b>Publish…</b>.</li>
     <li><b>Single</b>, <b>Quad</b>, <b>1+3</b> and <b>Two</b> (<span class="kbd">Alt</span> <span class="kbd">1</span> to <span class="kbd">4</span>) set the views. Quad is 3D, Top, Front and Side, like Hammer.</li>
-    <li>Panels: <b>Outline</b> and <b>Inspect</b> on the right; the <a href="#content-browser">Content Browser</a>, <b>Gameplay</b>, <b>Textures</b>, <b>Checks</b>, <b>Compile</b> and <b>Project</b> below. Drag tabs to move them. <b>View</b> has layouts and <b>Reset the panel layout</b>.</li>
+    <li>Panels: <b>Outline</b> and <b>Inspect</b> on the right; the <a href="#content-browser">Content browser</a>, <b>Gameplay</b>, <b>Textures</b>, <b>Checks</b>, <b>Compile</b> and <b>Project</b> below. Drag tabs to move them. <b>View</b> has layouts and <b>Reset the panel layout</b>.</li>
     <li>Each view's style picker also draws information, with a key in the corner: <b>Collision</b> (what blocks what: solid gray, CLIP orange, NULL red, triggers purple, ladders green, water blue, illusionary ghosted, model boxes as wireframes), <b>By entity type</b>, and <b>Missing textures</b> (magenta, to find them before you compile). <b>G</b> hides the editor's helpers (game view).</li>
     <li><b>Help › Change keys…</b> has Hammer's and TrenchBroom's keys.</li>
     <li>New to mapping? <b>Help › First map tour</b> walks you through a first room, light, spawns and playtest.</li>
@@ -888,16 +888,16 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
     <figcaption>The face sheet: a picked face's texture and how it lies.</figcaption>
   </figure>
   <h2 id="editor-entities">Entities</h2>
-  <p><b>Inspect</b> shows a form for the picked entity, with help on every key; pick several to change them together. <code>target</code> → <code>targetname</code> links are drawn in 3D. A model, sprite or sound key has <b>Choose…</b>, ↗ (show it in the <a href="#content-browser">Content Browser</a>) and <b>Use selected</b>. For a mod's own entities, add its FGD in <b>Map properties › Entity definitions</b>.</p>
+  <p><b>Inspect</b> shows a form for the picked entity, with help on every key; pick several to change them together. <code>target</code> → <code>targetname</code> links are drawn in 3D. A model, sprite or sound key has <b>Choose…</b>, ↗ (show it in the <a href="#content-browser">Content browser</a>) and <b>Use selected</b>. For a mod's own entities, add its FGD in <b>Map properties › Entity definitions</b>.</p>
   <p>The <b>I/O</b> panel (<b>What triggers what</b>) lists every link (targets, <code>multi_manager</code>s, masters and kill targets) and draws them as arrows. Show <b>All</b>, only <b>Broken</b> ones (a target no entity is named), or the <b>Picked chain</b>; the search box finds a name or a class. Click a row to pick it, double-click to look at it.</p>
-  <p id="editor-model-collision" data-keywords="collision clip block walk through model box cycler_sprite">A model you place (a <code>cycler_sprite</code>) has a <b>Collision</b> setting in Inspect: <b>None</b> (walk through), <b>Box, players only</b> (an invisible CLIP brush fitted to the model), <b>Box, players and bullets</b> (the same box as a <code>func_wall</code> with NULL faces) or <b>Custom</b> (draw your own brushes). The box is made when the map compiles, from the model's bounds, scale and turn, so it follows the model; picked, it's drawn as a wireframe. A model dropped from the Content Browser starts as Box, players only; models already in a map keep what they did.</p>
+  <p id="editor-model-collision" data-keywords="collision clip block walk through model box cycler_sprite">A model you place (a <code>cycler_sprite</code>) has a <b>Collision</b> setting in Inspect: <b>None</b> (walk through), <b>Box, players only</b> (an invisible CLIP brush fitted to the model), <b>Box, players and bullets</b> (the same box as a <code>func_wall</code> with NULL faces) or <b>Custom</b> (draw your own brushes). The box is made when the map compiles, from the model's bounds, scale and turn, so it follows the model; picked, it's drawn as a wireframe. A model dropped from the Content browser starts as Box, players only; models already in a map keep what they did.</p>
   <p id="editor-stock-entities" data-keywords="trigger_random game_counter game_score func_tracktrain path_track func_tank charger item ammo">The game's own logic and moving parts are in the entity list too, each with help: random triggers (<code>trigger_random</code>), <code>trigger_setorigin</code>, the <code>game_</code> rules (score, counters, team masters, player zones), <code>env_global</code>, momentary doors and wheels, trains on a <code>path_track</code> track, turrets (<code>func_tank</code>), health and armor chargers, and item and ammo pickups. Tracks, turret aim and what <code>trigger_setorigin</code> moves are drawn in the views, and the checks say when one can't work (a turret that never turns, an empty random target). <code>game_end</code> ends the map for everyone when set off.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/editor-io.webp" type="image/webp"><img src="img/1.0/editor-io.png" alt="The map editor on ls_outpost: a button fires a multi_manager that drops the east gate's boards and sounds a siren, its chain as arrows in 3D, the I/O panel listing the links below and the multi_manager's keys in Inspect" width="1440" height="900" loading="lazy"></picture>
     <figcaption>A multi_manager's chain: arrows in 3D, links in the I/O panel.</figcaption>
   </figure>
-  <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content Browser</h2>
-  <p>The map editor panel with <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>. Open it from <b>View › Content Browser</b> (tab: <b>Content</b>) or as a drawer.</p>
+  <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content browser</h2>
+  <p>The map editor panel with <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>. Open it from <b>View › Content browser</b> (tab: <b>Content</b>) or as a drawer.</p>
   <ul>
     <li><b>Where from</b>: <b>Everything</b>, <b>Game</b>, <b>Downloaded</b> (by GameBanana page), <b>Community</b>, <b>Mine</b> (next to your project), <b>Other</b>, <b>Favorites</b>, <b>Recent</b>.</li>
     <li>Play sounds with ▶, a double-click or <b>Play on hover</b>.</li>
@@ -1986,7 +1986,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="credits" data-keywords="credit license permission terms author assets">Credits</h2>
   <p>Loner-Strike tracks where every file came from:</p>
   <ul>
-    <li><b>Before you download.</b> Get more and the <a href="#content-browser">Content Browser</a> show a page's terms (sharing, commercial use, who to credit, license) and keep them with the files.</li>
+    <li><b>Before you download.</b> Get more and the <a href="#content-browser">Content browser</a> show a page's terms (sharing, commercial use, who to credit, license) and keep them with the files.</li>
     <li><b>When you package it.</b> <b>Credits for the files it uses</b> lists each file's source, makers and what its page allows.</li>
     <li><b>Ask first.</b> Most GameBanana pages want you to ask the maker. Once they say yes, press <b>Permission granted…</b> and note who, where and when.</li>
     <li><b>Not allowed.</b> The package isn't made until you record permission.</li>
