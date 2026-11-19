@@ -147,12 +147,12 @@ function describe(a: Activity) {
 /** Asked when an invite has no SteamID */
 const NO_STEAM = "Invite without their SteamID? Without it the server can't tell them apart in the game, so a Moderator could ban, mute or kick them. They find it by typing status in the game's console.";
 
-/** The Cloudflare route a tunnel needs for shared control (also shown in Website status):
+/** The Cloudflare route a tunnel needs for shared control (also shown in Website, downloads & Discord):
  * each value with a copy button, and where it goes in the list. */
 export function ControlRoute({ domain, port }: { domain: string; port: number }) {
   const toast = useToast();
   const rows: [string, string][] = [
-    ["Hostname", domain || "the status page address"],
+    ["Hostname", domain || "the server's address"],
     ["Path", "^/control/"],
     ["Service URL", `http://127.0.0.1:${port}`],
   ];
@@ -181,9 +181,9 @@ function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
     return (
       <div className="stack-tight">
-        <p className="muted small-note">Helpers connect to the server itself at its status page address, so this computer can be off. Set up the status page first, in this server's Website status tab.</p>
+        <p className="muted small-note">Helpers connect to the server itself, so this computer can be off. That needs an address on a domain you own: enter one in this server's Website, downloads & Discord tab.</p>
         <div className="row">
-          <button className="btn" onClick={() => openTab("webstatus")}>Set up Website status</button>
+          <button className="btn" onClick={() => openTab("webstatus")}>Set up an address</button>
         </div>
       </div>
     );
@@ -196,9 +196,9 @@ function ServerReach({ c }: { c: Control }) {
       </p>
       {!c.reachable && (
         <>
-          <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check the Website status tab, then open this tab again.</p>
+          <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check the Website, downloads & Discord tab, then open this tab again.</p>
           <div className="row">
-            <button className="btn small" onClick={() => openTab("webstatus")}>Open Website status</button>
+            <button className="btn small" onClick={() => openTab("webstatus")}>Open Website, downloads & Discord</button>
           </div>
         </>
       )}

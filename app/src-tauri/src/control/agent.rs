@@ -352,8 +352,8 @@ pub fn reachable(url: &str, tunnel: bool) -> Result<String, String> {
     // /control/ route, or with it below the status route), a 5xx the front not reaching it
     match status {
         404 if tunnel => return Err("the status page answered instead. In Cloudflare, add the ^/control/ route and move it above the status route".into()),
-        404 => return Err("the website status front didn't pass it on. Press Install again in Website status, so Caddy gets the /control route".into()),
-        502..=504 | 530 => return Err(format!("the front couldn't reach shared control on the server (HTTP {status})")),
+        404 => return Err("the server's address didn't pass it on. Press Save and update in Website, downloads & Discord, so Caddy gets the /control route".into()),
+        502..=504 | 530 => return Err(format!("the server's address couldn't reach shared control behind it (HTTP {status}). Open the Shared control tab, which starts it again, then check again")),
         _ => {}
     }
     // [Caps] a ping answer is a few bytes

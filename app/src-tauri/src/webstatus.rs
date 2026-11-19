@@ -85,8 +85,13 @@ impl Settings {
     pub fn is_unset(&self) -> bool {
         *self == Settings::default()
     }
+    /// Reached from the internet (Caddy or a tunnel in front): only with an address. Without
+    /// one the service runs for the Discord messages alone.
+    pub fn public(&self) -> bool {
+        !self.domain.is_empty()
+    }
     fn tunnel(&self) -> bool {
-        self.mode == "tunnel"
+        self.public() && self.mode == "tunnel"
     }
     /// The app runs its own cloudflared for this server
     fn own_tunnel(&self) -> bool {
@@ -208,6 +213,32 @@ pub fn port_of(me: &Entry, all: &[Entry]) -> u16 {
     }
 }
 
+/// The port shown before the service is installed: the one Install will take, so also
+/// passing over ports something already listens on at the machine (asked over SSH, at most
+/// once a minute per server). Once installed, the one it has.
+fn preview_port(e: &Entry, all: &[Entry]) -> u16 {
+    use std::collections::HashMap;
+    use std::time::Instant;
+    static SEEN: std::sync::Mutex<Option<HashMap<String, (Instant, u16)>>> = std::sync::Mutex::new(None);
+    let (Some(r), None) = (e.remote.as_ref(), e.web_status.port) else { return port_of(e, all) };
+    if let Some((at, p)) = SEEN.lock().unwrap_or_else(|x| x.into_inner()).as_ref().and_then(|m| m.get(&e.id).copied()) {
+        if at.elapsed() < Duration::from_secs(60) {
+            return p;
+        }
+    }
+    let p = match crate::remote::listening(r) {
+        Ok((_, tcp)) => pick_port(e, all, &tcp).unwrap_or_else(|| port_of(e, all)),
+        Err(_) => return port_of(e, all),
+    };
+    SEEN.lock().unwrap_or_else(|x| x.into_inner()).get_or_insert_with(Default::default).insert(e.id.clone(), (Instant::now(), p));
+    p
+}
+
+/// The service has a job: something reached at its address, or Discord messages to send.
+fn needs_something(s: &Settings, discord: bool) -> bool {
+    s.public() || discord
+}
+
 /// Checks and tidies new settings for server `me` (`all`: every server).
 pub fn validate(mut s: Settings, me: &Entry, all: &[Entry]) -> Result<Settings, String> {
     if me.remote.is_none() {
@@ -229,11 +260,19 @@ pub fn validate(mut s: Settings, me: &Entry, all: &[Entry]) -> Result<Settings, 
     }
     s.origins = origins;
     if s.enabled {
+        // only what's reached from the internet needs an address: fast downloads, the
+        // website's status and counter (and shared control for helpers, which follows the
+        // address when there is one). Discord messages go out from the server on their own.
         if s.domain.is_empty() {
-            return Err("Enter the status page's address, like status.example.com.".into());
+            if s.fastdl {
+                return Err("Fast downloads need an address, like files.example.com. Players' games download from it.".into());
+            }
+            if s.counter || !s.origins.is_empty() {
+                return Err("Showing the status on your website needs an address, like status.example.com.".into());
+            }
         }
-        if s.origins.is_empty() {
-            return Err("Enter at least one site that may show the status, like https://example.com.".into());
+        if s.counter && s.origins.is_empty() {
+            return Err("The visit counter counts visits to your website. Enter your site under Sites that may show it, like https://example.com.".into());
         }
         if let Some(o) = all.iter().find(|o| o.id != me.id && o.web_status.enabled && o.web_status.domain == s.domain) {
             return Err(format!("\"{}\" already uses {}. Pick another address.", o.name, s.domain));
@@ -331,7 +370,8 @@ pub fn saved_hooks(id: &str) -> Vec<String> {
 /// A Discord webhook link as pasted (Channel settings, Integrations, Webhooks, Copy Webhook
 /// URL): https://discord.com/api/webhooks/<id>/<token>, without anything after it.
 pub fn clean_hook(text: &str) -> Result<String, String> {
-    const HELP: &str = "Paste the link from Discord: Edit Channel, Integrations, Webhooks, Copy Webhook URL.";
+    // (the same steps as the app's pages: WebStatus.tsx HOOK_HOWTO)
+    const HELP: &str = "That isn't a Discord webhook link. In Discord, open the channel's settings (Edit Channel), then Integrations, then Webhooks. Make a new webhook and press Copy Webhook URL.";
     let t = text.trim();
     let rest = ["https://discord.com/api/webhooks/", "https://discordapp.com/api/webhooks/", "https://ptb.discord.com/api/webhooks/", "https://canary.discord.com/api/webhooks/"]
         .iter()
@@ -356,6 +396,8 @@ pub fn clean_hook(text: &str) -> Result<String, String> {
 /// in read-only so the service can serve players' downloads from it.
 pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String], counter: bool, discord: [bool; 2], address: &str, fastdl: Option<&str>) -> String {
     let mut counter = if counter { format!(" --counter {DATA}/{id}/visits.txt") } else { String::new() };
+    // (no sites: no --origins at all, an empty value would take the next option's place)
+    let origins = if origins.is_empty() { String::new() } else { format!(" --origins {}", origins.join(",")) };
     let mut load = String::new();
     if let Some(dir) = fastdl {
         // "-": a game folder that isn't there yet doesn't stop the status page
@@ -382,7 +424,7 @@ Wants=network-online.target
 [Service]
 User={USER}
 Group={USER}
-{load}ExecStart=/usr/bin/python3 {SCRIPT} --listen {listen} --game {game_port} --origins {origins}{counter}
+{load}ExecStart=/usr/bin/python3 {SCRIPT} --listen {listen} --game {game_port}{origins}{counter}
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
@@ -399,7 +441,6 @@ MemoryMax=64M
 [Install]
 WantedBy=multi-user.target
 ",
-        origins = origins.join(","),
         // looking up discord.com can go through systemd-resolved's socket
         unix = if discord.iter().any(|on| *on) { " AF_UNIX" } else { "" }
     )
@@ -654,7 +695,12 @@ pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Op
         String::new()
     };
     let sh_start = |t: String| t.replace("@CHECK_FASTDL@", &check);
-    if s.tunnel() && token.is_none() {
+    if !s.public() {
+        // no address: only the service (for Discord), nothing in front of it
+        sh.push_str(&fill(DROP_CADDY, id));
+        sh.push_str(&fill(DROP_TUNNEL, id));
+        sh.push_str(&sh_start(fill(START, id)).replace("@FRONT@", "").replace("@CHECK_FRONT@", ""));
+    } else if s.tunnel() && token.is_none() {
         // the Cloudflare Tunnel already on the machine (cloudflared.service): used, never changed
         sh.push_str(&fill(DROP_CADDY, id));
         sh.push_str(&fill(DROP_TUNNEL, id));
@@ -834,9 +880,16 @@ pub fn saved_token(id: &str) -> Option<String> {
 fn status(e: &Entry) -> Value {
     let all = servers::load();
     let s = &e.web_status;
-    let port = port_of(e, &all);
-    let (state, reason, live) = if !s.enabled || s.domain.is_empty() {
+    let port = preview_port(e, &all);
+    let (state, reason, live) = if !s.enabled {
         ("off", None, None)
+    } else if !s.public() {
+        // no address to ask from outside: the machine says whether the service runs
+        match e.remote.as_ref().map(|r| crate::remote::unit_state(r, &unit(&e.id))) {
+            Some(Ok((true, _))) => ("running", None, None),
+            Some(Ok((false, _))) => ("not_answering", Some("The service isn't running on the server. Press Save and update to start it again.".to_string()), None),
+            _ => ("not_answering", Some("Couldn't reach the server to see whether the service runs. Check it's on.".to_string()), None),
+        }
     } else {
         match check(e) {
             Ok(v) => ("running", None, Some(v)),
@@ -901,7 +954,7 @@ fn entry(id: &str) -> Result<Entry, String> {
 /// downloads (the current map, as a player's game would fetch it), and the Discord links.
 fn health(e: &Entry) -> Value {
     let s = &e.web_status;
-    if !s.enabled || s.domain.is_empty() {
+    if !s.enabled {
         return json!({});
     }
     let http = crate::sys::http();
@@ -909,17 +962,17 @@ fn health(e: &Entry) -> Value {
         Ok(()) => json!({"ok": true}),
         Err(why) => json!({"ok": false, "why": why}),
     };
-    let control = crate::control::agent::used_for(e).then(|| crate::control::agent::url(e)).flatten().map(|url| {
-        said(crate::control::agent::reachable(&url, s.tunnel()).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}", crate::control::VERSION)) }))
+    let control = (s.public() && crate::control::agent::used_for(e)).then(|| crate::control::agent::url(e)).flatten().map(|url| {
+        said(crate::control::agent::reachable(&url, s.tunnel()).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}. Open the Shared control tab, which brings it up to date, then check again", crate::control::VERSION)) }))
     });
-    let fastdl = s.fastdl.then(|| {
+    let fastdl = (s.fastdl && s.public()).then(|| {
         let map = http.get(format!("https://{}/status", s.domain)).timeout(Duration::from_secs(6)).send().ok().and_then(|r| crate::caps::read_up_to(r, "status page", MAX_STATUS_ANSWER).ok()).and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| v["map"].as_str().map(String::from)).filter(|m| crate::control::common::safe_arg(m)); // [Caps]
         said(match map {
-            None => Err("the status page didn't say which map is on, so there's nothing to try. Start the server and check again".into()),
+            None => Err("the service didn't say which map is on, so there's nothing to try. Start the server and check again".into()),
             Some(map) => match http.head(format!("{}/maps/{map}.bsp", fastdl_url(&s.domain))).timeout(Duration::from_secs(8)).send() {
                 Ok(r) if r.status().is_success() => Ok(()),
-                Ok(r) => Err(format!("maps/{map}.bsp didn't download (HTTP {})", r.status().as_u16())),
-                Err(err) => Err(format!("it didn't answer ({err})")),
+                Ok(r) => Err(fastdl_fix(&map, r.status().as_u16(), s.tunnel())),
+                Err(err) => Err(format!("it didn't answer ({}). Check the Service box above says Running, then check again", err.without_url())),
             },
         })
     });
@@ -931,14 +984,26 @@ fn health(e: &Entry) -> Value {
             let r = match http.get(&url).timeout(Duration::from_secs(6)).send() {
                 Ok(r) if r.status().is_success() => Ok(()),
                 Ok(r) if matches!(r.status().as_u16(), 401 | 404) => Err("Discord says this webhook was deleted. Make a new one and paste it here".to_string()),
-                Ok(r) => Err(format!("Discord answered HTTP {}", r.status().as_u16())),
+                Ok(r) => Err(format!("Discord answered HTTP {}. Discord may be having trouble: check again in a few minutes", r.status().as_u16())),
                 // (never the error itself: it carries the webhook's address, token and all)
-                Err(err) => Err(if err.is_timeout() { "Discord didn't answer in time".to_string() } else { "couldn't reach Discord".to_string() }),
+                Err(err) => Err(if err.is_timeout() { "Discord didn't answer in time. Check again in a few minutes".to_string() } else { "couldn't reach Discord from this computer. Check your internet connection, then check again".to_string() }),
             };
             ((*k).to_string(), said(r))
         })
         .collect();
     json!({"control": control, "fastdl": fastdl, "discord": discord})
+}
+
+/// A fast download that didn't work, with what to do about it.
+fn fastdl_fix(map: &str, code: u16, tunnel: bool) -> String {
+    let next = match code {
+        404 if tunnel => "Press Save and update, so the service serves the game folder. If it stays, check the tunnel's hostname in Cloudflare has no path, so /fastdl reaches the server",
+        404 => "Press Save and update, so the server's settings include fast downloads. If it stays, check the map is in the server's maps folder (Library, Maps)",
+        403 => "The service can't read the server's game folder. Press Save and update",
+        502..=504 | 530 => "The address answers, but not the service behind it. Press Save and update, then check again",
+        _ => "Press Save and update, then check again",
+    };
+    format!("maps/{map}.bsp didn't download (HTTP {code}). {next}")
 }
 
 async fn api_health(UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
@@ -996,10 +1061,10 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
             }
         }
         let token = (!req.token.trim().is_empty()).then(|| clean_token(&req.token)).transpose()?;
-        if s.tunnel() {
+        if s.mode == "tunnel" {
             // a new token: the app's own tunnel. Otherwise the one it has, or the machine's own
             s.own_tunnel = token.is_some() || (e.web_status.own_tunnel && read_token(&id).is_some());
-            if s.enabled && !s.own_tunnel {
+            if s.enabled && s.public() && !s.own_tunnel {
                 let r = e.remote.as_ref().ok_or("Website status is for servers on a Linux machine.")?;
                 if existing_tunnel(r)? != Some("running") {
                     return Err("There's no Cloudflare Tunnel running on this machine. Paste the tunnel's token from Cloudflare.".into());
@@ -1013,6 +1078,14 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
             .into_iter()
             .map(|(k, v)| v.map(|t| if t.trim().is_empty() { Ok(None) } else { clean_hook(&t).map(Some) }).transpose().map(|v| (k, v)))
             .collect::<Result<_, _>>()?;
+        // without an address the service is only there for Discord
+        let discord_after = hooks.iter().any(|(k, h)| match h {
+            Some(new) => new.is_some(),
+            None => read_hook(k, &id).is_some(),
+        });
+        if s.enabled && !needs_something(&s, discord_after) {
+            return Err("There's nothing to set up yet. Paste a Discord webhook, or enter an address for fast downloads or your website.".into());
+        }
         if let Some(t) = &token {
             save_token(&id, t)?;
         }
@@ -1138,8 +1211,17 @@ mod tests {
         assert_eq!(s.port, Some(8091), "8090 is b's on the same machine; c's machine doesn't count");
         assert_eq!(s.mode, "caddy");
         assert!(validate(on("status.example.com", &["https://example.com"]), &a, &all).is_err(), "b uses that name");
-        assert!(validate(on("", &["https://example.com"]), &a, &all).is_err());
-        assert!(validate(on("live.example.com", &[]), &a, &all).is_err(), "at least one site");
+        assert!(validate(on("", &["https://example.com"]), &a, &all).is_err(), "a website needs an address");
+        // no website: no sites needed (fast downloads, shared control and Discord work without one)
+        assert!(validate(on("live.example.com", &[]), &a, &all).is_ok(), "an address alone");
+        assert!(validate(Settings { fastdl: true, ..on("live.example.com", &[]) }, &a, &all).is_ok(), "fast downloads without a website");
+        assert!(validate(Settings { counter: true, ..on("live.example.com", &[]) }, &a, &all).is_err(), "the counter counts a website's visits");
+        // no address: only for Discord
+        assert!(validate(on("", &[]), &a, &all).is_ok(), "Discord alone needs no address");
+        assert!(validate(Settings { fastdl: true, ..on("", &[]) }, &a, &all).unwrap_err().contains("Fast downloads need an address"));
+        assert!(validate(Settings { counter: true, ..on("", &["https://example.com"]) }, &a, &all).is_err());
+        assert!(!needs_something(&on("", &[]), false) && needs_something(&on("", &[]), true) && needs_something(&on("x.example.com", &[]), false));
+        assert!(!Settings { mode: "tunnel".into(), ..on("", &[]) }.tunnel(), "no address, no tunnel");
         assert!(validate(Settings { enabled: false, ..on("", &[]) }, &a, &all).is_ok(), "off: nothing needed");
         assert!(validate(on("live.example.com", &["https://example.com"]), &server("l", None), &all).is_err(), "not on a Linux machine");
         // a port once picked is kept
@@ -1178,6 +1260,16 @@ mod tests {
     }
 
     #[test]
+    fn fast_download_problems_say_what_to_do() {
+        let t = fastdl_fix("de_dust2", 404, false);
+        assert!(t.starts_with("maps/de_dust2.bsp didn't download (HTTP 404). Press Save and update"), "{t}");
+        assert!(fastdl_fix("x", 404, true).contains("Cloudflare"));
+        for code in [403, 500, 502, 530] {
+            assert!(fastdl_fix("x", code, false).contains("Save and update"), "{code}");
+        }
+    }
+
+    #[test]
     fn discord_in_the_unit_and_script() {
         let u = status_unit_text("pub", 8090, 27015, &[], false, [true, false], "play.example.com", None);
         assert!(u.contains("LoadCredential=discord-live:/etc/lonerstrike-status/discord-live-pub.url\nExecStart="));
@@ -1186,6 +1278,14 @@ mod tests {
         assert!(u.contains("RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"));
         let none = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "play.example.com", None);
         assert!(!none.contains("discord") && !none.contains("--address") && !none.contains("AF_UNIX"));
+        // no sites: no --origins (an empty one would swallow the next option)
+        assert!(u.contains("--game 27015 --discord-state ") && !u.contains("--origins"));
+        // no address: the service alone, nothing in front of it
+        let bare = Settings { enabled: true, mode: "tunnel".into(), own_tunnel: true, ..Settings::default() };
+        let sh = install_sh("pub", &bare, 8090, 27015, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "cstrike");
+        assert!(!sh.contains("apt_get install -y -qq caddy") && !sh.contains("pkg.cloudflare.com") && !sh.contains("is-active --quiet cloudflared") && !sh.contains("--dport"));
+        assert!(sh.contains("sudo rm -f /etc/caddy/loner-strike.d/pub.caddy") && sh.contains("disable --now lonerstrike-pub-tunnel"), "a front from before goes");
+        assert!(sh.contains("sudo systemctl restart lonerstrike-pub-status"));
         let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec![], counter: false, mode: "caddy".into(), port: None, own_tunnel: false, fastdl: false };
         let hook = "https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz";
         let sh = install_sh("pub", &s, 8090, 27015, None, [Some(hook), None], "play.example.com", "cstrike");
@@ -1292,7 +1392,8 @@ mod tests {
         let t = Settings { mode: "tunnel".into(), own_tunnel: true, ..s.clone() };
         let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ=="; // gitleaks:allow (made-up test token)
         for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, None, [None, None], "", "cstrike"),
-                   install_sh("pub", &Settings { fastdl: true, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "czero"), off_sh("pub"), remove_sh("pub")] {
+                   install_sh("pub", &Settings { fastdl: true, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "czero"),
+                   install_sh("pub", &Settings { domain: String::new(), origins: vec![], counter: false, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "", "cstrike"), off_sh("pub"), remove_sh("pub")] {
             use std::io::Write;
             let mut c = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
             c.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();

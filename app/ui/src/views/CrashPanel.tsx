@@ -9,6 +9,11 @@ import { copyText, getJson, postJson } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Switch, useToast } from "../ui";
 import { DocsLink } from "./DocsLink"; // P5
+import { TabLink } from "./goto";
+
+/** How to get a Discord webhook link: the same words everywhere one is asked for (here and
+ *  Website, downloads & Discord; the app's own error says the same, webstatus.rs clean_hook) */
+export const HOOK_HOWTO = "In Discord, open the channel's settings (Edit Channel), then Integrations, then Webhooks. Make a new webhook and press Copy Webhook URL.";
 
 export type Crash = {
   id: string;
@@ -148,7 +153,7 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
       setSaving(false);
     }
   };
-  // a local server's Discord channel (a server on a Linux machine links it in Website and Discord)
+  // a local server's Discord channel (a server on a Linux machine links it in Website, downloads & Discord)
   const [hook, setHook] = useState("");
   const [linking, setLinking] = useState(false);
   const link = async (url: string | null) => {
@@ -214,8 +219,8 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
                 {r.alerts.discordLinked
                   ? `New crashes go to ${local ? "the linked Discord channel" : "the server's Discord status channel"} while Loner-Strike is running.`
                   : local
-                    ? "Paste a Discord channel's webhook link below first."
-                    : "Link the server's Discord status channel first (Website and Discord)."}
+                    ? "Paste a channel's webhook URL below first."
+                    : <>Paste a webhook for the live status message first, under <TabLink tab="webstatus">Website, downloads & Discord</TabLink>.</>}
               </p>
             </div>
             {saving ? (
@@ -234,18 +239,22 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
                 <BusyButton className="btn small" busy={linking} label="Unlink" busyLabel="Saving…" onClick={() => void link(null)} />
               </div>
             ) : (
-              <div className="row">
-                <input
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="https://discord.com/api/webhooks/…"
-                  aria-label="Discord webhook link"
-                  title="In Discord: Edit Channel, Integrations, Webhooks, New Webhook, Copy Webhook URL"
-                  value={hook}
-                  onChange={(e) => setHook(e.target.value)}
-                />
-                <BusyButton className="btn small" busy={linking} disabled={!hook.trim()} label="Link" busyLabel="Saving…" onClick={() => void link(hook)} />
+              <div className="stack-tight">
+                <p className="muted small-note">{HOOK_HOWTO}</p>
+                <div className="row" style={{ flexWrap: "nowrap" }}>
+                  <input
+                    className="search"
+                    style={{ flex: 1, minWidth: 0, maxWidth: "none" }}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="Webhook URL for the channel crashes go to"
+                    aria-label="Webhook URL for crashes"
+                    value={hook}
+                    onChange={(e) => setHook(e.target.value)}
+                  />
+                  <BusyButton className="btn small" busy={linking} disabled={!hook.trim()} label="Link" busyLabel="Saving…" onClick={() => void link(hook)} />
+                </div>
               </div>
             ))}
         </>

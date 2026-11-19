@@ -184,7 +184,7 @@ export function HostingGuide() {
             <b>Helpers.</b> Only invite people you trust, with their SteamID so Moderators can't ban or mute them. After removing someone, change the join password.
           </li>
           <li>
-            <b>Website status.</b> A Cloudflare Tunnel opens no ports on the machine, so it's the safer choice if you use Cloudflare. Caddy works without Cloudflare but
+            <b>Website, downloads & Discord.</b> A Cloudflare Tunnel opens no ports on the machine, so it's the safer choice if you use Cloudflare. Caddy works without Cloudflare but
             opens TCP 80 and 443.
           </li>
           <li>

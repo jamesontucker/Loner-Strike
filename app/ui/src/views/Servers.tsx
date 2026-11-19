@@ -403,7 +403,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "health", label: "Health", group: "Server" },
   { id: "extras", label: "Rotation & extras", group: "Server" },
   { id: "hltv", label: "Spectators & demos", group: "Server" },
-  { id: "webstatus", label: "Website status", group: "Server", remote: true },
+  { id: "webstatus", label: "Website, downloads & Discord", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "bots", label: "Bots", group: "Game", live: true },
   { id: "match", label: "Rules", group: "Game", live: true },
@@ -435,7 +435,7 @@ const SHARED_TABS: Record<"admin" | "moderator", Tab[]> = {
   admin: ["overview", "extras", "modes", "bots", "match", "fun", "players", "moderation", "stats", "welcome", "share", "maps", "sounds"],
   moderator: ["overview", "players", "moderation", "stats"],
 };
-/** The tabs a server shows at all: Website status only for a Linux server, Shared control only on this computer. */
+/** The tabs a server shows at all: Website, downloads & Discord only for a Linux server, Shared control only on this computer. */
 function tabsShown(s: ServerInfo): Tab[] {
   return TABS.filter((t) => (!t.remote || !!s.host) && ((t.id !== "share" && t.id !== "creations") || ON_THIS_COMPUTER)).map((t) => t.id);
 }
@@ -1998,7 +1998,7 @@ const GOOD_PRACTICE: { title: string; points: string[] }[] = [
       "Invite only people you trust, and start them as Moderators: kicking, muting, short bans and changing the map cover most nights.",
       "Make someone an Admin when they need to change settings, modes, maps and restarts. Who can join, passwords, the machine and deleting stay with you.",
       "Look at What people changed now and then; Undo puts settings back and lifts bans. Remove access as soon as someone stops helping, and change the join password if they should stay out.",
-      "Friends reach your app on one TCP port (27030 unless you change it): open it on your router with the button, or use a virtual LAN. Your app has to be open for them. On a Linux server, helpers reach the server itself through Website status, so your computer can be off.",
+      "Friends reach your app on one TCP port (27030 unless you change it): open it on your router with the button, or use a virtual LAN. Your app has to be open for them. On a Linux server, helpers reach the server itself at its address (Website, downloads & Discord), so your computer can be off.",
     ],
   },
   {

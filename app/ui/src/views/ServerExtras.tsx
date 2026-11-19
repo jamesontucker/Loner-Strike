@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
-import { ownMaps, useServers } from "../queries";
+import { ownMaps, useAppInfo, useServers } from "../queries";
 import { useDirty, useNav } from "../store";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -845,15 +845,17 @@ export function DailyRestart({ target }: { target: string }) {
 
 function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const toast = useToast();
-  // a Linux server of your own: its Website status serves the files itself
+  // a Linux server of your own: its Website, downloads & Discord service serves the files itself
   const open = useNav((s) => s.server);
+  // the example address ends in the server's own game folder
+  const game = useAppInfo().data?.game?.id === "czero" ? "czero" : "cstrike";
   const serverList = useServers().data;
   const remote = !!open && !isSharedId(open) && !!serverList?.servers.find((x) => x.id === open)?.host;
   const [url, setUrl] = useState<string | null>(null);
   const { run, busy } = useActions();
   const value = url ?? d.settings.fastdl;
   const ok = !value.trim() || URL_OK.test(value.trim());
-  // set by the server's Website status, which serves the files itself
+  // set by the server's own service (Website, downloads & Discord), which serves the files itself
   const bySt = /\/fastdl\/?$/.test(d.settings.fastdl);
   const save = () => run(xk("fastdl"), async () => {
     if (await saveSettings({ fastdl: value.trim() }, value.trim() ? "Saved. It's used from the next map." : "Fast downloads are off")) setUrl(null);
@@ -875,7 +877,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
         </p>
         <label className="field">
           <span>Web address of that folder<Info text="Players download missing maps and sounds from this web folder instead of the game server. Any host that serves plain files works." /></span>
-          <input className="search" type="url" spellCheck={false} placeholder="https://dl.example.com/czero" value={value} onChange={(e) => setUrl(e.target.value)} />
+          <input className="search" type="url" spellCheck={false} placeholder={`https://dl.example.com/${game}`} value={value} onChange={(e) => setUrl(e.target.value)} />
           <small className={ok ? undefined : "err-text"}>{ok ? "Leave it empty to turn fast downloads off." : "Start with http:// or https://, with no spaces or quotes."}</small>
         </label>
         <div className="row">
@@ -892,17 +894,17 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
         {ON_THIS_COMPUTER && open && !isSharedId(open) && <FastdlMirror id={open} current={d.settings.fastdl} save={(u, done) => saveSettings({ fastdl: u }, done)} />}
         {bySt ? (
           <p className="muted small-note">
-            This address was set by Fast downloads under the server's {remote ? <TabLink tab="webstatus">Website status</TabLink> : "Website status"}, which serves the files from the server itself. There's nothing to upload.
+            This address was set by Fast downloads under the server's {remote ? <TabLink tab="webstatus">Website, downloads & Discord</TabLink> : "Website, downloads & Discord"} tab, which serves the files from the server itself. There's nothing to upload.
           </p>
         ) : remote ? (
           <div className="stack-tight">
-            <p className="muted small-note">This server is on a Linux machine, so it doesn't need a web server of your own: turn on Fast downloads in its Website status, and it serves the files and fills in this address.</p>
+            <p className="muted small-note">This server is on a Linux machine, so it doesn't need a web server of your own. Turn on Fast downloads in its Website, downloads & Discord tab: the server serves the files and fills in this address. It needs an address on a domain you own, but no website.</p>
             <div className="row">
-              <button className="btn" onClick={() => openTab("webstatus")}>Set up Website status</button>
+              <button className="btn" onClick={() => openTab("webstatus")}>Set up fast downloads</button>
             </div>
           </div>
         ) : (
-          <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads under its Website status, and it serves the files and fills in this address.</p>
+          <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads in its Website, downloads & Discord tab, and it serves the files and fills in this address.</p>
         )}
       </div>
     </section>

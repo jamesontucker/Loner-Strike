@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ControlRoute } from "./ShareControl";
+import { HOOK_HOWTO } from "./CrashPanel";
 import { copyText, getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -38,6 +39,7 @@ type Form = { domain: string; origins: string; counter: boolean; mode: Mode; fas
 
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 const USUAL_PORT = 8090;
+const HOOK_HELP = "Kept on this computer and on the server, readable only by their administrators. Not shown again after it's saved.";
 /** shared control listens this far above the status service (control/agent.rs PORT_OFFSET) */
 const CONTROL_OFFSET = 1000;
 
@@ -50,10 +52,14 @@ function sitesFor(domain: string): string[] {
   return [`https://${parent}`, `https://www.${parent}`];
 }
 
+/** The page's name, the same as its tab (Servers.tsx) */
+const TITLE = "Website, downloads & Discord";
+
 const originList = (text: string) => text.split(/[\s,]+/).map((o) => o.trim()).filter(Boolean);
 
-/** The website status page for a server on a Linux machine: live name, map and players for
- *  the host's own site, and an optional visit counter. */
+/** Website, downloads & Discord for a server on a Linux machine: a small service on the machine
+ *  for the Discord messages (needs nothing else) and, at an address of the host's own, fast
+ *  downloads, shared control for helpers, and the live status and visit counter for their site. */
 export function WebStatus({ server }: { server: ServerInfo }) {
   const toast = useToast();
   const ask = useConfirm();
@@ -135,35 +141,36 @@ export function WebStatus({ server }: { server: ServerInfo }) {
         return;
       }
       markDirty(false);
-      if (r.port_moved && form.mode === "tunnel") toast(`The status page moved to port ${r.port}. In Cloudflare, point the hostname at http://localhost:${r.port}.`, true);
-      else toast(again ? "The status page is updated" : form.mode === "caddy" ? "The status page is set up. The HTTPS certificate can take a minute." : "The status page is set up");
+      if (r.port_moved && form.mode === "tunnel") toast(`The service moved to port ${r.port}. In Cloudflare, point the hostname at http://localhost:${r.port}.`, true);
+      else toast(again ? "The service is updated" : form.mode === "caddy" && form.domain.trim() ? "The service is set up. The HTTPS certificate can take a minute." : "The service is set up");
       load();
-    }, again ? `Updating the status page on ${server.name}…` : `Setting up the status page on ${server.name}…`);
+    }, again ? `Updating the service on ${server.name}…` : `Setting up the service on ${server.name}…`);
   };
   const turnOff = async () => {
     if (!form || !st || working) return;
-    if (!(await ask("Turn off the status page? Fast downloads, the Discord messages and Shared control for helpers stop working too.", { ok: "Turn it off", danger: true }))) return;
+    if (!(await ask("Turn off the service? Fast downloads, the Discord messages and Shared control for helpers stop working too.", { ok: "Turn it off", danger: true }))) return;
     return run(key("off"), async () => {
       // only turns it off: edits not saved yet stay in the form, unsaved
       const s = st.settings;
       const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: s.domain, origins: s.origins, counter: s.counter, mode: s.mode, fastdl: s.fastdl });
       if (r.error) return toast(r.error, true);
-      toast(dirty.current ? "The status page is off. Your other changes aren't saved yet." : "The status page is off");
+      toast(dirty.current ? "The service is off. Your other changes aren't saved yet." : "The service is off");
       load();
-    }, `Turning off the status page on ${server.name}…`);
+    }, `Turning off the service on ${server.name}…`);
   };
 
   if (!st || !form) {
     return (
       <div className="stack">
-        <SectionHead docs="website-status" title="Website status" />
+        <SectionHead docs="website-status" title={TITLE} />
         {failed ? <LoadError text={failed} onRetry={load} /> : <Skeleton rows={4} />}
       </div>
     );
   }
 
   const saved = st.settings;
-  const domain = form.domain.trim().toLowerCase() || "your status page address";
+  const hasAddress = !!form.domain.trim();
+  const domain = form.domain.trim().toLowerCase() || "your address";
   const tunnel = form.mode === "tunnel";
   const usesExisting = tunnel && st.existing_tunnel === "running" && !st.own_tunnel;
   const service = `http://localhost:${st.port}`;
@@ -173,19 +180,24 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     <div className="stack hltv">
       <SectionHead
         docs="website-status"
-        title="Website status"
-        note="A small service on the server that tells your website this server's name, map and players, so the site can show them live. It can also count visits, without cookies and without keeping anyone's address."
+        title={TITLE}
+        note="A small service on the server. On its own it posts to Discord who's playing. With an address on a domain you own, it also gives players fast downloads, lets helpers use Shared control while your computer is off, and tells your website the server's name, map and players."
       />
       {failed && <p className="muted small-note" role="status">Can't reach the app. Showing what it last reported.</p>}
 
       <div className="hltv-grid">
         <div className="panel">
           <div className="row between">
-            <h3>Status page</h3>
+            <h3>Service</h3>
             <span className={`live${st.state === "running" && !working ? " on" : ""}`}>{tag}</span>
           </div>
           {!saved.enabled ? (
             <p className="muted">It's off. Fill in the settings and press Install.</p>
+          ) : st.state === "running" && !saved.domain ? (
+            <>
+              <p className="muted">Running on the server. It sends the Discord messages. Add an address for fast downloads, Shared control for helpers and your website.</p>
+              <Health id={server.id} />
+            </>
           ) : st.state === "running" ? (
             <>
               <dl className="hltv-facts">
@@ -195,12 +207,14 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               </dl>
               <Health id={server.id} />
               <div className="hltv-addresses">
-                {st.status_url && <CopyRow label="Status page address" value={st.status_url} />}
+                {st.status_url && saved.origins.length > 0 && <CopyRow label="Status page address" value={st.status_url} />}
                 {st.visit_url && <CopyRow label="Visit counter address" value={st.visit_url} />}
                 {saved.fastdl && st.fastdl_url && <CopyRow label="Fast downloads" value={st.fastdl_url} />}
-                <p className="muted small-note">
-                  Paste the status page address where your site asks for it.{st.visit_url ? " The counter address goes where it asks for a visit counter." : ""}
-                </p>
+                {saved.origins.length > 0 && (
+                  <p className="muted small-note">
+                    Paste the status page address where your site asks for it.{st.visit_url ? " The counter address goes where it asks for a visit counter." : ""}
+                  </p>
+                )}
               </div>
             </>
           ) : (
@@ -219,25 +233,38 @@ export function WebStatus({ server }: { server: ServerInfo }) {
         <div className="panel">
           <h3>Settings</h3>
           <fieldset className="plain">
-          <label className="field">
-            <span>Address<Info text="A name for the status page, on a domain you own. It needs its own name, separate from the one players connect to." /></span>
-            <input className="search" placeholder={st.suggested_domain ?? "status.example.com"} value={form.domain} onChange={(e) => set({ domain: e.target.value })} onBlur={fillSites} spellCheck={false} autoComplete="off" />
-          </label>
-
           <div className="field">
-            <span>How it's reached</span>
-            <div className="seg" role="group" aria-label="How it's reached">
-              <button type="button" aria-pressed={!tunnel} onClick={() => set({ mode: "caddy" })}>Its own HTTPS (Caddy)</button>
-              <button type="button" aria-pressed={tunnel} onClick={() => set({ mode: "tunnel" })}>Cloudflare Tunnel</button>
-            </div>
+            <span>Discord<Info text={HOOK_HELP} /></span>
             <small>
-              {tunnel
-                ? "Cloudflare carries the page to the server through a tunnel, so no ports are opened."
-                : "The server answers on its own, with a free HTTPS certificate. Opens TCP ports 80 and 443."}
+              Keeps a message in a channel up to date with who's playing, and posts when people come on to play, at most once an hour. Works without an address. {HOOK_HOWTO}
+              {!st.discord.address && <> Set a Public address for the server first, under <TabLink tab="join">Who can join</TabLink>, so the messages can say how to join.</>}
             </small>
           </div>
+          <HookField label="Live status message" what="the channel for the live message" reveal={() => secret("live")} saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />
+          <HookField label="When people come on" what="the channel people chat in" reveal={() => secret("busy")} saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
 
-          {!tunnel ? (
+          <label className="field">
+            <span>Address<Info text="A name on a domain you own, separate from the one players connect to. Leave it empty if you only want the Discord messages." /></span>
+            <input className="search" placeholder={st.suggested_domain ?? "files.example.com"} value={form.domain} onChange={(e) => set({ domain: e.target.value })} onBlur={fillSites} spellCheck={false} autoComplete="off" />
+            <small>Needed for fast downloads, Shared control for helpers and your website. Not needed for Discord.</small>
+          </label>
+
+          {hasAddress && (
+            <div className="field">
+              <span>How it's reached</span>
+              <div className="seg" role="group" aria-label="How it's reached">
+                <button type="button" aria-pressed={!tunnel} onClick={() => set({ mode: "caddy" })}>Its own HTTPS (Caddy)</button>
+                <button type="button" aria-pressed={tunnel} onClick={() => set({ mode: "tunnel" })}>Cloudflare Tunnel</button>
+              </div>
+              <small>
+                {tunnel
+                  ? "Cloudflare carries the address to the server through a tunnel, so no ports are opened."
+                  : "The server answers on its own, with a free HTTPS certificate. Opens TCP ports 80 and 443."}
+              </small>
+            </div>
+          )}
+
+          {!hasAddress ? null : !tunnel ? (
             <div className="hltv-addresses">
               <p className="muted small-note">
                 Add a DNS record for {domain}: type A, pointing at {st.host ?? "the server's IP address"}. With Cloudflare, use the grey cloud (DNS only), or the orange cloud with SSL/TLS mode set to Full.
@@ -272,31 +299,22 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             </div>
           )}
 
-          <div className="field">
-            <span>Sites that may show it<Info text="Your site's address. Browsers only let these sites read the status. One per line." /></span>
-            <textarea className="invite" style={{ minHeight: 84 }} placeholder="https://example.com" value={form.origins} onChange={(e) => set({ origins: e.target.value })} spellCheck={false} aria-label="Sites that may show it" />
-            <PagesPreviews onAdd={(o) => set({ origins: [...originList(form.origins).filter((x) => x !== o), o].join("\n") })} />
-          </div>
-
           <div className="setting">
-            <span className="name">Visit counter<span className="note">Counts each visit to your site. Keeps no addresses and sets no cookies</span></span>
-            <Switch on={form.counter} disabled={working} onChange={(v) => set({ counter: v })} label="Visit counter" />
-          </div>
-
-          <div className="setting">
-            <span className="name">Fast downloads<span className="note">Players get missing maps, sounds and models from here in seconds, instead of slowly from the game. Sets the server's download address for you</span></span>
-            <Switch on={form.fastdl} disabled={working} onChange={(v) => set({ fastdl: v })} label="Fast downloads" />
+            <span className="name">Fast downloads<span className="note">{hasAddress ? "Players get missing maps, sounds and models from here in seconds, instead of slowly from the game. Sets the server's download address for you" : "Players get missing maps, sounds and models in seconds, instead of slowly from the game. Enter an address above first"}</span></span>
+            <Switch on={form.fastdl} disabled={working || (!hasAddress && !form.fastdl)} onChange={(v) => set({ fastdl: v })} label="Fast downloads" />
           </div>
 
           <div className="field">
-            <span>Discord<Info text="Uses Discord webhooks: in a channel's settings, open Integrations, then Webhooks, make one and copy its URL. Kept on this computer and on the server, readable only by their administrators. Not shown again after it's saved." /></span>
-            <small>
-              Keeps a message in a channel up to date with who's playing, and posts when people come on to play, at most once an hour.
-              {!st.discord.address && <> Set a Public address for the server first, under <TabLink tab="join">Who can join</TabLink>, so the messages can say how to join.</>}
-            </small>
+            <span>Sites that may show it (optional)<Info text="Your site's address. Browsers only let these sites read the server's live status. One per line." /></span>
+            <textarea className="invite" style={{ minHeight: 84 }} placeholder={hasAddress ? "https://example.com" : "Enter an address above first"} value={form.origins} disabled={!hasAddress && !form.origins.trim()} onChange={(e) => set({ origins: e.target.value })} spellCheck={false} aria-label="Sites that may show it" />
+            <small>Only for showing the server's name, map and players on your own site. Leave it empty if you don't have one.</small>
+            {hasAddress && <PagesPreviews onAdd={(o) => set({ origins: [...originList(form.origins).filter((x) => x !== o), o].join("\n") })} />}
           </div>
-          <HookField label="Live status message" what="the channel for the live message" reveal={() => secret("live")} saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />
-          <HookField label="When people come on" what="the channel people chat in" reveal={() => secret("busy")} saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
+
+          <div className="setting">
+            <span className="name">Visit counter<span className="note">Counts each visit to your site. Keeps no addresses and sets no cookies. Needs a site above</span></span>
+            <Switch on={form.counter} disabled={working || (!form.origins.trim() && !form.counter)} onChange={(v) => set({ counter: v })} label="Visit counter" />
+          </div>
 
           </fieldset>
           {!ON_THIS_COMPUTER && (st.token_saved || st.discord.live || st.discord.busy) && <p className="muted small-note">Saved tokens and links show on the computer running Loner-Strike. Here you can replace them.</p>}
@@ -306,7 +324,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               busy={installing}
               disabled={working}
               label={saved.enabled ? "Save and update" : "Install"}
-              busyLabel={saved.enabled ? "Updating the status page…" : "Setting up the status page…"}
+              busyLabel={saved.enabled ? "Updating the service…" : "Setting up the service…"}
               onClick={install}
             />
             {isDirty && !working && <span className="muted small-note">Unsaved changes</span>}
@@ -362,7 +380,7 @@ function SecretInput({ value, onChange, placeholder, label, disabled, saved }: {
 }
 
 function PortNote({ port }: { port: number }) {
-  return <p className="muted small-note">Port {USUAL_PORT} is taken by another server's status page on this machine, so this one uses port {port}. Use <code>http://localhost:{port}</code> in Cloudflare.</p>;
+  return <p className="muted small-note">Port {USUAL_PORT} is already used on this machine, so this server uses port {port}. Use <code>http://localhost:{port}</code> in Cloudflare.</p>;
 }
 
 /** Adds https://*.<project>.pages.dev, for a site on Cloudflare Pages and its previews. */
@@ -371,7 +389,7 @@ function PagesPreviews({ onAdd }: { onAdd: (origin: string) => void }) {
   const [name, setName] = useState("");
   const clean = name.trim().toLowerCase().replace(/\.pages\.dev$/, "");
   const ok = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(clean);
-  if (!open) return <button type="button" className="btn small" onClick={() => setOpen(true)}>Add Cloudflare Pages previews</button>;
+  if (!open) return <button type="button" className="btn small" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>Add Cloudflare Pages previews</button>;
   return (
     <div className="row">
       <input className="search" placeholder="Pages project name" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoComplete="off" aria-label="Pages project name" />
