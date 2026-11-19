@@ -8,7 +8,6 @@ import { mapNameProblem } from "./mapName"; // P5
 import { goToLeak } from "./LeakTools"; // P5
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BusyButton, SteamProgress, useConfirm, useToast } from "../../../ui";
-import { waitForSetupJob } from "../../../queries";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import * as api from "./compileApi";
@@ -32,7 +31,25 @@ const PRESETS: { id: Preset; label: string; hint: string }[] = [
 
 const KEEP_LINES = 3000;
 const mb = (b: number) => `${(b / 1_048_576).toFixed(1)} MB`;
-const secs = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`);
+const secs = (s: number) => (s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** 1.0.1: "just now", "5 min ago", "3 h ago", else the date. */
+function ago(when: number) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - when));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return new Date(when * 1000).toLocaleDateString();
+}
+
+// 1.0.1: a playtest's steps, each timed, with what happened
+type StepId = "compile" | "res" | "teach" | "game";
+type StepState = "waiting" | "running" | "done" | "skipped" | "failed" | "stopped";
+type PtStep = { id: StepId; label: string; state: StepState; started?: number; seconds?: number; note?: string };
+const STEP_WORDS: Record<StepState, string> = { waiting: "Waiting", running: "Running", done: "Done", skipped: "Skipped", failed: "Didn't work", stopped: "Stopped" };
+const STAGE_WORDS: Record<api.StageRow["state"], string> = { waiting: "Waiting", running: "Running", done: "Done", failed: "Failed", stopped: "Stopped" };
+/** Maps this many brushes or more count as big when bots learn them (br_valley, 5,426 brushes, took 25 minutes). */
+const BIG_MAP = 2000;
 
 function pref<T extends string | number | boolean>(key: string, fallback: T): T {
   try {
@@ -95,7 +112,19 @@ export function CompilePanel() {
   const [outStep, setOutStep] = useState<string | null>(null);
   const [outSummary, setOutSummary] = useState<string[] | null>(null);
   const outStop = useRef(false);
+  // 1.0.1: the playtest's steps (kept on screen after it ends, until the next one), Stop and Skip
+  const [steps, setSteps] = useState<PtStep[] | null>(null);
+  const stepsRef = useRef<PtStep[]>([]);
+  const ptStop = useRef<null | "stop" | "skip">(null);
+  const [ptAsked, setPtAsked] = useState<null | "stop" | "skip">(null);
+  const [teachDetail, setTeachDetail] = useState("");
+  const [choice, setChoice] = useState<{ text: string; yes: string; no: string; done: (yes: boolean) => void } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  // 1.0.1: the map's last compile and playtest, from their logs on disk
+  const [last, setLast] = useState<{ map: string; compile?: api.LastCompile | null; playtest?: api.LastPlaytest | null } | null>(null);
   const following = useRef(false);
+  // (the last compile asked for got going: not refused before it started)
+  const compileStarted = useRef(false);
   const logBox = useRef<HTMLPreElement>(null);
   const leak = api.useLeak();
 
@@ -153,6 +182,8 @@ export function CompilePanel() {
   // P5: the modes the map is made for (Gameplay > Mode kits) first, and picked when the last
   // used mode isn't one of them
   // (the game's mode list has short ids)
+  // 1.0.1: how big the map is, for how long teaching bots may take
+  const brushCount = useEditor((s) => s.brushes.size);
   const madeKey = useEditor((s) => madeForOf(s.doc?.world).map((m) => m.id).join(" "));
   const made = madeKey ? madeKey.split(" ") : [];
   const rank = (id: string) => (made.includes(id) ? made.indexOf(id) : made.length);
@@ -173,6 +204,36 @@ export function CompilePanel() {
 
   const running = !!job?.running || starting || playing;
 
+  const refreshLast = useCallback(async (map: string) => {
+    if (!map || mapNameProblem(map)) return setLast(null);
+    const r = await api.lastLogs(map);
+    setLast(r.error ? null : { map, compile: r.compile, playtest: r.playtest });
+  }, []);
+  // (the name being typed: asked once it settles)
+  const logName = (name.trim() || status?.suggestName || "").trim();
+  useEffect(() => {
+    const t = setTimeout(() => void refreshLast(logName), 400);
+    return () => clearTimeout(t);
+  }, [logName, refreshLast]);
+
+  // the steps' times tick while something runs
+  const ticking = playing || !!job?.running;
+  useEffect(() => {
+    if (!ticking) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [ticking]);
+
+  const setStep = (id: StepId, patch: Partial<PtStep>) => {
+    stepsRef.current = stepsRef.current.map((x) => (x.id === id ? { ...x, ...patch } : x));
+    setSteps(stepsRef.current);
+  };
+  const startStep = (id: StepId) => setStep(id, { state: "running", started: Date.now() });
+  const endStep = (id: StepId, state: StepState, note?: string) => {
+    const x = stepsRef.current.find((y) => y.id === id);
+    setStep(id, { state, note, seconds: x?.started ? Math.round((Date.now() - x.started) / 1000) : undefined });
+  };
+
   const download = async () => {
     setStarting(true);
     const r = await api.setUpCompiler();
@@ -187,6 +248,7 @@ export function CompilePanel() {
 
   /** Starts a compile and follows it; the finished job when it compiled. */
   const compile = async (install: boolean, as?: string): Promise<Job | null> => {
+    compileStarted.current = false;
     const n = (as ?? name).trim();
     const why = mapNameProblem(n);
     if (why) {
@@ -216,8 +278,10 @@ export function CompilePanel() {
       return null;
     }
     setClash(null);
+    compileStarted.current = true;
     if (r.map && r.map !== name) setName(r.map);
     const j = await follow(true);
+    void refreshLast(r.map || n);
     if (!j) {
       toast("Lost touch with the compiler. Try again.", true);
       return null;
@@ -238,44 +302,192 @@ export function CompilePanel() {
     if (j?.result?.map) toast(`Compiled ${j.result.map} in ${secs(j.seconds)}.`);
   };
 
+  /** 1.0.1: bots taught the map, following the app's job; Stop and Skip end it early. */
+  const teachBots = async (map: string, hadNav: boolean): Promise<{ state: StepState; note: string }> => {
+    const lr = await api.learnNav(map);
+    if (lr.error) return { state: "failed", note: `Bots didn't learn ${map}: ${lr.error} They'll find their way as they play.` };
+    let seen = false;
+    let asked = -1;
+    let idle = 0;
+    let misses = 0;
+    const early = (want: "stop" | "skip") =>
+      want === "skip"
+        ? { state: "skipped" as const, note: hadNav ? "Skipped: bots use what they knew of the map before, so they may get lost where you changed it." : "Skipped: bots will wander until they learn the map." }
+        : { state: "stopped" as const, note: "Stopped while bots were learning the map." };
+    for (let i = 0; ; i++) {
+      await sleep(800);
+      const want = ptStop.current;
+      if (want && asked < 0) {
+        asked = i;
+        void api.learnStop();
+      }
+      // (stopped: a few seconds for the hidden server to close, then on)
+      if (want && i - asked > 15) return early(want);
+      const j = await api.setupJob();
+      if (!j.state) {
+        if (++misses >= 10) return { state: "failed", note: `Bots didn't learn ${map} before the playtest: the app stopped answering while they learned. They'll find their way as they play.` };
+        continue;
+      }
+      misses = 0;
+      if (j.state === "running") {
+        seen = true;
+        const d = j.steps?.find((x) => x.state === "running")?.detail;
+        // (its own "(3 min so far)": the step shows the time)
+        if (d) setTeachDetail(d.replace(/\s*\(\d+ min so far\)$/, ""));
+      }
+      if (j.state === "done" || j.state === "error") {
+        if (want) return early(want);
+        if (j.state === "done") return { state: "done", note: "Bots learned the map." };
+        const said = await api.learnResult();
+        // P5: say why (the run's own summary, else the job's error), never a bare "couldn't"
+        return { state: "failed", note: `Bots didn't learn ${map}. ${said.result?.message || j.error || "The hidden server stopped without saying why."} They'll find their way as they play.` };
+      }
+      if (j.state === "idle" && (seen || ++idle > 10)) {
+        if (want) return early(want);
+        return { state: "failed", note: `Bots didn't learn ${map} before the playtest: the app stopped answering while they learned. They'll find their way as they play.` };
+      }
+    }
+  };
+
   const onPlaytest = async () => {
     // P5: a limit over 90% (Budget panel) is said first, never a silent block
     const over = await budgetWarnings();
     if (over.length && !(await ask(`Near the engine's limits: ${over.join("; ")}. The map may not load or may crash. Playtest anyway? (The Budget panel shows what uses most.)`, { ok: "Playtest anyway" }))) return;
+    ptStop.current = null;
+    setPtAsked(null);
+    setTeachDetail("");
+    stepsRef.current = [
+      { id: "compile", label: "Compile", state: "waiting" },
+      { id: "res", label: "Write the map's .res file", state: "waiting" },
+      { id: "teach", label: "Teach bots the map", state: "waiting" },
+      { id: "game", label: "Start the game", state: "waiting" },
+    ];
+    setSteps(stepsRef.current);
     setPlaying(true);
+    const began = Date.now();
+    let map = name.trim();
+    let outcome: "ok" | "failed" | "stopped" = "failed";
+    let learner = false;
+    let keepLog = true;
+    const stopNow = () => ptStop.current === "stop";
     try {
+      startStep("compile");
       const j = await compile(true);
-      const map = j?.result?.map;
-      if (!map) return;
+      if (!j?.result?.map) {
+        // (refused before it started: a Community map's name, a bad name; its box says why)
+        if (!compileStarted.current) {
+          keepLog = false;
+          setSteps(null);
+          return;
+        }
+        if (stopNow()) {
+          outcome = "stopped";
+          endStep("compile", "stopped");
+        } else endStep("compile", "failed", "The compile didn't finish. Its problems are listed below.");
+        return;
+      }
+      map = j.result.map;
+      endStep("compile", "done");
+      if (stopNow()) return void (outcome = "stopped");
+
+      startStep("res");
       setPhase("Writing the map's .res file…");
       const rr = await api.writeRes(map);
-      if (rr.error) toast(`The .res file wasn't written: ${rr.error}`, true);
-      if (teach) {
-        setPhase("Teaching bots the map (about a minute)…");
-        const lr = await api.learnNav(map);
-        if (lr.error) {
-          toast(`Bots didn't learn ${map} before the playtest: ${lr.error} They'll find their way as they play.`, true);
-        } else {
-          const done = await waitForSetupJob();
-          const said = await api.learnResult();
-          // P5: say why (the run's own summary, else the job's error), never a bare "couldn't"
-          if (!done) toast(`Bots didn't learn ${map} before the playtest: the app stopped answering while they learned. They'll find their way as they play.`, true);
-          else if (done.state === "error") toast(`Bots didn't learn ${map} before the playtest. ${said.result?.message || done.error || "The hidden server stopped without saying why."} They'll find their way as they play.`, true);
-        }
+      if (rr.error) {
+        endStep("res", "failed", `The .res file wasn't written: ${rr.error}`);
+        toast(`The .res file wasn't written: ${rr.error}`, true);
+      } else endStep("res", "done");
+
+      // bots' knowledge: taught when asked for, unless they know this version already; offered when
+      // the layout changed since they learned it and teaching is off
+      const nav = j.result.nav?.state;
+      const hadNav = !!j.result.hasNav;
+      let doTeach = teach;
+      let skipNote = "";
+      if (teach && nav === "current") {
+        doTeach = false;
+        skipNote = "Bots already know this version of the map.";
+      } else if (!teach && nav === "changed") {
+        setPhase("Waiting for your answer…");
+        doTeach = await new Promise<boolean>((done) =>
+          setChoice({
+            text: "You changed the map's layout since bots last learned it, so they may get lost. Teach them again first? On big maps it can take 20 minutes or more.",
+            yes: "Teach bots",
+            no: "Play now",
+            done,
+          }),
+        );
+        setChoice(null);
+        if (stopNow()) return void (outcome = "stopped");
+        if (!doTeach) skipNote = "Skipped: bots use what they knew of the map before, so they may get lost where you changed it.";
+      } else if (!teach) {
+        skipNote = nav === "none" || !hadNav ? "Skipped (Teach bots is off): bots will wander until they learn the map." : "Skipped (Teach bots is off).";
       }
+      if (doTeach) {
+        learner = true;
+        startStep("teach");
+        setPhase("Teaching bots the map…");
+        const t = await teachBots(map, hadNav);
+        endStep("teach", t.state, t.note);
+        setTeachDetail("");
+        if (t.state === "stopped") return void (outcome = "stopped");
+        if (t.state === "failed") toast(t.note, true);
+      } else setStep("teach", { state: "skipped", note: skipNote });
+      if (stopNow()) return void (outcome = "stopped");
+
+      startStep("game");
       setPhase("Starting the game…");
       const st = await api.gameState();
       const open = !!st.online || !!st.game_open;
-      if (open && !(await ask(`The game is open. Close it and start a playtest on ${map}?`, { ok: "Restart and playtest" }))) return;
+      if (open && !(await ask(`The game is open. Close it and start a playtest on ${map}?`, { ok: "Restart and playtest" }))) {
+        endStep("game", "stopped", "The game was left open.");
+        return void (outcome = "stopped");
+      }
+      if (stopNow()) {
+        endStep("game", "stopped");
+        return void (outcome = "stopped");
+      }
       const lr = await api.launchGame({ map, bots, mode: modes.length ? mode : undefined, restart: open || undefined });
-      if (lr.error) return toast(lr.error, true);
+      if (lr.error) {
+        endStep("game", "failed", lr.error);
+        return toast(lr.error, true);
+      }
       setPhase("Joining…");
+      endStep("game", "done", `With ${bots} bot${bots === 1 ? "" : "s"}. It joins by itself once the map loads.`);
+      outcome = "ok";
       toast(`Starting the game on ${map} with ${bots} bot${bots === 1 ? "" : "s"}. It joins by itself once the map loads.`);
-      await new Promise((r) => setTimeout(r, 2500));
+      await sleep(2500);
     } finally {
       setPhase(null);
       setPlaying(false);
+      setChoice(null);
+      setPtAsked(null);
+      ptStop.current = null;
+      if (keepLog && map && !mapNameProblem(map)) {
+        const lines = stepsRef.current.map((x) => `${x.label}: ${x.state === "waiting" ? "not run" : STEP_WORDS[x.state].toLowerCase()}${x.seconds != null ? ` (${secs(x.seconds)})` : ""}${x.note ? `. ${x.note}` : ""}`);
+        void api.keepPlaytestLog({ map, outcome, lines, learner, seconds: Math.round((Date.now() - began) / 1000) }).then(() => refreshLast(map));
+      }
     }
+  };
+
+  const openLog = async (map: string, which: "compile" | "playtest") => {
+    const r = await api.openLog(map, which);
+    if (r.error) toast(r.error, true);
+  };
+
+  /** 1.0.1: Stop, through every step of a playtest (the compile, teaching bots, before the game starts). */
+  const stopPlaytest = async () => {
+    ptStop.current = "stop";
+    setPtAsked("stop");
+    if (choice) choice.done(false);
+    if (job?.running) {
+      const r = await api.cancelCompile();
+      if (r.error) toast(r.error, true);
+    }
+  };
+  const skipTeaching = () => {
+    ptStop.current = "skip";
+    setPtAsked("skip");
   };
 
   const stop = async () => {
@@ -438,6 +650,8 @@ export function CompilePanel() {
   }
 
   const compiling = job?.kind === "compile" && job.running;
+  const stages = job?.kind === "compile" ? job.stages ?? [] : [];
+  const teaching = !!steps?.some((x) => x.id === "teach" && x.state === "running");
   const nameWhy = mapNameProblem(name.trim());
   const nameBad = !!nameWhy;
   const problems = job?.kind === "compile" ? job.problems : [];
@@ -497,7 +711,7 @@ export function CompilePanel() {
 
       <div className="editor-row wrap">
         <BusyButton className="btn primary" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun || nameBad} onClick={() => void onCompile()} />
-        {compiling && <BusyButton className="btn small" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={() => void stop()} />}
+        {compiling && !playing && <BusyButton className="btn small" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={() => void stop()} />}
       </div>
 
       <fieldset className="compile-playtest" disabled={running || !status.canRun}>
@@ -552,13 +766,81 @@ export function CompilePanel() {
         <p className="small-note muted">Compiles, puts the map in your game (backing up one with the same name), and starts it with bots.</p>
       </fieldset>
 
-      {(compiling || phase) && (
+      {compiling && (
         <SteamProgress
-          value={phase ? 1 : job?.fraction ?? 0}
-          title={phase ? `Playtest: ${name}` : `Compiling ${name}`}
-          text={phase ?? (stopping ? "Stopping…" : job?.label)}
+          value={job?.fraction ?? 0}
+          title={playing ? `Playtest: ${name}` : `Compiling ${name}`}
+          text={stopping || ptAsked === "stop" ? "Stopping…" : job?.label}
           foot={job ? `${secs(job.seconds)} so far` : ""}
         />
+      )}
+      {stages.length > 0 && (
+        <div className="compile-stages-box">
+          <ol className="compile-stages" aria-label="Compile stages">
+            {stages.map((r) => (
+              <li key={r.id} className={`compile-stage is-${r.state}`}>
+                <span className="compile-stage-name">
+                  {r.state === "running" && <span className="spinner" aria-hidden="true" />}
+                  {r.name}
+                </span>
+                <span className="compile-stage-state">{STAGE_WORDS[r.state]}</span>
+                <span className="compile-stage-time">{r.seconds != null ? secs(r.seconds) : ""}</span>
+              </li>
+            ))}
+          </ol>
+          {compiling && <p className="small-note muted">Each stage can take from a few seconds to several minutes, depending on the map's size and detail. Visibility (VIS) is usually the slowest on big maps.</p>}
+        </div>
+      )}
+
+      {steps && (
+        <div className="compile-steps-box" aria-live="polite">
+          <strong className="small-note">{playing ? `Playtest: ${name}` : "Playtest steps"}</strong>
+          <ol className="compile-steps" aria-label="Playtest steps">
+            {steps.map((x) => {
+              const t = x.state === "running" && x.started ? Math.max(0, Math.round((now - x.started) / 1000)) : x.seconds;
+              return (
+                <li key={x.id} className={`compile-step is-${x.state}`}>
+                  <div className="compile-step-line">
+                    <span className="compile-step-name">
+                      {x.state === "running" && <span className="spinner" aria-hidden="true" />}
+                      {x.label}
+                    </span>
+                    <span className="compile-step-state">{x.state === "waiting" && !playing ? "Not run" : STEP_WORDS[x.state]}</span>
+                    <span className="compile-step-time">{t != null ? secs(t) : ""}</span>
+                  </div>
+                  {x.id === "teach" && x.state === "running" && (
+                    <div className="small-note muted compile-step-note">
+                      {ptAsked === "skip" ? "Skipping…" : ptAsked === "stop" ? "Stopping…" : teachDetail || "Getting a hidden server ready"}
+                      {". "}
+                      {brushCount >= BIG_MAP ? `Big maps like this one (${brushCount.toLocaleString("en-US")} brushes) can take 20 minutes or more.` : "Usually a few minutes; bigger maps take longer."}
+                    </div>
+                  )}
+                  {x.note && x.state !== "running" && <div className="small-note muted compile-step-note">{x.note}</div>}
+                </li>
+              );
+            })}
+          </ol>
+          {choice && (
+            <div className="compile-clash" role="alertdialog" aria-labelledby="compile-choice-text">
+              <p id="compile-choice-text">{choice.text}</p>
+              <div className="editor-row wrap">
+                <button type="button" className="btn small primary" onClick={() => choice.done(true)}>
+                  {choice.yes}
+                </button>
+                <button type="button" className="btn small" onClick={() => choice.done(false)}>
+                  {choice.no}
+                </button>
+              </div>
+            </div>
+          )}
+          {playing && (
+            <div className="editor-row wrap compile-pt-actions">
+              <BusyButton className="btn small" busy={ptAsked === "stop"} label="Stop" busyLabel="Stopping…" disabled={!!ptAsked} onClick={() => void stopPlaytest()} />
+              {teaching && <BusyButton className="btn small" busy={ptAsked === "skip"} label="Skip teaching, play now" busyLabel="Skipping…" disabled={!!ptAsked} onClick={skipTeaching} />}
+            </div>
+          )}
+          {playing && teaching && !ptAsked && <p className="small-note muted">Skip starts the game now. Bots will wander until they learn the map.</p>}
+        </div>
       )}
 
       {done && (
@@ -654,6 +936,47 @@ export function CompilePanel() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {last && (last.compile || last.playtest) && !running && (
+        <div className="compile-last" data-testid="compile-last">
+          {last.compile && (
+            <div className="compile-last-line">
+              <span className="small-note">
+                <strong>Last compile</strong> of {last.compile.map}: {last.compile.outcome === "ok" ? "compiled" : last.compile.outcome === "stopped" ? "stopped" : "didn't finish"} {ago(last.compile.when)}
+                {last.compile.seconds ? `, took ${secs(last.compile.seconds)}` : ""}
+                {last.compile.errors ? `, ${last.compile.errors} problem${last.compile.errors === 1 ? "" : "s"}` : ""}
+                {last.compile.warnings ? `, ${last.compile.warnings} warning${last.compile.warnings === 1 ? "" : "s"}` : ""}.
+              </span>
+              <button type="button" className="linklike small-note" onClick={() => void openLog(last.map, "compile")}>
+                Open the full log
+              </button>
+            </div>
+          )}
+          {last.compile && !(job?.kind === "compile") && (last.compile.error || (last.compile.problems ?? []).some((p) => p.level === "error")) && (
+            <ul className="compile-last-errors small-note">
+              {last.compile.error && !(last.compile.problems ?? []).some((p) => p.message === last.compile!.error) && <li className="compile-bad">{last.compile.error}</li>}
+              {(last.compile.problems ?? [])
+                .filter((p) => p.level === "error")
+                .slice(0, 5)
+                .map((p, i) => (
+                  <li key={i} className="compile-bad">
+                    {p.message}
+                  </li>
+                ))}
+            </ul>
+          )}
+          {last.playtest && (
+            <div className="compile-last-line">
+              <span className="small-note">
+                <strong>Last playtest</strong>: {last.playtest.outcome === "ok" ? "started the game" : last.playtest.outcome === "stopped" ? "stopped" : "didn't start the game"} {ago(last.playtest.when)}.
+              </span>
+              <button type="button" className="linklike small-note" onClick={() => void openLog(last.map, "playtest")}>
+                Open the playtest log
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -37,7 +37,13 @@ export type Problem = {
   at?: Vec3;
 };
 
-export type CompileResult = { map: string; bsp: string; bytes: number; preset: Preset; installed: boolean; backup?: string | null; hasNav?: boolean };
+/** 1.0.1: bots' knowledge of the map against this compile: learned from this layout ("current"), from an
+ *  older one ("changed"), none yet, or a nav from elsewhere ("unknown"). */
+export type NavState = { state: "none" | "current" | "changed" | "unknown"; learnedAt?: number };
+export type CompileResult = { map: string; bsp: string; bytes: number; preset: Preset; installed: boolean; backup?: string | null; hasNav?: boolean; nav?: NavState };
+
+/** 1.0.1: one compile stage, timed. */
+export type StageRow = { id: string; name: string; label: string; state: "waiting" | "running" | "done" | "failed" | "stopped"; seconds: number | null };
 
 export type Job = {
   id: number;
@@ -53,6 +59,8 @@ export type Job = {
   result: (Partial<CompileResult> & { installed?: boolean }) | null;
   error: string | null;
   stopped: boolean;
+  /** 1.0.1: each stage and its time (older apps: absent) */
+  stages?: StageRow[];
 };
 
 export type Progress = { job: Job | null; lines?: string[]; from?: number | null; next?: number; partial?: string };
@@ -76,6 +84,26 @@ export const installLast = () => post<{ ok?: boolean; error?: string; map?: stri
 export const getProgress = (from?: number) => get<Progress & { error?: string }>(`${C}/progress${from != null ? `?from=${from}` : ""}`);
 export const cancelCompile = () => post<{ ok?: boolean; error?: string }>(`${C}/cancel`);
 
+// ---- 1.0.1: the last compile and playtest of each map, kept on disk ------------------------
+
+export type LastCompile = {
+  map: string;
+  when: number;
+  outcome: "ok" | "failed" | "stopped";
+  error?: string | null;
+  seconds: number;
+  preset?: string;
+  stages?: StageRow[];
+  errors?: number;
+  warnings?: number;
+  problems?: { level: "error" | "warning"; kind: string; message: string }[];
+  log: string;
+};
+export type LastPlaytest = { map: string; when: number; outcome: "ok" | "failed" | "stopped"; seconds: number; steps?: string[]; log: string };
+export const lastLogs = (map: string) => get<{ compile?: LastCompile | null; playtest?: LastPlaytest | null; error?: string }>(`${C}/logs?map=${encodeURIComponent(map)}`);
+export const openLog = (map: string, which: "compile" | "playtest") => post<{ ok?: boolean; error?: string }>(`${C}/logs/open`, { map, which });
+export const keepPlaytestLog = (b: { map: string; outcome: "ok" | "failed" | "stopped"; lines: string[]; learner: boolean; seconds: number }) => post<{ ok?: boolean; error?: string }>(`${C}/playtest-log`, b);
+
 // ---- what a playtest borrows from the rest of the app -------------------------------------
 
 export type Mode = { id: string; name: string };
@@ -90,7 +118,7 @@ export const copyToServers = (map: string, servers: string[]) => post<{ ok?: boo
 export type CopyOutcome = { message?: string; copied?: number; already?: number; failed?: { map: string; server: string; why: string }[]; skipped?: { map: string; server: string; why: string }[]; stopped?: boolean };
 export const copyResult = () => get<{ result?: CopyOutcome | null; error?: string }>("/api/mapcopy");
 export const copyStop = () => post<{ ok?: boolean; error?: string }>("/api/mapcopy/stop");
-export type SetupJob = { state: string; error?: string | null; label?: string };
+export type SetupJob = { state: string; error?: string | null; label?: string; kind?: string; steps?: { id: string; label: string; state: string; detail: string }[] };
 export const setupJob = () => get<SetupJob & { error?: string }>("/api/setup/job");
 /** Parity A: remixes whose original was updated in Community since (the list the app has). */
 export type RemixUpdate = { project: string; map: string; original: string; author: string; gb: number; url: string };

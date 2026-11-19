@@ -39,3 +39,23 @@
 .compile-sendout { display: grid; gap: 6px; justify-items: start; }
 .compile-sendout-summary { margin: 0; padding-left: 18px; color: var(--bone-dim); }
 .compile-sendout-summary li + li { margin-top: 2px; }
+/* 1.0.1: each compile stage with its time, the playtest's steps (Stop, Skip teaching), the last logs */
+.compile-stages-box, .compile-steps-box { display: grid; gap: 6px; min-width: 0; }
+.compile-stages, .compile-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+.compile-stage, .compile-step-line { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; gap: 8px; align-items: baseline; font-size: 13px; color: var(--bone-dim); }
+.compile-stage, .compile-step { padding: 3px 6px; background: var(--bg); box-shadow: var(--sunken); }
+.compile-stage-name, .compile-step-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compile-stage-time, .compile-step-time { text-align: right; font-variant-numeric: tabular-nums; }
+.compile-stage-state, .compile-step-state { font-size: 12px; }
+.compile-stage.is-running, .compile-step.is-running { color: var(--bone); }
+.compile-stage.is-running .compile-stage-name, .compile-step.is-running .compile-step-name { color: var(--bone); font-weight: 700; }
+.compile-stage.is-waiting, .compile-step.is-waiting { opacity: 0.6; }
+.compile-stage.is-failed .compile-stage-state, .compile-step.is-failed .compile-step-state { color: #f0a58a; }
+.compile-stage.is-stopped .compile-stage-state, .compile-step.is-stopped .compile-step-state, .compile-step.is-skipped .compile-step-state { color: var(--signal); }
+.compile-step-note { margin-top: 2px; overflow-wrap: anywhere; }
+.compile-pt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.compile-last { display: grid; gap: 4px; padding: 6px 8px; border: 1px solid var(--bevel-lo); border-radius: 2px; min-width: 0; }
+.compile-last-line { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; min-width: 0; }
+.compile-last-line .small-note { overflow-wrap: anywhere; }
+.compile-last-errors { margin: 0; padding-left: 18px; }
+.compile-last-errors li + li { margin-top: 2px; }
