@@ -573,7 +573,7 @@ export default function PluginStudio(_: ToolProps) {
         save={open && !open.readOnly ? { onClick: () => saveNow(), busyLabel: WORKING.save } : null}
         actions={[
           { label: "Compile", busyLabel: WORKING.compile, onClick: () => run("compile"), disabled: !isSource || !data.compiler, title: data.compiler ? "Check it with the compiler (Ctrl/⌘+Enter)" : data.compilerProblem ?? undefined },
-          { label: "Try it in my game", busyLabel: WORKING.try, onClick: () => run("try"), disabled: !isSource || !data.compiler || !!open?.readOnly },
+          { label: "Try it in my game", busyLabel: WORKING.try, onClick: () => run("try"), disabled: !isSource || !data.compiler || !!open?.readOnly, title: open?.readOnly ? "This file is read only: Save a copy to My plugins first, then try that" : !data.compiler ? data.compilerProblem ?? undefined : "Compile it, put it in your game and restart the map" },
           { label: "Take it out", busyLabel: WORKING.stop, onClick: stop, hidden: !isTrying },
         ]}
         more={moreActions({

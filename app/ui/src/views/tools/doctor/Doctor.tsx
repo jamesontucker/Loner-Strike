@@ -177,6 +177,10 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
   const missing = all.filter((f) => f.status === "missing");
   const resFix = !r.res.stockMap && (r.res.missing.length > 0 || r.res.broken.length > 0);
   const safe = (elsewhere.length ? 1 : 0) + (resFix ? 1 : 0);
+  // 1.0.1: each safe fix has one name, used by its check's button, the bar's summary and the bar's button
+  const copyLabel = `Copy ${plural(elsewhere.length, "file")}`;
+  const resLabel = r.res.exists ? "Update the download list" : "Make the download list";
+  const fixNames = [elsewhere.length ? copyLabel : "", resFix || elsewhere.length ? resLabel : ""].filter(Boolean);
   const search = `https://gamebanana.com/search?_sSearchString=${encodeURIComponent(r.name)}`;
 
   const copyAll = () => act("copy", () => copyFiles(map, elsewhere.map((f) => f.path)), "Couldn't copy the files.");
@@ -209,14 +213,14 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
 
   // the fix buttons, by check
   const actions: Record<string, ReactNode> = {
-    copy: <BusyButton className="btn primary small" busy={busy === "copy"} disabled={off} label={`Copy ${plural(elsewhere.length, "file")}`} busyLabel="Copying…" onClick={copyAll} />,
+    copy: <BusyButton className="btn primary small" busy={busy === "copy"} disabled={off} label={copyLabel} busyLabel="Copying…" onClick={copyAll} />,
     get: (
       <>
         {r.gamebanana ? <a className="btn small primary" href={r.gamebanana.url} target="_blank" rel="noreferrer">Its GameBanana page</a> : <a className="btn small" href={search} target="_blank" rel="noreferrer">Search GameBanana</a>}
         <button className="btn small" onClick={() => useNav.getState().go("more")}>Get more</button>
       </>
     ),
-    res: <BusyButton className="btn primary small" busy={busy === "res"} disabled={off} label={r.res.exists ? "Update the list" : "Make the list"} busyLabel="Saving…" onClick={saveRes} />,
+    res: <BusyButton className="btn primary small" busy={busy === "res"} disabled={off} label={resLabel} busyLabel="Saving…" onClick={saveRes} />,
     teach: <BusyButton className="btn primary small" busy={busy === "learn"} disabled={off || learning} label="Teach bots this map" busyLabel="Starting…" onClick={() => teach(false)} />,
     reteach: <BusyButton className="btn small" busy={busy === "learn"} disabled={off || learning} label="Teach bots again" busyLabel="Starting…" onClick={() => teach(true)} />,
     navfix: <button className="btn small" onClick={() => go(`navfix:${map}`)}>Open in Nav fixer</button>,
@@ -315,9 +319,9 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
         dirty={false}
         working={busy === "all" ? "Fixing…" : busy === "copy" ? "Copying…" : busy === "res" ? "Saving…" : busy === "learn" ? "Starting…" : null}
         status={busy ? undefined : <span className={`tl-ab-state doc-ab ${count.bad ? "bad" : count.warn ? "warn" : "ok"}`}>{count.bad || count.warn ? `${todo} to look at` : "✓ All good"}</span>}
-        where={safe ? `${safe} safe fix${safe === 1 ? "" : "es"}: ${[elsewhere.length ? "copy files" : "", resFix || elsewhere.length ? `update ${r.name}.res` : ""].filter(Boolean).join(", ")}` : undefined}
-        info="Safe fixes never replace a file: copying only adds files from another game's folder, and the .res only lists files. Both are kept in History."
-        save={safe ? { label: "Fix all safe", busyLabel: "Fixing…", onClick: fixAll, disabled: off } : null}
+        where={fixNames.length > 1 ? `${fixNames.length} safe fixes: ${fixNames.map((n) => n[0].toLowerCase() + n.slice(1)).join(", ")}` : undefined}
+        info="Safe fixes never replace a file: copying only adds files from another game's folder, and the download list (.res) only lists files. Both are kept in History."
+        save={safe ? { label: fixNames.length > 1 ? "Fix all safe" : fixNames[0], busyLabel: "Fixing…", onClick: fixAll, disabled: off } : null}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 /* The Tools pages (views/tools): the overview, the viewer's frame, panels and status bar.
    Loaded with the Tools page, not at start. Shared form pieces are in common/common.css. */
 .tools-beta { font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; margin-right: 4px; }
-/* the Tools overview: a card per tool, its blurb on up to two lines */
+/* the Tools overview: a card per tool, its blurb on up to three lines */
 .tools-cards-group { margin-bottom: 18px; }
 .tools-cards-head { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
 .tools-cards-blurb { margin: 0 0 10px; font-size: 13px; color: var(--bone-dim, var(--bone-faint)); }
@@ -12,7 +12,8 @@
 .tools-card:hover .tools-card-icon { color: var(--bone); }
 .tools-card-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
 .tools-card-title .tools-beta { margin: 0; }
-.tools-card-blurb { color: var(--bone-dim); font-size: 14px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* (1.0.1: three lines; the blurbs in registry.tsx are written to fit them at 1440) */
+.tools-card-blurb { color: var(--bone-dim); font-size: 14px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 /* the viewer fills the page's height: the page stops scrolling and the view takes the rest */
 .content:has(> .tools-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
 .tools-page { flex: 1 1 auto; min-height: 460px; display: flex; flex-direction: column; gap: 10px; }

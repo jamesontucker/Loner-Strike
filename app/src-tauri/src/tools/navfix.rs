@@ -695,6 +695,52 @@ fn ids(n: &Nav, list: &[usize]) -> Vec<u32> {
     list.iter().map(|&i| n.areas[i].id).collect()
 }
 
+/// 1.0.1: where a group of areas is, so two problems of the same kind read differently:
+/// "areas 12, 48 and 3 more near Long A". The place is the group's own (the commonest), else
+/// the nearest named area's within 384 units.
+fn where_is(n: &Nav, list: &[usize]) -> String {
+    let mut text = if list.len() == 1 {
+        format!("area {}", n.areas[list[0]].id)
+    } else {
+        let first: Vec<String> = list.iter().take(3).map(|&i| n.areas[i].id.to_string()).collect();
+        let rest = list.len().saturating_sub(3);
+        if rest == 0 {
+            match first.split_last() {
+                Some((last, head)) => format!("areas {} and {last}", head.join(", ")),
+                None => String::new(),
+            }
+        } else {
+            format!("areas {} and {rest} more", first.join(", "))
+        }
+    };
+    let mut counts: HashMap<u16, usize> = HashMap::new();
+    for &i in list {
+        if n.areas[i].place != 0 {
+            *counts.entry(n.areas[i].place).or_default() += 1;
+        }
+    }
+    let own = counts.into_iter().max_by_key(|&(p, c)| (c, std::cmp::Reverse(p))).map(|(p, _)| p);
+    let place = own.or_else(|| {
+        let at = mid(n, list);
+        n.areas
+            .iter()
+            .filter(|a| a.place != 0)
+            .map(|a| {
+                let c = a.center();
+                ((c[0] - at[0]).powi(2) + (c[1] - at[1]).powi(2) + (c[2] - at[2]).powi(2), a.place)
+            })
+            .filter(|(d, _)| *d <= 384.0 * 384.0)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, p)| p)
+    });
+    if let Some(name) = place.and_then(|p| n.places.get(p as usize - 1)) {
+        let pretty = name.replace('_', " ");
+        text.push_str(if own.is_some() { " in " } else { " near " });
+        text.push_str(&pretty);
+    }
+    text
+}
+
 /// A ladder's ends and the areas at each (indices), as the game picks them
 /// (nav::build_ladders follows the game's BuildLadders). A ladder it leaves without a top is
 /// reported ("A ladder has no area at its top"); in the sim's cs_rats2 recordings those are
@@ -917,7 +963,7 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         }
     }
     for g in clusters(n, &never, &index) {
-        let text = if g.len() == 1 { format!("Bots can't reach area {} from any spawn", n.areas[g[0]].id) } else { format!("Bots can't reach these {} areas from any spawn", g.len()) };
+        let text = if g.len() == 1 { format!("Bots can't reach {} from any spawn", where_is(n, &g)) } else { format!("Bots can't reach {} areas from any spawn: {}", g.len(), where_is(n, &g)) };
         problems.push(Problem {
             kind: "unreachable",
             text,
@@ -928,7 +974,7 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         });
     }
     for g in clusters(n, &trapped, &index) {
-        let text = if g.len() == 1 { format!("Bots that get to area {} can't walk back out", n.areas[g[0]].id) } else { format!("Bots that get to these {} areas can't walk back out", g.len()) };
+        let text = if g.len() == 1 { format!("Bots that get to {} can't walk back out", where_is(n, &g)) } else { format!("Bots that get to these {} areas can't walk back out: {}", g.len(), where_is(n, &g)) };
         problems.push(Problem {
             kind: "trap",
             text,
@@ -939,7 +985,7 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         });
     }
     for g in clusters(n, &falls, &index) {
-        let text = if g.len() == 1 { format!("Bots only get to area {} by falling in", n.areas[g[0]].id) } else { format!("Bots only get to these {} areas by falling in", g.len()) };
+        let text = if g.len() == 1 { format!("Bots only get to {} by falling in", where_is(n, &g)) } else { format!("Bots only get to these {} areas by falling in: {}", g.len(), where_is(n, &g)) };
         // the link bots would need: from an area they plan to reach to where they fall or walk in
         let way_in = (0..count).filter(|&i| planned[i]).find_map(|i| loose[i].iter().find(|(j, _)| g.contains(j)).map(|&(j, drop)| (i, j, drop)));
         problems.push(Problem {
@@ -2062,7 +2108,7 @@ mod tests {
         n.areas.push(area(6, [900.0, 950.0], [0.0, 100.0], 0.0));
         let c = check(&n, &[SPAWN], &[], None);
         assert_eq!(c.problems.iter().filter(|p| p.kind == "unreachable").map(|p| p.areas.clone()).collect::<Vec<_>>(), vec![vec![4, 5], vec![6]]);
-        assert!(c.problems[0].text.contains("these 2 areas"));
+        assert_eq!(c.problems[0].text, "Bots can't reach 2 areas from any spawn: areas 4 and 5");
     }
 
     #[test]

@@ -305,7 +305,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
     setShown(new Set(p.areas));
     if (p.areas.length) setSelected(new Set(p.areas.length <= 20 ? p.areas : []));
     const box = p.areas.length ? areasBox(st!, p.areas) : null;
-    useFix.getState().look(p.at, Math.min(box?.size ?? 96, 1200));
+    // (1.0.1: at least 256 wide, so a one-area problem is seen from above the room, not from inside a wall)
+    useFix.getState().look(p.at, Math.max(256, Math.min(box?.size ?? 256, 1200)));
   };
 
   const failed = mesh.error instanceof Error ? mesh.error.message : q.error instanceof Error ? q.error.message : null;
