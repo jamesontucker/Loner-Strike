@@ -1,0 +1,11 @@
+/* A server's page (Servers.tsx). */
+
+/* Narrow windows (a small laptop, the app not full screen): each tab group's name sits to the
+   left of its tabs instead of above them, so the strip takes half the height. Phones keep the
+   one swipeable row (styles.css). */
+@media (min-width: 761px) and (max-width: 1280px) and (pointer: fine) {
+  .server-tabs { gap: 6px 20px; }
+  .server-tabs .tab-group { display: flex; align-items: center; gap: 8px; }
+  .server-tabs .tab-group-name { flex: none; min-width: 50px; }
+  .server-tabs .chips { gap: 6px; }
+}

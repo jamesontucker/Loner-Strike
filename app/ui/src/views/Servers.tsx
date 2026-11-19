@@ -29,6 +29,7 @@ import { TabLink } from "./goto";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
 import { CrashBadge, CrashPanel } from "./CrashPanel"; // MCP: crash tracking
+import "./servers.css";
 import { capName, NameLeft } from "../serverName";
 
 // only servers that use it open this tab
@@ -746,7 +747,11 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}{role && <> <span className={`tag role-${role}`}>{ROLE_NAME[role]}</span></>}</h2>
             <p className="muted">
-              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>{!role && <> <CrashBadge id={s.id} inline /></>}
+              {/* each part keeps its " ·" after it, so a line never starts with a lone separator */}
+              {(role ? ["Shared with you", GAME[s.game], s.connect] : [s.host ? "Linux server" : "Dedicated server", GAME[s.game], s.host || s.public_address ? serverAddress(s) : `port ${s.port}`])
+                .filter(Boolean)
+                .map((part, i) => <span key={i} style={{ whiteSpace: "nowrap" }}>{part} · </span>)}
+              <span style={{ whiteSpace: "nowrap" }}><StateTag s={s} inline /></span>{!role && <> <CrashBadge id={s.id} inline /></>}
             </p>
           </div>
           <div className="row">
@@ -1197,11 +1202,11 @@ function JoinSettings({ server, onChanged }: { server: ServerInfo; onChanged: ()
       <div className="field">
         <span>Who finds it<Info text={WHO_CAN_JOIN} /></span>
         <div className="seg" role="group" aria-label="Who can join">
-          {VISIBILITY.map((v) => (
+          {VISIBILITY.filter((v) => v.id !== "lan" || !server.host || vis === "lan").map((v) => (
             <button key={v.id} type="button" aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
           ))}
         </div>
-        <small>{VISIBILITY.find((v) => v.id === vis)?.note}. Listed on Steam is the game's own server browser.</small>
+        <small>{VISIBILITY.find((v) => v.id === vis)?.note}.</small>
       </div>
       <label className="field">
         <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect as soon as you save, Join in this app uses it for you, and the invite below includes it." /></span>
@@ -1772,7 +1777,7 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
             <span>Where it runs<Info text={`This computer: ${RUNS_WHILE.replace("A server on this computer runs", "it runs")} A Linux server is a machine you rent (a VPS, like Oracle's free tier) that runs it all the time; the app sets it up over SSH with your key.`} /></span>
             <div className="seg" role="group" aria-label="Where it runs">
               <button type="button" aria-pressed={where === "here"} onClick={() => setWhere("here")}>This computer</button>
-              <button type="button" aria-pressed={where === "vps"} onClick={() => setWhere("vps")}>A Linux server (VPS)</button>
+              <button type="button" aria-pressed={where === "vps"} onClick={() => { setWhere("vps"); if (vis === "lan") setVis("unlisted"); }}>A Linux server (VPS)</button>
             </div>
           </div>
         )}
@@ -1874,11 +1879,15 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
         <div className="field">
           <span>Who can join<Info text={WHO_CAN_JOIN} /></span>
           <div className="seg" role="group" aria-label="Who can join">
-            {VISIBILITY.map((v) => (
+            {/* (a server on a VPS isn't on your network) */}
+            {VISIBILITY.filter((v) => v.id !== "lan" || where !== "vps").map((v) => (
               <button key={v.id} type="button" aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
             ))}
           </div>
-          <small>{VISIBILITY.find((v) => v.id === vis)?.note}. You can change it later.</small>
+          <small>
+            {VISIBILITY.find((v) => v.id === vis)?.note}. You can change it later.
+            {where === "here" && vis !== "lan" && " Friends outside your home network need a way in: once it's made, turn on Direct in its Who can join tab, or open its port on your router."}
+          </small>
         </div>
         <label className="field">
           <span>Join password<Info text="Players type this to get in. Leave it empty for no password. You can change it later on the server's page." /></span>
