@@ -156,11 +156,11 @@ class Tests(unittest.TestCase):
         # another port on the same machine is another server
         self.assertTrue(r.update("8.8.8.8:27016", info, on, 1030, "8.8.8.8:27016"))
         self.assertEqual(len(r.public(1040)), 2)
-        # two names for one machine with no IP entry: both shown (names never fold together)
+        # one name per ip:port (a second name is refused; names never fold together)
         n = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
-        n.update("a.example.com:27015", info, on, 1000, "8.8.8.8:27015")
-        n.update("b.example.com:27015", info, on, 1000, "8.8.8.8:27015")
-        self.assertEqual(len(n.public(1000)), 2)
+        self.assertTrue(n.update("a.example.com:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertFalse(n.update("b.example.com:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertEqual([s["address"] for s in n.public(1000)], ["a.example.com:27015"])
 
     def test_a_name_pointed_at_someone_elses_server_changes_nothing_of_theirs(self):
         on = {"ls_list": "1"}
@@ -205,6 +205,14 @@ class Tests(unittest.TestCase):
         self.assertEqual(sorted(r.addresses()), ["8.8.8.8:27015", "a.example.com:27015"])
         self.assertTrue(r.update("a.example.com:27015", info, on, 1100, "8.8.8.8:27015"), "the ones there keep answering")
         self.assertTrue(r.update("d.example.com:27015", info, on, 1100, "9.9.9.9:27015"), "another server is fine")
+
+    def test_names_registered_first_cant_squat_the_servers_own_ip(self):
+        info = sl.parse_info(INFO_BODY)
+        on = {"ls_list": "1"}
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        self.assertTrue(r.update("evil.example.com:27015", info, on, 1000, "8.8.8.8:27015"))
+        self.assertFalse(r.update("evil2.example.com:27015", info, on, 1000, "8.8.8.8:27015"), "one name per ip:port")
+        self.assertTrue(r.update("8.8.8.8:27015", info, on, 1000, "8.8.8.8:27015"), "the server's own IP always gets on")
 
     def test_check_asks_the_address_it_keeps(self):
         srv = FakeServer({"ls_list": "1"})

@@ -287,9 +287,10 @@ class Registry:
                 if not entry:
                     if len(self.servers) >= MAX_SERVERS:
                         return False
-                    # at most two entries per ip:port (its IP and a name, the normal case), so
-                    # many names pointed at one server (wildcard DNS) can't fill the list
-                    if ip and sum(1 for a, e in self.servers.items() if a == ip or e.get("ip") == ip) >= MAX_PER_SERVER:
+                    # names only: at most MAX_PER_SERVER - 1 host names per ip:port, so many names
+                    # pointed at one server (wildcard DNS) can't fill the list. The server's own IP
+                    # entry is never refused or counted, so names registered first can't squat it.
+                    if ip and listed != ip and sum(1 for a, e in self.servers.items() if a != ip and e.get("ip") == ip) >= MAX_PER_SERVER - 1:
                         return False
                     entry = {"since": now}
                     self.servers[listed] = entry
