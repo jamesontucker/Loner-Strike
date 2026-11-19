@@ -190,3 +190,7 @@ p.cm-line { display: block; width: auto; padding-top: 0; padding-bottom: 0; padd
 
 /* Try it when it can't be: clearly off (the global disabled primary is only dimmed a little) */
 .btn.primary.cm-tryit:disabled:not([aria-busy="true"]) { opacity: .45; cursor: not-allowed; }
+
+/* Publish a map: "Did you make this map?" above the checks */
+.cm-made-it { display: grid; gap: 8px; justify-items: start; margin-bottom: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--bevel-lo); }
+.cm-made-it p { margin: 0; }

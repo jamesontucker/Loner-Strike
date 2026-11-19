@@ -2,7 +2,7 @@
 // Browse finds them (GameBanana pages tagged for Loner-Strike, plus the Loner-Strike index's
 // extras), Try it installs one with the app's own safe installer and starts a game with bots,
 // Installed lists what came from Community (update, remove, remix a Studio mode), Publish
-// packages your map or Studio mode for GameBanana, Published lists what you published.
+// packages your map or Studio mode for GameBanana, Yours lists what you published.
 //
 // Addresses (go("tools", ...)): "community", "community:installed", "community:publish",
 // "community:publish:<map>" (the editor or nav fixer handing over a map),
@@ -83,7 +83,7 @@ export default function Community({ maps }: ToolProps) {
   // each tab and creation has its own address, so Back and the crumbs step between them
   const shown = tab === "browse" && open ? open : null;
   const item = useQuery({ queryKey: ["tools", "community", "item", shown?.model, shown?.id], queryFn: ({ signal }) => details(shown!.model, shown!.id, signal), retry: false, enabled: !!shown });
-  const tabCrumb: Record<Tab, Crumb> = { browse: { label: "Browse", address: "community" }, installed: { label: "Installed", address: "community:installed" }, publish: { label: "Publish", address: "community:publish" }, yours: { label: "Published", address: "community:yours" } };
+  const tabCrumb: Record<Tab, Crumb> = { browse: { label: "Browse", address: "community" }, installed: { label: "Installed", address: "community:installed" }, publish: { label: "Publish", address: "community:publish" }, yours: { label: "Yours", address: "community:yours" } };
   useReportAddress(
     "community",
     shown ? `community:${shown.model === "Mod" ? "mod" : "spray"}:${shown.id}` : tab === "publish" ? `community:publish${publishMap ? `:${publishMap}` : ""}` : tab === "yours" ? "community:yours" : tab === "installed" ? "community:installed" : null,
@@ -96,7 +96,7 @@ export default function Community({ maps }: ToolProps) {
   return (
     <div className="cm stack-tight">
       <div className="cm-tabs">
-        <Segmented label="Community" values="browse installed publish yours" labels="Browse|Installed|Publish|Published" current={tab} onPick={(v) => setTab(v as Tab)} />
+        <Segmented label="Community" values="browse installed publish yours" labels="Browse|Installed|Publish|Yours" current={tab} onPick={(v) => setTab(v as Tab)} />
       </div>
       {tab === "browse" && !open && <DiscordButton note="Show off what you made, find people to play with, and tell us what Community needs." />}
       {tab === "browse" && (open ? <CreationPage model={open.model} id={open.id} onBack={() => setOpen(null)} /> : <BrowseList kind={kind} setKind={setKind} onOpen={(e) => setOpen({ model: e.model, id: e.id })} />)}

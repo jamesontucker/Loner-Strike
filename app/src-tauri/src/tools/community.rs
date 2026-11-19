@@ -1571,6 +1571,9 @@ pub struct Readiness {
     pub blockers: Vec<String>,
     /// things players would notice (missing files, no nav for the bots)
     pub warnings: Vec<String>,
+    /// the warnings about the map's own files and textures (also in `warnings`), for the
+    /// Files and textures check
+    pub file_warnings: Vec<String>,
     /// nice to have
     pub tips: Vec<String>,
     pub map: MapMeta,
@@ -1705,7 +1708,7 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     }
     let missing_tex = doc["textures"]["missing"].as_array().map(|a| a.len()).unwrap_or(0);
     if missing_tex > 0 {
-        r.warnings.push(if missing_tex == 1 { "1 texture isn't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.".to_string() } else { format!("{missing_tex} textures aren't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.") });
+        r.file_warnings.push(if missing_tex == 1 { "1 texture isn't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.".to_string() } else { format!("{missing_tex} textures aren't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.") });
     }
     // the files that go with it: where the game looks and not something every player has
     let f = crate::mapcopy::Finder::default();
@@ -1720,8 +1723,9 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
         }
     }
     if !missing.is_empty() {
-        r.warnings.push(missing_files_warning(&missing));
+        r.file_warnings.push(missing_files_warning(&missing));
     }
+    r.warnings.extend(r.file_warnings.iter().cloned());
     r.map.name = m.name.clone();
     r.map.bsp_size = std::fs::metadata(&m.bsp).map(|x| x.len()).unwrap_or(0);
     r.map.bsp_sha256 = sha256_file(&m.bsp).unwrap_or_default();
@@ -2848,12 +2852,33 @@ async fn api_ready(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> 
                     }
                 }
                 let choices = mode_choices(&game.dir, &super::studio::graphs_dir(), &super::communitylib::load_all(&super::communitylib::lib_dir()));
-                Ok(json!({"ready": r, "suggestedModes": suggested, "modeChoices": choices, "tag": format!("{TAG_TITLE}: {TAG_VALUE}"), "projects": source_projects(&m.name)}))
+                let projects = source_projects(&m.name);
+                let editor = projects.iter().any(|p| p["match"] == json!(true));
+                let downloaded = game.store.authors().get(&m.name.to_lowercase()).cloned();
+                let origin = map_origin(editor, downloaded, &r.title);
+                Ok(json!({"ready": r, "suggestedModes": suggested, "modeChoices": choices, "tag": format!("{TAG_TITLE}: {TAG_VALUE}"), "projects": projects, "origin": origin}))
             })
             .await
         }
     };
     json_answer(r)
+}
+
+/// Who made a map, as far as the app can tell, so Publish can ask before someone shares a map
+/// that isn't theirs: "editor" (a map editor project named like it), "download" (from
+/// GameBanana, with that page's author) or "added" (put in by hand); and a maker its own text
+/// names ("Map by Dewolt").
+fn map_origin(editor: bool, downloaded: Option<String>, title: &str) -> Value {
+    let kind = if editor { "editor" } else if downloaded.is_some() { "download" } else { "added" };
+    json!({"kind": kind, "author": downloaded.filter(|a| !a.trim().is_empty()), "named": author_in_text(title)})
+}
+
+/// A maker named in a map's text: "by Dewolt", "Map by Dewolt", "made by: Dewolt".
+pub(crate) fn author_in_text(text: &str) -> Option<String> {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| regex::Regex::new(r"(?i)(?:\b(?:made|created|mapped|map)\s+by|(?:^|[(\[,;|-])\s*by)\s*:?\s+([\p{L}\p{N}_.\-\[\]]{2,32})").unwrap());
+    let name = re.captures(text)?.get(1)?.as_str().trim_matches(|c: char| c == '.' || c == '-').to_string();
+    (name.chars().count() >= 2).then_some(name)
 }
 
 /// P5: the editor's recent projects, for a map's editable source (the one named like the map
@@ -3234,6 +3259,21 @@ pub fn md5_hex(data: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::goldsrc::{bsp::fixture, nav, wad};
+
+    #[test]
+    fn who_made_a_map() {
+        assert_eq!(author_in_text("Map by Dewolt").as_deref(), Some("Dewolt"));
+        assert_eq!(author_in_text("Aztec Temple - by Dewolt").as_deref(), Some("Dewolt"));
+        assert_eq!(author_in_text("made by: [RS]Kane.").as_deref(), Some("[RS]Kane"));
+        assert_eq!(author_in_text("by Dewolt").as_deref(), Some("Dewolt"));
+        for none in ["", "Aztec Temple", "Inspired by de_dust", "Bypass", "Standby", "maps nearby x"] {
+            assert_eq!(author_in_text(none), None, "{none}");
+        }
+        assert_eq!(map_origin(true, Some("X".into()), "Map by Dewolt"), json!({"kind": "editor", "author": "X", "named": "Dewolt"}));
+        assert_eq!(map_origin(false, Some("Dewolt".into()), "")["kind"], "download");
+        assert_eq!(map_origin(false, None, "")["kind"], "added");
+        assert_eq!(map_origin(false, Some(" ".into()), "")["author"], Value::Null);
+    }
 
     fn tmp(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("ls-community-{tag}-{}", std::process::id()));

@@ -119,7 +119,12 @@ export type Readiness = {
   creatures?: string[];
   /** the publisher's GameBanana member id this computer knows (0: ask for the profile link) */
   member?: number;
+  /** the warnings about the map's own files and textures (also in warnings) */
+  fileWarnings?: string[];
 };
+/** Who made a map, as far as the app can tell: made in the map editor, downloaded from GameBanana
+ *  (author: that page's), or added by hand; named: a maker its own text names ("Map by Dewolt") */
+export type MapOrigin = { kind: "editor" | "download" | "added"; author: string | null; named: string | null };
 export const notePermission = (b: { key: string; granted: boolean; note: string; authors?: Author[]; page?: string }) =>
   post<{ ok: boolean }>(`/api/tools/credits/${b.authors ? "manual" : "permission"}`, b);
 
@@ -151,7 +156,7 @@ export const tryIt = (model: Model, id: number, confirmed: boolean, file?: numbe
   post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode" | "creature"; types?: string[]; message?: string; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[]; riskCodes?: string[]; differs?: boolean }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}), ...(risks ? { risks } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
-  get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string; projects?: SourceProject[] }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
+  get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string; projects?: SourceProject[]; origin?: MapOrigin }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
 
 /** P5: an editor project that can be a map's editable source (`match`: named like the map). */
 export type SourceProject = { path: string; name: string; match: boolean; remixOf?: { gb: number; name: string; author: string } | null };

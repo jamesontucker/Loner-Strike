@@ -86,7 +86,7 @@ export function Loading({ text, className = "" }: { text: string; className?: st
 
 const PAGE = 150;
 
-export function MapList({ maps, onPick, placeholder, note, filter, none }: {
+export function MapList({ maps, onPick, placeholder, note, filter, none, order }: {
   maps: MapInfo[];
   onPick: (name: string) => void;
   placeholder: string;
@@ -95,6 +95,8 @@ export function MapList({ maps, onPick, placeholder, note, filter, none }: {
   filter?: (m: MapInfo) => boolean;
   /** what to say when the filter leaves no maps at all (say, none has a bot nav yet) */
   none?: string;
+  /** groups shown in this order (lower first), each by name: Publish lists your own maps first */
+  order?: (m: MapInfo) => number;
 }) {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
@@ -103,8 +105,8 @@ export function MapList({ maps, onPick, placeholder, note, filter, none }: {
     const w = searchWords(q);
     return all
       .filter((m) => matches(w, m.name, m.title))
-      .sort((a, b) => COLLATOR.compare(a.name, b.name));
-  }, [all, q]);
+      .sort((a, b) => (order ? order(a) - order(b) : 0) || COLLATOR.compare(a.name, b.name));
+  }, [all, q, order]);
   if (!all.length)
     return <Empty title="No maps here yet" text={maps.length && none ? none : "Loner-Strike can't find any maps in your game yet. Add some from Get more or the Maps page."} />;
   return (

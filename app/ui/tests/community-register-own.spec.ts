@@ -1,4 +1,4 @@
-// Publish's "Already uploaded? Register a GameBanana page": always there above step 1, the same
+// Publish's "Already uploaded? Add a GameBanana page to Community": always there above step 1, the same
 // form as step 3 (the link, the Terms tick, Add to Community) with no package step; the app sends
 // the link with no package file. Every answer shows as one full-width line, its mark (✓ ! ✕) on
 // the same line as the text, the reason said once (a fix only when the reason doesn't already say
@@ -10,7 +10,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // every answer the register form can show, as the app's /register answers it
 const STATES: { name: string; answer: object; line: string; mark: "✓" | "!" | "✕"; fix?: string }[] = [
   { name: "listed", answer: { ok: true, state: "listed", error: null, copy: "{}", item: {} }, line: "Listed. It shows in Community within a few minutes.", mark: "✓" },
-  { name: "sent-to-moderators", answer: { ok: true, state: "pending", error: null, copy: "{}", item: {} }, line: "Sent. A Loner-Strike moderator looks at it first; Published shows when it's listed.", mark: "✓" },
+  { name: "sent-to-moderators", answer: { ok: true, state: "pending", error: null, copy: "{}", item: {} }, line: "Sent. A Loner-Strike moderator looks at it first; it shows under Yours once it's listed.", mark: "✓" },
   { name: "refusal-with-fix", answer: { error: "That page isn't in GameBanana's Counter-Strike 1.6 section." }, line: "Not added: That page isn't in GameBanana's Counter-Strike 1.6 section.", mark: "✕", fix: "Move the page to GameBanana's Counter-Strike 1.6 section" },
   { name: "pending-scan", answer: { error: "GameBanana is still checking the page's file. Try again in a few minutes." }, line: "Not added: GameBanana is still checking the page's file. Try again in a few minutes.", mark: "✕" },
   { name: "list-refused", answer: { ok: true, state: "refused", error: "maps/br_valley.lsv didn't pass the checks: it says 12000 areas, more than the bot brain reads (10000).", copy: "" }, line: "Not added: maps/br_valley.lsv didn't pass the checks: it says 12000 areas, more than the bot brain reads (10000).", mark: "✕" },
@@ -48,7 +48,7 @@ test("a GameBanana page registers without a package, and every answer reads as o
   await box.waitFor({ timeout: 20_000 });
   // above step 1, closed until asked
   await expect(page.getByRole("heading", { name: "What are you publishing?" })).toBeVisible();
-  await box.getByText("Already uploaded? Register a GameBanana page").click();
+  await box.getByText("Already uploaded? Add a GameBanana page to Community").click();
   await box.getByRole("textbox", { name: "GameBanana link" }).fill("https://gamebanana.com/mods/741494");
   const add = box.getByRole("button", { name: "Add to Community" });
   await expect(add).toBeDisabled();

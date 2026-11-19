@@ -4,7 +4,7 @@
 //
 // The page is one column of numbered steps: what you're publishing, checks (a status list where
 // each check says why in one line and has a button that fixes it), details, modes, pictures,
-// credits, then the action. After packing: the upload steps, the terms tick and Register.
+// credits, then the action. After packing: the upload steps, the terms tick and Add to Community.
 //
 // Other tools hand over a map with go("tools", "community:publish:<map>"), the Game Mode Studio a
 // mode with "community:publish:mode:<id>", the prefab library a prefab with "community:publish:prefab:<id>".
@@ -23,7 +23,7 @@ import { drawCover } from "./coverCard"; // MCP: the automatic cover card
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import {
   modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, studioGraphs,
-  type AssetCredit, type Form, type MineState, type Package, type Readiness, type Shot, type SourceProject,
+  type AssetCredit, type Form, type MapOrigin, type MineState, type Package, type Readiness, type Shot, type SourceProject,
 } from "./communityApi";
 
 const MAX_SHOTS = 6;
@@ -40,7 +40,7 @@ export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[];
   return (
     <div className="cm-pub">
       <details className="cm-step panel cm-register-own" data-testid="register-own">
-        <summary>Already uploaded? Register a GameBanana page</summary>
+        <summary>Already uploaded? Add a GameBanana page to Community</summary>
         <p className="muted small-note">For a page that's already on GameBanana: made on another computer, or a map that comes with Loner-Strike. Paste its link; no package needed.</p>
         <RegisterForm file="" onDone={onDone} />
       </details>
@@ -48,8 +48,8 @@ export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[];
         <Segmented label="What to publish" values="map mode prefab" labels="A map|A game mode|A prefab" current={what} onPick={(v) => setWhat(v as What)} />
         {what === "map" && (
           <>
-            <p className="muted small-note">A map you made: it's checked, then packed with its bot nav, map knowledge, download list and radar picture.</p>
-            <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
+            <p className="muted small-note">A map you made: it's checked, then packed with its bot nav, map knowledge, download list and radar picture. Maps you added come first; downloaded ones are someone else's, so share those only with permission.</p>
+            <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} order={mineFirst} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
           </>
         )}
         {what === "mode" && <ModeList onPick={(id) => onMap(`mode:${id}`)} />}
@@ -58,6 +58,9 @@ export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[];
     </div>
   );
 }
+
+/** Maps you added (the map editor's among them) before downloaded ones and a server's */
+const mineFirst = (m: MapInfo) => (m.source === "added" ? 0 : 1);
 
 // ---- building blocks ---------------------------------------------------------------------------
 
@@ -271,11 +274,12 @@ function creatureCheck(list?: string[]): Check | null {
 // ---- a map ----------------------------------------------------------------------------------------
 
 /** The map's checks as a status list (from the server's readiness), each with its fix. */
-function mapChecks(map: string, r: Readiness): Check[] {
+function mapChecks(map: string, r: Readiness, maker: string | null): Check[] {
   const rows: Check[] = r.blockers.map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b }));
   const credit = (r.assets ?? []).filter((a) => (a.verdict === "ask" || a.verdict === "no") && !a.permission?.granted);
   const creditNo = credit.some((a) => a.verdict === "no");
-  const files = r.warnings.filter((w) => /map doctor/i.test(w));
+  // (by kind, not wording: the bot nav warning also names the map doctor)
+  const files = r.fileWarnings ?? [];
   rows.push(
     files.length
       ? { state: "warn", title: "Files and textures", why: files[0], fix: { label: "Open the map doctor", to: `doctor:${map}` } }
@@ -297,14 +301,38 @@ function mapChecks(map: string, r: Readiness): Check[] {
       : r.health.verdict === "bad"
         ? { state: "warn", title: "Bot simulation", why: "The last run found real problems (falls, stuck bots or errors).", fix: { label: "See the report", to: `health:${map}` } }
         : { state: "ok", title: "Bot simulation", why: `Last run ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` },
-    credit.length
-      ? { state: creditNo ? "bad" : "warn", title: "Credits and permissions", why: `${credit.length} file${credit.length === 1 ? "" : "s"} ${creditNo ? "may not be shared without permission" : "ask for permission first"}.`, fix: { label: "See credits", to: "#cm-credits" } }
-      : { state: "ok", title: "Credits and permissions", why: "Everyone whose files it uses is credited." },
+    maker !== null
+      ? { state: "warn", title: "Credits and permissions", why: `The map is ${maker ? `by ${maker}` : "someone else's"}: share it only with their permission, and credit them.`, fix: { label: "See credits", to: "#cm-credits" } }
+      : credit.length
+        ? { state: creditNo ? "bad" : "warn", title: "Credits and permissions", why: `${credit.length} file${credit.length === 1 ? "" : "s"} ${creditNo ? "may not be shared without permission" : "ask for permission first"}.`, fix: { label: "See credits", to: "#cm-credits" } }
+        : { state: "ok", title: "Credits and permissions", why: "Everyone whose files it uses is credited." },
   );
   const cr = creatureCheck(r.creatures);
   if (cr) rows.push(cr);
   for (const w of r.warnings.filter((x) => /can be listed once|the full name is too long/.test(x))) rows.push({ state: "warn", title: "Creature names", why: w });
   return rows;
+}
+
+/** Asked when a map may be someone else's: downloaded, added by hand, or its own text names a maker. */
+function MadeIt({ origin, maker, mine, setMine, allowed, setAllowed }: { origin: MapOrigin; maker: string; mine: "yes" | "no" | null; setMine: (v: "yes" | "no") => void; allowed: boolean; setAllowed: (v: boolean) => void }) {
+  const why =
+    origin.kind === "download"
+      ? `It was downloaded from GameBanana${origin.author ? `, where it's by ${origin.author}` : ""}.`
+      : origin.named
+        ? `Its own text says it's by ${origin.named}.`
+        : "It wasn't made in Loner-Strike's map editor on this computer.";
+  return (
+    <div className="cm-made-it" data-testid="cm-made-it">
+      <b>Did you make this map?</b>
+      <p className="muted small-note">{why}</p>
+      <Segmented label="Did you make this map?" values="yes no" labels="Yes, I made it|No, someone else did" current={mine ?? ""} onPick={(v) => setMine(v as "yes" | "no")} />
+      {mine === "no" && (
+        <label className="cm-wide-check">
+          <input type="checkbox" checked={allowed} onChange={(e) => setAllowed(e.target.checked)} /> I have {maker ? `${maker}'s` : "the maker's"} permission to share it
+        </label>
+      )}
+    </div>
+  );
 }
 
 /** P5: which editor project is the map's, and whether its editable source goes in the package. */
@@ -351,6 +379,9 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   // P5: the map's editor project (its editable source when asked, and a remix's credit)
   const [project, setProject] = useState<string | null>(null);
   const [withSource, setWithSource] = useState(false);
+  // a map that may be someone else's (downloaded, added by hand, or its text names a maker)
+  const [mine, setMine] = useState<"yes" | "no" | null>(null);
+  const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
     if (!q.data) return;
@@ -398,13 +429,19 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
       setDone({ pkg: res.package, form: res.form });
     });
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const origin = q.data.origin;
+  const ask = !!origin && (origin.kind !== "editor" || !!origin.named);
+  const otherMaker = origin?.author || origin?.named || "";
+  const theirs = ask && mine === "no";
   const blocked = r.blockers.length > 0;
+  const unanswered = ask && (mine === null || (mine === "no" && !allowed));
 
   return (
     <div className="cm-pub">
       {head}
       <Step n={1} title="Checks" note={blocked ? "Fix what's marked Must fix, then Check again." : "Optional items earn badges; nothing here stops you except Must fix."}>
-        <Checks rows={mapChecks(map, r)} />
+        {ask && origin && <MadeIt origin={origin} maker={otherMaker} mine={mine} setMine={setMine} allowed={allowed} setAllowed={setAllowed} />}
+        <Checks rows={mapChecks(map, r, theirs ? otherMaker : null)} />
         <p className="muted small-note cm-ships">
           In the package: the map{r.map.nav ? ", its bot nav" : ""}{r.map.lsv ? ", bot map knowledge" : ""}, a fresh download list (.res)
           {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses` : ""}.
@@ -434,8 +471,17 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
         </div>
       </Step>
       <Step n={5} title="Credits and permissions" id="cm-credits" note="Where each file the map ships came from. Credits go into the README, GameBanana's Credits module and the Community listing.">
+        {theirs && (
+          <p className="small-note" data-testid="cm-map-maker">
+            The map itself is {otherMaker ? <>by <b>{otherMaker}</b></> : "someone else's"}. Name them in About it, and add them as the map's author in GameBanana's Credits.
+          </p>
+        )}
         {(r.assets ?? []).some((a) => a.source !== "stock" && a.source !== "mine") ? (
           <CreditsPanel assets={r.assets ?? []} onChanged={() => q.refetch()} />
+        ) : theirs ? (
+          <p className="muted small-note">Its other files are the game's own.</p>
+        ) : ask && mine === null ? (
+          <p className="muted small-note">The map only uses the game's own files and the map's own. Say above whether you made it.</p>
         ) : (
           <p className="muted small-note">The map only uses the game's own files and yours: nobody else to credit.</p>
         )}
@@ -443,8 +489,8 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
       <Step n={6} title="Editable source" note="Optional. Others can open the map in Loner-Strike's editor (Remix this map), or the .map in Hammer, J.A.C.K. or TrenchBroom, and make their own version that credits yours.">
         <SourceStep projects={q.data.projects ?? []} project={project ?? ""} setProject={setProject} on={withSource} setOn={setWithSource} />
       </Step>
-      <Action note={blocked ? "Fix the checks marked Must fix first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
-        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || (withSource && !project)} onClick={build} />
+      <Action note={blocked ? "Fix the checks marked Must fix first." : unanswered ? (mine === "no" ? "Tick that you have the maker's permission first." : "Say whether you made this map first (step 1).") : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and add it to Community."}>
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || unanswered || !title.trim() || !author.trim() || (withSource && !project)} onClick={build} />
       </Action>
     </div>
   );
@@ -602,7 +648,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
           </>
         )}
       </Step>
-      <Action note={blocked ? "Fix the graph first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
+      <Action note={blocked ? "Fix the graph first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and add it to Community."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />
       </Action>
     </div>
@@ -667,7 +713,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
           </ul>
         </Step>
       )}
-      <Action note={!title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana's Prefabs and register the page."}>
+      <Action note={!title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana's Prefabs and add it to Community."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} onClick={build} />
       </Action>
     </div>
@@ -756,7 +802,7 @@ function PublishCreature({ name, onBack, onDone }: { name: string; onBack: () =>
           </div>
         </div>
       </Step>
-      <Action note={blocked ? "Fix what's above first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : !(r.member || memberFrom(memberText)) ? "Add your GameBanana profile." : !picture ? "Take its picture." : "Next: upload it to GameBanana's Skins and register the page."}>
+      <Action note={blocked ? "Fix what's above first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : !(r.member || memberFrom(memberText)) ? "Add your GameBanana profile." : !picture ? "Take its picture." : "Next: upload it to GameBanana's Skins and add it to Community."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || !picture || !(r.member || memberFrom(memberText))} onClick={build} />
       </Action>
     </div>
@@ -835,7 +881,7 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
         </div>
         <p className="muted small-note">On GameBanana's Technical tab, under Tags, add a Custom Tag with the value <code>{form.tag.value}</code> (the title can stay empty), then press + and save. That's how Community finds it.</p>
       </Step>
-      <Step n={3} title="Register the page" note="Paste the page's link once GameBanana has checked the file.">
+      <Step n={3} title="Add to Community" note="Paste the page's link once GameBanana has checked the file.">
         <RegisterForm file={pkg.file} onDone={onDone} />
       </Step>
     </>
@@ -899,7 +945,7 @@ function RegisterForm({ file, onDone }: { file: string; onDone: () => void }) {
             {result.state === "listed" || result.state === "sent" ? (
               <p className="cm-line ok" data-testid="register-result">Listed. It shows in Community within a few minutes.</p>
             ) : result.state === "pending" ? (
-              <p className="cm-line ok" data-testid="register-result">Sent. A Loner-Strike moderator looks at it first; Published shows when it's listed.</p>
+              <p className="cm-line ok" data-testid="register-result">Sent. A Loner-Strike moderator looks at it first; it shows under Yours once it's listed.</p>
             ) : result.state === "refused" ? (
               <Refused why={result.error || "the Loner-Strike list gave no reason."} />
             ) : (
