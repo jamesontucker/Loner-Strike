@@ -31,6 +31,9 @@ test("Publish a map: the editable source option, off by default, sends the proje
   await box.check();
   await expect(step).toContainText("Adds source/ to the package");
   await page.getByRole("textbox", { name: "Made by" }).fill("qa");
+  // (1.0.1: a map not made in the editor here asks who made it before it packs)
+  const madeIt = page.getByTestId("cm-made-it");
+  if (await madeIt.count()) await madeIt.getByRole("button", { name: "Yes, I made it" }).click();
   await page.getByRole("button", { name: "Make the package" }).click();
   await expect(page.getByText(/sent:\{"project":"\/tmp\/de_dust2\.lsmap","source":true\}/)).toBeVisible();
 });
