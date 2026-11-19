@@ -413,7 +413,7 @@ fn invite(id: &str, aid: u64, who: &Who) -> Result<Value, String> {
         // a Linux server keeps its people itself (ls-control): it makes the invite and tells the
         // list service when it's redeemed
         if crate::control::agent::url(&e).is_none() {
-            return Err("Helpers reach a Linux server at its website status address. Set up Website status for it first (Overview).".into());
+            return Err("Helpers reach a Linux server through its status service. Set it up first in the server's Website, downloads & Discord tab.".into());
         }
         let aid_s = aid.to_string();
         let v = crate::control::agent::cli(&e, &["invite", "--role", "moderator", "--steam", steam, "--app", &aid_s])?;

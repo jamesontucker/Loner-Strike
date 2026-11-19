@@ -242,7 +242,7 @@ fn needs_something(s: &Settings, discord: bool) -> bool {
 /// Checks and tidies new settings for server `me` (`all`: every server).
 pub fn validate(mut s: Settings, me: &Entry, all: &[Entry]) -> Result<Settings, String> {
     if me.remote.is_none() {
-        return Err("Website status is for servers on a Linux machine.".into());
+        return Err("Website, downloads & Discord is for servers on a Linux machine.".into());
     }
     if s.mode != "tunnel" {
         s.mode = "caddy".into();
@@ -756,7 +756,7 @@ pub fn remove_sh(id: &str) -> String {
 
 /// Writes the status service on the machine and turns it on, or takes it away.
 pub fn apply(e: &Entry, on: bool) -> Result<(), String> {
-    let r = e.remote.as_ref().ok_or("Website status is for servers on a Linux machine.")?;
+    let r = e.remote.as_ref().ok_or("Website, downloads & Discord is for servers on a Linux machine.")?;
     let script = if on {
         let s = &e.web_status;
         let listen = s.port.unwrap_or(FIRST_PORT);
@@ -1065,7 +1065,7 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
             // a new token: the app's own tunnel. Otherwise the one it has, or the machine's own
             s.own_tunnel = token.is_some() || (e.web_status.own_tunnel && read_token(&id).is_some());
             if s.enabled && s.public() && !s.own_tunnel {
-                let r = e.remote.as_ref().ok_or("Website status is for servers on a Linux machine.")?;
+                let r = e.remote.as_ref().ok_or("Website, downloads & Discord is for servers on a Linux machine.")?;
                 if existing_tunnel(r)? != Some("running") {
                     return Err("There's no Cloudflare Tunnel running on this machine. Paste the tunnel's token from Cloudflare.".into());
                 }

@@ -842,7 +842,7 @@ fn server_invite(st: &Shared, e: &crate::servers::Entry, role: Role, steam: &str
         return Err("That isn't a SteamID. It looks like STEAM_0:1:12345.".into());
     }
     if agent::url(e).is_none() {
-        return Err("Helpers reach a Linux server at its website status address. Set up Website status for it first (Overview).".into());
+        return Err("Helpers reach a Linux server through its status service. Set it up first in the server's Website, downloads & Discord tab.".into());
     }
     agent::ensure(e, &crate::setup_api::resources_for(st)?)?;
     let mut args = vec!["invite", "--role", if role == Role::Admin { "admin" } else { "moderator" }];

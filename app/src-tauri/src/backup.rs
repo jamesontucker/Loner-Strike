@@ -274,7 +274,7 @@ impl Saved {
             e.web_status = self.web_status.clone();
             e.web_status.port = port;
         } else if self.web_status.enabled {
-            notes.push("Website status is for servers on a Linux machine, so it's off here.".into());
+            notes.push("Website, downloads & Discord is for servers on a Linux machine, so it's off here.".into());
         }
     }
 }
@@ -1555,7 +1555,7 @@ fn check_extras(e: &mut Entry, all: &[Entry], notes: &mut Vec<String>) {
             Ok(s) => e.web_status = s,
             Err(why) => {
                 e.web_status.enabled = false;
-                notes.push(format!("Website status was turned off: {why}"));
+                notes.push(format!("Website, downloads & Discord was turned off: {why}"));
             }
         }
     }
@@ -2236,7 +2236,7 @@ impl Restore {
             if e.web_status.enabled && e.web_status.own_tunnel && e.web_status.mode == "tunnel" && crate::webstatus::read_token(&e.id).is_none() {
                 e.web_status.enabled = false;
                 servers::edit(|l| l.iter_mut().filter(|x| x.id == e.id).for_each(|x| x.web_status.enabled = false))?;
-                job.note("Website status was turned off: its tunnel token wasn't restored. Paste it in Website status to turn it on again.");
+                job.note("Website, downloads & Discord was turned off: its tunnel token wasn't restored. Paste it in Website, downloads & Discord to turn it on again.");
             }
             if e.hltv.enabled {
                 if let Err(why) = crate::hltv::remote_apply(&e, true) {
@@ -2245,7 +2245,7 @@ impl Restore {
             }
             if e.web_status.enabled {
                 if let Err(why) = crate::webstatus::apply(&e, true) {
-                    job.note(&format!("Website status isn't set up on the machine yet: {why}"));
+                    job.note(&format!("Website, downloads & Discord isn't set up on the machine yet: {why}"));
                 }
             }
         }

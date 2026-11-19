@@ -536,7 +536,7 @@ fn alerts_for(id: &str) -> bool {
 fn set_alerts(e: &Entry, on: bool) -> Result<(), String> {
     if on && crate::webstatus::read_hook("live", &e.id).is_none() {
         return Err(if e.remote.is_some() {
-            "Link the server's Discord status channel first (Website and Discord), then turn this on."
+            "Link the server's Discord status channel first (Website, downloads & Discord), then turn this on."
         } else {
             "Paste the Discord channel's webhook link first, then turn this on."
         }
@@ -695,7 +695,7 @@ async fn api_hook(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(req): Json<Ho
         tokio::task::spawn_blocking(move || {
             let e = own(&id)?;
             if e.remote.is_some() {
-                return Err("Link this server's Discord channel in Website and Discord.".into());
+                return Err("Link this server's Discord channel in Website, downloads & Discord.".into());
             }
             match req.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
                 Some(u) => crate::webstatus::save_hook("live", &e.id, Some(&crate::webstatus::clean_hook(u)?))?,
