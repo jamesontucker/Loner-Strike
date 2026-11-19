@@ -815,6 +815,18 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 Ok(json!({"ok": true}))
             }
+            "fetch-demo" if e.remote.is_none() => {
+                // from a server on this computer into the player's game folder, ready for viewdemo
+                let from = find_demo(&e, &req.name).ok_or("That demo isn't there any more.")?;
+                let game = st.local_game().ok_or("Set up the game on this computer first.")?;
+                let to = game.hl.join(&e.game).join(&req.name);
+                // (a server running from the game's own folder: it's there already)
+                let same = std::fs::canonicalize(&from).ok().zip(std::fs::canonicalize(&to).ok()).is_some_and(|(a, b)| a == b);
+                if !same {
+                    std::fs::copy(&from, &to).map_err(|err| format!("Couldn't copy it ({err})."))?;
+                }
+                Ok(json!({"ok": true}))
+            }
             "fetch-demo" => {
                 // from the Linux server into the player's game folder, ready for viewdemo
                 let r = e.remote.as_ref().ok_or("That demo is on this computer already.")?;

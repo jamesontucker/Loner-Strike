@@ -427,10 +427,11 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
                     <span className="muted">{size(d.size)} · {when(d.modified)}{live ? " · recording now" : ""}</span>
                   </div>
                   <div className="row">
-                    {ON_THIS_COMPUTER && st.remote ? (
-                      <BusyButton className="btn" busy={busy(fetchKey(d))} label="Copy to my game" busyLabel="Copying…" onClick={() => fetchDemo(d)} />
-                    ) : ON_THIS_COMPUTER ? (
-                      <button className="btn" onClick={() => show(d.name)}>Show</button>
+                    {ON_THIS_COMPUTER ? (
+                      <>
+                        <BusyButton className="btn" busy={busy(fetchKey(d))} disabled={live} label="Copy to my game" busyLabel="Copying…" onClick={() => fetchDemo(d)} />
+                        {!st.remote && <button className="btn" onClick={() => show(d.name)}>Show</button>}
+                      </>
                     ) : (
                       <a className="btn" href={`/api/servers/${encodeURIComponent(server.id)}/hltv/demos/${encodeURIComponent(d.name)}`} download={d.name}>Download</a>
                     )}
@@ -440,7 +441,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
               );
             })}
           </ul>
-          <p className="muted small-note">{st.remote ? "Copy to my game puts a demo in your game's folder. Then type viewdemo followed by its name in the console." : `To watch one, put it in your game's ${server.game} folder and type viewdemo followed by its name in the console.`}</p>
+          <p className="muted small-note">{ON_THIS_COMPUTER ? "Copy to my game puts a demo in your game's folder. Then type viewdemo followed by its name in the console." : `To watch one, put it in your game's ${server.game} folder and type viewdemo followed by its name in the console.`}</p>
         </>
       )}
     </div>
