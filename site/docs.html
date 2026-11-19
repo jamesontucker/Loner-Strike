@@ -1598,7 +1598,7 @@ public on_spawn(id)
     <li><b>Favorites</b> and <b>History</b>: saved or played on.</li>
     <li><b>LAN</b>: games on your network.</li>
   </ul>
-  <p><b>Connect</b> or double-click to play; filters narrow the list. To list your server, turn on <b>On the Loner-Strike server list</b> in its <b>Who can join</b> tab.</p>
+  <p><b>Join</b> or double-click to play; filters narrow the list. To list your server, turn on <b>On the Loner-Strike server list</b> in its <b>Who can join</b> tab.</p>
 </section>
 
 <section class="topic" id="lan-party" data-group="Multiplayer">
@@ -1710,7 +1710,7 @@ public on_spawn(id)
       <tr><td><b>Health</b></td><td><a href="#maintenance">Updates, security, backups, daily restart, repair, crashes</a></td></tr>
       <tr><td><b>Rotation &amp; extras</b></td><td><a href="#rotation">Rotation, adverts, kicks, votes</a></td></tr>
       <tr><td><b>Spectators &amp; demos</b></td><td><a href="#hltv">HLTV</a></td></tr>
-      <tr><td><b>Website status</b></td><td><a href="#website-status">Site, Discord, fast downloads</a> (Linux)</td></tr>
+      <tr><td><b>Website, downloads &amp; Discord</b></td><td><a href="#website-status">Site, Discord, fast downloads</a> (Linux)</td></tr>
       <tr><td><b>Modes</b>, <b>Bots</b>, <b>Rules</b>, <b>Fun</b>, <b>Add-ons</b></td><td>As for your game</td></tr>
       <tr><td><b>Bot voice commands</b></td><td><a href="#voice">Voice commands</a></td></tr>
       <tr><td><b>Players</b>, <b>Moderation</b>, <b>Stats</b>, <b>Admins</b>, <b>Welcome page</b></td><td><a href="#running-a-server">Its people</a></td></tr>
@@ -1730,7 +1730,7 @@ public on_spawn(id)
     <li><b>Delete the server</b> stops it and deletes its folder. Servers added with Add one you already run have <b>Remove</b>, which leaves the folder alone.</li>
   </ul>
   <h2 id="crashes" data-keywords="crash crashing ham sandwich hamsandwich module discord">Crashes</h2>
-  <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in a Discord channel while Loner-Strike runs: a Linux server uses its status channel (<b>Website and Discord</b>); for a server on this computer, paste the channel's webhook link under the switch (in Discord: Edit Channel, Integrations, Webhooks).</p>
+  <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in a Discord channel while Loner-Strike runs: a Linux server uses its status channel (<b>Website, downloads &amp; Discord</b>); for a server on this computer, paste the channel's webhook link under the switch (in Discord: Edit Channel, Integrations, Webhooks).</p>
   <p>A <b>Crash-prone module</b> warning means the server runs a module known to crash servers. The usual one is the official Ham Sandwich, which crashes on map changes: Loner-Strike puts its fixed copy back before every Play and local server start (a Linux server does it before each start), keeping the replaced file beside it.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/crashes.webp" type="image/webp"><img src="img/1.0/crashes.png" alt="Health › Crashes: a Ham Sandwich warning, two crashes in the last 24 hours with Details and Copy, and Post crashes to Discord switched on" width="1152" height="380" loading="lazy"></picture>
@@ -1804,10 +1804,10 @@ cat ~/.ssh/loner-strike.pub</code></pre>
 lsctl status      running or not
 lsctl restart     also start, stop
 lsctl logs        the last 100 console lines</code></pre>
-  <h2 id="vps-tunnel" data-short="7. Website and tunnel">7. Website status, and keeping ports closed</h2>
-  <p>Optional: <a href="#website-status">Website status</a> (also used for <a href="#shared-control">shared control</a>) needs a web address, served one of two ways:</p>
+  <h2 id="vps-tunnel" data-short="7. Website and tunnel">7. Website and downloads, and keeping ports closed</h2>
+  <p>Optional: fast downloads and <a href="#shared-control">shared control</a> in <a href="#website-status">Website, downloads &amp; Discord</a> need a web address on a domain you own (Discord messages don't), served one of two ways:</p>
   <ul>
-    <li><b>Cloudflare Tunnel</b> (recommended if your domain is on Cloudflare): <b>no web ports are opened</b>. In Cloudflare's dashboard (Zero Trust, then Networks, then Tunnels), make a tunnel, copy its token and paste it in Website status. The app installs and runs it.</li>
+    <li><b>Cloudflare Tunnel</b> (recommended if your domain is on Cloudflare): <b>no web ports are opened</b>. In Cloudflare's dashboard (Zero Trust, then Networks, then Tunnels), make a tunnel, copy its token and paste it in Website, downloads &amp; Discord. The app installs and runs it.</li>
     <li><b>Its own HTTPS (Caddy)</b>: no Cloudflare needed, but opens TCP 80 and 443 on the machine and in your provider's firewall.</li>
   </ul>
   <p>The game still needs <b>UDP 27015 to 27020</b> open. With a tunnel, close everything else except SSH (TCP 22). See <a href="#security">Security and health</a>.</p>
@@ -1831,14 +1831,14 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="fast-downloads" data-keywords="fastdl sv_downloadurl sv_allowdownload download maps slow joining http">Fast downloads</h2>
   <p>A player who doesn't have one of your server's custom maps, models or sounds downloads it when they join. From the game server itself that's slow (often minutes for one map). With <b>fast downloads</b> (FastDL) the game fetches the same files from a web address instead, in seconds. Turn it on under <b>Rotation &amp; extras</b>, <b>Fast downloads</b>:</p>
   <ul>
-    <li><b>A server on a Linux machine</b>: turn on Fast downloads in its <a href="#website-status">Website status</a>. The machine serves the files itself and fills in the address. Nothing to upload.</li>
+    <li><b>A server on a Linux machine</b>: turn on Fast downloads in its <a href="#website-status">Website, downloads &amp; Discord</a> tab. The machine serves the files itself and fills in the address. Nothing to upload.</li>
     <li><b>Any other server</b>: <b>Copy files for your web server</b> puts the custom files (never the game's own) in a folder laid out like the game's. Upload that folder to any web host that serves plain files, and paste its address.</li>
   </ul>
   <p>The app sets <code>sv_downloadurl</code> and turns on <code>sv_allowdownload</code> for you. The address is used from the next map. Players without fast downloads still get the files from the game server.</p>
   <h2 id="hltv">Spectators and demos</h2>
   <p>HLTV lets people watch with a delay and records demos. Copy a demo to your game from the list, then <code>viewdemo &lt;name&gt;</code> in the console.</p>
-  <h2 id="website-status">Website status</h2>
-  <p>On Linux: a live player count for your website, a Discord message of who's playing, down alerts and fast downloads, each checked from outside. Setup: <a href="#vps-tunnel">step 7</a>.</p>
+  <h2 id="website-status">Website, downloads &amp; Discord</h2>
+  <p>On Linux: a Discord message of who's playing and down alerts (no website needed), fast downloads (needs a web address on your domain), and a live player count for your website, each checked from outside. Setup: <a href="#vps-tunnel">step 7</a>.</p>
   <h2 id="server-skins">Skins and models</h2>
   <p>The server's skins and models and who sees each (everyone, one team, admins), plus each map's use of the 512 models and 512 sounds limit.</p>
 </section>
@@ -1846,7 +1846,7 @@ lsctl logs        the last 100 console lines</code></pre>
 <section class="topic" id="shared-control" data-group="Servers">
   <p class="crumb">Servers</p>
   <h1>Shared control</h1>
-  <p class="lead">Friends help run your server from their Loner-Strike, through <a href="#website-status">Website status</a> (Linux) or TCP 27030 on this computer while the app is open (<b>Open the port on my router</b> opens it).</p>
+  <p class="lead">Friends help run your server from their Loner-Strike, through <a href="#website-status">Website, downloads &amp; Discord</a> (Linux) or TCP 27030 on this computer while the app is open (<b>Open the port on my router</b> opens it).</p>
   <ol>
     <li>In the server's <b>Shared control</b> tab, make an invite and pick a role. Adding their SteamID is recommended (they see it with <code>status</code> in the console). An invite works once, for 24 hours.</li>
     <li>They paste it in <b>Servers</b> › <b>Add a shared server</b>.</li>
@@ -1875,7 +1875,7 @@ lsctl logs        the last 100 console lines</code></pre>
     <li><b>Set your provider's firewall</b> to allow only UDP 27015 to 27020 and TCP 22, with SSH limited to your address if it doesn't change.</li>
     <li><b>Guard your SSH key</b> (the file without <code>.pub</code>). If it leaked, remove its line from <code>~/.ssh/authorized_keys</code> on the machine and make a new one.</li>
     <li><b>Keep password logins off</b>; the panel can do it. Loner-Strike always uses your key.</li>
-    <li><b>Prefer a Cloudflare Tunnel</b> for <a href="#vps-tunnel">Website status</a>: it opens no web ports.</li>
+    <li><b>Prefer a Cloudflare Tunnel</b> for <a href="#vps-tunnel">fast downloads and shared control</a>: it opens no web ports.</li>
     <li><b>Decide about RCON</b> if another game server shares the machine: closing it to the internet affects every server there, so it stays open until you choose in the panel.</li>
   </ul>
   <h2 id="backups">Backups</h2>
@@ -2004,7 +2004,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <p>Players who try it get the map as usual; <code>source/</code> never goes into their game. On a map shared with its source, <b>Remix this map</b> on its Community page saves a copy as a new project of yours (<code>&lt;map&gt;_remix</code>, never over one you have) and opens it in the map editor. When you publish your remix, the package, its README and the GameBanana text say "A remix of" the original, by its maker.</p>
   <p>A map's custom creatures (an <code>ls_creature</code> or wave spawner using your own type) go with it, named for your account; players get them in their own block in <code>creatures.ini</code>, removed again with the map. <a href="#creatures-how">How creatures work</a>.</p>
   <h2 id="publish-yours">After it's up</h2>
-  <p>The <b>Published</b> tab lists what you've shared. To update one, upload the new file to its GameBanana page, then paste the link in Publish again. Players get it as an <a href="#community-updates">update</a>.</p>
+  <p>The <b>Yours</b> tab lists what you've shared. To update one, upload the new file to its GameBanana page, then paste the link in Publish again. Players get it as an <a href="#community-updates">update</a>.</p>
   <p><b>Unlist</b> takes one off Community (installed copies stay). If the app asks, put the short code it gives you on the GameBanana page, so it knows the page is yours; <b>List again</b> puts it back.</p>
 </section>
 
