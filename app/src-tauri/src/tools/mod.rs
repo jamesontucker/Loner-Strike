@@ -24,6 +24,7 @@ pub mod overview;
 pub mod demos;
 pub mod plugins;
 pub mod compile;
+pub mod buildlog; // 1.0.1: the last compile and playtest logs of each map, and what bots know of it
 pub mod community;
 pub mod mapsource; // P5: a map's editable source in its package, and Remix
 pub mod communitylib;

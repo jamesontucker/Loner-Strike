@@ -505,7 +505,13 @@ pub fn start_learning(client: Install, maps: Vec<String>, relearn: bool) -> Resu
             let _ = job.run(&format!("{}/nav-{i}", m.game), || {
                 match learner.learn(job, m, &STOP) {
                     Ok(nav) => match install_nav(&hl, m, &nav, relearn) {
-                        Ok(()) => learned.push(m.name.clone()),
+                        Ok(()) => {
+                            // 1.0.1: which compile of the map bots know (a playtest offers to teach them again after a change)
+                            if let Some(n) = crate::tools::buildlog::nav_beside(&m.bsp, &m.name) {
+                                crate::tools::buildlog::note_learned(&crate::tools::buildlog::nav_book(), &m.name, &m.bsp, &n);
+                            }
+                            learned.push(m.name.clone())
+                        }
                         Err(e) => failed.push((m.name.clone(), e)),
                     },
                     Err(Missed::Stopped) => stopped = true,

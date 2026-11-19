@@ -291,6 +291,27 @@ pub fn retry_reason_with(log: &str, closed: bool, waited: Duration, steam_retrie
     silent_limit.is_some_and(|l| waited > l).then_some("hang")
 }
 
+/// 1.0.1: the hidden server hung after it came up: Valve's HLDS 4599 under CrossOver can stop at
+/// `Failed to load "SDL3.dll"` on a map change too (the Game Mode Menu reloads the map once the
+/// mode is set), not only on the first. `since_up` is what the console said after the server first
+/// answered; `quiet` how long it hasn't answered. Started again once (the start's hang retry
+/// counts: one per run).
+pub fn hung_after_start(since_up: &str, quiet: Duration, hang_retries: u32) -> bool {
+    hang_retries < 1 && quiet >= Duration::from_secs(30) && after_restart(since_up).contains("Failed to load \"SDL3.dll\"")
+}
+
+/// A file's text from `from` on (at most 1 MB): the console since a point in the run.
+fn read_from(path: &Path, from: u64) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else { return String::new() };
+    if f.seek(SeekFrom::Start(from)).is_err() {
+        return String::new();
+    }
+    let mut b = Vec::new();
+    let _ = f.take(1 << 20).read_to_end(&mut b);
+    crate::rcon::latin1(&b)
+}
+
 /// What a hidden server that closed by itself said, for the error a tool shows: Steam that didn't
 /// answer is the firewall prompt on Windows (engine_finding), anything else is `otherwise`.
 pub fn closed_why(log: &str, otherwise: &str) -> String {
@@ -1356,6 +1377,8 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
     let (mut nudges, mut last_nudge, mut last_check) = (0, started, started);
     let (mut retries, mut hang_retries) = (0u32, 0u32);
     let mut started = started;
+    // 1.0.1: once up, still answering? (where the console was when it first answered, its last answer)
+    let (mut up_at, mut answered) = (0u64, Instant::now());
     // (a retry: the console log gets the mark, the server's own logs start again, a new process)
     let restart = |child: &mut std::process::Child, what: String| -> Result<(), String> {
         pkill_hidden(&p.hidden);
@@ -1402,6 +1425,24 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
             if let Some(why) = user_busy() {
                 break Ended::Busy(why);
             }
+            // 1.0.1: hung on a map change after it came up (the SDL3.dll line): started again once
+            if playing.is_some() {
+                if rcon.send("status").is_ok() {
+                    answered = Instant::now();
+                } else if hung_after_start(&read_from(&logs[2], up_at), answered.elapsed(), hang_retries) {
+                    hang_retries += 1;
+                    restart(&mut child, format!("The hidden server got stuck changing the map: starting it again on {}", p.asked.map))?;
+                    playing = None;
+                    nudges = 0;
+                    started = Instant::now();
+                    last_nudge = started;
+                    update(|r| {
+                        r.phase = "starting";
+                        r.playing_since = None;
+                    });
+                    continue;
+                }
+            }
         }
         // the bot count, set directly a few times (the plugins ramp it, or hold it for people)
         if nudges < 6 && last_nudge.elapsed() >= Duration::from_secs(8) {
@@ -1410,6 +1451,8 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
                 nudges += 1;
                 if playing.is_none() {
                     playing = Some(Instant::now());
+                    up_at = std::fs::metadata(&logs[2]).map(|m| m.len()).unwrap_or(0);
+                    answered = Instant::now();
                     update(|r| {
                         r.phase = "playing";
                         r.playing_since = Some(now_ms());
@@ -1979,6 +2022,19 @@ mod tests {
         assert_eq!(retry_reason("", false, D::from_secs(241), 0, 0), Some("hang"));
         assert_eq!(retry_reason("", false, D::from_secs(100), 0, 0), None);
         assert_eq!(retry_reason("", false, D::from_secs(241), 0, 1), None);
+    }
+
+    // 1.0.1: the SDL3 hang on a map change after the server came up (the Game Mode Menu's reload):
+    // started again once, only when it stopped answering for 30 s and said the SDL3 line since
+    #[test]
+    fn a_hang_after_it_came_up_is_retried_once() {
+        let sdl = "Changing level\nsrc\\public\\tier1\\interface.h (273) : Assertion Failed: Failed to load \"SDL3.dll\"\n";
+        assert!(hung_after_start(sdl, D::from_secs(31), 0));
+        assert!(!hung_after_start(sdl, D::from_secs(12), 0), "a slow answer isn't a hang");
+        assert!(!hung_after_start(sdl, D::from_secs(31), 1), "once per run (the start's retry counts)");
+        assert!(!hung_after_start("Changing level\nbots joined\n", D::from_secs(120), 0), "quiet without the SDL3 line: left to the run's own end");
+        // the line before a restart was the old attempt's
+        assert!(!hung_after_start(&format!("{sdl}{RESTART_MARK}\nfine"), D::from_secs(31), 0));
     }
 
     use super::*;

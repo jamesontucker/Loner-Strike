@@ -209,6 +209,15 @@ impl Stage {
             Stage::Rad => "Lighting…",
         }
     }
+    /// 1.0.1: its name in the panel's list of stages (with the program's short name mappers know).
+    pub fn short(self) -> &'static str {
+        match self {
+            Stage::Csg => "Brushes (CSG)",
+            Stage::Bsp => "Map (BSP)",
+            Stage::Vis => "Visibility (VIS)",
+            Stage::Rad => "Lighting (RAD)",
+        }
+    }
     /// How much of the whole compile it usually is.
     fn weight(self) -> f64 {
         match self {
@@ -1360,6 +1369,40 @@ struct Job {
     error: Option<String>,
     stopped: bool,
     started: Option<Instant>,
+    /// 1.0.1: a compile's map and preset (its log is kept per map), and how long each stage took
+    map: Option<String>,
+    preset: Option<Preset>,
+    stages: Vec<StageRun>,
+}
+
+/// 1.0.1: one stage of a compile, timed: the panel shows each stage's time as it goes (VIS on a
+/// big map can take many minutes, so the user sees it's working).
+#[derive(Clone, Debug)]
+struct StageRun {
+    stage: Stage,
+    started: Option<Instant>,
+    ended: Option<Instant>,
+    failed: bool,
+}
+
+/// The stages as the page shows them: {id, name, label, state, seconds}, state "waiting",
+/// "running", "done", "failed" or "stopped" (a stage that didn't end when the job did).
+fn stage_rows(v: &[StageRun], now: Instant, job_running: bool) -> Value {
+    Value::Array(
+        v.iter()
+            .map(|r| {
+                let state = match (r.started, r.ended) {
+                    (None, _) => "waiting",
+                    (Some(_), None) if job_running => "running",
+                    (Some(_), None) => "stopped",
+                    (Some(_), Some(_)) if r.failed => "failed",
+                    (Some(_), Some(_)) => "done",
+                };
+                let seconds = r.started.map(|s| r.ended.unwrap_or(now).saturating_duration_since(s).as_secs());
+                json!({"id": r.stage.id(), "name": r.stage.short(), "label": r.stage.label(), "state": state, "seconds": seconds})
+            })
+            .collect(),
+    )
 }
 
 static JOB: Mutex<Option<Job>> = Mutex::new(None);
@@ -1419,6 +1462,7 @@ fn note(text: &str) {
 }
 
 fn finish(result: Result<Option<Value>, String>) {
+    let failed = result.is_err();
     with_job(|j| {
         if !j.partial.is_empty() {
             let line = std::mem::take(&mut j.partial);
@@ -1426,6 +1470,12 @@ fn finish(result: Result<Option<Value>, String>) {
         }
         j.running = false;
         let stopped = STOP.load(Ordering::SeqCst);
+        if !stopped {
+            for r in j.stages.iter_mut().filter(|r| r.started.is_some() && r.ended.is_none()) {
+                r.ended = Some(Instant::now());
+                r.failed = failed;
+            }
+        }
         match result {
             Ok(v) => {
                 j.result = v;
@@ -1445,6 +1495,60 @@ fn finish(result: Result<Option<Value>, String>) {
             }
         }
     });
+    // 1.0.1: the compile's log kept as the map's last (outside the lock: it writes files)
+    if let Some((map, text, summary)) = with_job(|j| compile_record(j, crate::sys::now() as u64)).flatten() {
+        if let Err(e) = super::buildlog::keep(&super::buildlog::logs_dir(), &map, "compile", &text, summary) {
+            note(&e);
+        }
+    }
+}
+
+/// 1.0.1: a finished compile as its kept log (the text) and summary; None for the download.
+fn compile_record(j: &Job, when: u64) -> Option<(String, String, Value)> {
+    if j.kind != "compile" || j.running {
+        return None;
+    }
+    let map = j.map.clone()?;
+    let seconds = j.started.map_or(0, |s| s.elapsed().as_secs());
+    let outcome = if j.stopped { "stopped" } else if j.error.is_some() { "failed" } else { "ok" };
+    let preset = j.preset.map(|p| format!("{p:?}").to_lowercase()).unwrap_or_default();
+    let stages = stage_rows(&j.stages, Instant::now(), false);
+    let mut t = format!("Loner-Strike compile of {map} ({preset} preset), {}\n", super::buildlog::utc(when));
+    t.push_str(&match outcome {
+        "ok" => format!("Compiled in {}.\n", super::buildlog::duration(seconds)),
+        "stopped" => format!("Stopped after {}.\n", super::buildlog::duration(seconds)),
+        _ => format!("Didn't finish ({}): {}\n", super::buildlog::duration(seconds), j.error.clone().unwrap_or_default()),
+    });
+    t.push_str("\nStages:\n");
+    for r in stages.as_array().into_iter().flatten() {
+        let secs = r["seconds"].as_u64().map(super::buildlog::duration).unwrap_or_else(|| "-".into());
+        t.push_str(&format!("  {:<18} {:<8} {secs}\n", r["name"].as_str().unwrap_or(""), r["state"].as_str().unwrap_or("")));
+    }
+    if !j.problems.is_empty() {
+        t.push_str("\nProblems:\n");
+        for p in &j.problems {
+            t.push_str(&format!("  {}: {}\n", p.level, p.message));
+            if !p.detail.is_empty() && p.detail != p.message {
+                t.push_str(&format!("      {}\n", p.detail));
+            }
+        }
+    }
+    t.push_str("\nCompiler output:\n");
+    if j.dropped > 0 {
+        t.push_str(&format!("(the first {} lines were left out)\n", j.dropped));
+    }
+    for l in &j.log {
+        t.push_str(l);
+        t.push('\n');
+    }
+    let problems: Vec<Value> = j.problems.iter().filter(|p| p.level == "error").chain(j.problems.iter().filter(|p| p.level != "error")).take(20).map(|p| json!({"level": p.level, "kind": p.kind, "message": p.message})).collect();
+    let summary = json!({
+        "when": when, "outcome": outcome, "error": j.error, "seconds": seconds, "preset": preset, "stages": stages,
+        "errors": j.problems.iter().filter(|p| p.level == "error").count(),
+        "warnings": j.problems.iter().filter(|p| p.level != "error").count(),
+        "problems": problems,
+    });
+    Some((map, t, summary))
 }
 
 fn progress_json(from: Option<usize>) -> Value {
@@ -1469,6 +1573,7 @@ fn progress_json(from: Option<usize>) -> Value {
             "result": j.result,
             "error": j.error,
             "stopped": j.stopped,
+            "stages": stage_rows(&j.stages, Instant::now(), j.running),
         },
         "lines": lines,
         "from": from.map(|f| f.max(j.dropped)),
@@ -1762,6 +1867,8 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         with_job(|j| j.problems.push(Problem { level: "warning".into(), kind: "other".into(), message: note, ..Default::default() }));
     }
     let text = map_text(&boxed, &wads.paths)?;
+    // 1.0.1: what the layout is, for whether bots' knowledge of the map is still right
+    let nav_fp = super::buildlog::nav_fingerprint(&text);
     // entity text in the game's code page (GoldSrc shows bytes, not UTF-8)
     let (bytes, cp, lost) = mapfile::encode_for_game(&text);
     if let Some(note) = super::editor::code_page_note(cp, &lost) {
@@ -1785,9 +1892,21 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
             j.stage = stage.id().into();
             j.label = stage.label().into();
             j.fraction = done / total;
+            if let Some(r) = j.stages.iter_mut().find(|r| r.stage == stage) {
+                r.started = Some(Instant::now());
+            }
         });
         let extra = if stage == Stage::Csg { wadinclude_args(&wads.include) } else { Vec::new() };
         let r = run_stage(&layout, stage, p.preset, &base, &extra, done, total);
+        // (a stopped stage keeps no end: the page says it was stopped)
+        if !STOP.load(Ordering::SeqCst) {
+            with_job(|j| {
+                if let Some(s) = j.stages.iter_mut().find(|s| s.stage == stage) {
+                    s.ended = Some(Instant::now());
+                    s.failed = r.is_err();
+                }
+            });
+        }
         let out = match &r {
             Ok(t) | Err(t) => t.clone(),
         };
@@ -1860,6 +1979,15 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         result["installed"] = json!(true);
         result["backup"] = json!(backup.map(|b| b.to_string_lossy().to_string()));
         result["hasNav"] = json!(maps.join(format!("{}.nav", p.name)).is_file());
+        // 1.0.1: does the nav the bots have still fit? ("changed": the playtest offers to teach again)
+        let installed = maps.join(format!("{}.bsp", p.name));
+        let book = super::buildlog::nav_book();
+        super::buildlog::note_compiled(&book, &p.name, &nav_fp, &installed);
+        let nav = super::buildlog::nav_beside(&installed, &p.name);
+        result["nav"] = super::buildlog::nav_state(&book, &p.name, &nav_fp, nav.as_deref());
+        if nav.is_some() {
+            result["hasNav"] = json!(true);
+        }
     }
     Ok(Some(result))
 }
@@ -1891,6 +2019,11 @@ fn start_compile(st: &Shared, req: StartReq) -> Result<Value, String> {
     let p = plan(st, req)?;
     let name = p.name.clone();
     let id = begin("compile", "Getting ready…")?;
+    with_job(|j| {
+        j.map = Some(name.clone());
+        j.preset = Some(p.preset);
+        j.stages = p.preset.stages().into_iter().map(|stage| StageRun { stage, started: None, ended: None, failed: false }).collect();
+    });
     std::thread::spawn(move || {
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_compile(p))).unwrap_or_else(|_| Err(INTERNAL.into()));
         finish(r);
@@ -2017,11 +2150,177 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/compile/start", post(api_start))
         .route("/api/tools/compile/progress", get(api_progress))
         .route("/api/tools/compile/cancel", post(api_cancel))
+        .route("/api/tools/compile/logs", get(api_logs))
+        .route("/api/tools/compile/logs/open", post(api_logs_open))
+        .route("/api/tools/compile/playtest-log", post(api_playtest_log))
+}
+
+// ---- 1.0.1: the last compile and playtest of each map (tools/buildlog.rs) -----------------
+
+#[derive(Deserialize)]
+struct MapQuery {
+    #[serde(default)]
+    map: String,
+}
+
+async fn api_logs(Query(q): Query<MapQuery>) -> Response {
+    Json(super::buildlog::last(&super::buildlog::logs_dir(), &q.map)).into_response()
+}
+
+#[derive(Deserialize)]
+struct OpenLog {
+    map: String,
+    which: String,
+}
+
+/// Opens a kept log in the computer's text viewer.
+fn open_log(map: &str, which: &str) -> Result<Value, String> {
+    let p = super::buildlog::log_path(&super::buildlog::logs_dir(), map, which).ok_or("That log isn't there any more.")?;
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg("-t").arg(&p).spawn().map(crate::sys::reap);
+    #[cfg(windows)]
+    let r = std::process::Command::new("notepad").arg(&p).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let r = std::process::Command::new("xdg-open").arg(&p).spawn().map(crate::sys::reap);
+    r.map_err(|_| "Couldn't open the log.".to_string())?;
+    Ok(json!({"ok": true, "path": p.to_string_lossy()}))
+}
+
+async fn api_logs_open(h: HeaderMap, Json(b): Json<OpenLog>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || open_log(&b.map, &b.which)).await
+}
+
+/// What a playtest did, sent by the panel at its end: its steps (each a line, with its time),
+/// how it ended, and whether bots were taught (then the hidden server's console goes in too).
+#[derive(Deserialize)]
+struct PlaytestLog {
+    map: String,
+    #[serde(default)]
+    outcome: String,
+    #[serde(default)]
+    lines: Vec<String>,
+    #[serde(default)]
+    learner: bool,
+    #[serde(default)]
+    seconds: u64,
+}
+
+/// The playtest's log text: its steps, then the nav learner's console when bots were taught.
+fn playtest_text(b: &PlaytestLog, when: u64, console: Option<&str>) -> String {
+    let mut t = format!("Loner-Strike playtest of {}, {}\n", b.map, super::buildlog::utc(when));
+    t.push_str(&format!("{} ({}).\n\nSteps:\n", playtest_outcome_words(&b.outcome), super::buildlog::duration(b.seconds)));
+    for l in b.lines.iter().take(400) {
+        t.push_str("  ");
+        t.push_str(&l.chars().take(MAX_LINE * 2).collect::<String>());
+        t.push('\n');
+    }
+    if let Some(c) = console {
+        t.push_str("\nThe hidden server that taught bots the map (its console):\n");
+        t.push_str(&super::buildlog::learner_console(c));
+        t.push('\n');
+    }
+    t
+}
+
+fn playtest_outcome_words(o: &str) -> &'static str {
+    match o {
+        "ok" => "The game started",
+        "stopped" => "Stopped",
+        _ => "Didn't start the game",
+    }
+}
+
+fn keep_playtest(st: &Shared, b: PlaytestLog) -> Result<Value, String> {
+    if !valid_map_name(&b.map) {
+        return Err("That isn't a map name.".into());
+    }
+    // (the nav learner's console: tools/navs.rs LocalLearner, .nav-learner/learn-server.log)
+    let console = if b.learner {
+        crate::servers::client(st)
+            .and_then(|c| crate::servers::root_for(&c).ok())
+            .map(|r| r.join(".nav-learner").join("learn-server.log"))
+            .and_then(|p| std::fs::metadata(&p).ok().filter(|m| m.len() <= 8 << 20).and_then(|_| std::fs::read(&p).ok()))
+            .map(|b| crate::rcon::latin1(&b))
+    } else {
+        None
+    };
+    let when = crate::sys::now() as u64;
+    let text = playtest_text(&b, when, console.as_deref());
+    let outcome = if matches!(b.outcome.as_str(), "ok" | "stopped") { b.outcome.clone() } else { "failed".into() };
+    let p = super::buildlog::keep(&super::buildlog::logs_dir(), &b.map, "playtest", &text, json!({"when": when, "outcome": outcome, "seconds": b.seconds, "steps": b.lines.iter().take(40).collect::<Vec<_>>()}))?;
+    Ok(json!({"ok": true, "log": p.to_string_lossy()}))
+}
+
+async fn api_playtest_log(State(st): State<Shared>, h: HeaderMap, Json(b): Json<PlaytestLog>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || keep_playtest(&st, b)).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 1.0.1: each stage timed as it goes (VIS on a big map takes minutes), and a finished compile's
+    // log kept with its stages and problems
+    #[test]
+    fn stages_are_timed_and_a_compile_keeps_its_log() {
+        let t0 = Instant::now();
+        let at = |s: u64| Some(t0 + Duration::from_secs(s));
+        let mut v = vec![
+            StageRun { stage: Stage::Csg, started: at(0), ended: at(3), failed: false },
+            StageRun { stage: Stage::Bsp, started: at(3), ended: at(10), failed: false },
+            StageRun { stage: Stage::Vis, started: at(10), ended: None, failed: false },
+            StageRun { stage: Stage::Rad, started: None, ended: None, failed: false },
+        ];
+        let now = t0 + Duration::from_secs(200);
+        let rows = stage_rows(&v, now, true);
+        let col = |k: &str| rows.as_array().unwrap().iter().map(|r| r[k].clone()).collect::<Vec<_>>();
+        assert_eq!(col("state"), vec![json!("done"), json!("done"), json!("running"), json!("waiting")]);
+        assert_eq!(col("seconds"), vec![json!(3), json!(7), json!(190), Value::Null]);
+        assert_eq!(rows[2]["label"], "Working out what can be seen from where…");
+        assert_eq!(rows[2]["name"], "Visibility (VIS)");
+        // the job ended while VIS ran (stopped): said so, not "running"
+        assert_eq!(stage_rows(&v, now, false)[2]["state"], "stopped");
+        v[2].ended = at(50);
+        v[2].failed = true;
+        assert_eq!(stage_rows(&v, now, false)[2]["state"], "failed");
+        assert_eq!(stage_rows(&v, now, false)[2]["seconds"], 40);
+
+        let mut j = Job { kind: "compile", map: Some("qa_room".into()), preset: Some(Preset::Normal), stages: v, error: Some("The map leaks.".into()), ..Default::default() };
+        j.problems.push(Problem { level: "error".into(), kind: "leak".into(), message: "The map leaks".into(), detail: "LEAK LEAK LEAK".into(), ..Default::default() });
+        j.problems.push(Problem { level: "warning".into(), kind: "texture".into(), message: "A texture is missing".into(), ..Default::default() });
+        j.log = vec!["> sdHLCSG x".into(), "Leak pointfile generated".into()];
+        let (map, text, sum) = compile_record(&j, 0).unwrap();
+        assert_eq!(map, "qa_room");
+        assert!(text.starts_with("Loner-Strike compile of qa_room (normal preset), 1970-01-01 00:00 UTC\nDidn't finish"), "{text}");
+        assert!(text.contains("Visibility (VIS)") && text.contains("failed") && text.contains("40 s"), "{text}");
+        assert!(text.contains("error: The map leaks\n      LEAK LEAK LEAK") && text.contains("warning: A texture is missing"), "{text}");
+        assert!(text.ends_with("> sdHLCSG x\nLeak pointfile generated\n"));
+        assert_eq!(sum["outcome"], "failed");
+        assert_eq!((sum["errors"].as_u64(), sum["warnings"].as_u64()), (Some(1), Some(1)));
+        assert_eq!(sum["problems"][0]["message"], "The map leaks");
+        // a running job, or the compiler's download: nothing kept
+        j.running = true;
+        assert!(compile_record(&j, 0).is_none());
+        j.running = false;
+        j.kind = "setup";
+        assert!(compile_record(&j, 0).is_none());
+    }
+
+    #[test]
+    fn a_playtest_log_has_its_steps_and_the_learner_console() {
+        let b = PlaytestLog { map: "qa_room".into(), outcome: "ok".into(), lines: vec!["Compile: 1 min 2 s".into(), "Teaching bots: skipped (bots will wander)".into()], learner: true, seconds: 70 };
+        let t = playtest_text(&b, 0, Some("Protocol version 48\n[mvk-info] MoltenVK\n\tVK_KHR_x v1\nNavigation file 'x' saved.\n"));
+        assert!(t.contains("The game started (1 min 10 s)."), "{t}");
+        assert!(t.contains("  Teaching bots: skipped (bots will wander)\n"));
+        assert!(t.contains("Navigation file 'x' saved.") && !t.contains("VK_KHR"), "{t}");
+        assert!(!playtest_text(&PlaytestLog { outcome: "failed".into(), learner: false, ..b }, 0, None).contains("hidden server"));
+    }
     use crate::editor::doc::Entity;
 
     /// Parity A: a Community map's name is refused (any case, the exact name only), and
