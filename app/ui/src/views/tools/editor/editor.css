@@ -166,3 +166,4 @@
 .editor-nudges { gap: 4px; }
 .editor-nudges .btn { padding-left: 6px; padding-right: 6px; }
 .editor-facesheet .editor-row .muted { font-size: 13px; }
+.editor-recent-clear { margin-left: 10px; font-weight: 400; } /* 1.0.1: Remove missing */

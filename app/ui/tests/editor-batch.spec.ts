@@ -42,7 +42,7 @@ async function open(page: Page) {
 const dockTab = (page: Page, name: RegExp) => page.locator("[data-dock-strip] [role=tab]", { hasText: name }).first();
 const content = async (page: Page) => {
   await dockTab(page, /^Content$/).click();
-  return page.getByRole("region", { name: "Content Browser" }).first();
+  return page.getByRole("region", { name: "Content browser" }).first();
 };
 const centre = async (page: Page) => {
   const r = (await page.locator(".ed-pane").first().boundingBox())!;
@@ -245,7 +245,8 @@ test("clip tool: the hint walks you through, a third point in 3D tilts the cut",
     await page.getByRole("button", { name: /^Clip/ }).first().click();
   });
   const opts = page.locator(".editor-options");
-  await expect(opts).toContainText("Click the first point.");
+  // (1.0.1: nothing picked says to pick a brush first; the clicks below still place the points)
+  await expect(opts).toContainText("Pick a brush first, then click two points.");
   const b = (await page.locator(".ed-pane").first().boundingBox())!;
   await page.mouse.click(b.x + b.width / 2 - 80, b.y + b.height / 2 + 60);
   await expect(opts).toContainText("the cut follows the cursor");

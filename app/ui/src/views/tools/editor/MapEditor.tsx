@@ -102,7 +102,7 @@ function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy:
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [rec, setRec] = useState<Recovery | null>(null);
   useEffect(() => {
-    void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
+    void api.getRecentShown().then((r) => !r.error && setRecent(r.files ?? []));
     void api.getRecovery().then((r) => !r.error && setRec(r));
   }, []);
   const when = rec?.time ? new Date(rec.time * 1000).toLocaleString() : "";
@@ -163,7 +163,14 @@ function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy:
         <p className="small-note muted">A new map starts as an open-sky room with two spawns for each team.</p>
         {recent.length > 0 && (
           <div className="editor-recent-files">
-            <h4>Recent</h4>
+            <h4>
+              Recent
+              {recent.some((f) => !f.found) && (
+                <button type="button" className="linklike small-note editor-recent-clear" title="Take the files that aren't there any more off this list" onClick={() => setRecent(api.removeMissingRecent(recent))}>
+                  Remove missing
+                </button>
+              )}
+            </h4>
             <ul>
               {recent.map((f) => (
                 <li key={f.index}>
@@ -278,7 +285,7 @@ function Status() {
     view !== "3d"
       ? "Drag on empty space to box-pick. Right-drag to pan, scroll to zoom."
       : navPreset === "unreal"
-        ? "Hold right mouse to look, WASD/QE to fly, scroll for speed. Alt+drag orbits, middle-drag pans. F: focus."
+        ? "Hold right mouse to look, WASD/QE to fly, scroll for speed. Alt+drag orbits, middle-drag pans. F: frame."
         : navPreset === "hammer"
           ? "Hold left + WASD to fly, Z: mouse-look. Right-drag moves, middle-drag pans."
           : camera === "fly"

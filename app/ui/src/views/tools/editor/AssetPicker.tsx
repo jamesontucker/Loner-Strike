@@ -85,8 +85,8 @@ export function AssetButtons({ kind, value, set, label }: { kind: AssetKind; val
       <button
         type="button"
         className="btn small icon"
-        aria-label={`Show ${label} in the Content Browser`}
-        title="Show it in the Content Browser"
+        aria-label={`Show ${label} in the Content browser`}
+        title="Show it in the Content browser"
         disabled={!value.trim()}
         onClick={() => {
           showPanel("content");
@@ -99,7 +99,7 @@ export function AssetButtons({ kind, value, set, label }: { kind: AssetKind; val
         type="button"
         className="btn small"
         disabled={!fits}
-        title={fits ? `Use ${selected!.path} (picked in the Content Browser)` : `Pick a ${kind} in the Content Browser first`}
+        title={fits ? `Use ${selected!.path} (picked in the Content browser)` : `Pick a ${kind} in the Content browser first`}
         onClick={() => {
           if (!selected) return;
           set(keyValue(selected));

@@ -209,6 +209,38 @@ export const saveProject = (as = false) => post<{ cancelled?: boolean; saved?: b
 export const copySelection = (brushes: number[], entities: number[]) => post<{ text: string; brushes: number; entities: number }>(`${E}/copy`, { brushes, entities });
 export const getFgd = () => getJson<{ classes: FgdClass[]; source: string; custom?: { file: string; path: string; error?: string } }>(`${E}/fgd`);
 export const getRecent = () => getJson<{ files: RecentFile[] }>(`${E}/recent`);
+
+// 1.0.1: "Remove missing" (the start page, File > Recent). The app keeps a missing file on its
+// list (it may be back next time, on a drive that's plugged in again); the editor stops showing
+// the ones you removed, and shows one again if it's found.
+const HIDDEN_RECENT = "ls.editor.recentHidden";
+const recentKey = (f: RecentFile) => `${f.folder}/${f.name}`;
+function hiddenRecent(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(HIDDEN_RECENT) ?? "[]");
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+/** The recent files, without the missing ones you removed. */
+export async function getRecentShown(): Promise<{ files?: RecentFile[]; error?: string }> {
+  const r = await getRecent();
+  if (r.error || !r.files) return r;
+  const hidden = hiddenRecent();
+  return { files: r.files.filter((f) => f.found || !hidden.has(recentKey(f))) };
+}
+/** Takes every missing file off the lists shown; returns what's left. */
+export function removeMissingRecent(files: RecentFile[]): RecentFile[] {
+  const hidden = hiddenRecent();
+  for (const f of files) if (!f.found) hidden.add(recentKey(f));
+  try {
+    localStorage.setItem(HIDDEN_RECENT, JSON.stringify([...hidden].slice(-60)));
+  } catch {
+    /* private window */
+  }
+  return files.filter((f) => f.found);
+}
 export const openRecent = (index: number) => post<DocState>(`${E}/open-recent`, { index });
 export const autosave = () => post<{ saved: boolean }>(`${E}/autosave`);
 export const getRecovery = () => getJson<Recovery>(`${E}/recovery`);

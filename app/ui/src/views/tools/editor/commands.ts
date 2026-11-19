@@ -26,7 +26,8 @@ import { budgetWarnings } from "./BudgetPanel";
 import { canPasteTransform, clipNow, copyProps, copyTransform, pasteProps, pasteTransform } from "./inspectClip"; // Inspector Copy / Paste
 import { dropToFloor } from "./dropToFloor";
 
-export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
+// 1.0.1: Brush (Hammer's Tools menu) holds what shapes brushes, so Edit fits a short window
+export type Menu = "File" | "Edit" | "Brush" | "View" | "Select" | "Tools" | "Map" | "Help";
 export type Command = {
   id: string;
   label: string;
@@ -36,6 +37,8 @@ export type Command = {
   run: () => void | Promise<void>;
   /** greyed out when false */
   when?: () => boolean;
+  /** what a key press says when `when` is false ("Pick a brush first to hollow it.") */
+  needs?: string;
   /** works while flying in the 3D view (else the key goes to the camera) */
   fly?: boolean;
   /** shown in menus after a line */
@@ -70,7 +73,7 @@ export function selectIds(ids: Ids, add = false) {
   s.notify(n ? `Picked ${n} thing${n === 1 ? "" : "s"}.` : "Nothing like that found.");
 }
 
-/** Zooms every view to what's picked (else the whole map). */
+/** Frames what's picked in every view (else the whole map). */
 export function frame(all = false) {
   const s = S();
   const b = all ? null : selectionBounds();
@@ -215,6 +218,16 @@ function cyclePaneMode() {
 
 const AX = ["X", "Y", "Z"];
 
+const PICK = "Pick something first";
+const PICK_BRUSH = "Pick a brush first";
+
+/** Why a command can't run now, for a key press that did nothing (1.0.1). */
+export function whyNot(c: Command): string {
+  if (c.needs) return c.needs;
+  if (c.when === brushSel) return `${PICK_BRUSH}.`;
+  return `${PICK}.`;
+}
+
 // ---- the list ------------------------------------------------------------------------------
 
 export function commands(): Command[] {
@@ -232,20 +245,25 @@ export function commands(): Command[] {
     { id: "file.props", label: "Map properties…", menu: "File", hint: "Sky, WADs, sun and rules", run: () => S().set({ dialog: "props" }) },
 
     // Edit
-    { id: "edit.undo", label: "Undo", menu: "Edit", hint: s.doc?.undo ? `Undo ${s.doc.undo}` : undefined, when: () => !!S().doc?.undo, run: () => void S().undo(), fly: true },
-    { id: "edit.redo", label: "Redo", menu: "Edit", hint: s.doc?.redo ? `Redo ${s.doc.redo}` : undefined, when: () => !!S().doc?.redo, run: () => void S().redo(), fly: true },
+    { id: "edit.undo", label: "Undo", menu: "Edit", hint: s.doc?.undo ? `Undo ${s.doc.undo}` : undefined, when: () => !!S().doc?.undo, needs: "Nothing to undo.", run: () => void S().undo(), fly: true },
+    { id: "edit.redo", label: "Redo", menu: "Edit", hint: s.doc?.redo ? `Redo ${s.doc.redo}` : undefined, when: () => !!S().doc?.redo, needs: "Nothing to redo.", run: () => void S().redo(), fly: true },
     { id: "edit.history", label: "Undo history", menu: "Edit", hint: "Click a step to go back to it", run: () => openTab("history") },
-    { id: "edit.cut", label: "Cut", menu: "Edit", sep: true, when: hasSel, run: () => void copySelection(true) },
-    { id: "edit.copy", label: "Copy", menu: "Edit", when: hasSel, run: () => void copySelection(false) },
+    { id: "edit.cut", label: "Cut", menu: "Edit", sep: true, when: hasSel, needs: `${PICK} to cut it.`, run: () => void copySelection(true) },
+    { id: "edit.copy", label: "Copy", menu: "Edit", when: hasSel, needs: `${PICK} to copy it.`, run: () => void copySelection(false) },
     { id: "edit.paste", label: "Paste", menu: "Edit", run: () => void paste() },
-    { id: "edit.pasteSpecial", label: "Paste special…", menu: "Edit", hint: "Copies in a row, ring or spiral", when: hasSel, run: () => S().set({ dialog: "paste" }) },
-    { id: "edit.duplicate", label: "Duplicate", menu: "Edit", hint: "A copy one grid step over, with new target names", when: hasSel, run: () => void duplicateWith([S().grid, S().grid, 0]) },
+    { id: "edit.pasteSpecial", label: "Paste special…", menu: "Edit", hint: "Copies in a row, ring or spiral", when: hasSel, needs: `${PICK} to paste copies of it.`, run: () => S().set({ dialog: "paste" }) },
+    { id: "edit.duplicate", label: "Duplicate", menu: "Edit", hint: "A copy one grid step over, with new target names", when: hasSel, needs: `${PICK} to duplicate it.`, run: () => void duplicateWith([S().grid, S().grid, 0]) },
+    { id: "edit.duplicateHere", label: "Duplicate in place", menu: "Edit", hint: "A copy right on top (move it next)", when: hasSel, needs: `${PICK} to duplicate it.`, run: () => void duplicateWith([0, 0, 0]) },
+    { id: "edit.duplicateSame", label: "Duplicate (keep names)", menu: "Edit", hidden: true, hint: "A copy with the same target names", when: hasSel, needs: `${PICK} to duplicate it.`, run: () => void duplicate() },
+    { id: "edit.delete", label: "Delete", menu: "Edit", when: hasSel, needs: `${PICK} to delete it.`, run: () => deleteSelection() },
     {
       id: "edit.applyTexture",
       label: "Apply the current texture",
       menu: "Edit",
+      sep: true,
       hint: "To the picked faces, or every face of the picked brushes",
       when: () => hasSel() || !!S().sel.face,
+      needs: "Pick a brush or a face first to apply the texture.",
       run: () => {
         const s = S();
         const faces = s.sel.faces?.length ? s.sel.faces : s.sel.face ? [s.sel.face] : [];
@@ -253,30 +271,30 @@ export function commands(): Command[] {
         else void s.cmd({ op: "set_texture", faces: selectionIds().brushes.map((b) => [b, null]), texture: s.texture });
       },
     },
-    { id: "edit.duplicateHere", label: "Duplicate in place", menu: "Edit", hint: "A copy right on top (move it next)", when: hasSel, run: () => void duplicateWith([0, 0, 0]) },
-    { id: "edit.duplicateSame", label: "Duplicate (keep names)", menu: "Edit", hidden: true, hint: "A copy with the same target names", when: hasSel, run: () => void duplicate() },
-    { id: "edit.delete", label: "Delete", menu: "Edit", when: hasSel, run: () => deleteSelection() },
     // Unreal habits (the Inspector's Copy / Paste, End drops to the floor)
-    { id: "edit.copyProps", label: "Copy properties", menu: "Edit", sep: true, hint: "The picked entity's keys (not its class, place, brush model or name), to paste onto others", when: () => S().sel.entities.length > 0, run: () => copyProps() },
-    { id: "edit.pasteProps", label: "Paste properties", menu: "Edit", hint: "Onto every picked entity; keys a class doesn't have are skipped", when: () => S().sel.entities.length > 0 && clipNow()?.kind === "props", run: () => void pasteProps() },
-    { id: "edit.copyTransform", label: "Copy Transform", menu: "Edit", hint: "Location, rotation, size and scale of what's picked", when: hasSel, run: () => copyTransform() },
-    { id: "edit.pasteTransform", label: "Paste Transform", menu: "Edit", hint: "Onto what's picked: its middle goes to the copied location", when: () => canPasteTransform(), run: () => void pasteTransform() },
-    { id: "edit.dropToFloor", label: "Drop to the floor", menu: "Edit", hint: "Down onto the brush below (like Unreal's End)", when: hasSel, run: () => void dropToFloor() },
+    { id: "edit.copyProps", label: "Copy properties", menu: "Edit", sep: true, hint: "The picked entity's keys (not its class, place, brush model or name), to paste onto others", when: () => S().sel.entities.length > 0, needs: "Pick an entity first to copy its properties.", run: () => copyProps() },
+    { id: "edit.pasteProps", label: "Paste properties", menu: "Edit", hint: "Onto every picked entity; keys a class doesn't have are skipped", when: () => S().sel.entities.length > 0 && clipNow()?.kind === "props", needs: "Copy an entity's properties first, then pick the entities to paste them onto.", run: () => void pasteProps() },
+    { id: "edit.copyTransform", label: "Copy transform", menu: "Edit", hint: "Location, rotation, size and scale of what's picked", when: hasSel, needs: `${PICK} to copy its transform.`, run: () => copyTransform() },
+    { id: "edit.pasteTransform", label: "Paste transform", menu: "Edit", hint: "Onto what's picked: its middle goes to the copied location", when: () => canPasteTransform(), needs: "Copy a transform first, then pick what gets it.", run: () => void pasteTransform() },
+    { id: "edit.dropToFloor", label: "Drop to the floor", menu: "Edit", hint: "Down onto the brush below (like Unreal's End)", when: hasSel, needs: `${PICK} to drop it to the floor.`, run: () => void dropToFloor() },
     { id: "edit.find", label: "Find and replace…", menu: "Edit", sep: true, hint: "Textures, classnames, keys and values", run: () => useP5.getState().set({ dialog: "find" }) },
-    { id: "edit.transform", label: "Transform…", menu: "Edit", hint: "Move, turn or stretch by exact numbers", when: hasSel, run: () => useP5.getState().set({ dialog: "transform" }) },
-    { id: "edit.replaceWith", label: "Replace with entity or prefab…", menu: "Edit", hint: "Swap what's picked for another entity or a prefab", when: hasSel, run: () => useP5.getState().set({ dialog: "replaceWith" }) },
-    { id: "edit.group", label: "Group", menu: "Edit", sep: true, when: hasSel, run: () => void S().cmd({ op: "group", name: `Group ${(S().doc?.groups.length ?? 0) + 1}`, brushes: S().sel.brushes, entities: S().sel.entities }) },
+
+    // Brush (1.0.1: Hammer's Tools menu; the ids stay edit.* so keys and layouts carry over)
+    { id: "edit.transform", label: "Transform…", menu: "Brush", hint: "Move, turn or stretch by exact numbers", when: hasSel, needs: `${PICK} to transform it.`, run: () => useP5.getState().set({ dialog: "transform" }) },
+    { id: "edit.replaceWith", label: "Replace with entity or prefab…", menu: "Brush", hint: "Swap what's picked for another entity or a prefab", when: hasSel, needs: `${PICK} to replace it.`, run: () => useP5.getState().set({ dialog: "replaceWith" }) },
+    { id: "edit.group", label: "Group", menu: "Brush", sep: true, when: hasSel, needs: `${PICK} to group it.`, run: () => void S().cmd({ op: "group", name: `Group ${(S().doc?.groups.length ?? 0) + 1}`, brushes: S().sel.brushes, entities: S().sel.entities }) },
     {
       id: "edit.ungroup",
       label: "Ungroup",
-      menu: "Edit",
+      menu: "Brush",
       when: () => ungroupTarget() != null,
+      needs: "Pick something in a group first to ungroup it.",
       run: () => {
         const g = ungroupTarget();
         if (g != null) void S().cmd({ op: "ungroup", group: g });
       },
     },
-    { id: "edit.tie", label: "Tie to entity", menu: "Edit", hint: "func_wall (pick another in Inspect)", when: brushSel, run: async () => {
+    { id: "edit.tie", label: "Tie to entity", menu: "Brush", hint: "func_wall (pick another in Inspect)", when: brushSel, needs: `${PICK_BRUSH} to tie it to an entity.`, run: async () => {
       // the new entity is what's picked after (so Move to world works straight away)
       const r = await S().cmd({ op: "tie", brushes: selectionIds().brushes, classname: "func_wall" });
       if (r.created?.entities.length) S().select({ brushes: [], entities: r.created.entities, face: null });
@@ -284,65 +302,68 @@ export function commands(): Command[] {
     {
       id: "edit.toWorld",
       label: "Move to world",
-      menu: "Edit",
+      menu: "Brush",
       hint: "Brush entities become world brushes",
       when: () => S().sel.entities.some((e) => (S().doc?.entities.find((x) => x.id === e)?.brushes.length ?? 0) > 0),
+      needs: "Pick a brush entity (a func_wall, a door, a trigger) first to move it to the world.",
       run: async () => {
         for (const e of S().sel.entities) if (S().doc?.entities.find((x) => x.id === e)?.brushes.length) await S().cmd({ op: "to_world", entity: e });
       },
     },
-    { id: "edit.hollow", label: "Hollow", menu: "Edit", sep: true, when: brushSel, run: () => void S().cmd({ op: "hollow", brushes: selectionIds().brushes, thickness: S().thickness }) },
-    { id: "edit.carve", label: "Carve", menu: "Edit", hint: "Cut this brush out of what it overlaps", when: () => selectionIds().brushes.length === 1, run: () => void S().cmd({ op: "carve", cutter: selectionIds().brushes[0], targets: [...S().brushes.keys()] }) },
-    { id: "edit.merge", label: "Merge", menu: "Edit", when: () => selectionIds().brushes.length > 1, run: () => void S().cmd({ op: "merge", brushes: selectionIds().brushes }) },
-    { id: "edit.snap", label: "Snap to grid", menu: "Edit", when: brushSel, run: () => void S().cmd({ op: "snap", brushes: selectionIds().brushes, grid: S().grid }) },
-    ...[0, 1, 2].map((a): Command => ({ id: `edit.mirror${AX[a]}`, label: `Flip along ${AX[a]}`, menu: "Edit", sep: a === 0, when: hasSel, run: () => mirror(a) })),
-    ...[0, 1, 2].map((a): Command => ({ id: `edit.turn${AX[a]}`, label: `Turn 90° around ${AX[a]}`, menu: "Edit", when: hasSel, run: () => turn(a, 90) })),
+    { id: "edit.hollow", label: "Hollow", menu: "Brush", sep: true, when: brushSel, needs: `${PICK_BRUSH} to hollow it.`, run: () => void S().cmd({ op: "hollow", brushes: selectionIds().brushes, thickness: S().thickness }) },
+    { id: "edit.carve", label: "Carve", menu: "Brush", hint: "Cut this brush out of what it overlaps", when: () => selectionIds().brushes.length === 1, needs: "Pick one brush first: Carve cuts it out of what it overlaps.", run: () => void S().cmd({ op: "carve", cutter: selectionIds().brushes[0], targets: [...S().brushes.keys()] }) },
+    { id: "edit.merge", label: "Merge", menu: "Brush", when: () => selectionIds().brushes.length > 1, needs: "Pick two or more brushes first to merge them.", run: () => void S().cmd({ op: "merge", brushes: selectionIds().brushes }) },
+    { id: "edit.snap", label: "Snap to grid", menu: "Brush", when: brushSel, needs: `${PICK_BRUSH} to snap it to the grid.`, run: () => void S().cmd({ op: "snap", brushes: selectionIds().brushes, grid: S().grid }) },
+    ...[0, 1, 2].map((a): Command => ({ id: `edit.mirror${AX[a]}`, label: `Flip along ${AX[a]}`, menu: "Brush", sep: a === 0, when: hasSel, needs: `${PICK} to flip it.`, run: () => mirror(a) })),
+    ...[0, 1, 2].map((a): Command => ({ id: `edit.turn${AX[a]}`, label: `Turn 90° around ${AX[a]}`, menu: "Brush", when: hasSel, needs: `${PICK} to turn it.`, run: () => turn(a, 90) })),
     ...[0, 1, 2].flatMap((a): Command[] =>
       (["min", "centre", "max"] as const).map((edge) => ({
         id: `edit.align${AX[a]}${edge}`,
         label: `Line up on ${AX[a]}: ${edge === "min" ? (a === 2 ? "bottoms" : "low sides") : edge === "max" ? (a === 2 ? "tops" : "high sides") : "middles"}`,
-        menu: "Edit",
+        menu: "Brush",
         hidden: true,
         when: () => selectionIds().brushes.length + S().sel.entities.length > 1,
+        needs: "Pick two or more things first to line them up.",
         run: () => void align(a, edge),
       })),
     ),
-    ...[0, 1, 2].map((a): Command => ({ id: `edit.distribute${AX[a]}`, label: `Spread out evenly along ${AX[a]}`, menu: "Edit", hidden: true, when: () => selectionIds().brushes.length + S().sel.entities.length > 2, run: () => void distribute(a) })),
+    ...[0, 1, 2].map((a): Command => ({ id: `edit.distribute${AX[a]}`, label: `Spread out evenly along ${AX[a]}`, menu: "Brush", hidden: true, when: () => selectionIds().brushes.length + S().sel.entities.length > 2, needs: "Pick three or more things first to spread them out.", run: () => void distribute(a) })),
 
     // Select
     { id: "sel.all", label: "Select all", menu: "Select", run: selectAll },
     { id: "sel.none", label: "Select none", menu: "Select", run: () => S().select(EMPTY_SEL) },
     { id: "sel.invert", label: "Invert selection", menu: "Select", run: invert },
-    { id: "sel.texture", label: "Select same texture", menu: "Select", sep: true, hint: "Everything with the picked brush's or face's textures", when: () => hasSel() || !!S().sel.face, run: () => void similar({ by: "texture" }) },
-    { id: "sel.class", label: "Select same type", menu: "Select", hint: "Every entity of the picked kind (world brushes: all world brushes)", when: hasSel, run: () => void similar({ by: "class" }) },
+    { id: "sel.texture", label: "Select same texture", menu: "Select", sep: true, hint: "Everything with the picked brush's or face's textures", when: () => hasSel() || !!S().sel.face, needs: "Pick a brush or a face first to find others with its texture.", run: () => void similar({ by: "texture" }) },
+    { id: "sel.class", label: "Select same type", menu: "Select", hint: "Every entity of the picked kind (world brushes: all world brushes)", when: hasSel, needs: `${PICK} to find others of its type.`, run: () => void similar({ by: "class" }) },
     {
       id: "sel.value",
       label: "Select same name",
       menu: "Select",
       hint: "Entities sharing the picked one's targetname",
       when: () => S().sel.entities.length > 0,
+      needs: "Pick an entity first to find others with its name.",
       run: () => void similar({ by: "value", key: "targetname" }),
     },
-    { id: "sel.touching", label: "Select touching", menu: "Select", sep: true, hint: "Things whose box touches the selection's", when: hasSel, run: () => void touching(false) },
-    { id: "sel.inside", label: "Select inside", menu: "Select", hint: "Things wholly inside the selection's box", when: hasSel, run: () => void touching(true) },
+    { id: "sel.touching", label: "Select touching", menu: "Select", sep: true, hint: "Things whose box touches the selection's", when: hasSel, needs: `${PICK} to find what touches it.`, run: () => void touching(false) },
+    { id: "sel.inside", label: "Select inside", menu: "Select", hint: "Things wholly inside the selection's box", when: hasSel, needs: `${PICK} to find what's inside it.`, run: () => void touching(true) },
     { id: "sel.goto", label: "Go to brush or entity number…", menu: "Select", hint: "For compiler messages (Entity 3, Brush 12)", run: () => useP5.getState().set({ dialog: "goto" }) },
-    { id: "sel.hide", label: "Hide", menu: "Select", sep: true, when: hasSel, run: () => hideSelection() },
-    { id: "sel.isolate", label: "Hide everything else", menu: "Select", when: hasSel, run: () => isolateSelection() },
+    { id: "sel.hide", label: "Hide", menu: "Select", sep: true, when: hasSel, needs: `${PICK} to hide it.`, run: () => hideSelection() },
+    { id: "sel.isolate", label: "Hide everything else", menu: "Select", when: hasSel, needs: `${PICK} to hide everything else.`, run: () => isolateSelection() },
     { id: "sel.showAll", label: "Show everything", menu: "Select", run: () => showAll() },
     { id: "sel.hideEntities", label: "Hide all point entities", menu: "Select", hint: "Spawns, lights, sounds…", run: () => hideKind("point") },
     { id: "sel.hideTriggers", label: "Hide triggers and zones", menu: "Select", hint: "trigger_*, buy zones, bomb sites, rescue zones", run: () => hideKind("trigger") },
     { id: "sel.hideWorld", label: "Hide world brushes", menu: "Select", run: () => hideKind("world") },
-    { id: "sel.lock", label: "Lock", menu: "Select", hint: "Can't be picked until unlocked", when: hasSel, run: () => lockSelection(true) },
-    { id: "sel.unlockAll", label: "Unlock everything", menu: "Select", when: () => useP5.getState().locked.brushes.size + useP5.getState().locked.entities.size > 0, run: () => lockSelection(false) },
+    { id: "sel.lock", label: "Lock", menu: "Select", hint: "Can't be picked until unlocked", when: hasSel, needs: `${PICK} to lock it.`, run: () => lockSelection(true) },
+    { id: "sel.unlockAll", label: "Unlock everything", menu: "Select", when: () => useP5.getState().locked.brushes.size + useP5.getState().locked.entities.size > 0, needs: "Nothing is locked.", run: () => lockSelection(false) },
     { id: "sel.groups", label: "Clicks pick whole groups", menu: "Select", sep: true, run: () => S().set({ selectMode: "groups" }) },
     { id: "sel.objects", label: "Clicks pick single objects", menu: "Select", run: () => S().set({ selectMode: "objects" }) },
 
     // View
     ...LAYOUTS.map((l, i): Command => ({ id: `view.layout.${l.id}`, label: `Layout: ${l.label}`, menu: "View", hint: l.tip, run: () => setLayout(l.id), fly: true, sep: i === 0 })),
-    { id: "view.maximise", label: "Maximize the pane / put it back", menu: "View", when: () => usePanes.getState().layout !== "single", run: () => toggleMaximise(), fly: true },
+    { id: "view.maximise", label: "Maximize the pane / put it back", menu: "View", when: () => usePanes.getState().layout !== "single", needs: "One pane already fills the view: pick a layout with more panes first (View > Layout).", run: () => toggleMaximise(), fly: true },
     ...(["3d", "top", "front", "side"] as ViewId[]).map((v, i): Command => ({ id: `view.${v}`, label: `${v === "3d" ? "3D" : v[0].toUpperCase() + v.slice(1)} view`, menu: "View", sep: i === 0, hint: "In the active pane", run: () => setView(v), fly: true })),
-    { id: "view.frame", label: "Zoom to selection", menu: "View", sep: true, when: () => hasSel() || !!S().sel.face, run: () => frame(false) },
-    { id: "view.frameAll", label: "Zoom to the whole map", menu: "View", run: () => frame(true) },
+    { id: "view.frame", label: "Frame selection", menu: "View", sep: true, when: () => hasSel() || !!S().sel.face, needs: `${PICK} to frame it.`, run: () => frame(false) },
+    { id: "view.frameAll", label: "Frame the whole map", menu: "View", run: () => frame(true) },
     { id: "view.fly", label: "Fly / orbit camera", menu: "View", run: () => useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly"), fly: true },
     { id: "view.gridDown", label: "Smaller grid", menu: "View", sep: true, run: () => stepGrid(-1), fly: true },
     { id: "view.gridUp", label: "Bigger grid", menu: "View", run: () => stepGrid(1), fly: true },
@@ -375,15 +396,15 @@ export function commands(): Command[] {
     { id: "map.report", label: "Entity report…", menu: "Map", run: () => S().set({ dialog: "report" }) },
     { id: "map.info", label: "Map information…", menu: "Map", hint: "Counts, textures and texture files in use", run: () => useP5.getState().set({ dialog: "info" }) },
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
-    { id: "view.content", label: "Content Browser", menu: "View", sep: true, hint: "Models, sprites, sounds, textures, prefabs and GameBanana: drag onto the map", run: () => showPanel("content") },
-    { id: "view.contentDrawer", label: "Content drawer", menu: "View", hint: "The Content Browser over the bottom panels (a click away closes it)", run: () => useBrowser.getState().set({ drawer: !useBrowser.getState().drawer }), fly: true },
+    { id: "view.content", label: "Content browser", menu: "View", sep: true, hint: "Models, sprites, sounds, textures, prefabs and GameBanana: drag onto the map", run: () => showPanel("content") },
+    { id: "view.contentDrawer", label: "Content drawer", menu: "View", hint: "The Content browser over the bottom panels (a click away closes it)", run: () => useBrowser.getState().set({ drawer: !useBrowser.getState().drawer }), fly: true },
     { id: "view.budget", label: "Budget", menu: "View", hint: "How close the map is to the engine's limits", run: () => showPanel("budget") },
     { id: "view.io", label: "I/O: what triggers what", menu: "View", hint: "Targets, multi_managers, masters and broken links; pick an entity for its chain", run: () => showPanel("io") },
     { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
-    { id: "map.goToLeak", label: "Go to leak", menu: "Map", hint: "Fly along the leak line to the hole and pick the brush beside it", when: () => !!useLeak.getState().points, run: () => goToLeak() },
+    { id: "map.goToLeak", label: "Go to leak", menu: "Map", hint: "Fly along the leak line to the hole and pick the brush beside it", when: () => !!useLeak.getState().points, needs: "No leak line yet: compile first, or load a pointfile (Map menu).", run: () => goToLeak() },
     { id: "map.loadPointfile", label: "Load pointfile…", menu: "Map", hint: "A leak line (.lin or .pts) from another compile", run: () => void loadLeakFile() },
-    { id: "map.leakLine", label: "Show or hide the leak line", menu: "Map", when: () => !!useLeak.getState().points, run: () => useLeak.getState().toggle() },
+    { id: "map.leakLine", label: "Show or hide the leak line", menu: "Map", when: () => !!useLeak.getState().points, needs: "No leak line yet: compile first, or load a pointfile (Map menu).", run: () => useLeak.getState().toggle() },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },
     { id: "map.outline", label: "Outline", menu: "Map", sep: true, hint: "Everything in the map as a list", run: () => openTab("outline") },
     { id: "map.textures", label: "Textures", menu: "Map", run: () => openTab("textures") },

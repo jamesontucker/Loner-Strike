@@ -112,7 +112,7 @@ export function IOPanel() {
                   <button type="button" className="linklike" onClick={() => pick(from)} onDoubleClick={() => look(e)} title="Pick it (double-click: look at it)">
                     {label(e)}
                   </button>
-                  <button type="button" className="btn small icon" aria-label={`Look at ${label(e)}`} title="Look at it" onClick={() => look(e)}>
+                  <button type="button" className="btn small icon" aria-label={`Frame ${label(e)}`} title="Frame it: bring it into the middle of the view" onClick={() => look(e)}>
                     ◎
                   </button>
                 </div>

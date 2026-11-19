@@ -12,7 +12,7 @@ import { NAV_HELP, NAV_PRESETS, useNav } from "./navigation";
 import { clashes, keyName, keysOf, norm, PRESETS, showKey, useKeySet, type PresetId } from "./Shortcuts";
 import { keyOf, originOf, useEditor } from "./store";
 
-const MENUS: Menu[] = ["File", "Edit", "View", "Select", "Tools", "Map", "Help"];
+const MENUS: Menu[] = ["File", "Edit", "Brush", "View", "Select", "Tools", "Map", "Help"];
 
 type Item = { kind: "cmd"; c: Command } | { kind: "ent"; id: number; label: string; note: string };
 
@@ -281,7 +281,8 @@ export function KeyEditor({ onClose }: { onClose: () => void }) {
           return (
             <div key={c.id} className="ed-keyedit-row">
               <span>
-                {c.label} <span className="muted small-note">{c.menu}</span>
+                <span className="muted ed-keyedit-menu">{c.menu} › </span>
+                {c.label}
               </span>
               <span className="ed-keyedit-keys">
                 {ks.map((k) => (

@@ -11,8 +11,8 @@ test("Escape closes every dialog (focus inside it) and leaves the selection alon
   await openEditor(page);
   const m = await testMap(page);
   for (const [mn, item, name] of [
-    ["Edit", "Paste special…", "Paste special"], ["Edit", "Find and replace…", "Find and replace"], ["Edit", "Transform…", "Transform"],
-    ["Edit", "Replace with entity or prefab…", "Replace with"], ["Select", "Go to brush or entity number…", "Go to a number"], ["View", "Grid and snapping…", "Grid and snapping"],
+    ["Edit", "Paste special…", "Paste special"], ["Edit", "Find and replace…", "Find and replace"], ["Brush", "Transform…", "Transform"],
+    ["Brush", "Replace with entity or prefab…", "Replace with"], ["Select", "Go to brush or entity number…", "Go to a number"], ["View", "Grid and snapping…", "Grid and snapping"],
     ["Map", "Map properties…", "Map properties"], ["Map", "Entity report…", "Entity report"], ["Map", "Map information…", "Map information"],
     ["Help", "Find a command…", "Find a command"], ["Help", "Keys cheat sheet", "Keys"], ["Help", "Coordinates and axes", "Coordinates and axes"], ["Help", "Change keys…", "Change keys"],
   ] as const) {
@@ -45,7 +45,7 @@ test("Transform: after Apply, Escape closes the dialog and keeps the selection",
   await openEditor(page);
   const m = await testMap(page);
   await select(page, { brushes: [m.a] });
-  await menu(page, "Edit", "Transform…");
+  await menu(page, "Brush", "Transform…");
   const d = dialog(page, "Transform");
   await d.getByRole("spinbutton").first().fill("32");
   await d.getByRole("button", { name: "Apply" }).click();
@@ -60,7 +60,7 @@ test("Transform: Turn, Stretch and Line up (with Spread out)", async ({ page }) 
   const m = await testMap(page);
   const c = (await cmd(page, { op: "add_box", min: [300, 0, 0], max: [332, 64, 16], texture: m.tex }))!.brushes[0];
   await select(page, { brushes: [c] });
-  await menu(page, "Edit", "Transform…");
+  await menu(page, "Brush", "Transform…");
   const d = dialog(page, "Transform");
   await d.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Turn" }).click();
   await d.getByRole("group", { name: "Axis" }).getByRole("button", { name: "Z" }).click();
@@ -74,7 +74,7 @@ test("Transform: Turn, Stretch and Line up (with Spread out)", async ({ page }) 
   await d.getByRole("button", { name: "Close" }).click();
   // Line up and spread out (Edit > Line up and spread out… opens the same dialog on it)
   await select(page, { brushes: [m.a, m.b, c] });
-  await menu(page, "Edit", "Line up and spread out…");
+  await menu(page, "Brush", "Line up and spread out…");
   await d.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Line up" }).click();
   await d.getByRole("button", { name: "Bottoms" }).click();
   await expect.poll(async () => (await boundsOf(page, c))![0][2]).toBe(0);
@@ -183,7 +183,7 @@ test("Replace with: a prefab", async ({ page }) => {
   const r = await page.evaluate(async (e) => (await fetch("/api/tools/editor/prefabs/save", { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify({ name: "cov lamp", tags: [], author: "qa", description: "", brushes: [], entities: [e] }) })).json(), m.light);
   expect(r.error ?? null).toBeNull();
   await select(page, { entities: [m.spawn] });
-  await menu(page, "Edit", "Replace with entity or prefab…");
+  await menu(page, "Brush", "Replace with entity or prefab…");
   const d = dialog(page, "Replace with");
   await d.getByRole("button", { name: "A prefab" }).click();
   await d.getByRole("button", { name: /cov lamp/ }).first().click();
@@ -220,6 +220,10 @@ test("Map properties: world, sun, rules, WADs, entity definitions; one undo step
   // Add a WAD back
   await menu(page, "Map", "Map properties…");
   const add = d.getByRole("combobox", { name: "Add a WAD" });
+  // (the game's WAD list arrives a moment after the dialog opens when the Content browser hasn't
+  // loaded it yet, e.g. with the bottom dock folded: wait for it to settle before picking)
+  await expect.poll(() => add.locator("option").count()).toBeGreaterThan(1);
+  await page.waitForTimeout(500);
   const opt = (await add.locator("option").allTextContents()).find((o) => /cstrike\.wad/i.test(o));
   await add.selectOption({ label: opt! });
   await d.getByRole("button", { name: "Add", exact: true }).click();

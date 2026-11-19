@@ -49,7 +49,7 @@ async function setUp(page: Page) {
   await page.getByRole("menuitem", { name: /^Save( ⌘S| Ctrl\+S)?$/ }).first().click();
   await expect.poll(() => existsSync(SAVE), { timeout: 15_000 }).toBe(true);
   await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click();
-  const cb = page.locator('section[aria-label="Content Browser"]').first();
+  const cb = page.locator('section[aria-label="Content browser"]').first();
   await cb.getByTestId("content-import-input").setInputFiles([{ name: "qa_box.mdl", mimeType: "application/octet-stream", buffer: MDL }]);
   await expect(cb.locator(".p5-cb-import")).toContainText("Imported models/qa_box.mdl");
   await cb.locator(".p5-cb-import").getByRole("button", { name: "Close" }).click();

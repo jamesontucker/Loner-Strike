@@ -69,13 +69,13 @@ test("Inspect, a brush: Transform fields, textures, wall thickness and every but
   await page.getByRole("button", { name: "Tie to entity" }).click();
   await expect.poll(async () => (await counts(page)).entities).toBe(e0 + 1);
   await undo(page);
-  // Group, Look at, Hide, Isolate, Delete
+  // Group, Frame, Hide, Isolate, Delete
   await select(page, { brushes: [m.a, m.b] });
   await page.getByRole("button", { name: "Group", exact: true }).first().click();
   await expect.poll(async () => (await counts(page)).groups).toBe(1);
   await undo(page);
   await select(page, { brushes: [m.b] });
-  await page.getByRole("button", { name: "Look at" }).first().click();
+  await page.getByRole("button", { name: "Frame", exact: true }).first().click();
   await page.getByRole("button", { name: "Isolate" }).first().click();
   await expect.poll(() => st(page, (s) => s.hidden.brushes.size)).toBeGreaterThan(3);
   await page.evaluate(() => (window as any).__covRun("sel.showAll")); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -128,12 +128,12 @@ test("Inspect, an entity: name, colour, brightness, flicker, falloff, flags, raw
   await expect.poll(async () => (await sel(page)).entities).toEqual([m.light]);
   await page.getByRole("button", { name: /^Set off by trigger_multiple/ }).click();
   await expect.poll(async () => (await sel(page)).entities).toEqual([m.trig]);
-  // Move to world (the trigger), then Look at / Duplicate / Delete for the light
+  // Move to world (the trigger), then Frame / Duplicate / Delete for the light
   await page.getByRole("button", { name: "Move to world" }).click();
   await expect.poll(async () => (await entity(page, m.trig)) === null).toBe(true);
   await undo(page);
   await select(page, { entities: [m.light] });
-  await page.getByRole("button", { name: "Look at" }).first().click();
+  await page.getByRole("button", { name: "Frame", exact: true }).first().click();
   const e0 = (await counts(page)).entities;
   await page.locator(".tools-panel").getByRole("button", { name: "Duplicate", exact: true }).first().click();
   await expect.poll(async () => (await counts(page)).entities).toBe(e0 + 1);
@@ -298,7 +298,7 @@ test("I/O: All, Broken, Picked chain; find; pick; look; a broken link's Remove",
   await io.getByRole("button", { name: /^trigger_multiple #/ }).first().click();
   await expect.poll(async () => (await sel(page)).entities).toEqual([m.trig]);
   await io.getByRole("button", { name: "Picked chain" }).click();
-  await io.getByRole("button", { name: /^Look at trigger_multiple/ }).first().click();
+  await io.getByRole("button", { name: /^Frame trigger_multiple/ }).first().click();
   await io.getByRole("searchbox", { name: "Find in the links" }).fill("");
   await io.getByRole("button", { name: "Broken" }).click();
   await io.getByRole("button", { name: "Remove" }).first().click();
@@ -333,8 +333,8 @@ test("Gameplay: Components / Mode kits, search, Place, component file save and l
 test("Content: sections, search, size, sources, favorites, recent, right-click menu, Refresh", async ({ page }) => {
   await openEditor(page);
   await testMap(page);
-  await menu(page, "View", "Content Browser");
-  const cb = page.getByRole("region", { name: "Content Browser" });
+  await menu(page, "View", "Content browser");
+  const cb = page.getByRole("region", { name: "Content browser" });
   for (const s of ["Sprites", "Sounds", "Textures", "Prefabs", "GameBanana", "Models"]) {
     await cb.getByRole("tablist", { name: "Content" }).getByRole("tab", { name: s }).click();
     await expect(cb.getByRole("tablist", { name: "Content" }).getByRole("tab", { name: s })).toHaveAttribute("aria-selected", "true");
@@ -364,8 +364,8 @@ test("Content: sections, search, size, sources, favorites, recent, right-click m
 test("Prefabs: save what's picked, find it, place it, rename and tags, share as a package, delete", async ({ page }) => {
   await openEditor(page);
   const m = await testMap(page);
-  await menu(page, "View", "Content Browser");
-  const cb = page.getByRole("region", { name: "Content Browser" });
+  await menu(page, "View", "Content browser");
+  const cb = page.getByRole("region", { name: "Content browser" });
   await cb.getByRole("tablist", { name: "Content" }).getByRole("tab", { name: "Prefabs" }).click();
   await select(page, { brushes: [m.a], entities: [m.light] });
   await page.getByRole("button", { name: "Save what's picked…" }).click();

@@ -115,7 +115,7 @@ export const NAV_HELP: Record<NavPreset, [string, string][]> = {
     ["Alt + right-drag", "Move closer / further"],
     ["Middle-drag", "Pan"],
     ["Scroll", "Move forward / back"],
-    ["F", "Focus on what's picked"],
+    ["F", "Frame selection"],
   ],
   blender: [
     ["Left-drag", "Orbit"],

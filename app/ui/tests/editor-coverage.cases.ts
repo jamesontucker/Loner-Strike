@@ -142,7 +142,7 @@ export const CASES: Case[] = [
     expect(await texturesOf(p, m.b)).toEqual([m.tex]);
     await d.getByRole("button", { name: "Close" }).click();
   }, undo: async (p, m) => poll(() => texturesOf(p, m.a)).toEqual([m.tex]) },
-  { id: "edit.transform", menu: "Edit", label: "Transform…", setup: async (p, m) => select(p, { brushes: [m.a] }), check: async (p, m) => {
+  { id: "edit.transform", menu: "Brush", label: "Transform…", setup: async (p, m) => select(p, { brushes: [m.a] }), check: async (p, m) => {
     const d = dialog(p, "Transform");
     await d.getByRole("spinbutton").first().fill("32");
     await d.getByRole("button", { name: "Apply" }).click();
@@ -150,30 +150,30 @@ export const CASES: Case[] = [
     // (Close, not Esc: after Apply, Esc goes past the dialog; see editor-coverage-dialogs)
     await d.getByRole("button", { name: "Close" }).click();
   }, undo: async (p, m) => poll(async () => (await boundsOf(p, m.a))![0][0]).toBe(0) },
-  { id: "edit.replaceWith", menu: "Edit", label: "Replace with entity or prefab…", setup: async (p, m) => select(p, { entities: [m.spawn] }), check: async (p, m) => {
+  { id: "edit.replaceWith", menu: "Brush", label: "Replace with entity or prefab…", setup: async (p, m) => select(p, { entities: [m.spawn] }), check: async (p, m) => {
     const d = dialog(p, "Replace with");
     await d.getByRole("combobox", { name: "Entity type" }).fill("info_player_deathmatch");
     await d.getByRole("button", { name: "Replace", exact: true }).click();
     await poll(async () => (await st(p, (s) => s.doc.entities.filter((e: { classname: string }) => e.classname === "info_player_deathmatch").length))).toBeGreaterThan(2);
   }, undo: async (p, m) => poll(async () => (await entity(p, m.spawn))?.classname).toBe("info_player_start") },
-  { id: "edit.group", menu: "Edit", label: "Group", setup: async (p, m) => (await select(p, { brushes: [m.a, m.b] }), (await counts(p)).groups), check: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g + 1), undo: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g) },
-  { id: "edit.ungroup", menu: "Edit", label: "Ungroup", setup: async (p, m) => {
+  { id: "edit.group", menu: "Brush", label: "Group", setup: async (p, m) => (await select(p, { brushes: [m.a, m.b] }), (await counts(p)).groups), check: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g + 1), undo: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g) },
+  { id: "edit.ungroup", menu: "Brush", label: "Ungroup", setup: async (p, m) => {
     await cmd(p, { op: "group", name: "G", brushes: [m.a, m.b], entities: [] });
     await select(p, { brushes: [m.a] });
     return (await counts(p)).groups;
   }, check: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g - 1), undo: async (p, m, g) => poll(async () => (await counts(p)).groups).toBe(g) },
-  { id: "edit.tie", menu: "Edit", label: "Tie to entity", setup: async (p, m) => (await select(p, { brushes: [m.a] }), nEnts(p)), check: async (p, m, n) => {
+  { id: "edit.tie", menu: "Brush", label: "Tie to entity", setup: async (p, m) => (await select(p, { brushes: [m.a] }), nEnts(p)), check: async (p, m, n) => {
     await poll(() => nEnts(p)).toBe(n + 1);
     const e = (await sel(p)).entities[0];
     expect((await entity(p, e))!.classname).toBe("func_wall");
     expect((await entity(p, e))!.brushes).toEqual([m.a]);
   }, undo: async (p, m, n) => poll(() => nEnts(p)).toBe(n) },
-  { id: "edit.toWorld", menu: "Edit", label: "Move to world", setup: async (p, m) => (await select(p, { entities: [m.trig] }), nEnts(p)), check: async (p, m, n) => {
+  { id: "edit.toWorld", menu: "Brush", label: "Move to world", setup: async (p, m) => (await select(p, { entities: [m.trig] }), nEnts(p)), check: async (p, m, n) => {
     await poll(() => nEnts(p)).toBe(n - 1);
     expect(await p.evaluate((id) => (window as any).__lsEditor.getState().doc.brushes.find((b: { id: number }) => b.id === id)?.entity ?? null, m.trigBrush)).toBeNull(); // eslint-disable-line @typescript-eslint/no-explicit-any
   }, undo: async (p, m, n) => poll(() => nEnts(p)).toBe(n) },
-  { id: "edit.hollow", menu: "Edit", label: "Hollow", setup: async (p, m) => (await select(p, { brushes: [m.a] }), nBrushes(p)), check: async (p, m, n) => poll(() => nBrushes(p)).toBe(n + 5), undo: async (p, m, n) => poll(() => nBrushes(p)).toBe(n) },
-  { id: "edit.carve", menu: "Edit", label: "Carve", setup: async (p, m) => {
+  { id: "edit.hollow", menu: "Brush", label: "Hollow", setup: async (p, m) => (await select(p, { brushes: [m.a] }), nBrushes(p)), check: async (p, m, n) => poll(() => nBrushes(p)).toBe(n + 5), undo: async (p, m, n) => poll(() => nBrushes(p)).toBe(n) },
+  { id: "edit.carve", menu: "Brush", label: "Carve", setup: async (p, m) => {
     const cutter = (await cmd(p, { op: "add_box", min: [32, 32, 32], max: [96, 96, 96], texture: m.tex }))!.brushes[0];
     await select(p, { brushes: [cutter] });
     return { n: await nBrushes(p) };
@@ -182,18 +182,18 @@ export const CASES: Case[] = [
     await poll(async () => (await boundsOf(p, m.a)) === null).toBe(true);
     expect(await nBrushes(p)).toBeGreaterThan(c.n);
   }, undo: async (p, m, c) => poll(() => nBrushes(p)).toBe(c.n) },
-  { id: "edit.merge", menu: "Edit", label: "Merge", setup: async (p, m) => (await select(p, { brushes: [m.a, m.b] }), nBrushes(p)), check: async (p, m, n) => {
+  { id: "edit.merge", menu: "Brush", label: "Merge", setup: async (p, m) => (await select(p, { brushes: [m.a, m.b] }), nBrushes(p)), check: async (p, m, n) => {
     await poll(() => nBrushes(p)).toBe(n - 1);
     const merged = (await sel(p)).brushes[0] ?? (await st(p, (s) => s.doc.brushes[s.doc.brushes.length - 1].id));
     expect(await boundsOf(p, merged)).toEqual([[0, 0, 0], [192, 64, 64]]);
   }, undo: async (p, m, n) => poll(() => nBrushes(p)).toBe(n) },
-  { id: "edit.snap", menu: "Edit", label: "Snap to grid", setup: async (p, m) => {
+  { id: "edit.snap", menu: "Brush", label: "Snap to grid", setup: async (p, m) => {
     const off = (await cmd(p, { op: "add_box", min: [3, 5, 1], max: [67, 69, 65], texture: m.tex }))!.brushes[0];
     await select(p, { brushes: [off] });
     return off;
   }, check: async (p, m, off) => poll(async () => (await boundsOf(p, off))![0]).toEqual([0, 0, 0]), undo: async (p, m, off) => poll(async () => (await boundsOf(p, off))![0]).toEqual([3, 5, 1]) },
   ...[0, 1, 2].map((ax): Case => ({
-    id: `edit.mirror${"XYZ"[ax]}`, menu: "Edit", label: `Flip along ${"XYZ"[ax]}`,
+    id: `edit.mirror${"XYZ"[ax]}`, menu: "Brush", label: `Flip along ${"XYZ"[ax]}`,
     setup: async (p, m) => {
       const c = await addC(p, m);
       await select(p, { brushes: [m.a, c] });
@@ -208,7 +208,7 @@ export const CASES: Case[] = [
     undo: async (p, m, x) => poll(() => boundsOf(p, m.a)).toEqual(x.a),
   })),
   ...[0, 1, 2].map((ax): Case => ({
-    id: `edit.turn${"XYZ"[ax]}`, menu: "Edit", label: `Turn 90° around ${"XYZ"[ax]}`,
+    id: `edit.turn${"XYZ"[ax]}`, menu: "Brush", label: `Turn 90° around ${"XYZ"[ax]}`,
     setup: async (p, m) => {
       const c = await addC(p, m); // 32 x 64 x 16
       await select(p, { brushes: [c] });
@@ -226,7 +226,7 @@ export const CASES: Case[] = [
   })),
   ...[0, 1, 2].flatMap((ax) =>
     (["min", "centre", "max"] as const).map((edge): Case => ({
-      id: `edit.align${"XYZ"[ax]}${edge}`, menu: "Edit", hidden: true,
+      id: `edit.align${"XYZ"[ax]}${edge}`, menu: "Brush", hidden: true,
       label: `Line up on ${"XYZ"[ax]}: ${edge === "min" ? (ax === 2 ? "bottoms" : "low sides") : edge === "max" ? (ax === 2 ? "tops" : "high sides") : "middles"}`,
       setup: async (p, m) => {
         const c = await addC(p, m);
@@ -244,7 +244,7 @@ export const CASES: Case[] = [
     })),
   ),
   ...[0, 1, 2].map((ax): Case => ({
-    id: `edit.distribute${"XYZ"[ax]}`, menu: "Edit", hidden: true, label: `Spread out evenly along ${"XYZ"[ax]}`,
+    id: `edit.distribute${"XYZ"[ax]}`, menu: "Brush", hidden: true, label: `Spread out evenly along ${"XYZ"[ax]}`,
     setup: async (p, m) => {
       // three boxes on the axis: 0..16, 16..32 (the middle one bunched up), 200..216
       const mk = async (lo: number) => {
@@ -356,11 +356,11 @@ export const CASES: Case[] = [
     setup: async (p) => p.evaluate((v) => (window as any).__lsEditor.getState().set({ view: v === "top" ? "side" : "top" }), v), // eslint-disable-line @typescript-eslint/no-explicit-any
     check: async (p) => poll(() => st(p, (s) => s.view)).toBe(v),
   })),
-  { id: "view.frame", menu: "View", label: "Zoom to selection", setup: async (p, m) => {
+  { id: "view.frame", menu: "View", label: "Frame selection", setup: async (p, m) => {
     await select(p, { brushes: [m.b] });
     return p.locator(".ed-pane").first().screenshot();
   }, check: async (p, m, shot) => poll(async () => Buffer.compare(await p.locator(".ed-pane").first().screenshot(), shot) !== 0).toBe(true) },
-  { id: "view.frameAll", menu: "View", label: "Zoom to the whole map", setup: async (p, m) => {
+  { id: "view.frameAll", menu: "View", label: "Frame the whole map", setup: async (p, m) => {
     await select(p, { brushes: [m.b] });
     await p.evaluate(() => (window as any).__covRun?.("view.frame")); // eslint-disable-line @typescript-eslint/no-explicit-any
     await p.waitForTimeout(800);
@@ -411,7 +411,7 @@ export const CASES: Case[] = [
   { id: "dock.reset", menu: "View", label: "Reset the panel layout", setup: async (p) => {
     await p.evaluate(() => (window as any).__covRun?.("dock.tabs")); // eslint-disable-line @typescript-eslint/no-explicit-any
   }, check: async (p) => poll(async () => JSON.parse((await ls(p, "ls.editor.dock2"))!).areas.right.tabs[0]).toBe("outline") },
-  { id: "view.content", menu: "View", label: "Content Browser", check: async (p) => tabShown(p, "Content") },
+  { id: "view.content", menu: "View", label: "Content browser", check: async (p) => tabShown(p, "Content") },
   { id: "view.contentDrawer", menu: "View", label: "Content drawer", check: async (p) => expect(p.getByRole("region", { name: "Content drawer" }).or(p.locator('[aria-label="Content drawer"]')).first()).toBeVisible() },
   { id: "view.budget", menu: "View", label: "Budget", check: async (p) => tabShown(p, "Budget") },
   { id: "view.io", menu: "View", label: "I/O: what triggers what", check: async (p) => tabShown(p, "I/O") },

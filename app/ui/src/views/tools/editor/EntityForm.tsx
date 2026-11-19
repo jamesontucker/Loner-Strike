@@ -459,8 +459,8 @@ export function EntityForm({ e }: { e: DocEntity }) {
       )}
       <div className="editor-row wrap">
         {b && (
-          <button type="button" className="btn small" onClick={() => useTools.getState().look(b[0].map((x, i) => (x + b[1][i]) / 2) as Vec3, Math.max(64, ...b[1].map((x, i) => x - b[0][i])))}>
-            Look at
+          <button type="button" className="btn small" data-cmd="view.frame" title="Bring it into the middle of the view" onClick={() => useTools.getState().look(b[0].map((x, i) => (x + b[1][i]) / 2) as Vec3, Math.max(64, ...b[1].map((x, i) => x - b[0][i])))}>
+            Frame
           </button>
         )}
         {e.brushes.length > 0 && (

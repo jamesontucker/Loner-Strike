@@ -26,7 +26,18 @@
 .ed-menu { position: relative; }
 .ed-menu-title { border: 0; background: none; color: var(--bone); padding: 4px 9px; font-size: 13px; border-radius: 2px; cursor: default; }
 .ed-menu-title:hover, .ed-menu-title[aria-expanded="true"] { background: var(--panel-2); color: var(--signal); }
-.ed-menu-list { position: absolute; top: 100%; left: 0; min-width: 270px; max-height: min(70vh, 640px); overflow-y: auto; margin: 2px 0 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); border-radius: 3px; z-index: 30; }
+/* 1.0.1: as tall as the window allows (the bar sits at the top); a menu that still scrolls shows a
+   shadow at the edge that has more (background-attachment: local keeps the covers with the content) */
+.ed-menu-list {
+  position: absolute; top: 100%; left: 0; min-width: 270px; max-height: calc(100vh - 56px); overflow-y: auto; margin: 2px 0 0; padding: 4px; list-style: none;
+  background:
+    linear-gradient(var(--panel) 30%, rgba(0, 0, 0, 0)) 0 0 / 100% 28px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0), var(--panel) 70%) 0 100% / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)) 0 0 / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)) 0 100% / 100% 12px no-repeat scroll,
+    var(--panel);
+  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); border-radius: 3px; z-index: 30;
+}
 .ed-menu-list li.sep { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 3px; }
 .ed-menu-list button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 16px; border: 0; background: none; color: var(--bone); padding: 4px 8px; font-size: 13px; text-align: left; border-radius: 2px; }
 .ed-menu-list button:hover:not(:disabled), .ed-menu-list button:focus-visible { background: var(--panel-2); color: var(--signal); }
@@ -37,6 +48,8 @@
 .ed-layouts button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 12px; }
 @container (max-width: 900px) { .ed-layout-label { display: none; } }
 @media (max-width: 1100px) { .ed-layout-label { display: none; } }
+/* 1.0.1: eight menus still fit one row at 1024: tighter titles, no Beta tag or Find key */
+@media (max-width: 1100px) { .ed-menu-title { padding: 4px 6px; } .ed-bar-name .tools-beta { display: none; } .ed-menu-find kbd { display: none; } }
 .ed-selsize { color: var(--bone-dim); white-space: nowrap; }
 
 /* command palette */
@@ -69,6 +82,7 @@
 .ed-keychip button:hover { color: var(--warn); }
 .ed-keychip.clash kbd { border-color: var(--warn); color: var(--warn); }
 .ed-keyedit-clash { color: var(--warn); }
+.ed-keyedit-menu { font-size: 12px; } /* 1.0.1: "Edit › Undo", the menu as a muted prefix */
 
 /* dialogs */
 .sheet.ed-dialog { width: min(560px, 94vw); }
@@ -168,7 +182,12 @@
 
 /* navigation */
 .ed-nav-hud { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(20, 24, 17, 0.8); color: var(--bone); padding: 3px 10px; border-radius: 3px; font-size: 12px; pointer-events: none; z-index: 2; white-space: nowrap; }
+/* 1.0.1: the first-run banners (camera choice, tour offer) side by side when they fit, else one line each */
+.ed-start-banners { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 6px; }
+.ed-start-banners:empty { display: none; }
+.ed-start-banners > .banner { flex: 1 1 auto; min-width: 0; }
 .ed-nav-choice { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 6px; font-size: 13px; }
+@media (max-width: 1300px) { .ed-nav-choice .small-note, .p5-tour > .small-note, .ed-nav-choice-how { display: none; } }
 .ed-nav-choice .seg button { font-size: 12px; padding: 3px 8px; }
 
 /* outliner, Unreal-style */
@@ -326,6 +345,8 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-tour-next { flex: 1 1 260px; min-width: 0; color: var(--bone); }
 /* P5: the bottom panels folded to their tabs */
 .ed-dock-bottom-area.folded { height: auto; }
+/* (1.0.1: folded, the strip takes its own height; with flex 1 1 0 in an auto-height column it collapsed to 0 and drew over the status bar) */
+.ed-dock-bottom-area.folded .ed-dock-stack { flex: none; }
 .ed-dock-fold { margin-right: 2px; }
 /* (one row at common widths: the layout picker drops its words first, then Find's) */
 .ed-bar-name .map-title { font-size: 15px; line-height: 1.1; margin: 0; }

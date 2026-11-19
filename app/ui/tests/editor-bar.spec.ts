@@ -35,7 +35,7 @@ test("one bar: menus left, Save / Playtest / Publish right, the old row's action
   await newMap(page);
   await expect(page.locator(".editor-bar")).toHaveCount(0);
   const bar = page.getByRole("menubar", { name: "Editor menu" });
-  for (const m of ["File", "Edit", "View", "Select", "Map", "Tools", "Help"]) await expect(bar.locator(".ed-menu-title", { hasText: new RegExp(`^${m}$`) })).toBeVisible();
+  for (const m of ["File", "Edit", "Brush", "View", "Select", "Map", "Tools", "Help"]) await expect(bar.locator(".ed-menu-title", { hasText: new RegExp(`^${m}$`) })).toBeVisible();
   for (const b of ["Save", "Playtest", "Publish…"]) await expect(bar.getByRole("button", { name: b, exact: true })).toBeVisible();
   await expect(bar.getByRole("group", { name: "View", exact: true })).toBeVisible();
   // everything the old row had
@@ -61,6 +61,9 @@ test("one bar: menus left, Save / Playtest / Publish right, the old row's action
 
 test("the bottom panels fold to their tabs and stay folded", async ({ page }) => {
   await newMap(page);
+  // (1.0.1: a short window starts with the bottom panels folded; open them first)
+  const opened = page.getByRole("button", { name: "Open the bottom panels" });
+  if (await opened.isVisible()) await opened.click();
   const fold = page.getByRole("button", { name: "Fold the bottom panels" });
   await fold.click();
   await expect(page.locator('[data-dock-body="bottom"]')).toHaveCount(0);

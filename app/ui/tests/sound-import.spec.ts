@@ -74,7 +74,7 @@ test("the Content Browser's Import takes MP3, Ogg and FLAC and lists what each c
   if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
   await page.locator(".ed-pane").first().waitFor();
   await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click();
-  const cb = page.locator('section[aria-label="Content Browser"]').first();
+  const cb = page.locator('section[aria-label="Content browser"]').first();
   await expect(cb.getByTestId("content-import-input")).toHaveAttribute("accept", /\.mp3.*\.ogg.*\.flac/);
   await cb.getByTestId("content-import-input").setInputFiles([{ name: "wind.ogg", mimeType: "audio/ogg", buffer: MP3 }]);
   const box = cb.locator(".p5-cb-import");

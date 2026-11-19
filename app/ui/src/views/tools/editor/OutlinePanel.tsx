@@ -432,7 +432,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
     const ids = idsOf(r);
     const groups = doc.groups;
     return [
-      ["Look at", () => look(r)],
+      ["Frame", () => look(r)],
       r.kind === "group" || r.kind === "entity" ? ["Rename… (F2)", () => setRenaming(r.key)] : undefined,
       ["Select same type", () => void cmd2({ op: "similar", ...ids, similar: { by: "class" } }).then((x) => x.select && selectIds(x.select))],
       null,
@@ -492,7 +492,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
         {rows.map(rowEl)}
       </div>
       <p className="small-note muted ed-ol-foot">
-        {total} things · {sel.brushes.length + sel.entities.length} picked{nHidden ? ` · ${nHidden} hidden` : ""}. Double-click to look; right-click for more; drag onto a folder.
+        {total} things · {sel.brushes.length + sel.entities.length} picked{nHidden ? ` · ${nHidden} hidden` : ""}. Double-click to frame; right-click for more; drag onto a folder.
       </p>
       {ghost && (
         <div className="ed-dock-ghost" style={{ left: ghost.x + 12, top: ghost.y + 10, zIndex: 80 }}>

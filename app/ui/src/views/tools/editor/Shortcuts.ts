@@ -9,7 +9,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useTools } from "../../../stores/tools";
-import { commands, type Command } from "./commands";
+import { commands, whyNot, type Command } from "./commands";
 import { useP5 } from "./p5store";
 import { useEditor } from "./store";
 import { NAV_KEYS, useNav } from "./navigation";
@@ -88,6 +88,7 @@ const LONER: Keys = {
   "help.cheats": ["?"],
   "map.inspect": ["Alt+Enter"],
   "map.playtest": ["F5"],
+  "map.compile": ["F9"], // (1.0.1: in every key set, like Hammer)
   // Unreal's Ctrl+Space; on a Mac ⌘Space is Spotlight and Ctrl+Space switches the input source
   "view.contentDrawer": [MAC ? "Mod+Shift+Space" : "Mod+Space"],
   "view.snap": ["Shift+W"],
@@ -363,6 +364,8 @@ export function useShortcuts() {
         e.preventDefault();
         e.stopImmediatePropagation();
         if (!c.when || c.when()) void c.run();
+        // 1.0.1: a key that can't do its job now says why, instead of nothing
+        else s.notify(whyNot(c));
         return;
       }
       // a key moved away from its old job: the old handler mustn't do it

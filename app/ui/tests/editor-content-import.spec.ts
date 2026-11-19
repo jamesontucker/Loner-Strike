@@ -31,7 +31,7 @@ async function savedProject(page: Page) {
     await expect.poll(() => existsSync(SAVE), { timeout: 15_000 }).toBe(true);
   }
   await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click();
-  return page.locator('section[aria-label="Content Browser"]').first();
+  return page.locator('section[aria-label="Content browser"]').first();
 }
 
 test.beforeEach(() => {
@@ -89,7 +89,7 @@ test("with no project saved: asks to save it first, or to use Add your own", asy
   const leave = page.getByRole("button", { name: "Leave them" });
   if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
   await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click();
-  const cb = page.locator('section[aria-label="Content Browser"]').first();
+  const cb = page.locator('section[aria-label="Content browser"]').first();
   await cb.getByTestId("content-import-input").setInputFiles([{ name: "qa_box.mdl", mimeType: "application/octet-stream", buffer: MDL }]);
   const box = cb.locator(".p5-cb-import");
   await expect(box).toContainText("Save the project first");
@@ -112,7 +112,7 @@ test("right-click a tile: Show in Finder/Explorer, and Export… with whose work
   const leave = page.getByRole("button", { name: "Leave them" });
   if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
   await page.locator("[data-dock-strip] [role=tab]", { hasText: /^Content$/ }).first().click();
-  const cb = page.locator('section[aria-label="Content Browser"]').first();
+  const cb = page.locator('section[aria-label="Content browser"]').first();
   const tile = cb.locator(".p5-cb-tile").first();
   await tile.waitFor({ timeout: 30_000 });
   await tile.click({ button: "right" });

@@ -26,7 +26,7 @@ async function open(page: Page) {
   if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
   await page.locator(".ed-pane").first().waitFor();
   await page.locator('[data-dock-strip] [role=tab]', { hasText: /^Content$/ }).first().click();
-  return page.getByRole("region", { name: "Content Browser" }).first();
+  return page.getByRole("region", { name: "Content browser" }).first();
 }
 
 // a spot near the middle of the first view, so the drop lands on it at any window size (P5: at
@@ -126,8 +126,8 @@ test("the entity form: Choose…, Show in Content Browser, Use selected; the con
   await pop.getByRole("option").first().getByRole("button").click();
   await expect.poll(async () => Object.fromEntries((await api(page, "/api/tools/editor/doc")).entities.find((x: { id: number }) => x.id === id).keys).model).toMatch(/^sprites\/muzzleflash/);
   // Show in Content Browser
-  await page.getByRole("button", { name: /^Show .* in the Content Browser$/ }).first().click();
-  const browser = page.getByRole("region", { name: "Content Browser" }).first();
+  await page.getByRole("button", { name: /^Show .* in the Content browser$/ }).first().click();
+  const browser = page.getByRole("region", { name: "Content browser" }).first();
   await expect(tab(browser, "Sprites")).toHaveAttribute("aria-selected", "true");
   await expect(browser.locator('.p5-cb-tile[aria-selected="true"]')).toContainText(/muzzleflash/i);
   // Use selected: pick another sprite there
@@ -148,7 +148,7 @@ test("the entity form: Choose…, Show in Content Browser, Use selected; the con
   await page.keyboard.press(mac ? "Meta+Shift+Space" : "Control+Space");
   const drawer = page.getByRole("dialog", { name: "Content drawer" });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("region", { name: "Content Browser" })).toBeVisible();
+  await expect(drawer.getByRole("region", { name: "Content browser" })).toBeVisible();
   const pane = (await page.locator(".ed-pane").first().boundingBox())!;
   await page.mouse.click(pane.x + 40, pane.y + 40);
   await expect(drawer).toHaveCount(0);

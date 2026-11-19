@@ -360,7 +360,7 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   return (
     <section
       className={`tools-panel p5-cb${drawer ? " in-drawer" : ""}${dropOver ? " drop-over" : ""}`}
-      aria-label="Content Browser"
+      aria-label="Content browser"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();

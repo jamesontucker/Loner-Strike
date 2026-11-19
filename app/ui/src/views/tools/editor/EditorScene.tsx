@@ -28,6 +28,7 @@ import { PaneBoxes } from "./Layout";
 import { paneCount, PaneCtx, usePaneActive, usePanes, usePaneView } from "./panes";
 import { useP5 } from "./p5store";
 import { duplicateWith } from "./commands";
+import { noteRightHit } from "./ViewportMenu"; // 1.0.1
 import { useKeySet } from "./Shortcuts"; // (Alt-drag copies with the Loner-Strike keys)
 import { CollisionBoxes } from "./CollisionBoxes";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
@@ -599,6 +600,12 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       };
       window.addEventListener("pointermove", move, true);
       window.addEventListener("pointerup", up, true);
+      return;
+    }
+    if (e.button === 2) {
+      // 1.0.1: a right-click's menu (ViewportMenu.tsx) picks what the press landed on first
+      const h = hitOf(e);
+      noteRightHit(h && h.kind !== "plane" ? { kind: h.kind, id: h.id } : null);
       return;
     }
     if (e.button !== 0 || (useTools.getState().camera === "fly" && view === "3d")) return;

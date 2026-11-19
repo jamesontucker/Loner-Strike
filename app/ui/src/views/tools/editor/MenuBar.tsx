@@ -1,4 +1,4 @@
-// P5: the editor's one bar: the menus (File, Edit, View, Select, Map, Tools, Help) and Find a
+// P5: the editor's one bar: the menus (File, Edit, Brush, View, Select, Map, Tools, Help) and Find a
 // command on the left, the map's name, then the layout and view pickers and the real buttons
 // (Save, Playtest, Publish) on the right; everything the old button row had is in a menu with
 // its keys (Recent files in File). Also the pieces that hang off it: keys (Shortcuts.ts), the
@@ -17,11 +17,13 @@ import { LAYOUTS, setLayout, usePanes } from "./panes";
 import { P5Dialogs } from "./P5Dialogs";
 import { useP5 } from "./p5store";
 import { keysOf, showKey, useKeySet, useShortcuts } from "./Shortcuts";
+import { InspectMenu } from "./InspectMenu";
+import { useViewportMenu } from "./ViewportMenu"; // 1.0.1: right-click in a view
 import { selectionBounds, useEditor } from "./store";
 import "./p5.css";
 import { NAV_PRESETS, setNavPreset, useNav } from "./navigation";
 
-const MENUS: Menu[] = ["File", "Edit", "View", "Select", "Map", "Tools", "Help"];
+const MENUS: Menu[] = ["File", "Edit", "Brush", "View", "Select", "Map", "Tools", "Help"];
 
 const VIEWS: { id: "3d" | "top" | "front" | "side"; label: string }[] = [
   { id: "3d", label: "3D" },
@@ -40,9 +42,10 @@ export function MenuBar() {
   const fileBusy = useEditor((s) => s.fileBusy);
   const [recent, setRecent] = useState<RecentFile[]>([]);
   useEffect(() => {
-    if (open === "File") void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
+    if (open === "File") void api.getRecentShown().then((r) => !r.error && setRecent(r.files ?? []));
   }, [open]);
   useShortcuts();
+  useViewportMenu();
   // starting over asks first when there are unsaved changes (like the start screen's buttons)
   useEffect(() => {
     askHooks.ask = (text, ok) => ask(text, { ok });
@@ -86,7 +89,7 @@ export function MenuBar() {
             >
               {m}
             </button>
-            {open === m && <MenuList menu={m} onDone={() => setOpen(null)} recent={m === "File" ? recent : []} openRecent={openRecent} />}
+            {open === m && <MenuList menu={m} onDone={() => setOpen(null)} recent={m === "File" ? recent : []} openRecent={openRecent} removeMissing={() => setRecent(api.removeMissingRecent(recent))} />}
           </div>
         ))}
         {doc && (
@@ -127,22 +130,25 @@ export function MenuBar() {
           </button>
         </span>
       </div>
-      <NavChoice />
-      <FirstMapTour />
+      {/* 1.0.1: the first-run banners share one row when there's room, one line each */}
+      <div className="ed-start-banners">
+        <NavChoice />
+        <FirstMapTour />
+      </div>
       <ContentDrawer />
       <Overlays />
     </>
   );
 }
 
-function MenuList({ menu, onDone, recent, openRecent }: { menu: Menu; onDone: () => void; recent: RecentFile[]; openRecent: (f: RecentFile) => void }) {
+function MenuList({ menu, onDone, recent, openRecent, removeMissing }: { menu: Menu; onDone: () => void; recent: RecentFile[]; openRecent: (f: RecentFile) => void; removeMissing: () => void }) {
   useKeySet((s) => s.mine); // keys shown follow your changes
   const list = commands().filter((c) => c.menu === menu && !c.hidden);
   const extra: Command[] =
-    menu === "Edit"
-      ? [{ id: "p5.arrange", label: "Line up and spread out…", menu: "Edit", run: () => useP5.getState().set({ dialog: "transform" }), when: () => useEditor.getState().sel.brushes.length + useEditor.getState().sel.entities.length > 1 }]
+    menu === "Brush"
+      ? [{ id: "p5.arrange", label: "Line up and spread out…", menu: "Brush", run: () => useP5.getState().set({ dialog: "transform" }), when: () => useEditor.getState().sel.brushes.length + useEditor.getState().sel.entities.length > 1 }]
       : [];
-  const items = menu === "Edit" ? [...list.slice(0, list.findIndex((c) => c.id === "edit.mirrorX")), ...extra, ...list.slice(list.findIndex((c) => c.id === "edit.mirrorX"))] : list;
+  const items = menu === "Brush" ? [...list.slice(0, list.findIndex((c) => c.id === "edit.mirrorX")), ...extra, ...list.slice(list.findIndex((c) => c.id === "edit.mirrorX"))] : list;
   // File: the recent files (they were a list in the old button row), after Open
   if (menu === "File" && recent.length) {
     const at = items.findIndex((c) => c.id === "file.open") + 1;
@@ -154,7 +160,9 @@ function MenuList({ menu, onDone, recent, openRecent }: { menu: Menu; onDone: ()
       when: () => f.found,
       run: () => openRecent(f),
     }));
-    items.splice(at, 0, { id: "file.recent.head", label: "Recent files", menu: "File", sep: true, run: () => {}, when: () => false }, ...rec);
+    // 1.0.1: a missing file can be taken off the list
+    const gone = recent.some((f) => !f.found) ? [{ id: "file.recent.clear", label: "Remove missing", menu: "File" as const, hint: "Take the files that aren't there any more off this list", run: removeMissing }] : [];
+    items.splice(at, 0, { id: "file.recent.head", label: "Recent files", menu: "File", sep: true, run: () => {}, when: () => false }, ...rec, ...gone);
   }
   return (
     <ul className="ed-menu-list" role="menu" aria-label={menu}>
@@ -203,6 +211,7 @@ function Overlays() {
       {dialog === "cheats" && <CheatSheet onClose={close} />}
       {dialog === "keys" && <KeyEditor onClose={close} />}
       <P5Dialogs />
+      <InspectMenu /> {/* the Inspector's and the views' right-click menu (one for the editor) */}
     </>
   );
 }
@@ -239,7 +248,7 @@ function NavChoice() {
         {NAV_PRESETS.map((n) => (
           <button key={n.id} type="button" aria-pressed={preset === n.id} title={n.tip} onClick={() => setNavPreset(n.id)}>
             {n.label}
-            {n.id === "unreal" ? " (hold right mouse + WASD)" : n.id === "blender" ? " (drag to orbit)" : " (hold left mouse + WASD)"}
+            <span className="ed-nav-choice-how">{n.id === "unreal" ? " (hold right mouse + WASD)" : n.id === "blender" ? " (drag to orbit)" : " (hold left mouse + WASD)"}</span>
           </button>
         ))}
       </div>

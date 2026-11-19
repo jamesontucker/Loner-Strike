@@ -18,7 +18,7 @@ import { FaceSheet, RecentTextures } from "./FaceSheet";
 import { EntityForm } from "./EntityForm";
 import { MultiEntityKeys } from "./MultiEntityKeys"; // P5
 import { BrushFacts, TransformSection } from "./InspectParts"; // P5
-import { InspectMenu, openInspectMenu } from "./InspectMenu"; // right-click Copy / Paste
+import { openInspectMenu } from "./InspectMenu"; // right-click Copy / Paste (the menu itself is mounted by the menu bar)
 import { propItems } from "./inspectMenus";
 import { ArchStart } from "./P5Dialogs"; // P5
 import { TEXTURE_MIME } from "./P4Scene"; // P5: textures drag onto faces
@@ -238,7 +238,9 @@ export function ToolOptions() {
         <>
           <span className="muted">
             {!clip?.points
-              ? "Click the first point."
+              ? s.sel.brushes.length + s.sel.entities.length === 0
+                ? "Pick a brush first, then click two points."
+                : "Click the first point."
               : clip.points === 1
                 ? "Click the second point (the cut follows the cursor)."
                 : clip.points === 2 && (clip.max ?? 2) > 2
@@ -276,12 +278,7 @@ export function Inspector() {
   const sel = useEditor((s) => s.sel);
   const ent = useSelectedEntity();
   const body = sel.face && !sel.brushes.length && !sel.entities.length ? <FaceSheet /> : ent ? <EntityForm e={ent} /> : sel.brushes.length || sel.entities.length ? <SelectionPanel /> : <MapPanel />;
-  return (
-    <>
-      {body}
-      <InspectMenu />
-    </>
-  );
+  return body;
 }
 
 function SelectionPanel() {
@@ -417,7 +414,7 @@ function SelectionPanel() {
         </button>
         {centre && size && (
           <button type="button" className="btn small" data-cmd="view.frame" title="Bring it into the middle of the view" onClick={() => useTools.getState().look(centre, Math.max(...size))}>
-            Look at
+            Frame
           </button>
         )}
         <button type="button" className="btn small" data-cmd="sel.hide" data-tip="Hide what's picked for now (Show everything brings it back)" title="Hide what's picked for now" onClick={() => hideSelection()}>
@@ -648,7 +645,7 @@ export function Outline() {
           Show more
         </button>
       )}
-      <p className="small-note muted">Shift-click to pick several. Double-click to look at it.</p>
+      <p className="small-note muted">Shift-click to pick several. Double-click to frame it.</p>
     </section>
   );
 }
