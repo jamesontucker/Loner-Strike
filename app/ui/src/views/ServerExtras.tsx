@@ -289,7 +289,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
         title="Map rotation"
         note={
           <>
-            The maps that come next, in order, when a map's time runs out. A map vote still wins, and map presets still pick the mode (a surf_ map plays Surf). Players can
+            {d.settings.rotation_random ? "When a map's time runs out, the next one is picked at random from this list (Random order is on)." : "When a map's time runs out, the next one comes from this list, in order."} A map vote still wins, and map presets still pick the mode (a surf_ map plays Surf). Players can
             say <b>nextmap</b> to see what's coming.
           </>
         }
@@ -404,7 +404,9 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
               {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
               {scope && own && <BusyButton className="btn danger push" busy={busy(rotKey("drop"))} disabled={rotBusy} label={OWN_MAP_MODES.has(scope) ? "Use the maps made for it" : "Use the main rotation"} busyLabel="Removing…" onClick={dropOwn} />}
             </div>
-            <p className="muted small-note">Drag maps to reorder them, or use the buttons. {list.length} {list.length === 1 ? "map" : "maps"}.</p>
+            <p className="muted small-note">
+              {d.settings.rotation_random ? "With Random order on, the order here doesn't matter." : "Drag maps to reorder them, or use the buttons."} {list.length} {list.length === 1 ? "map" : "maps"}. Changes to the list are kept when you press Save rotation; the switches below save right away.
+            </p>
           </>
         )}
       </div>
@@ -417,7 +419,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
         />
         <Toggle
           label="Map votes use the rotation"
-          note="Map votes (rtv and nominate) only offer maps from the rotation, instead of every map bots can play."
+          note="When players vote for the next map (by saying rtv in chat), the vote only offers maps from the rotation, instead of every map bots can play."
           on={d.settings.rtv_cycle}
           set={(v) => saveSettings({ rtv_cycle: v })}
         />
