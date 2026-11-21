@@ -2,6 +2,29 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
+## 1.0.2
+
+Map editor fixes from a tester's report and two audits of the editor:
+- Flying in the 3D view no longer stops on its own
+- The 2D views stay straight after zooming
+- Wireframe, sky brushes and two 3D views work the way you'd expect
+
+### Map editor
+- Flying (Unreal right mouse, Hammer left mouse or Z, Blender fly) keeps going when the editor redraws: an edit, autosave, resizing the window or clicking another view used to stop it.
+- Hammer Z mouse-look: if the system lets go of the mouse mid-flight you keep flying, and a move key or click takes the mouse back. Esc stops it in one press, also with a move key held. If the mouse can't be hidden, it still turns the view.
+- Z over the 3D view works while a 2D view is the active one, and doesn't start while a dialog is open.
+- Pressing a second mouse button while flying, or switching windows mid-flight, no longer leaves the camera stuck.
+- With two 3D views, only the one you're using flies.
+- Blender fly in Quad: W picks the Move tool when a 2D view is active instead of also flying. Pressing F to switch to the fly camera no longer breaks the editor.
+- A fly camera left on from Blender or the map viewer no longer stops clicks and tool keys in Unreal and Hammer. View > Fly / orbit camera is for the Blender keys.
+- The Front and Side views no longer tilt after zooming at a corner.
+- Frame all and Frame selection stay within the 2D zoom limits, and big maps can zoom in close in a small view.
+- 2D views keep their zoom and place when you switch layouts and back.
+- Sky brushes show their outlines in the 2D views in every drawing style, and can be picked there when nothing else is under the mouse.
+- Wireframe draws entity models as lines.
+- A click right after picking the Box or Clip tool uses that tool.
+- Typing in a text box works when you click it during a mouse-look.
+
 ## 1.0.1
 
 Polish from the first week, and the fixes people asked for:
