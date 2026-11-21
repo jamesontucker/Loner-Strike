@@ -24,7 +24,8 @@ function materialFor(mats: MapMaterials, mode: RenderMode, texture: string) {
 }
 
 /** Every unpicked, shown brush: one draw per texture and up to three outline draws. */
-export function SharedBrushes({ mats, version, mode, hideSky }: { mats: MapMaterials; version: number; mode: RenderMode; hideSky: boolean }) {
+/** hideSky: no sky faces (and sky brushes are tagged for hitOf); skyGhost: no sky outlines either. */
+export function SharedBrushes({ mats, version, mode, hideSky, skyGhost }: { mats: MapMaterials; version: number; mode: RenderMode; hideSky: boolean; skyGhost: boolean }) {
   useBrushBuffers((s) => s.version); // pools added or grown: draw the new geometry objects
   const hide = useRef(hideSky);
   hide.current = hideSky;
@@ -33,6 +34,9 @@ export function SharedBrushes({ mats, version, mode, hideSky }: { mats: MapMater
   const e = outlinePools();
   const w = edgeLook(mode, false, false);
   const t = edgeLook(mode, false, true);
+  // sky brushes with no faces (2D views) are only their outlines: drawn light, as in Wireframe,
+  // so they show on the dark background in every mode
+  const sk = hideSky ? edgeLook("wire", false, false) : w;
   void version;
   return (
     <>
@@ -47,9 +51,9 @@ export function SharedBrushes({ mats, version, mode, hideSky }: { mats: MapMater
           <lineBasicMaterial color={t.color} transparent opacity={t.opacity} depthTest={mode !== "wire"} />
         </lineSegments>
       )}
-      {e.sky && !hideSky && (
+      {e.sky && !skyGhost && (
         <lineSegments key={`s${e.sky.gen}`} geometry={e.sky.geometry} renderOrder={1} raycast={noRay} frustumCulled={false}>
-          <lineBasicMaterial color={w.color} transparent opacity={w.opacity} depthTest={mode !== "wire"} />
+          <lineBasicMaterial color={sk.color} transparent opacity={sk.opacity} depthTest={mode !== "wire" && !hideSky} />
         </lineSegments>
       )}
       <primitive object={picker} />

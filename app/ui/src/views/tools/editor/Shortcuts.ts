@@ -12,7 +12,7 @@ import { useTools } from "../../../stores/tools";
 import { commands, whyNot, type Command } from "./commands";
 import { useP5 } from "./p5store";
 import { useEditor } from "./store";
-import { NAV_KEYS, useNav } from "./navigation";
+import { blenderFly, NAV_KEYS, useNav } from "./navigation";
 import { navWantsKey } from "./NavCamera";
 
 export const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -350,7 +350,8 @@ export function useShortcuts() {
       if (isField(e.target) || s.dialog || p5.dialog) return;
       // a sheet from elsewhere (confirm, toast actions) is up
       if (document.querySelector(".sheet-backdrop")) return;
-      const flying = s.view === "3d" && useTools.getState().camera === "fly";
+      // (Blender fly: the 3D pane has the mouse even when a 2D pane is the active one)
+      const flying = blenderFly() && (s.view === "3d" || useTools.getState().looking);
       const id = keyMap().get(name);
       // Unreal: W/E/R pick tools unless right mouse is held; say so once
       if (id && !flying && useNav.getState().preset === "unreal" && s.view === "3d" && /^[WASDQE]$/.test(name) && !wasdTold) {

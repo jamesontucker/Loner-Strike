@@ -24,7 +24,7 @@ import { MenuBar, SelectionSize } from "./MenuBar";
 import { useP5 } from "./p5store";
 import { DockArea, DockDropZones, DockFloats, useDockColumns } from "./Dock";
 import { showPanel } from "./dockState";
-import { useNav as useNavPreset } from "./navigation";
+import { blenderFly, useNav as useNavPreset } from "./navigation";
 import { importOther } from "./commands";
 import { gotoSection } from "./contentApi";
 import * as api from "./editorApi";
@@ -440,8 +440,8 @@ function useKeys(replace: (w: Pick) => Promise<void>) {
         return;
       }
       if (mod || e.altKey) return;
-      // while flying, WASD moves the camera
-      const flying = s.view === "3d" && useTools.getState().camera === "fly";
+      // while flying, WASD moves the camera (the same test as Shortcuts.ts)
+      const flying = blenderFly() && (s.view === "3d" || useTools.getState().looking);
       if (e.key === "Escape") {
         if (!flying) {
           if (s.tool === "vertex" && s.verts.length) s.set({ verts: [] });
@@ -465,7 +465,7 @@ function useKeys(replace: (w: Pick) => Promise<void>) {
         s.set({ view: "3d", bookmark: { n: Number(digit), store: false, seq: (s.bookmark?.seq ?? 0) + 1 } });
         return;
       }
-      if (k === "f" && s.view === "3d") return useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly");
+      if (k === "f" && s.view === "3d" && useNavPreset.getState().preset === "blender") return useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly");
       if (e.key === "[" || e.key === "]") {
         const grids = [1, 2, 4, 8, 16, 32, 64, 128, 256];
         const i = grids.indexOf(s.grid);

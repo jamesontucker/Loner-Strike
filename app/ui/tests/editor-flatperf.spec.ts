@@ -102,14 +102,28 @@ test("br_valley in Quad: the Top view pans and zooms smoothly", async ({ page })
   // panning one flat view draws that pane, not all four (a catch-up redraw of all may follow)
   expect(pan.drawsPerRender, "draws per pane").toBeLessThan(150);
 
-  // pick a brush in the Top view and stretch it with a handle: one Scale step
-  await page.mouse.click(cx, cy);
+  // pick a brush in the Top view and stretch it with a handle: one Scale step (try a few spots
+  // near the middle for a brush big enough on screen that its handles don't overlap)
   const handles = () => page.evaluate(() => (window as unknown as { __lsFlatHandles?: Record<string, () => { x: number; y: number }[]> }).__lsFlatHandles?.top?.() ?? null);
-  const picked = await expect.poll(handles, { timeout: 5000 }).not.toBeNull().then(
-    () => true,
-    () => false,
-  );
-  if (picked) {
+  const wide = (h: { x: number; y: number }[] | null) => !!h && Math.max(...h.map((p) => p.x)) - Math.min(...h.map((p) => p.x)) > 24 && Math.max(...h.map((p) => p.y)) - Math.min(...h.map((p) => p.y)) > 24;
+  // (zoomed in first: the whole map fits the pane, where brushes are a few pixels wide)
+  await page.mouse.move(cx, cy);
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(80);
+  }
+  let picked = false;
+  for (const [dx, dy] of [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30], [50, 40], [-50, -40], [60, -20], [-60, 20]]) {
+    await page.keyboard.press("Escape");
+    await page.mouse.click(cx + dx, cy + dy);
+    await page.waitForTimeout(400);
+    if (wide(await handles())) {
+      picked = true;
+      break;
+    }
+  }
+  expect(picked, "a brush big enough to stretch near the middle").toBe(true);
+  {
     const h = (await handles())!;
     await page.mouse.move(h[3].x, h[3].y, { steps: 3 });
     await page.mouse.down();

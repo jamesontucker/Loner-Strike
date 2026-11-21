@@ -126,7 +126,10 @@ function Fly() {
     };
     const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
     const keyDown = (e: KeyboardEvent) => {
-      if (isField(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // (a key the map editor already used, e.g. W picking a tool while a 2D pane is active)
+      if (e.defaultPrevented || isField(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // the map editor with two 3D panes: only the one you're using flies (Layout marks it active)
+      if (el !== gl.domElement && !locked() && !el.classList.contains("active") && el.parentElement?.querySelector(".active[data-pane]")) return;
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(e.code)) {
         keys.current.add(e.code);
         if (e.code.startsWith("Arrow")) e.preventDefault();

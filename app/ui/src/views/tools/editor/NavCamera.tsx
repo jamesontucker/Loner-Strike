@@ -9,6 +9,8 @@ import * as THREE from "three";
 import { useTools } from "../../../stores/tools";
 import { gsToThree, type Vec3 } from "../viewer/coords";
 import { selectionBounds, useEditor } from "./store";
+import { useP5 } from "./p5store";
+import { usePanes } from "./panes";
 import { flySpeed, stepSpeed, useNav, type NavPreset } from "./navigation";
 
 const LOOK = 0.0022;
@@ -28,13 +30,23 @@ let hammerLeftDown = false;
 /** Hammer: this left press became a camera hold (so letting go doesn't also pick what's under it) */
 let hammerHeld = false;
 export const navTookPress = () => hammerHeld;
+/** The pane whose camera has the look now (with two 3D panes, only its keys fly) */
+let lookOwner: HTMLElement | null = null;
 
 /** True when the key belongs to the camera right now (Shortcuts.ts leaves it alone). */
+/** Z can start a look: the active pane is 3D, or the mouse is over a 3D pane (Quad with a 2D
+ *  pane active: no click needed first) */
+function zLookHere() {
+  if (useEditor.getState().view === "3d") return true;
+  const ps = usePanes.getState();
+  return ps.hover != null && ps.views[ps.hover] === "3d";
+}
+
 export function navWantsKey(e: KeyboardEvent): boolean {
   const n = useNav.getState();
   if (hammerLeftDown && n.preset === "hammer" && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) return true;
   if (n.looking && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) return true;
-  if (n.preset === "hammer" && e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && useEditor.getState().view === "3d") return true;
+  if (n.preset === "hammer" && e.code === "KeyZ" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (n.looking || zLookHere())) return true;
   return false;
 }
 
@@ -42,8 +54,13 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const gl = useThree((s) => s.gl);
   const set = useThree((s) => s.set);
-  const invalidate = useThree((s) => s.invalidate);
+  const invalidateNow = useThree((s) => s.invalidate);
+  // (through a ref: the mouse/key setup below must not start over when the editor redraws)
+  const inval = useRef(invalidateNow);
+  inval.current = invalidateNow;
+  const invalidate = useMemo(() => (frames?: number) => inval.current(frames), []);
   const connected = useThree((s) => s.events.connected) as HTMLElement | undefined;
+  const el = connected?.dataset?.pane != null ? connected : gl.domElement;
   const ctl = useMemo(() => new NavControls(), []);
   const keys = useRef(new Set<string>());
   const vel = useRef(new THREE.Vector3());
@@ -93,7 +110,6 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
   }, [req, camera, ctl, invalidate]);
 
   useEffect(() => {
-    const el = connected?.dataset?.pane != null ? connected : gl.domElement;
     const nav = useNav.getState;
     const turn = (dx: number, dy: number) => {
       const e = euler.current;
@@ -140,15 +156,34 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     type Drag = { kind: "look" | "move" | "orbit" | "dolly" | "pan" | "pending-left"; x: number; y: number; moved: boolean; pivot?: THREE.Vector3; button: number; held?: boolean };
     let drag: Drag | null = null;
     const locked = () => document.pointerLockElement === el;
+    // the system said no to hiding the mouse (or has no pointer lock): Z look turns with the
+    // visible mouse instead
+    let lockDenied = false;
     const lock = () => {
       try {
         const p = el.requestPointerLock() as unknown as Promise<void> | undefined;
-        p?.catch?.(() => {});
+        p?.catch?.(() => (lockDenied = true));
       } catch {
-        /* drag without hiding the pointer */
+        lockDenied = true; // drag without hiding the pointer
       }
     };
+    const lockError = () => (lockDenied = true);
     const unlock = () => locked() && document.exitPointerLock();
+    /** this pane has the look (or nobody is looking) */
+    const mine = () => !nav().looking || lookOwner === el;
+    const startLook = (p: Parameters<ReturnType<typeof useNav.getState>["set"]>[0]) => {
+      lookOwner = el;
+      const slot = el.dataset.pane;
+      useNav.getState().set({ looking: true, pane: slot == null ? null : Number(slot), ...p });
+    };
+    /** Z goes to the 3D pane under the mouse, else the active one */
+    const zPane = () => {
+      const ps = usePanes.getState();
+      const slot = el.dataset.pane;
+      if (slot == null) return true;
+      const want = ps.hover != null && ps.views[ps.hover] === "3d" ? ps.hover : ps.active;
+      return Number(slot) === want;
+    };
     const pivotNow = () => {
       const b = selectionBounds();
       if (b) return gsToThree(b[0].map((x, i) => (x + b[1][i]) / 2) as Vec3);
@@ -160,11 +195,16 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       if (nav().looking) return;
       d.held = true;
       hammerHeld = true;
-      useNav.getState().set({ looking: true, held: true });
+      startLook({ held: true });
       (document.activeElement as HTMLElement | null)?.blur?.();
     };
     const down = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest?.(".ed-pane-head")) return;
+      // another button while one drags: the drag keeps going (and ends on its own button)
+      if (drag) {
+        if (e.buttons & ([1, 4, 2][drag.button] ?? 0)) return;
+        drag = null; // its button came up without us seeing it
+      }
       if (e.button === 0) hammerHeld = false;
       const p = nav().preset;
       if (e.button === 1) {
@@ -174,7 +214,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
         if (p === "unreal") {
           drag = { kind: e.altKey ? "dolly" : "look", x: e.clientX, y: e.clientY, moved: false, button: 2 };
           if (!e.altKey) {
-            useNav.getState().set({ looking: true });
+            startLook({});
             // the keys come here now, wherever focus was
             (document.activeElement as HTMLElement | null)?.blur?.();
             lock();
@@ -192,7 +232,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     const move = (e: PointerEvent) => {
       // Hammer mouse-look (Z): the mouse turns the camera with no button down
       if (!drag) {
-        if (nav().looking && nav().preset === "hammer" && locked()) turn(e.movementX, e.movementY);
+        if (nav().looking && lookOwner === el && nav().preset === "hammer" && (locked() || (lockDenied && !nav().released))) turn(e.movementX, e.movementY);
         return;
       }
       const dx = locked() ? e.movementX : e.clientX - drag.x;
@@ -239,7 +279,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       if (e.button === 0) hammerLeftDown = false;
       if (!drag || e.button !== drag.button) return;
       if (drag.held) {
-        useNav.getState().set({ looking: false });
+        useNav.getState().set({ looking: false, held: false });
         keys.current.clear();
       }
       if (drag.kind === "look" && nav().preset === "unreal") {
@@ -249,6 +289,15 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       }
       drag = null;
     };
+    const cancel = () => {
+      if (drag?.held || (drag?.kind === "look" && nav().preset === "unreal")) {
+        useNav.getState().set({ looking: false, held: false });
+        keys.current.clear();
+        unlock();
+      }
+      drag = null;
+      hammerLeftDown = false;
+    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       if (nav().looking && nav().preset === "unreal") return stepSpeed(e.deltaY < 0 ? 1 : -1);
@@ -256,13 +305,22 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     };
     const menu = (e: MouseEvent) => e.preventDefault();
     const keyDown = (e: KeyboardEvent) => {
+      // another 3D pane has the look: its camera takes the keys
+      if (!mine()) return;
       const t = e.target as HTMLElement | null;
-      if (!nav().looking && t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
-      if (nav().preset === "hammer" && e.code === "KeyZ" && navWantsKey(e) && useEditor.getState().view === "3d") {
+      const field = !!t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+      // a text box keeps its keys unless the mouse is grabbed (a released or no-lock look leaves
+      // the mouse free to click into one)
+      if (field && (!nav().looking || !locked())) return;
+      // a dialog or sheet is up: no new look
+      if (!nav().looking && (useEditor.getState().dialog || useP5.getState().dialog || document.querySelector(".sheet-backdrop"))) return;
+      if (nav().preset === "hammer" && e.code === "KeyZ" && navWantsKey(e)) {
+        const on = !nav().looking;
+        if (on && !zPane()) return; // (the other 3D pane's camera takes it)
         e.preventDefault();
         e.stopImmediatePropagation();
-        const on = !nav().looking;
-        useNav.getState().set({ looking: on, held: false });
+        if (on) startLook({ held: false, released: false });
+        else useNav.getState().set({ looking: false, held: false, released: false });
         if (on) lock();
         else {
           unlock();
@@ -271,7 +329,10 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
         return;
       }
       if (nav().looking && e.key === "Escape") {
-        useNav.getState().set({ looking: false });
+        // (only stops the look: it doesn't also clear the selection)
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        useNav.getState().set({ looking: false, released: false });
         keys.current.clear();
         unlock();
         return;
@@ -284,46 +345,84 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       if (nav().looking && MOVE_KEYS.includes(e.code) && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        // (a held key's auto-repeat doesn't count: Esc with W down let go of the mouse on purpose)
+        if (nav().released && !e.repeat) relock();
         keys.current.add(e.code);
         if (!nav().hintDone && /^Key[WASDQE]$/.test(e.code)) useNav.getState().set({ hintDone: true });
         invalidate();
       }
     };
     const keyUp = (e: KeyboardEvent) => keys.current.delete(e.code);
+    // Z look lost the mouse without Z or Esc. With a move key down (Windows does this now and
+    // then, mid-flight) it keeps flying and takes the mouse back on the next move key or click.
+    // With none down it was Esc (Chromium keeps that Esc for itself): stop.
     const lockChange = () => {
-      if (!locked() && nav().looking && nav().preset === "hammer") {
-        useNav.getState().set({ looking: false });
-        keys.current.clear();
+      if (!mine()) return;
+      if (locked()) {
+        lockDenied = false;
+        if (nav().released) useNav.getState().set({ released: false });
+      } else if (nav().looking && nav().preset === "hammer" && !nav().held) {
+        if (keys.current.size > 0) useNav.getState().set({ released: true });
+        else useNav.getState().set({ looking: false, released: false });
       }
     };
+    const relock = () => {
+      useNav.getState().set({ released: false });
+      lock();
+    };
+    // a click while released only takes the mouse back (it doesn't also pick)
+    const downFirst = (e: PointerEvent) => {
+      if (!nav().looking || lookOwner !== el || !nav().released || nav().preset !== "hammer") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hammerHeld = true; // and letting go doesn't pick either
+      relock();
+    };
+    // a press outside the pane while the mouse is free (released, or no pointer lock) ends the look
+    const downElsewhere = (e: PointerEvent) => {
+      if (!nav().looking || lookOwner !== el || locked() || drag) return;
+      if (e.target instanceof Node && el.contains(e.target)) return;
+      useNav.getState().set({ looking: false, held: false, released: false });
+      keys.current.clear();
+    };
     const blur = () => {
+      // (a button let go in another window never comes back as a pointerup here)
+      drag = null;
       hammerLeftDown = false;
       keys.current.clear();
-      if (nav().looking) useNav.getState().set({ looking: false });
+      if (nav().looking) useNav.getState().set({ looking: false, held: false, released: false });
     };
+    el.addEventListener("pointerdown", downFirst, true);
     el.addEventListener("pointerdown", down);
+    window.addEventListener("pointerdown", downElsewhere, true);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
     el.addEventListener("wheel", wheel, { passive: false });
     el.addEventListener("contextmenu", menu);
     window.addEventListener("keydown", keyDown, true);
     window.addEventListener("keyup", keyUp, true);
     document.addEventListener("pointerlockchange", lockChange);
+    document.addEventListener("pointerlockerror", lockError);
     window.addEventListener("blur", blur);
     return () => {
+      el.removeEventListener("pointerdown", downFirst, true);
       el.removeEventListener("pointerdown", down);
+      window.removeEventListener("pointerdown", downElsewhere, true);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
       el.removeEventListener("wheel", wheel);
       el.removeEventListener("contextmenu", menu);
       window.removeEventListener("keydown", keyDown, true);
       window.removeEventListener("keyup", keyUp, true);
       document.removeEventListener("pointerlockchange", lockChange);
+      document.removeEventListener("pointerlockerror", lockError);
       window.removeEventListener("blur", blur);
       unlock();
-      if (useNav.getState().looking) useNav.getState().set({ looking: false });
+      if (useNav.getState().looking && lookOwner === el) useNav.getState().set({ looking: false, held: false, released: false });
     };
-  }, [camera, gl, connected, ctl, invalidate, preset]);
+  }, [camera, el, ctl, invalidate, preset]);
 
   // flying: velocity eases toward where the keys point (a short ramp up and a glide to stop)
   const fwd = useMemo(() => new THREE.Vector3(), []);

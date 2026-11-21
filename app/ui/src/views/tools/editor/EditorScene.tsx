@@ -50,7 +50,7 @@ import { IOArrows } from "./IOPanel"; // P5
 import { chainOf, ioLinks } from "./ioGraph"; // P5
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
-import { useNav } from "./navigation";
+import { blenderFly, useNav } from "./navigation";
 import { NavCamera, navTookPress } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, VertexHandles } from "./SceneExtras";
 
@@ -157,7 +157,7 @@ function isPicked(b: BrushGeo, sel: { brushes: number[]; entities: number[] }) {
 
 // ---- brushes --------------------------------------------------------------------------
 
-function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; version: number; dim?: boolean }) {
+function BrushMesh({ b, mats, picked, hideSky, skyGhost, version, dim }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; skyGhost: boolean; version: number; dim?: boolean }) {
   const mode = usePaneMode(); // P5: textured / flat / wire / textured + wire, per pane
   const cls = useEditor((s) => (b.entity != null ? s.doc?.entities.find((e) => e.id === b.entity)?.classname ?? "" : ""));
   const materials = useMemo(
@@ -172,25 +172,28 @@ function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; ma
     [b, mats, version, mode, cls], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const edges = useMemo(() => new THREE.EdgesGeometry(b.geometry, 20), [b]);
-  const look = edgeLook(mode, picked, b.entity != null);
   useEffect(() => () => edges.dispose(), [edges]);
   const skyOnly = hideSky && b.textures.every(isSkyTex);
+  // a sky brush with no faces: no outline in the 3D orbit view (as SharedBrushes), a light one in 2D
+  const look = skyOnly && !picked ? edgeLook("wire", false, false) : edgeLook(mode, picked, b.entity != null);
   const raycast = brushRaycast(b); // P5: picks on edges too (pickRay.ts)
   return (
     <group>
       {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} visible={mode !== "wire"} raycast={raycast} />}
       {skyOnly && <mesh geometry={b.geometry} userData={{ kind: "brush", id: b.id, sky: true }} visible={false} raycast={raycast} />}
       {dim && !skyOnly && <mesh geometry={b.geometry} material={DIM_MATERIAL} renderOrder={2} raycast={() => null} />}
-      <lineSegments geometry={edges} renderOrder={picked ? 3 : 1}>
-        <lineBasicMaterial color={look.color} transparent opacity={look.opacity} depthTest={!picked && mode !== "wire"} />
-      </lineSegments>
+      {!(skyOnly && skyGhost && !picked) && (
+        <lineSegments geometry={edges} renderOrder={picked ? 3 : 1}>
+          <lineBasicMaterial color={look.color} transparent opacity={look.opacity} depthTest={!picked && mode !== "wire" && !skyOnly} />
+        </lineSegments>
+      )}
     </group>
   );
 }
 
 
 /** Every shown brush on its own (the class styles color a brush by its entity). */
-function ClassBrushes({ mats, version, hideSky }: { mats: MapMaterials; version: number; hideSky: boolean }) {
+function ClassBrushes({ mats, version, hideSky, skyGhost }: { mats: MapMaterials; version: number; hideSky: boolean; skyGhost: boolean }) {
   const brushes = useEditor((s) => s.brushes);
   const hidden = useEditor((s) => s.hidden.brushes);
   const sel = useEditor((s) => s.sel);
@@ -199,7 +202,7 @@ function ClassBrushes({ mats, version, hideSky }: { mats: MapMaterials; version:
       {[...brushes.values()]
         .filter((b) => !hidden.has(b.id) && !isPicked(b, sel))
         .map((b) => (
-          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} />
+          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} skyGhost={skyGhost} version={version} />
         ))}
     </>
   );
@@ -207,9 +210,14 @@ function ClassBrushes({ mats, version, hideSky }: { mats: MapMaterials; version:
 
 function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   const preview = useEditor((s) => s.preview);
-  const camera = useTools((s) => s.camera);
+  const cameraMode = useTools((s) => s.camera);
+  const navPreset = useNav((s) => s.preset); // (both hooks every render)
+  const fly = cameraMode === "fly" && navPreset === "blender";
   const view = usePaneView(); // P5
-  const hideSky = !(view === "3d" && camera === "fly");
+  // sky faces show only when flying in 3D; the 2D views draw sky outlines (and hitOf picks a
+  // sky brush there when nothing else is under the mouse)
+  const hideSky = !(view === "3d" && fly);
+  const skyGhost = view === "3d" && !fly;
   const moving = useRef<THREE.Group>(null);
   useEffect(() => {
     const g = moving.current;
@@ -226,10 +234,10 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   return (
     <>
       <group>
-        <SharedBrushes mats={mats} version={version} mode={mode} hideSky={hideSky} />
-        {byClass(mode) && <ClassBrushes mats={mats} version={version} hideSky={hideSky} /> /* Collision / By entity type: each brush its own color */}
+        <SharedBrushes mats={mats} version={version} mode={mode} hideSky={hideSky} skyGhost={skyGhost} />
+        {byClass(mode) && <ClassBrushes mats={mats} version={version} hideSky={hideSky} skyGhost={skyGhost} /> /* Collision / By entity type: each brush its own color */}
         {dimmed.map((b) => (
-          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim />
+          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} skyGhost={skyGhost} version={version} dim />
         ))}
       </group>
       <group ref={moving} matrixAutoUpdate={false}>
@@ -396,14 +404,20 @@ function handleOf(e: ThreeEvent<PointerEvent>): Handle | null {
   return null;
 }
 
-function hitOf(e: ThreeEvent<PointerEvent>): Hit | null {
+function hitOf(e: ThreeEvent<PointerEvent>, view: ViewId): Hit | null {
   let plane: Hit | null = null;
+  // clicks go through sky brushes (a ceiling would cover the whole map), but in a 2D view one
+  // is picked when it's the only brush under the mouse
+  let sky: Hit | null = null;
+  const flat = view !== "3d";
   for (const i of e.intersections) {
     const ud = i.object.userData as { kind?: string; id?: number; sky?: boolean };
     const point = threeToGs(i.point);
     if (ud.kind === "plane") {
       plane ??= { kind: "plane", id: 0, face: null, point, normal: [0, 0, 1] };
-    } else if (ud.kind === "brush" && ud.id != null && !ud.sky) {
+    } else if (ud.kind === "brush" && ud.id != null && ud.sky) {
+      if (flat && !sky) sky = { kind: "brush", id: ud.id, face: null, point, normal: [0, 0, 1] };
+    } else if (ud.kind === "brush" && ud.id != null) {
       const b = useEditor.getState().brushes.get(ud.id);
       const face = b && i.faceIndex != null ? b.faceOfTri[i.faceIndex] ?? null : null;
       const n = i.face?.normal;
@@ -412,7 +426,7 @@ function hitOf(e: ThreeEvent<PointerEvent>): Hit | null {
       return { kind: "entity", id: ud.id, face: null, point, normal: [0, 0, 1] };
     }
   }
-  return plane;
+  return sky ?? plane;
 }
 
 let dragCounter = 0;
@@ -514,14 +528,21 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const live = useRef(state);
   live.current = state;
 
-  // tool changes forget half-made things
+  // tool changes forget half-made things: right when the tool changes in the store (a press can
+  // come before this scene re-renders, and a later reset wiped a quick first clip point)
   useEffect(() => {
-    setClip([]);
-    setBox(null);
-    setRect(null);
-    if (tool !== "measure") useEditor.setState({ measure: null });
-    if (tool !== "vertex") useEditor.setState({ verts: [] });
-  }, [tool, view]);
+    const forget = (t: string) => {
+      setClip([]);
+      setBox(null);
+      setRect(null);
+      if (t !== "measure" && useEditor.getState().measure) useEditor.setState({ measure: null });
+      if (t !== "vertex" && useEditor.getState().verts.length) useEditor.setState({ verts: [] });
+    };
+    forget(useEditor.getState().tool); // (and when the view changes)
+    return useEditor.subscribe((s, p) => {
+      if (s.tool !== p.tool) forget(s.tool);
+    });
+  }, [view]);
 
   // clip: Tab picks which side stays, Enter cuts, Esc forgets the points
   useEffect(() => {
@@ -573,11 +594,14 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   };
 
   const onDown = (e: ThreeEvent<PointerEvent>) => {
+    // the tool now, not this render's: a press right after picking a tool can come before this
+    // scene re-renders (its renderer commits a moment after the toolbar's), and box-selected
+    const tool = useEditor.getState().tool;
     // P5: Hammer's face painting with the Texture tool: right-click paints the face with the
     // current texture, Alt+right-click also carries the picked face's alignment onto it. Only a
     // click (no drag), so right-drag still looks around.
     if (e.button === 2 && tool === "texture") {
-      const hit = hitOf(e);
+      const hit = hitOf(e, view);
       if (!hit || hit.kind !== "brush" || hit.face == null) return;
       e.stopPropagation(); // (once, not for every object under the pointer)
       const ev = e.nativeEvent;
@@ -604,13 +628,13 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     }
     if (e.button === 2) {
       // 1.0.1: a right-click's menu (ViewportMenu.tsx) picks what the press landed on first
-      const h = hitOf(e);
+      const h = hitOf(e, view);
       noteRightHit(h && h.kind !== "plane" ? { kind: h.kind, id: h.id } : null);
       return;
     }
-    if (e.button !== 0 || (useTools.getState().camera === "fly" && view === "3d")) return;
+    if (e.button !== 0 || (blenderFly() && view === "3d")) return;
     e.stopPropagation();
-    const hit = hitOf(e);
+    const hit = hitOf(e, view);
     const s = useEditor.getState();
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     const ev = e.nativeEvent;
@@ -840,7 +864,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     if (tool === "texture") {
       if (!hit || hit.kind !== "brush" || hit.face == null) {
         // P4: a box from empty space picks faces
-        if (!(view === "3d" && useTools.getState().camera === "fly")) {
+        if (!(view === "3d" && blenderFly())) {
           startMarquee(ev, live.current, { faces: true, controlsOff, onClick: () => !additive && s.select({ brushes: [], entities: [], face: null, faces: [] }) });
         }
         return;
@@ -924,12 +948,12 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     const b = hit?.kind === "brush" ? s.brushes.get(hit.id) : null;
     const canPush = tool === "select" && b && hit && hit.face != null && isPicked(b, s.sel) && !additive;
     // Parity A: Shift-drag a face of a picked brush pulls out a new brush (TrenchBroom's extrude)
-    if (tool === "select" && view === "3d" && b && hit && hit.face != null && isPicked(b, s.sel) && e.shiftKey && !e.ctrlKey && !e.metaKey && useTools.getState().camera !== "fly") {
+    if (tool === "select" && view === "3d" && b && hit && hit.face != null && isPicked(b, s.sel) && e.shiftKey && !e.ctrlKey && !e.metaKey && !blenderFly()) {
       return startExtrude(ev, live.current, { id: hit.id, face: hit.face, point: hit.point, normal: hit.normal }, controlsOff, () => pickBrush(hit.id, true));
     }
     // P4: dragging from empty space draws a box (every view; see Marquee.tsx). In flat views and
     // in 3D with "Box anywhere", from anywhere but a picked brush (that's push/pull).
-    const flyNow = view === "3d" && useTools.getState().camera === "fly";
+    const flyNow = view === "3d" && blenderFly();
     // (flat views, like Hammer: from anywhere but a picked brush; a click still picks what's under it)
     const anywhere = (view !== "3d" || useMarquee.getState().anywhere3d) && !canPush;
     if (!flyNow && (!hit || hit.kind === "plane" || anywhere) && (tool === "select" || tool === "move" || tool === "rotate" || tool === "scale" || tool === "vertex")) {
@@ -988,8 +1012,9 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   };
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
+    const tool = useEditor.getState().tool; // (as in onDown)
     if (tool === "clip" && clip.length >= 1 && clip.length < clipMax) {
-      const h = hitOf(e);
+      const h = hitOf(e, view);
       const p = h ? h.point : onPlane(rayAt(e.nativeEvent, live.current), axis, 0);
       if (p) {
         const q = snapVec(p);
@@ -1289,6 +1314,19 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
 
 // ---- flat views -----------------------------------------------------------------------
 
+// the 2D views' zoom (screen pixels per unit), the same for every map and pane size: limits from
+// the first fit made Frame all / Frame selection land outside them (the next wheel notch jumped)
+// and kept a big map in a small pane from zooming in close
+const ZOOM_MIN = 0.004;
+const ZOOM_MAX = 32;
+const clampZoom = (z: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+
+// where each 2D pane was (by document, pane slot and view): a pane that goes away when the layout
+// changes (Quad to Single and back) comes back where it was instead of refitting the map
+type FlatPose = { target: THREE.Vector3; position: THREE.Vector3; zoom: number };
+const flatPoses = new Map<string, FlatPose>();
+let flatDoc = 0;
+
 function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Vec3] }) {
   const size = useThree((s) => s.size);
   const camera = useThree((s) => s.camera);
@@ -1300,12 +1338,18 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   const v = view === "top" ? 1 : 2;
   // P5: the first zoom only (a pane's size can read 0 while panes move; refits come from frameFlat)
   const zoom0 = Math.min(size.width / Math.max(128, hi[u] - lo[u]), size.height / Math.max(128, hi[v] - lo[v])) * 0.85;
-  const [zoom] = useState(() => (Number.isFinite(zoom0) && zoom0 > 0 ? zoom0 : 0.5));
+  const [zoom] = useState(() => (Number.isFinite(zoom0) && zoom0 > 0 ? clampZoom(zoom0) : 0.5));
   const eyeGs: Vec3 = [...centre];
   eyeGs[axis] = axis === 1 ? lo[1] - 8192 : hi[axis] + 8192;
   const eye = gsToThree(eyeGs);
   const target = gsToThree(centre);
   const up = view === "top" ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0);
+  // the camera's first place only: these props are applied again on every redraw, and a fresh
+  // eye/target then snapped the camera back to its first spot while the controls kept aiming at the
+  // zoomed-to point, so the view tilted (the effect below places it when the view changes)
+  const [first] = useState(() => ({ eye, up, aim: (c: THREE.OrthographicCamera) => c.lookAt(target) }));
+  // dev builds: the browser tests read the flat cameras
+  if (import.meta.env.DEV) ((window as unknown as { __lsFlatCams?: Record<string, THREE.Camera> }).__lsFlatCams ??= {})[view] = camera;
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
@@ -1333,7 +1377,7 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
       const el = (c as unknown as { domElement?: HTMLElement }).domElement;
       const w = el?.clientWidth || size.width;
       const h = el?.clientHeight || size.height;
-      c.object.zoom = Math.min(w / Math.max(64, max[u] - min[u]), h / Math.max(64, max[v] - min[v])) * 0.8;
+      c.object.zoom = clampZoom(Math.min(w / Math.max(64, max[u] - min[u]), h / Math.max(64, max[v] - min[v])) * 0.8);
       c.object.updateProjectionMatrix();
     }
     c.update();
@@ -1342,19 +1386,41 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   useEffect(() => {
     if (frame) fit(frame.min, frame.max, true);
   }, [frame]); // eslint-disable-line react-hooks/exhaustive-deps
-  // P5: fit the map to this pane once its controls are up and its box is known
+  // P5: fit the map to this pane once its controls are up and its box is known (or go back to
+  // where this pane was, after a layout change)
   const ctl = useThree((s) => s.controls);
+  const slot = useContext(PaneCtx)?.slot ?? 0;
+  const poseKey = `${flatDoc}:${slot}:${view}`;
   useEffect(() => {
-    const id = requestAnimationFrame(() => fit(lo, hi, true));
-    return () => cancelAnimationFrame(id);
-  }, [ctl]); // eslint-disable-line react-hooks/exhaustive-deps
+    const c = ref.current;
+    const save = () => {
+      if (c && c.object instanceof THREE.OrthographicCamera) flatPoses.set(poseKey, { target: c.target.clone(), position: c.object.position.clone(), zoom: c.object.zoom });
+    };
+    const id = requestAnimationFrame(() => {
+      const pose = flatPoses.get(poseKey);
+      if (c && pose && c.object instanceof THREE.OrthographicCamera) {
+        c.target.copy(pose.target);
+        c.object.position.copy(pose.position);
+        c.object.zoom = pose.zoom;
+        c.object.updateProjectionMatrix();
+        c.update();
+        invalidate();
+      } else fit(lo, hi, true);
+      save();
+    });
+    c?.addEventListener("change", save);
+    return () => {
+      cancelAnimationFrame(id);
+      c?.removeEventListener("change", save);
+    };
+  }, [ctl, poseKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (lookReq) fit(lookReq.point, lookReq.point, false);
   }, [lookReq]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <OrthographicCamera makeDefault position={eye} up={up} zoom={zoom} near={1} far={40000} onUpdate={(c) => c.lookAt(target)} />
-      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} zoomToCursor screenSpacePanning enableDamping={false} minZoom={zoom / 16} maxZoom={zoom * 60} mouseButtons={{ LEFT: -1 as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }} />}
+      <OrthographicCamera makeDefault position={first.eye} up={first.up} zoom={zoom} near={1} far={40000} onUpdate={first.aim} />
+      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} zoomToCursor screenSpacePanning enableDamping={false} minZoom={ZOOM_MIN} maxZoom={ZOOM_MAX} mouseButtons={{ LEFT: -1 as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }} />}
     </>
   );
 }
@@ -1382,6 +1448,10 @@ function GridFor({ view, grid, bounds, major }: { view: ViewId; grid: number; bo
 // ---- the canvas -----------------------------------------------------------------------
 
 export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; docId: number; onLost: () => void }) {
+  if (flatDoc !== docId) {
+    flatDoc = docId; // (set while rendering: the panes read it in their first effects)
+    flatPoses.clear();
+  }
   // P5: one canvas behind the pane boxes; each pane is a drei <View> drawn into its box
   const layout = usePanes((s) => s.layout);
   const views = usePanes((s) => s.views);

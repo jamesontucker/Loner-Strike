@@ -110,3 +110,71 @@ test("Hammer: Z mouse-look + W still flies", async ({ page }) => {
   await expect(page.locator(".ed-pane").first()).toBeVisible();
   await page.screenshot({ path: "test-results/hammer-hint.png" });
 });
+
+// Windows can let go of the mouse mid-flight (seen in a tester's video): Z look keeps flying, says
+// how to get the mouse back, and the next move key takes it back. Z and Esc still stop it. (With
+// no move key down a lost mouse stops the look: editor-nav-audit.spec.ts.)
+const nav = (page: Page) =>
+  page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = (window as any).__lsNav.getState();
+    return { looking: s.looking, released: s.released, locked: !!document.pointerLockElement };
+  });
+
+test("Hammer: Z look survives the system letting go of the mouse", async ({ page }) => {
+  // test browsers never grant a real pointer lock: a stand-in that behaves like one (change events)
+  await page.addInitScript(() => {
+    let el: Element | null = null;
+    Object.defineProperty(Document.prototype, "pointerLockElement", { get: () => el, configurable: true });
+    const change = () => setTimeout(() => document.dispatchEvent(new Event("pointerlockchange")), 0);
+    Element.prototype.requestPointerLock = function (this: Element) {
+      el = this;
+      change();
+      return Promise.resolve();
+    } as typeof Element.prototype.requestPointerLock;
+    Document.prototype.exitPointerLock = function () {
+      if (!el) return;
+      el = null;
+      change();
+    };
+  });
+  await openEditor(page);
+  const { shot, mid } = await pane(page);
+  await page.mouse.move(mid.x, mid.y);
+  await page.keyboard.press("z");
+  await expect.poll(() => nav(page)).toEqual({ looking: true, released: false, locked: true });
+  // the system drops the lock mid-flight (not Z, not Esc)
+  await page.keyboard.down("w");
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => nav(page)).toEqual({ looking: true, released: true, locked: false });
+  await page.keyboard.up("w");
+  await expect(page.locator(".ed-nav-hud")).toContainText("click or press a move key");
+  await page.screenshot({ path: test.info().outputPath("released-hint.png") });
+  // still flying, and W takes the mouse back
+  const before = await shot();
+  await page.keyboard.down("w");
+  await page.waitForTimeout(500);
+  await page.keyboard.up("w");
+  await expect.poll(() => nav(page)).toEqual({ looking: true, released: false, locked: true });
+  expect(Buffer.compare(before, await shot()), "W still flew").not.toBe(0);
+  await expect(page.locator(".editor-tool[aria-pressed='true']")).toContainText("Select");
+  // dropped again: a click takes it back without picking anything
+  await page.keyboard.down("d");
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => nav(page)).toMatchObject({ released: true });
+  await page.keyboard.up("d");
+  await page.mouse.click(mid.x, mid.y);
+  await expect.poll(() => nav(page)).toEqual({ looking: true, released: false, locked: true });
+  expect(await picked(page)).toEqual({ b: [], e: [] });
+  // Esc still stops
+  await page.keyboard.press("Escape");
+  await expect.poll(() => nav(page)).toEqual({ looking: false, released: false, locked: false });
+  // and Z after a drop stops too
+  await page.keyboard.press("z");
+  await page.keyboard.down("s");
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => nav(page)).toMatchObject({ released: true });
+  await page.keyboard.up("s");
+  await page.keyboard.press("z");
+  await expect.poll(() => nav(page)).toEqual({ looking: false, released: false, locked: false });
+});

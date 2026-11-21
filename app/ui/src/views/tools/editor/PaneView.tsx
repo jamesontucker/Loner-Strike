@@ -5,7 +5,7 @@
 // the box is compared with the canvas's own box. Only the tracked-element form is kept.
 
 import { createPortal, useFrame, useThree, type RootState } from "@react-three/fiber";
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import * as THREE from "three";
 import { paneDrawn, paneInvalidate, paneNeedsDraw } from "./paneRedraw"; // Parity A
 
@@ -110,14 +110,22 @@ export function PaneView({ track, index = 1, visible = true, children }: { track
     if (track.current) rect.current = track.current.getBoundingClientRect();
     done();
   }, [track]);
-  if (!ready) return null;
+  // the same invalidate every render: a new one each time made the pane's camera (NavCamera)
+  // set itself up again on any redraw of the editor, which stopped flying mid-flight
+  const invalidate = useMemo(() => paneInvalidate(index, rootInvalidate), [index, rootInvalidate]);
   const r = rect.current;
+  const width = r?.width ?? size.width;
+  const height = r?.height ?? size.height;
+  const top = r?.top ?? 0;
+  const left = r?.left ?? 0;
+  // (R3F's types leave invalidate out of a portal's state, but the portal takes it: Parity A)
+  const state = useMemo(() => ({ invalidate, events: { compute, priority: index }, size: { width, height, top, left } }) as never, [invalidate, compute, index, width, height, top, left]);
+  if (!ready) return null;
   return createPortal(
     <Container visible={visible} canvasSize={size as Size} track={track} rect={rect} index={index}>
       {children}
     </Container>,
     scene,
-    // (R3F's types leave invalidate out of a portal's state, but the portal takes it: Parity A)
-    { invalidate: paneInvalidate(index, rootInvalidate), events: { compute, priority: index }, size: { width: r?.width ?? size.width, height: r?.height ?? size.height, top: r?.top ?? 0, left: r?.left ?? 0 } } as never,
+    state,
   );
 }

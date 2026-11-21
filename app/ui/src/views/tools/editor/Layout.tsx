@@ -49,12 +49,14 @@ function NavHint() {
 }
 
 /** The camera speed note ("Speed 4 · 512 u/s") shown a moment after it changes, and while looking round. */
-function NavHud() {
+function NavHud({ slot }: { slot: number }) {
   const until = useNav((s) => s.hudUntil);
+  const pane = useNav((s) => s.pane);
   const speed = useNav((s) => s.speed);
   const looking = useNav((s) => s.looking);
   const preset = useNav((s) => s.preset);
   const held = useNav((s) => s.held);
+  const released = useNav((s) => s.released);
   const scale = useNav((s) => s.mapScale);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -64,10 +66,11 @@ function NavHud() {
     return () => clearTimeout(id);
   }, [until]);
   if (preset === "blender" || (!looking && performance.now() > until)) return null;
+  if (looking && pane != null && pane !== slot) return null; // (two 3D panes: the one flying)
   return (
     <div className="ed-nav-hud" aria-live="polite">
       Speed {speed + 1} <span className="muted">· {Math.round(SPEEDS[speed] * scale)} u/s</span>
-      {looking && <span className="muted"> · {preset === "hammer" ? (held ? "let go to stop" : "Z or Esc to stop") : "scroll: speed"}</span>}
+      {looking && <span className="muted"> · {preset === "hammer" ? (held ? "let go to stop" : released ? "click or press a move key to look around · Z or Esc to stop" : "Z or Esc to stop") : "scroll: speed"}</span>}
     </div>
   );
 }
@@ -169,7 +172,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
             onPointerEnter={() => usePanes.setState({ hover: i })}
             onPointerLeave={() => usePanes.getState().hover === i && usePanes.setState({ hover: null })}
           >
-            {shown && views[i] === "3d" && <NavHud />}
+            {shown && views[i] === "3d" && <NavHud slot={i} />}
             {shown && <AxisTriad slot={i} />}
             {shown && views[i] === "3d" && i === firstThreeD && <NavHint />}
             {shown && (

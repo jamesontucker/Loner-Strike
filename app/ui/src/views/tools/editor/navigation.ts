@@ -9,6 +9,7 @@
 // Kept on this computer; chosen once on first open (View menu later).
 
 import { create } from "zustand";
+import { useTools } from "../../../stores/tools";
 
 export type NavPreset = "unreal" | "blender" | "hammer";
 export const NAV_PRESETS: { id: NavPreset; label: string; tip: string }[] = [
@@ -31,6 +32,11 @@ type NavState = {
   looking: boolean;
   /** Hammer: that look is a left-mouse hold (it ends when the button comes up, not with Z) */
   held: boolean;
+  /** Hammer Z look: the system let go of the mouse (Windows can, now and then); flying goes on and
+   *  the next move key or click takes the mouse back */
+  released: boolean;
+  /** the 3D pane (slot) whose camera had the look last: its speed note shows, not the others' */
+  pane: number | null;
   /** big maps fly faster: 1 up to 4 (a map's size / 3000 units), times the speed step */
   mapScale: number;
   /** the "how to move" hint has done its job (flown once, or closed) */
@@ -55,6 +61,8 @@ export const useNav = create<NavState>((set, get) => ({
   hudUntil: 0,
   looking: false,
   held: false,
+  released: false,
+  pane: null,
   mapScale: 1,
   hintDone: (() => {
     try {
@@ -87,6 +95,11 @@ export const useNav = create<NavState>((set, get) => ({
 export function setNavPreset(preset: NavPreset) {
   useNav.getState().set({ preset, chosen: true, looking: false });
 }
+
+/** Blender's fly camera is on. The fly setting is shared with the map viewer and can be left on
+ *  from there; only the Blender preset uses it in the editor (Unreal and Hammer fly their own way,
+ *  and a leftover "fly" made their left clicks pick nothing and W/E/R pick no tools). */
+export const blenderFly = () => useNav.getState().preset === "blender" && useTools.getState().camera === "fly";
 
 /** Units per second now: the step's speed times the map's size factor. */
 export const flySpeed = () => SPEEDS[useNav.getState().speed] * useNav.getState().mapScale;
@@ -131,3 +144,6 @@ export const NAV_HELP: Record<NavPreset, [string, string][]> = {
     ["Scroll", "Move forward / back"],
   ],
 };
+
+// dev builds: the browser tests read the camera state
+if (import.meta.env.DEV) (window as unknown as { __lsNav?: typeof useNav }).__lsNav = useNav;

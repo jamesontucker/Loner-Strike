@@ -15,6 +15,7 @@ import { loadModel, modelOf, sharedModelGeometry, sharedModelMaterials, type Got
 import { useKits } from "./kits";
 import { useP5 } from "./p5store";
 import { keyOf, originOf } from "./store";
+import { usePaneMode } from "./renderModes";
 
 type Look = { size: Vec3; colour: string; up: number };
 
@@ -23,6 +24,8 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 // recompiles its shader program on an edit (PerfAudit #1)
 const BOX_MATERIAL = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.85 });
 const PICK_MATERIAL = new THREE.MeshBasicMaterial();
+// Wireframe panes: studio models as lines, like the brushes (shared, so no recompiles)
+const MODEL_WIRE = new THREE.MeshBasicMaterial({ color: "#aab894", wireframe: true, transparent: true, opacity: 0.55 });
 const LINK_MATERIAL = new THREE.LineDashedMaterial({ color: "#7fb7c9", dashSize: 12, gapSize: 8, transparent: true, opacity: 0.6 });
 const MARKER_MATERIAL = new THREE.MeshBasicMaterial();
 const BOX_EDGES: number[] = (() => {
@@ -78,6 +81,7 @@ type ModelGroup = { key: string; got: NonNullable<Got>; body: number; skin: numb
 export function EntityBatch({ ents, look, yaw, picked = false }: { ents: DocEntity[]; look: (e: DocEntity) => Look; yaw: (e: DocEntity) => number | null; picked?: boolean }) {
   const invalidate = useThree((s) => s.invalidate);
   const showModels = useP5((s) => s.showModels);
+  const wire = usePaneMode() === "wire";
   const creatures = useKits((k) => k.creatures);
   useKits((k) => k.kits); // markers take their kit's colour when the kits arrive
 
@@ -242,6 +246,12 @@ export function EntityBatch({ ents, look, yaw, picked = false }: { ents: DocEnti
     [boxes, picks, lines, arrows, glow, models],
   );
   useEffect(() => invalidate(), [built, invalidate]);
+  // Wireframe: no filled boxes, models drawn as lines
+  for (const m of models) {
+    m.userData.solid ??= m.material;
+    (m as THREE.Mesh).material = wire ? MODEL_WIRE : (m.userData.solid as THREE.Material | THREE.Material[]);
+  }
+  if (boxes) boxes.visible = !wire;
 
   return (
     <group name="entity-batch">
@@ -252,7 +262,7 @@ export function EntityBatch({ ents, look, yaw, picked = false }: { ents: DocEnti
       ))}
       {/* picked: yellow outlines and arrows drawn through walls, as EntityBox drew them */}
       <lineSegments geometry={lines} renderOrder={picked ? 3 : 1} raycast={() => null}>
-        <lineBasicMaterial color={picked ? "#ffd84a" : "#11140e"} depthTest={!picked} />
+        <lineBasicMaterial color={picked ? "#ffd84a" : wire ? "#c6d2ae" : "#11140e"} depthTest={!picked && !wire} />
       </lineSegments>
       <lineSegments geometry={arrows} raycast={() => null}>
         {picked ? <lineBasicMaterial color="#ffd84a" /> : <lineBasicMaterial vertexColors />}

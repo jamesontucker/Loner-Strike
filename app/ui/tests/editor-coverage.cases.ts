@@ -395,6 +395,39 @@ export const CASES: Case[] = [
   { id: "view.speedUp", menu: "View", label: "Camera faster", hidden: true, check: async (p) => poll(async () => JSON.parse((await ls(p, "ls.editor.nav")) ?? "{}").speed).toBe(4) },
   { id: "view.speedDown", menu: "View", label: "Camera slower", hidden: true, check: async (p) => poll(async () => JSON.parse((await ls(p, "ls.editor.nav")) ?? "{}").speed).toBe(2) },
   { id: "view.models", menu: "View", label: "Models in place of entity boxes on / off", setup: async (p) => ls(p, "ls.editor.showModels"), check: async (p, m, b) => poll(() => ls(p, "ls.editor.showModels")).toBe(b === "0" ? "1" : "0") },
+  // 1.0.2: commands added in 1.0.x
+  { id: "edit.copyProps", menu: "Edit", label: "Copy properties", setup: async (p, m) => select(p, { entities: [m.light] }), check: async (p) => {
+    await expect(p.locator(".toast, [role=status]").filter({ hasText: /Copied \d+ propert(y|ies) of light/ }).first()).toBeVisible();
+  } },
+  { id: "edit.pasteProps", menu: "Edit", label: "Paste properties", setup: async (p, m) => {
+    await cmd(p, { op: "set_key", entity: m.light, key: "_light", value: "255 0 0 200" });
+    await select(p, { entities: [m.light] });
+    await p.evaluate(() => (window as any).__covRun("edit.copyProps")); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const other = (await cmd(p, { op: "add_entity", classname: "light", origin: [64, -128, 96] }))!.entities[0];
+    await select(p, { entities: [other] });
+    return other;
+  }, check: async (p, m, other) => poll(async () => (await entity(p, other))?.keys._light).toBe("255 0 0 200"),
+  undo: async (p, m, other) => poll(async () => (await entity(p, other))?.keys._light ?? null).not.toBe("255 0 0 200") },
+  { id: "edit.copyTransform", menu: "Edit", label: "Copy transform", setup: async (p, m) => select(p, { brushes: [m.a] }), check: async (p) => {
+    await expect(p.locator(".toast, [role=status]").filter({ hasText: /Copied the Transform/ }).first()).toBeVisible();
+  } },
+  { id: "edit.pasteTransform", menu: "Edit", label: "Paste transform", setup: async (p, m) => {
+    await select(p, { brushes: [m.a] });
+    await p.evaluate(() => (window as any).__covRun("edit.copyTransform")); // eslint-disable-line @typescript-eslint/no-explicit-any
+    await select(p, { brushes: [m.b] });
+    return boundsOf(p, m.b);
+  }, check: async (p, m) => poll(async () => (await boundsOf(p, m.b))?.[0][0]).toBe(0),
+  undo: async (p, m, was) => poll(() => boundsOf(p, m.b)).toEqual(was) },
+  { id: "edit.dropToFloor", menu: "Edit", label: "Drop to the floor", setup: async (p) => {
+    const id = (await cmd(p, { op: "add_box", min: [-100, -100, 200], max: [-36, -36, 264], texture: await st(p, (s) => s.texture) }))!.brushes[0];
+    await select(p, { brushes: [id] });
+    return id;
+  }, check: async (p, m, id) => poll(async () => (await boundsOf(p, id))?.[0][2]).toBe(0),
+  undo: async (p, m, id) => poll(async () => (await boundsOf(p, id))?.[0][2]).toBe(200) },
+  { id: "view.gameView", menu: "View", label: "Game view on / off", setup: async (p) => p.locator(".ed-pane").first().screenshot(), check: async (p, m, shot) => poll(async () => Buffer.compare(await p.locator(".ed-pane").first().screenshot(), shot) !== 0).toBe(true) },
+  { id: "view.style.collision", menu: "View", label: "Draw what blocks what (Collision)", check: async (p) => poll(() => p.getByRole("combobox", { name: /How pane 1 draws/ }).inputValue()).toBe("collision") },
+  { id: "view.style.bytype", menu: "View", label: "Draw brushes by entity type", check: async (p) => poll(() => p.getByRole("combobox", { name: /How pane 1 draws/ }).inputValue()).toBe("bytype") },
+  { id: "view.style.missing", menu: "View", label: "Show missing textures", check: async (p) => poll(() => p.getByRole("combobox", { name: /How pane 1 draws/ }).inputValue()).toBe("missing") },
   { id: "view.paneMode", menu: "View", label: "Next drawing style for the active pane", check: async (p) => poll(() => p.getByRole("combobox", { name: /How pane 1 draws/ }).inputValue()).toBe("flat") },
   ...[["content", "Content"], ["inspect", "Inspect"], ["outline", "Outline"], ["textures", "Textures"], ["library", "Gameplay"], ["budget", "Budget"], ["io", "I/O"], ["checks", "Checks"], ["compile", "Compile"], ["project", "Project"], ["history", "History"]].map(([id, title]): Case => ({
     id: `panel.${id}`, menu: "View", label: `Panel: ${title}`, check: async (p) => tabShown(p, title),

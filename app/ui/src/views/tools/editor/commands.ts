@@ -13,7 +13,7 @@ import { deleteSelection, duplicate, hideSelection, isolateSelection, showAll, T
 import { frameFlat, LAYOUTS, setLayout, toggleMaximise, usePanes } from "./panes";
 import { cmd2, importRmf, useP5, type Ids, type SideTab } from "./p5store";
 import { modeFor, setPaneMode, type RenderMode } from "./renderModes";
-import { NAV_PRESETS, setNavPreset, stepSpeed } from "./navigation";
+import { NAV_PRESETS, setNavPreset, stepSpeed, useNav as useNavKeys } from "./navigation";
 import { applyDockPreset, DOCK_PRESETS, showPanel, type DockPresetId } from "./dockState";
 import { DOCK_PANELS } from "./dockPanels";
 import { EMPTY_SEL, selectionBounds, useEditor, type ViewId } from "./store";
@@ -364,7 +364,7 @@ export function commands(): Command[] {
     ...(["3d", "top", "front", "side"] as ViewId[]).map((v, i): Command => ({ id: `view.${v}`, label: `${v === "3d" ? "3D" : v[0].toUpperCase() + v.slice(1)} view`, menu: "View", sep: i === 0, hint: "In the active pane", run: () => setView(v), fly: true })),
     { id: "view.frame", label: "Frame selection", menu: "View", sep: true, when: () => hasSel() || !!S().sel.face, needs: `${PICK} to frame it.`, run: () => frame(false) },
     { id: "view.frameAll", label: "Frame the whole map", menu: "View", run: () => frame(true) },
-    { id: "view.fly", label: "Fly / orbit camera", menu: "View", run: () => useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly"), fly: true },
+    { id: "view.fly", label: "Fly / orbit camera", menu: "View", when: () => useNavKeys.getState().preset === "blender", needs: "The fly camera is part of the Blender keys (View > Move like Blender). Unreal and Hammer fly with the mouse and WASD.", run: () => useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly"), fly: true },
     { id: "view.gridDown", label: "Smaller grid", menu: "View", sep: true, run: () => stepGrid(-1), fly: true },
     { id: "view.gridUp", label: "Bigger grid", menu: "View", run: () => stepGrid(1), fly: true },
     { id: "view.gridShow", label: "Show / hide the grid", menu: "View", run: () => useP5.getState().set({ showGrid: !useP5.getState().showGrid }), fly: true },
