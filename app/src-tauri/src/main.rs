@@ -112,8 +112,9 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        // the window opens where and how big it was last time
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // the window opens where and how big it was last time (but not shown by the plugin: the
+        // app shows it once the page is up, see show_when_loaded)
+        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE).build())
         .plugin(tauri_plugin_notification::init())
         .on_menu_event(|app, event| menu_clicked(app, event.id().as_ref()))
         .setup(move |app| {
@@ -160,7 +161,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI
-            let url = std::env::var("LONER_UI_URL")
+            let url: tauri::Url = std::env::var("LONER_UI_URL")
                 .unwrap_or_else(|_| format!("http://127.0.0.1:{port}/"))
                 .parse()
                 .unwrap();
@@ -178,6 +179,7 @@ fn main() {
             // /api/app/open-url to the browser).
             let handle = app.handle().clone();
             let next_panel = std::sync::atomic::AtomicU32::new(1);
+            let start_url = url.clone();
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .on_new_window(move |url, features| {
                     if url.as_str() != "about:blank" {
@@ -203,8 +205,22 @@ fn main() {
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
                 .center()
+                // 1.0.3: made hidden, in the app's own color, and shown once the page is up. Shown
+                // at once, the window was resized (last size, then fit_on_screen) while WebView2
+                // was still starting, and on Windows the page could stay a white square on black
+                // until a restart (a tester, after updating)
+                .visible(false)
+                .background_color(tauri::window::Color(0x3e, 0x46, 0x37, 0xff))
+                .on_page_load(|w, p| {
+                    if p.event() == tauri::webview::PageLoadEvent::Finished {
+                        PAGE_LOADED.store(true, std::sync::atomic::Ordering::SeqCst);
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                })
                 .build()?;
             fit_on_screen(&window);
+            show_when_loaded(window, start_url);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -222,6 +238,32 @@ fn main() {
                 control::shutdown();
             }
         });
+}
+
+/// The main window's page has finished loading at least once.
+static PAGE_LOADED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The window shows when its page has loaded (on_page_load), else after 2 s anyway (a dark window
+/// beats none: people start the app again); a page still not loaded after 8 s is reloaded, once
+/// (a WebView2 start that hung, or security software holding it up: Microsoft's WebView2 notes).
+fn show_when_loaded(window: tauri::WebviewWindow, url: tauri::Url) {
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        if !PAGE_LOADED.load(Ordering::SeqCst) {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        std::thread::sleep(std::time::Duration::from_secs(6));
+        if !PAGE_LOADED.load(Ordering::SeqCst) {
+            crate::diagnostics::log_error("app start", "the page hadn't loaded 8 seconds after starting: loading it again");
+            // (navigating, not reload(): with no page loaded yet there's nothing to reload; and
+            // a new address, since the same one still loading is ignored)
+            let mut again = url;
+            again.query_pairs_mut().append_pair("retry", "1");
+            let _ = window.navigate(again);
+        }
+    });
 }
 
 /// The window comes back where and how big it was last time, which may be on a bigger
