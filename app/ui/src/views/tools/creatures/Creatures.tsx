@@ -3,7 +3,7 @@
 // the wave mixes modes use; and "apply to game" / "spawn one" on the player's running map.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useDirty, useNav } from "../../../store";
 import { remixCreature } from "../community/communityApi"; // CP-kind
 import { DOCS_URL } from "../../DocsLink";
@@ -81,6 +81,11 @@ export default function Creatures() {
     enabled: !!shown?.model.trim(),
     staleTime: 30_000,
   });
+  // the preview keeps the last look while the next type's is fetched (so its 3D view stays up,
+  // dimmed, instead of closing and opening again on every quick switch)
+  const lastLook = useRef(look.data);
+  if (look.data) lastLook.current = look.data;
+  const previewLook = look.data ?? (look.isFetching ? lastLook.current : undefined);
   // problems, a summary and the model/sound report, from the server (its rules are the game's)
   useEffect(() => {
     if (!types || numberProblems(types).length) return;
@@ -418,16 +423,17 @@ export default function Creatures() {
           </section>
 
           <aside className="panel cs-side" aria-label="Preview">
-            {(placed || inst || t) && look.data?.model ? (
+            {(placed || inst || t) && previewLook?.model ? (
               <Suspense fallback={<p className="muted"><span className="spinner" aria-hidden="true" /> Loading the 3D view…</p>}>
                 {inst ? (
-                  <CreaturePreview key={`inst:${inst.name}`} look={look.data} skin={0} glow={[0, 0, 0]} fallbackGlow={[0, 0, 0]} scale={1} />
+                  <CreaturePreview key={`inst:${inst.name}`} look={previewLook} waiting={!look.data} skin={0} glow={[0, 0, 0]} fallbackGlow={[0, 0, 0]} scale={1} />
                 ) : placed ? (
-                  <CreaturePreview key={placed.id} look={look.data} skin={placedType?.skin ?? 0} glow={placedType?.glow ?? [0, 0, 0]} fallbackGlow={placedType?.fallback_glow ?? [0, 0, 0]} scale={placedType?.scale ?? 1} />
+                  <CreaturePreview key={placed.id} look={previewLook} waiting={!look.data} skin={placedType?.skin ?? 0} glow={placedType?.glow ?? [0, 0, 0]} fallbackGlow={placedType?.fallback_glow ?? [0, 0, 0]} scale={placedType?.scale ?? 1} />
                 ) : (
                   <>
                     <CreaturePreview
-                      look={look.data}
+                      look={previewLook}
+                      waiting={!look.data}
                       skin={as === "2" && t!.tier2_skin >= 0 ? t!.tier2_skin : as === "3" && t!.tier3_skin >= 0 ? t!.tier3_skin : t!.skin}
                       glow={t!.glow}
                       fallbackGlow={t!.fallback_glow}

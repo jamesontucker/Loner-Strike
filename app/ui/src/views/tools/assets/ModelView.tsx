@@ -4,7 +4,7 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ElementRef } from "react";
 import * as THREE from "three";
 import { ROOT_ROTATION } from "../viewer/coords";
@@ -113,17 +113,26 @@ function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed,
   }, [bundle]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
-  // one texture per model texture, loaded once
+  // one texture per model texture, loaded once; the model shows once they're all in (not as a
+  // black shape first)
+  const [arrived, setArrived] = useState<{ of: unknown; n: number }>({ of: null, n: 0 });
   const textures = useMemo(() => {
     const loader = new THREE.TextureLoader();
-    return bundle.textures.map((_, i) => {
-      const t = loader.load(modelTextureUrl(item, i), () => invalidate());
+    const list: THREE.Texture[] = [];
+    const done = () => {
+      setArrived((a) => ({ of: list, n: a.of === list ? a.n + 1 : 1 }));
+      invalidate();
+    };
+    bundle.textures.forEach((_, i) => {
+      const t = loader.load(modelTextureUrl(item, i), done, undefined, done);
       t.flipY = false;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.anisotropy = 4;
-      return t;
+      list.push(t);
     });
+    return list;
   }, [bundle, item, invalidate]);
+  const ready = textures.length === 0 || (arrived.of === textures && arrived.n >= textures.length);
   useEffect(() => () => textures.forEach((t) => t.dispose()), [textures]);
 
   // a material per draw: its texture in this skin (sized to the texture skin 0 used, which
@@ -218,8 +227,8 @@ function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed,
 
   return (
     <>
-      <mesh geometry={geometry} material={materials} frustumCulled={false} />
-      {shellMats && <mesh geometry={geometry} material={shellMats} frustumCulled={false} renderOrder={1} />}
+      <mesh geometry={geometry} material={materials} frustumCulled={false} visible={ready} />
+      {shellMats && <mesh geometry={geometry} material={shellMats} frustumCulled={false} renderOrder={1} visible={ready} />}
     </>
   );
 }

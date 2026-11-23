@@ -13,37 +13,42 @@ const MOVES = ["Idle", "Walk", "Run", "Attack", "Flinch", "Die"];
 /** the brain's renderamt for a glow shell (creature.cpp Setup) */
 const SHELL_AMOUNT = 12;
 
-export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale, shellOver, animScale = 1 }: { look: ModelLook; skin: number; glow: Vec3; fallbackGlow: Vec3; scale: number; shellOver?: { color: Vec3; amount: number } | null; animScale?: number }) {
+export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale, shellOver, animScale = 1, waiting = false }: { look: ModelLook; skin: number; glow: Vec3; fallbackGlow: Vec3; scale: number; shellOver?: { color: Vec3; amount: number } | null; animScale?: number; /** the next type's model is still being looked up */ waiting?: boolean }) {
   const item = look.model!;
-  const [bundle, setBundle] = useState<ModelBundle | null>(null);
+  const key = `${item.folder}/${item.path}`;
+  // the model on show, with the item it came from: while the next one loads (switching types
+  // quickly) the last stays up, dimmed, in the same 3D view. A new view per model went blank
+  // between switches, and could lose its drawing context; a fresh item with the last model
+  // for one render drew one creature's mesh with another's textures.
+  const [shown, setShown] = useState<{ key: string; item: typeof item; bundle: ModelBundle } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [move, setMove] = useState(1);
-  const [anim, setAnim] = useState<Animation | null>(null);
+  const [anim, setAnim] = useState<{ key: string; seq: number; anim: Animation } | null>(null);
   const [lost, setLost] = useState(0);
-  const key = `${item.folder}/${item.path}`;
 
   useEffect(() => {
     const ac = new AbortController();
-    setBundle(null);
     setError(null);
     getModel(item, ac.signal).then(
-      (b) => !ac.signal.aborted && setBundle(b),
+      (b) => !ac.signal.aborted && setShown({ key, item, bundle: b }),
       () => !ac.signal.aborted && setError("Couldn't read this model."),
     );
     return () => ac.abort();
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const seq = look.picks?.[move]?.seq ?? null;
+  const current = shown?.key === key ? shown : null;
   useEffect(() => {
-    setAnim(null);
-    if (seq == null || !bundle) return;
+    if (seq == null || !current) return;
     const ac = new AbortController();
-    getAnimation(item, seq, ac.signal).then(
-      (a) => !ac.signal.aborted && setAnim(a),
+    getAnimation(current.item, seq, ac.signal).then(
+      (a) => !ac.signal.aborted && setAnim({ key: current.key, seq, anim: a }),
       () => undefined,
     );
     return () => ac.abort();
-  }, [key, seq, bundle]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, seq]);
+  // only the shown model's own animation (another model's would pull its vertices apart)
+  const playAnim = current && anim && anim.key === current.key && anim.seq === seq ? anim.anim : null;
 
   if (error) return <p className="muted">{error}</p>;
   const on = (c: Vec3) => c.some((v) => v > 0);
@@ -57,15 +62,15 @@ export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale,
   return (
     <div className="cs-preview">
       <div className="cs-preview-view">
-        {bundle ? (
+        {shown ? (
           <ModelView
             key={lost}
-            item={item}
-            bundle={bundle}
+            item={shown.item}
+            bundle={shown.bundle}
             skin={skin}
             body={[]}
-            anim={anim}
-            playing={!!anim}
+            anim={playAnim}
+            playing={!!playAnim}
             wire={false}
             loop={!once}
             speed={(runIsWalk ? 2 : 1) * animScale}
@@ -74,8 +79,9 @@ export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale,
             onEnded={() => once && move !== 5 && setMove(1)}
             onLost={() => setTimeout(() => setLost((n) => n + 1), 500)}
           />
-        ) : (
-          <p className="muted cs-preview-wait">
+        ) : null}
+        {(!current || waiting) && (
+          <p className={`muted cs-preview-wait${shown ? " over" : ""}`}>
             <span className="spinner" aria-hidden="true" /> Opening the model…
           </p>
         )}
