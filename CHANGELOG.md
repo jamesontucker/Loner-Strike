@@ -2,6 +2,18 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
+## 1.0.3
+
+Two fixes:
+- The app could open to a white square on a black window (Windows, after updating) until it was restarted
+- Creature Studio's model viewer glitched when switching creatures quickly
+
+### The app
+- The window opens in the app's own color and shows once its page is ready, instead of white. If the page hasn't loaded after 8 seconds, it's loaded again by itself.
+
+### Creature Studio
+- Switching creatures quickly keeps the 3D view up: the last model stays, dimmed, until the next one is ready, instead of a blank panel, another creature's model or a black shape.
+
 ## 1.0.2
 
 Map editor fixes from a tester's report and two audits of the editor:
