@@ -272,6 +272,8 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
     let why = if why.is_empty() { "unknown error".to_string() } else { why };
     let hint = if unar.is_none() && cfg!(target_os = "macos") {
         " Installing unar (brew install unar) lets Loner-Strike open newer RAR files."
+    } else if unar.is_none() && cfg!(target_os = "linux") {
+        " Installing unar (or libarchive-tools, for bsdtar) from your system's packages lets Loner-Strike open RAR and 7z files."
     } else {
         ""
     };
@@ -284,8 +286,10 @@ pub fn read_listing(ok: bool, out: &str) -> (u64, bool, bool) {
     let (mut total, mut links, mut readable) = (0u64, false, ok);
     for line in out.lines() {
         let cols: Vec<&str> = line.split_whitespace().collect();
-        match cols.get(4).and_then(|c| if c.bytes().all(|b| b.is_ascii_digit()) { c.parse::<u64>().ok() } else { None }) {
-            Some(n) if cols.len() >= 5 => total += n,
+        // bsdtar: mode, links, owner, group, size; GNU tar (Linux): mode, owner/group, size
+        let at = if cols.get(1).is_some_and(|c| c.contains('/')) { 2 } else { 4 };
+        match cols.get(at).and_then(|c| if c.bytes().all(|b| b.is_ascii_digit()) { c.parse::<u64>().ok() } else { None }) {
+            Some(n) if cols.len() >= at + 1 => total += n,
             _ => {
                 readable = false;
                 break;
@@ -1022,6 +1026,11 @@ mod tests {
         assert!(read_listing(true, hard).1);
         assert!(!read_listing(true, "garbage line\n").2);
         assert!(!read_listing(false, "").2);
+        // GNU tar's (Linux): mode, owner/group, size, date, time, name
+        let gnu = "-rw-r--r-- user/user      1234 2026-11-23 12:00 maps/a.bsp\n-rw-r--r-- 1000/1000 10 2026-11-23 12:00 b.wad\n";
+        assert_eq!(read_listing(true, gnu), (1244, false, true));
+        let gnu_link = "lrwxrwxrwx user/user         0 2026-11-23 12:00 x -> /etc/passwd\n";
+        assert_eq!(read_listing(true, gnu_link), (0, true, true));
     }
 
     #[test]

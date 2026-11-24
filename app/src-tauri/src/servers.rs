@@ -27,6 +27,19 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub(crate) const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
+
+/// Servers on this computer run Valve's Windows server (through CrossOver on a Mac); the native
+/// Linux one isn't wired up yet, so on Linux they (and the hidden server behind map learning,
+/// the map simulator, Studio's test runs) say so instead of starting. Servers on a VPS work.
+pub(crate) const LINUX_NO_LOCAL: &str = "Servers on this computer aren't available on Linux yet, so this can't run here. A server on a Linux VPS works (Servers, New server).";
+
+/// Err(LINUX_NO_LOCAL) for the native Linux game.
+pub(crate) fn local_servers_here(client: &Install) -> Result<(), String> {
+    if client.kind == "linux" {
+        return Err(LINUX_NO_LOCAL.into());
+    }
+    Ok(())
+}
 /// Where servers went before they moved into Loner-Strike/Servers (still recognised)
 const FOLDER: &str = "Loner-Strike Servers";
 /// The player's own game hosts on 27015, so servers start above it and never clash
@@ -1098,6 +1111,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     if !crate::sharing::password_ok(&join_pw) {
         return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
     }
+    local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The server runs through it, like the game.".into());
     }

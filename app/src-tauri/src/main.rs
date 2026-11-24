@@ -24,6 +24,7 @@ mod compat; // W2: format versions across 1.x (docs/notes/Compat.md)
 mod extras;
 mod fastdl; // W2: fast downloads from Loner-Strike's mirror (dl.lonerstrike.com/fastdl/<server>)
 mod game;
+mod gamebin; // the game's binaries by system: .dll (Windows game, CrossOver too) or .so (native Linux game)
 mod gamebanana;
 mod hltv;
 mod lists;
@@ -405,13 +406,14 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
 }
 
 /// P5: loner-strike:// links: the scheme registered where the app needs to do it itself
-/// (Windows; macOS reads it from the bundle's Info.plist), the link that started the app and
+/// (Windows, and Linux for the AppImage, which has no installed .desktop file; macOS reads it
+/// from the bundle's Info.plist, the .deb from its own .desktop file), the link that started the app and
 /// the ones that come while it runs. Each is checked (deeplink.rs), kept for the page, and the
 /// page nudged to ask for it (it also asks when it loads).
 fn deep_links(app: &tauri::App) {
     use tauri::Manager;
     use tauri_plugin_deep_link::DeepLinkExt;
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     if let Err(e) = app.deep_link().register_all() {
         eprintln!("couldn't register {}:// links: {e}", deeplink::SCHEME);
     }

@@ -781,7 +781,7 @@ fn wine_noise(line: &str) -> bool {
 
 /// What the compiler needs, checked: (compiler, install), or why it can't run.
 fn compiler(g: &Game) -> Result<(PathBuf, crate::steam::Install), String> {
-    let exe = amxx_dir(g).join("scripting").join("amxxpc.exe");
+    let exe = amxx_dir(g).join("scripting").join(crate::gamebin::AMXXPC);
     if !exe.is_file() {
         return Err("Your game has no AMX Mod X compiler yet. Install the basics (Mods page) first.".into());
     }
@@ -840,6 +840,9 @@ pub fn run_compiler(exe: &Path, install: &crate::steam::Install, src: &Path, out
         ran = go();
     }
     let output = clean(&ran).ok_or("The compiler didn't run, or took too long.")?;
+    if crate::setup::core::missing_library(&output) {
+        return Err(crate::setup::core::LINUX_32BIT_LIBS.into());
+    }
     if crashed(&Some(output.clone())) {
         crate::diagnostics::log_error("plugin studio: compile", &output);
         return Err(format!("The compiler stopped part way through{}. Try again.", if install.kind == "crossover" { " (this happens now and then under CrossOver)" } else { "" }));

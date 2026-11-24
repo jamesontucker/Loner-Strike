@@ -249,6 +249,7 @@ struct Hidden {
 fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), String> {
     let game = st.local_game().ok_or(super::NO_GAME)?;
     let client = crate::servers::client(st).ok_or(super::NO_GAME)?;
+    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }

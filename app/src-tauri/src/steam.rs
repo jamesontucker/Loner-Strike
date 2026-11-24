@@ -1,5 +1,6 @@
 //! Finds Half-Life installs with czero (Condition Zero) and/or cstrike (CS 1.6).
-//! Windows: every Steam library. Mac: Steam inside CrossOver bottles.
+//! Windows: every Steam library. Mac: Steam inside CrossOver bottles. Linux: every library of
+//! the native Steam (its usual folder, and the Flatpak and Snap ones).
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -7,7 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize)]
 pub struct Install {
     pub hl: PathBuf,
-    /// "windows" or "crossover"
+    /// "windows", "crossover" or "linux" (the native Linux game: hl_linux and .so files)
     pub kind: String,
     pub bottle: Option<String>,
     pub games: Vec<String>,
@@ -19,10 +20,12 @@ pub struct Install {
 /// Loner-Strike's mods (ReGameDLL, Metamod-P, AMX Mod X 1.10) can't load on: its own game
 /// (hl.exe there) without the SDL2.dll that update added. Dedicated server folders aren't asked.
 pub fn too_old(hl: &Path) -> bool {
-    hl.join("hl.exe").is_file() && !hl.join("SDL2.dll").is_file()
+    // (a Linux copy has hl_linux, and SDL2 under its own name)
+    hl.join("hl.exe").is_file() && !hl.join("SDL2.dll").is_file() && !hl.join("hl_linux").is_file()
 }
 
 pub const TOO_OLD: &str = "This copy of the game is older than Loner-Strike supports (from before Valve's 2013 update), so its mods can't load on it. Use the current Steam version of Counter-Strike 1.6 or Condition Zero.";
+
 
 fn games_in(hl: &Path) -> Vec<String> {
     ["czero", "cstrike"]
@@ -161,9 +164,48 @@ fn scan() -> Vec<Install> {
     found
 }
 
-#[cfg(not(any(target_os = "macos", windows)))]
+/// The Steam folders on Linux: the usual one (~/.steam/steam links to it), Flatpak's and
+/// Snap's. The same folder reached two ways counts once.
+#[cfg(target_os = "linux")]
+pub fn linux_steam_roots() -> Vec<PathBuf> {
+    let Some(home) = dirs::home_dir() else { return vec![] };
+    let mut out: Vec<PathBuf> = vec![];
+    for rel in [".steam/steam", ".local/share/Steam", ".steam/root", ".var/app/com.valvesoftware.Steam/.local/share/Steam", ".var/app/com.valvesoftware.Steam/.steam/steam", "snap/steam/common/.local/share/Steam"] {
+        let p = home.join(rel);
+        if !p.join("steamapps").is_dir() {
+            continue;
+        }
+        let real = std::fs::canonicalize(&p).unwrap_or(p);
+        if !out.contains(&real) {
+            out.push(real);
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "linux")]
 fn scan() -> Vec<Install> {
-    Vec::new()
+    let mut found = Vec::new();
+    for root in linux_steam_roots() {
+        for lib in libraries(&root) {
+            let lib = std::fs::canonicalize(&lib).unwrap_or_else(|_| PathBuf::from(&lib));
+            push(&mut found, lib.join("steamapps/common/Half-Life"), "linux", None);
+        }
+    }
+    found
+}
+
+/// How Steam is started on Linux for a game in `hl`: Flatpak's Steam through flatpak, else the
+/// `steam` command.
+#[cfg(target_os = "linux")]
+fn linux_steam_command(hl: &Path) -> std::process::Command {
+    if hl.to_string_lossy().contains("/.var/app/com.valvesoftware.Steam/") {
+        let mut c = std::process::Command::new("flatpak");
+        c.args(["run", "com.valvesoftware.Steam"]);
+        c
+    } else {
+        std::process::Command::new("steam")
+    }
 }
 
 /// Starts the game through Steam: Steam inside CrossOver on a Mac, Steam on Windows.
@@ -198,10 +240,12 @@ pub fn open_steam_url(hl: &Path, url: &str) -> Result<(), String> {
         cmd.args(["/C", "start", "", url]);
         cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = (hl, url);
-        Err("Launching isn't supported on this system.".into())
+        let mut cmd = linux_steam_command(hl);
+        cmd.arg(url);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
     }
 }
 
@@ -244,10 +288,13 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
         cmd.args(["/C", "start", "", &url]);
         cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = (hl, appid, args);
-        Err("Launching isn't supported on this system.".into())
+        // Steam that's already running is handed the launch and this one quits
+        let mut cmd = linux_steam_command(hl);
+        cmd.arg("-applaunch").arg(appid).args(args);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e}). Is Steam installed?"))
     }
 }
 
@@ -267,13 +314,19 @@ pub fn persona_name() -> Option<String> {
     persona_in(&text).and_then(clean)
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn persona_name() -> Option<String> {
+    let clean = |s: String| Some(s.trim().chars().filter(|c| !c.is_control()).take(32).collect::<String>()).filter(|s| !s.is_empty());
+    linux_steam_roots().into_iter().find_map(|r| std::fs::read_to_string(r.join("config/loginusers.vdf")).ok().and_then(|t| persona_in(&t)).and_then(clean))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn persona_name() -> Option<String> {
     None
 }
 
 /// The PersonaName of the account marked MostRecent "1" (else the first) in loginusers.vdf.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn persona_in(vdf: &str) -> Option<String> {
     let value = |line: &str, key: &str| -> Option<String> {
         let rest = line.trim().strip_prefix(&format!("\"{key}\""))?.trim();

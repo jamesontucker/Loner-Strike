@@ -20,7 +20,6 @@ const ALLOWED: &[&str] = &[
     "gm_player", "gm_nav", "gm_pause", "gm_team", "gm_preset", "gm_presetsave", "gm_presetdel", "gm_pos",
     "gm_crash", "gm_do", "gm_announce", "gm_votemode",
 ];
-const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 const OFFLINE: &str = "No game is loaded. Start one from Play.";
 const BAD_PASSWORD: &str = "The game didn't accept Loner-Strike's console password. Restart the map once.";
 
@@ -398,53 +397,48 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
     let am = cz.join("addons").join("amxmodx");
     let mut check = |name: &str, ok: bool, detail: &str| checks.push(json!({"name": name, "ok": ok, "detail": detail}));
 
+    // (every set of the game's binaries setup puts in: on Linux both the native and Proton's
+    // Windows one, gamebin.rs)
     let liblist = cz.join("liblist.gam");
     match sys::read_latin1(&liblist) {
-        Ok(text) => {
-            let re = Regex::new(r#"(?m)^gamedll\s+"([^"]*)""#).unwrap();
-            let m = re.captures(&text).and_then(|c| c.get(1));
-            match m {
-                Some(m) if m.as_str().to_lowercase() == METAMOD_DLL.to_lowercase() => check("Game loads Metamod", true, ""),
-                Some(m) if repair => {
-                    let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
-                    let new = format!("{}{}{}", &text[..m.start()], METAMOD_DLL, &text[m.end()..]);
-                    sys::make_writable(&liblist);
-                    if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1_atomic(&liblist, &new).is_ok() {
-                        fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart the game.");
-                        check("Game loads Metamod", true, "repaired");
-                    } else {
-                        check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod");
-                    }
+        Ok(text) => match crate::setup::foundation::point_at_metamod(&text) {
+            None => check("Game loads Metamod", true, ""),
+            // (on Windows and the Mac, as before: a liblist.gam without a gamedll line isn't
+            // repaired here; Linux adds whichever of its two lines is missing)
+            Some(_) if !crate::gamebin::LINUX && !Regex::new(r#"(?m)^gamedll\s+""#).unwrap().is_match(&text) => check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod"),
+            Some(new) if repair => {
+                let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
+                sys::make_writable(&liblist);
+                if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1_atomic(&liblist, &new).is_ok() {
+                    fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart the game.");
+                    check("Game loads Metamod", true, "repaired");
+                } else {
+                    check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod");
                 }
-                _ => check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod"),
             }
-        }
+            Some(_) => check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod"),
+        },
         Err(_) => check("Game loads Metamod", false, "liblist.gam is missing"),
     }
 
-    check("Metamod installed", cz.join("addons/metamod/dlls/metamod.dll").exists(), "");
+    check("Metamod installed", crate::gamebin::FLAVORS.iter().all(|f| cz.join(f.metamod).exists()), "");
     let mm_ini = cz.join("addons/metamod/plugins.ini");
     let mm_text = sys::read_latin1(&mm_ini).unwrap_or_default();
-    if mm_text.to_lowercase().contains("amxmodx_mm.dll") {
-        check("Metamod loads AMX Mod X", true, "");
-    } else if repair && mm_ini.parent().map(|d| d.is_dir()).unwrap_or(false) {
+    match crate::setup::foundation::add_amxx_lines(&mm_text) {
+        None => check("Metamod loads AMX Mod X", true, ""),
         // (added to what's there: other Metamod plugins stay)
-        sys::make_writable(&mm_ini);
-        let mut list = mm_text.clone();
-        if !list.is_empty() && !list.ends_with('\n') {
-            list.push_str("\r\n");
+        Some(list) if repair && mm_ini.parent().map(|d| d.is_dir()).unwrap_or(false) => {
+            sys::make_writable(&mm_ini);
+            if sys::write_latin1_atomic(&mm_ini, &list).is_ok() {
+                fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart the game.");
+                check("Metamod loads AMX Mod X", true, "repaired");
+            } else {
+                check("Metamod loads AMX Mod X", false, "");
+            }
         }
-        list.push_str("win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n");
-        if sys::write_latin1_atomic(&mm_ini, &list).is_ok() {
-            fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart the game.");
-            check("Metamod loads AMX Mod X", true, "repaired");
-        } else {
-            check("Metamod loads AMX Mod X", false, "");
-        }
-    } else {
-        check("Metamod loads AMX Mod X", false, "");
+        Some(_) => check("Metamod loads AMX Mod X", false, ""),
     }
-    check("AMX Mod X installed", am.join("dlls/amxmodx_mm.dll").exists(), "");
+    check("AMX Mod X installed", crate::gamebin::FLAVORS.iter().all(|f| cz.join(f.amxx_mm).exists()), "");
     check("Game Mode Menu installed", am.join("plugins/gamemodes.amxx").exists(), "");
 
     let pl_ini = am.join("configs/plugins.ini");
@@ -510,9 +504,12 @@ mod tests {
         for d in ["addons/metamod/dlls", "addons/amxmodx/dlls", "addons/amxmodx/plugins", "addons/amxmodx/configs"] {
             std::fs::create_dir_all(cz.join(d)).unwrap();
         }
-        std::fs::write(cz.join("liblist.gam"), "game \"CZ\"\r\ngamedll \"dlls\\czero.dll\"\r\n").unwrap();
-        std::fs::write(cz.join("addons/metamod/dlls/metamod.dll"), "").unwrap();
-        std::fs::write(cz.join("addons/amxmodx/dlls/amxmodx_mm.dll"), "").unwrap();
+        use crate::gamebin::{AMXX_MM, LIBLIST_KEY, METAMOD_LIBLIST};
+        std::fs::write(cz.join("liblist.gam"), "game \"CZ\"\r\ngamedll \"dlls\\czero.dll\"\r\ngamedll_linux \"dlls/cs.so\"\r\n").unwrap();
+        for f in crate::gamebin::FLAVORS {
+            std::fs::write(cz.join(f.metamod), "").unwrap();
+            std::fs::write(cz.join(f.amxx_mm), "").unwrap();
+        }
         std::fs::write(cz.join("addons/amxmodx/plugins/gamemodes.amxx"), "").unwrap();
         std::fs::write(cz.join("addons/amxmodx/configs/plugins.ini"), "admin.amxx\r\n").unwrap();
         std::fs::write(cz.join("config.cfg"), "bind \"F3\" \"gamemenu\"\nbind \"F4\" \"gamequick\"\n").unwrap();
@@ -525,9 +522,10 @@ mod tests {
         assert_eq!(h["ok"], true, "{h}");
         assert_eq!(h["fixed"].as_array().unwrap().len(), 3);
         let lib = std::fs::read_to_string(cz.join("liblist.gam")).unwrap();
-        assert_eq!(lib, "game \"CZ\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
+        let want = if crate::gamebin::LINUX { "game \"CZ\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\ngamedll_linux \"addons/metamod/dlls/metamod.so\"\r\n".to_string() } else { format!("game \"CZ\"\r\n{LIBLIST_KEY} \"{METAMOD_LIBLIST}\"\r\ngamedll_linux \"dlls/cs.so\"\r\n") };
+        assert_eq!(lib, want);
         assert!(std::fs::read_dir(&cz).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("liblist.gam.steam-")));
-        assert!(std::fs::read_to_string(cz.join("addons/metamod/plugins.ini")).unwrap().contains("amxmodx_mm.dll"));
+        assert!(std::fs::read_to_string(cz.join("addons/metamod/plugins.ini")).unwrap().contains(AMXX_MM.rsplit('/').next().unwrap()));
         assert!(std::fs::read_to_string(cz.join("addons/amxmodx/configs/plugins.ini")).unwrap().contains("\r\ngamemodes.amxx"));
 
         let h = health_check(&cz, true);

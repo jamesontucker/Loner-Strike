@@ -1318,6 +1318,7 @@ fn state_json(m: &MapFile, v: &View, ctx: &MapCtx, extra: Value, can_rebuild: Re
 /// Whether this computer can rebuild knowledge (Err: why not, in plain words).
 fn rebuild_ready(st: &Shared, m: &MapFile) -> Result<(), String> {
     let client = crate::servers::client(st).ok_or("Set up the game on this computer first.")?;
+    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !std::path::Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
@@ -1532,7 +1533,7 @@ pub const REBUILD_KIND: &str = "knowfix";
 fn brain_dll(m: &MapFile) -> Result<PathBuf, String> {
     let gdir = m.hl.join(&m.game);
     let f = crate::mapcopy::Finder::default();
-    let p = f.find(&gdir, "dlls/mp.dll").ok_or("The bot brain isn't installed in your game. Open Mods and click Repair, then try again.")?;
+    let p = f.find(&gdir, crate::gamebin::MP).ok_or("The bot brain isn't installed in your game. Open Mods and click Repair, then try again.")?;
     let b = std::fs::read(&p).map_err(|e| format!("The bot brain couldn't be read ({e})."))?;
     let needle = b"lonerstrike_mapknow";
     if !b.windows(needle.len()).any(|w| w == needle) {
@@ -1547,11 +1548,12 @@ fn liblist_dll(game_dir: &std::path::Path) -> String {
     text.lines()
         .filter_map(|l| {
             let l = l.trim();
-            let rest = l.strip_prefix("gamedll ").or_else(|| l.strip_prefix("gamedll\t"))?;
+            let key = crate::gamebin::LIBLIST_KEY;
+            let rest = l.strip_prefix(key).filter(|r| r.starts_with([' ', '\t']))?;
             Some(rest.trim().trim_matches('"').replace('\\', "/"))
         })
         .find(|p| !p.is_empty() && !p.contains(".."))
-        .unwrap_or_else(|| "dlls/mp.dll".into())
+        .unwrap_or_else(|| crate::gamebin::MP.into())
 }
 
 /// Puts the hidden server's own DLL back however the run ends.
@@ -1613,6 +1615,7 @@ fn read_new(path: &std::path::Path, from: &mut u64) -> String {
 /// Starts the rebuild job for the saved nav at `nav_path`. Returns the job id.
 fn start_rebuild(client: crate::steam::Install, m: MapFile, nav_path: PathBuf) -> Result<String, String> {
     use crate::navs::Learner;
+    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !std::path::Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }

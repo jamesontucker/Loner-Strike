@@ -453,6 +453,7 @@ const KNOWN: &str = "known";
 /// Starts teaching bots `maps` (the ones they already know only with `relearn`). Returns
 /// the job id.
 pub fn start_learning(client: Install, maps: Vec<String>, relearn: bool) -> Result<String, String> {
+    servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
@@ -735,13 +736,13 @@ const BRAIN: &[u8] = b"lonerstrike_mapknow";
 
 /// Whether a game folder's server DLL is Loner-Strike's bot brain.
 fn has_brain(gdir: &Path) -> bool {
-    std::fs::read(gdir.join("dlls/mp.dll")).is_ok_and(|b| b.windows(BRAIN.len()).any(|w| w == BRAIN))
+    std::fs::read(gdir.join(crate::gamebin::MP)).is_ok_and(|b| b.windows(BRAIN.len()).any(|w| w == BRAIN))
 }
 
 /// Copies the game's bot brain into a hidden server's game folder: its server DLL (only when
 /// it is Loner-Strike's ReGameDLL, which has the bots) and the bot profile and chatter files.
 pub(crate) fn bring_bots(game: &Path, gdir: &Path) -> Result<(), String> {
-    let dll_rel = "dlls/mp.dll";
+    let dll_rel = crate::gamebin::MP;
     // Parity A: the brain from the game being learned, else from the other game in the same
     // Half-Life folder: setup puts the same ReGameDLL build in both, and a Condition Zero that
     // hasn't been updated since (CZ updates when it's the game picked) still learns with ours
@@ -1070,16 +1071,16 @@ mod tests {
         let server = temp("bots-server");
         std::fs::create_dir_all(game.join("dlls")).unwrap();
         // Valve's DLL (no bots): refused, nothing copied
-        std::fs::write(game.join("dlls/mp.dll"), b"valve server code").unwrap();
+        std::fs::write(game.join(crate::gamebin::MP), b"valve server code").unwrap();
         std::fs::write(game.join("BotProfile.db"), b"profiles").unwrap();
         assert!(bring_bots(&game, &server).is_err());
         assert!(!has_bot_profile(&server));
         // ours: the DLL and the bot files come over
-        std::fs::write(game.join("dlls/mp.dll"), b"...lonerstrike_mapknow...").unwrap();
+        std::fs::write(game.join(crate::gamebin::MP), b"...lonerstrike_mapknow...").unwrap();
         std::fs::write(game.join("BotChatter.db"), b"chatter").unwrap();
         bring_bots(&game, &server).unwrap();
         assert!(has_bot_profile(&server) && server.join("BotChatter.db").is_file());
-        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow...");
+        assert_eq!(std::fs::read(server.join(crate::gamebin::MP)).unwrap(), b"...lonerstrike_mapknow...");
         assert!(LEARN_CFG.contains("bot_enable 1"));
     }
 
@@ -1092,21 +1093,21 @@ mod tests {
         for g in [&cs, &cz] {
             std::fs::create_dir_all(g.join("dlls")).unwrap();
         }
-        std::fs::write(cs.join("dlls/mp.dll"), b"...lonerstrike_mapknow v2...").unwrap();
-        std::fs::write(cz.join("dlls/mp.dll"), b"ReGameDLL 5.30.0.814-dev (older)").unwrap();
+        std::fs::write(cs.join(crate::gamebin::MP), b"...lonerstrike_mapknow v2...").unwrap();
+        std::fs::write(cz.join(crate::gamebin::MP), b"ReGameDLL 5.30.0.814-dev (older)").unwrap();
         std::fs::write(cz.join("BotProfile.db"), b"cz profiles").unwrap();
         let server = temp("bots-server-cz");
         std::fs::create_dir_all(server.join("dlls")).unwrap();
-        std::fs::write(server.join("dlls/mp.dll"), b"valve cz server code").unwrap();
+        std::fs::write(server.join(crate::gamebin::MP), b"valve cz server code").unwrap();
         std::fs::write(server.join("BotProfile.db"), b"valve cz profiles").unwrap();
         assert!(has_bot_profile(&server) && !has_brain(&server));
         bring_bots(&cz, &server).unwrap();
         assert!(has_brain(&server));
-        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow v2...");
+        assert_eq!(std::fs::read(server.join(crate::gamebin::MP)).unwrap(), b"...lonerstrike_mapknow v2...");
         // CZ's own bot profile (the game's) is what the brain reads there
         assert_eq!(std::fs::read(server.join("BotProfile.db")).unwrap(), b"cz profiles");
         // no brain in either game: refused, with the repair hint
-        std::fs::write(cs.join("dlls/mp.dll"), b"valve").unwrap();
+        std::fs::write(cs.join(crate::gamebin::MP), b"valve").unwrap();
         assert!(bring_bots(&cz, &server).unwrap_err().contains("Repair"));
     }
 

@@ -353,12 +353,13 @@ pub fn compiler_install(st: &Shared, game_dir: &Path) -> Option<crate::steam::In
         let bottle = rest.split('/').next().filter(|b| !b.is_empty())?;
         return Some(crate::steam::Install { hl: game_dir.parent()?.to_path_buf(), kind: "crossover".into(), bottle: Some(bottle.into()), games: vec![], dedicated: false });
     }
-    cfg!(windows).then(|| crate::steam::Install { hl: game_dir.parent().map(Path::to_path_buf).unwrap_or_default(), kind: "windows".into(), bottle: None, games: vec![], dedicated: false })
+    let kind = if cfg!(target_os = "linux") { "linux" } else { "windows" };
+    cfg!(any(windows, target_os = "linux")).then(|| crate::steam::Install { hl: game_dir.parent().map(Path::to_path_buf).unwrap_or_default(), kind: kind.into(), bottle: None, games: vec![], dedicated: false })
 }
 
 /// Runs amxxpc on a source file; Ok((compiled, output)).
 pub fn run_amxxpc(install: &crate::steam::Install, scripting: &Path, src: &Path, inc: &Path, out: &Path) -> Result<(bool, String), String> {
-    let exe = scripting.join("amxxpc.exe");
+    let exe = scripting.join(crate::gamebin::AMXXPC);
     if !exe.is_file() {
         return Err("The game has no AMX Mod X compiler. Run setup again (Settings), then compile.".into());
     }
@@ -381,6 +382,9 @@ pub fn run_amxxpc(install: &crate::steam::Install, scripting: &Path, src: &Path,
         ran = run();
     }
     let (_, o, e) = ran.ok_or("The compiler didn't run, or took too long.")?;
+    if crate::setup::core::missing_library(&format!("{o}{e}")) {
+        return Err(crate::setup::core::LINUX_32BIT_LIBS.into());
+    }
     let all: String = format!("{o}{e}").lines().filter(|l| !wine_noise(l)).collect::<Vec<_>>().join("\n");
     Ok((all.contains("Done.") && out.is_file(), all))
 }
@@ -737,7 +741,7 @@ fn graph_of(v: Value) -> Result<Graph, String> {
 async fn api_status(State(st): State<Shared>) -> Response {
     blocking(move || {
         let game = local_game(&st).ok();
-        let compiler = game.as_ref().is_some_and(|g| g.dir.join("addons/amxmodx/scripting/amxxpc.exe").is_file());
+        let compiler = game.as_ref().is_some_and(|g| g.dir.join("addons/amxmodx/scripting").join(crate::gamebin::AMXXPC).is_file());
         Ok(json!({"game": game.is_some(), "compiler": compiler, "graphsDir": graphs_dir().display().to_string()}))
     })
     .await

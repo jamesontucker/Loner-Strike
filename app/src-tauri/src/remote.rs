@@ -908,12 +908,12 @@ step ready
 
 /// Linux builds of the foundation, the same versions as setup/foundation.rs's Windows ones.
 pub const FOUNDATION_ENV: &[(&str, &str)] = &[
-    ("MM_URL", "https://github.com/Bots-United/metamod-p/releases/download/v1.21p109/metamod-p-v1.21p109-linux_ubuntu2404.tar.xz"),
-    ("MM_SHA", "bea62478a9d50023820188bda3893c720e7e7b1b01570292c747c5ef71829365"),
-    ("AMXX_URL", "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-base-linux.tar.gz"),
-    ("AMXX_SHA", "d82d1d65c907f358c48bdebc07e20084e7e8c4f4d0e95af275e8b43f32815c7e"),
-    ("AMXXCS_URL", "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-cstrike-linux.tar.gz"),
-    ("AMXXCS_SHA", "6a7541a213ef71c47c1348b3457722e95669c0135c60102d5cb5a876341aa808"),
+    ("MM_URL", crate::setup::foundation::METAMOD_LINUX.url),
+    ("MM_SHA", crate::setup::foundation::METAMOD_LINUX.sha256),
+    ("AMXX_URL", crate::setup::foundation::AMXX_BASE_LINUX.url),
+    ("AMXX_SHA", crate::setup::foundation::AMXX_BASE_LINUX.sha256),
+    ("AMXXCS_URL", crate::setup::foundation::AMXX_CSTRIKE_LINUX.url),
+    ("AMXXCS_SHA", crate::setup::foundation::AMXX_CSTRIKE_LINUX.sha256),
     ("RG_URL", crate::setup::foundation::REGAMEDLL.url),
     ("RG_SHA", crate::setup::foundation::REGAMEDLL.sha256),
     ("RH_URL", crate::setup::foundation::REHLDS.url),

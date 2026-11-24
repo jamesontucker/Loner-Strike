@@ -217,7 +217,7 @@ fn game_status(install: &Install, game: &str) -> Value {
     let rec = Record::open(&dir);
     let installed = rec.installed("foundation");
     let comps: Vec<&String> = rec.data.components.keys().filter(|c| !matches!(c.as_str(), "foundation" | "core")).collect();
-    let amxx = "addons/amxmodx/dlls/amxmodx_mm.dll";
+    let amxx = crate::gamebin::AMXX_MM;
     let foreign = dir.join(amxx).exists() && !rec.ours(amxx);
     // installed, but a plugin of theirs didn't build (it won't load until it's tried again)
     let unbuilt: Vec<&String> = rec.data.components.iter().filter(|(_, v)| v["unbuilt"] == Value::Bool(true)).map(|(k, _)| k).collect();

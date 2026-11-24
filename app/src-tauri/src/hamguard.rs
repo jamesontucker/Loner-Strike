@@ -13,9 +13,23 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// Where the module lives in a game folder (Windows: this computer's games and servers,
-/// CrossOver's too).
-pub const REL: &str = "addons/amxmodx/modules/hamsandwich_amxx.dll";
+/// Where the module lives in a game folder on this computer (the Windows build: games and
+/// servers here and in CrossOver; the Linux build for the native Linux game).
+#[allow(dead_code)] // (tests)
+pub const REL: &str = crate::gamebin::HAM;
+/// The module's file name, which a kept copy starts with
+fn file_name_of(rel: &str) -> &str {
+    rel.rsplit('/').next().unwrap_or(rel)
+}
+#[cfg(test)]
+fn file_name() -> &'static str {
+    file_name_of(REL)
+}
+
+/// The fixed build's hash for a module path (.so: the Linux build)
+fn fixed_hash(rel: &str) -> &'static str {
+    if rel.ends_with(".so") { FIXED_HAM_LINUX } else { FIXED_HAM_WINDOWS }
+}
 
 /// The app's resources folder, set once at start (main.rs).
 static RES: OnceLock<PathBuf> = OnceLock::new();
@@ -25,8 +39,13 @@ pub fn init(res: PathBuf) {
 }
 
 /// The fixed DLL: the app's resources, else LONER_STRIKE_RESOURCES or the repo (dev builds).
+#[cfg(test)]
 fn fixed_dll() -> Option<PathBuf> {
-    let rel = Path::new("windows/hamsandwich/hamsandwich_amxx.dll");
+    fixed_from(crate::gamebin::HAM_FIXED_RES)
+}
+
+fn fixed_from(res_rel: &str) -> Option<PathBuf> {
+    let rel = Path::new(res_rel);
     let mut places: Vec<PathBuf> = RES.get().map(|r| r.join(rel)).into_iter().collect();
     places.extend(std::env::var_os("LONER_STRIKE_RESOURCES").map(|r| PathBuf::from(r).join(rel)));
     if cfg!(any(debug_assertions, test)) {
@@ -83,29 +102,37 @@ fn today() -> String {
 
 /// Ours in `game_dir` (a game folder: cstrike or czero), from `fixed`. Fast when it's ours
 /// already: one hash of a small file.
+#[cfg(test)]
 pub fn ensure_in(game_dir: &Path, fixed: &Path) -> Result<Outcome, String> {
-    let p = game_dir.join(REL);
+    ensure_at(game_dir, REL, fixed)
+}
+
+/// The same for the module at `rel` (each set of the game's binaries has its own: gamebin.rs)
+fn ensure_at(game_dir: &Path, rel: &str, fixed: &Path) -> Result<Outcome, String> {
+    let want = fixed_hash(rel);
+    let file_name = || file_name_of(rel);
+    let p = game_dir.join(rel);
     let Some(found) = sha256(&p) else { return Ok(Outcome::NotThere) };
-    if found == FIXED_HAM_WINDOWS {
+    if found == want {
         return Ok(Outcome::Ours);
     }
-    if sha256(fixed).as_deref() != Some(FIXED_HAM_WINDOWS) {
+    if sha256(fixed).as_deref() != Some(want) {
         return Err("Loner-Strike's fixed Ham Sandwich is missing from the app. Reinstalling the app should fix it.".into());
     }
     // the one found, kept once (the same file kept before isn't kept again)
     let dir = p.parent().unwrap_or(game_dir);
     let kept_before = std::fs::read_dir(dir).into_iter().flatten().flatten().any(|e| {
         let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-        n.starts_with("hamsandwich_amxx.dll.replaced-") && sha256(&e.path()).as_deref() == Some(found.as_str())
+        n.starts_with(&format!("{}.replaced-", file_name())) && sha256(&e.path()).as_deref() == Some(found.as_str())
     });
     let mut backup = None;
     if !kept_before {
-        let mut b = dir.join(format!("hamsandwich_amxx.dll.replaced-{}", today()));
+        let mut b = dir.join(format!("{}.replaced-{}", file_name(), today()));
         for n in 2..100 {
             if !b.exists() {
                 break;
             }
-            b = dir.join(format!("hamsandwich_amxx.dll.replaced-{}-{n}", today()));
+            b = dir.join(format!("{}.replaced-{}-{n}", file_name(), today()));
         }
         std::fs::copy(&p, &b).map_err(|e| format!("Couldn't keep a copy of the Ham Sandwich module that was there ({e})."))?;
         backup = Some(b);
@@ -117,15 +144,26 @@ pub fn ensure_in(game_dir: &Path, fixed: &Path) -> Result<Outcome, String> {
 
 /// Before Play or a local server start: ours back in place if something replaced it. Never
 /// stops the start; says what it did in the diagnostics. Some(note) when it put ours back.
+/// (On Linux both the native module and the Windows one Proton's game loads.)
 pub fn before_start(game_dir: &Path, what: &str) -> Option<String> {
-    let fixed = fixed_dll()?;
+    let mut said = None;
+    for f in crate::gamebin::FLAVORS {
+        if let Some(note) = before_start_at(game_dir, what, f.ham, f.ham_fixed_res) {
+            said.get_or_insert(note);
+        }
+    }
+    said
+}
+
+fn before_start_at(game_dir: &Path, what: &str, rel: &str, res_rel: &str) -> Option<String> {
+    let fixed = fixed_from(res_rel)?;
     // (a loaded DLL can't be replaced on Windows: with the game open, say so instead of failing)
-    let p = game_dir.join(REL);
+    let p = game_dir.join(rel);
     if what == "Play" && p.is_file() && !is_fixed(&p) && crate::sys::game_running() {
         crate::diagnostics::log_error("ham sandwich", &format!("{what}: not the fixed one, but the game is open"));
         return Some("Loner-Strike's fixed Ham Sandwich goes back in the next time the game starts from a closed game.".into());
     }
-    match ensure_in(game_dir, &fixed) {
+    match ensure_at(game_dir, rel, &fixed) {
         Ok(Outcome::Restored(kept)) => {
             let note = "Restored Loner-Strike's fixed Ham Sandwich.".to_string();
             let where_ = kept.map(|k| format!(" The one found was kept as {}.", k.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())).unwrap_or_default();
@@ -164,7 +202,7 @@ mod tests {
         let Outcome::Restored(Some(kept)) = r else { panic!("{r:?}") };
         assert!(is_fixed(&p), "ours is back");
         assert_eq!(std::fs::read(&kept).unwrap(), b"the official Ham Sandwich");
-        assert!(kept.file_name().unwrap().to_string_lossy().starts_with("hamsandwich_amxx.dll.replaced-"));
+        assert!(kept.file_name().unwrap().to_string_lossy().starts_with(&format!("{}.replaced-", file_name())));
         // the same official one again: put right, not kept a second time
         std::fs::write(&p, b"the official Ham Sandwich").unwrap();
         assert_eq!(ensure_in(&g, &fixed()).unwrap(), Outcome::Restored(None));

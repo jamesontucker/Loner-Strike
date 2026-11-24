@@ -3095,7 +3095,7 @@ async fn api_reveal(h: HeaderMap, Json(req): Json<RevealReq>) -> Response {
     #[cfg(windows)]
     let r = std::process::Command::new("explorer").arg(format!("/select,{}", p.display())).spawn().map(crate::sys::reap);
     #[cfg(not(any(target_os = "macos", windows)))]
-    let r: std::io::Result<()> = Err(std::io::Error::other("unsupported"));
+    let r = std::process::Command::new("xdg-open").arg(p.parent().unwrap_or(&p)).spawn().map(crate::sys::reap);
     json_answer(r.map(|_| json!({"ok": true})).map_err(|e| Fail::new(StatusCode::OK, format!("Couldn't show the folder ({e})."))))
 }
 

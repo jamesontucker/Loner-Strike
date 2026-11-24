@@ -101,8 +101,10 @@ fn read_local(game: &Path) -> Raw {
     list.sort_by(|a, b| b.0.cmp(&a.0));
     let files = list.into_iter().take(MAX_FILES).filter_map(|(mtime, rel, p)| std::fs::read(p).ok().map(|bytes| Found { rel, mtime, bytes })).collect();
     let modules = std::fs::read(game.join("crashes/modules.json")).ok().filter(|b| b.len() as u64 <= MAX_FILE);
-    let ham = std::fs::read(game.join(ham_rel("windows"))).ok().map(|b| hex(&Sha256::digest(&b)));
-    Raw { files, modules, ham, os: "windows" }
+    // (this computer's games and servers: the native Linux game's on Linux)
+    let os = if crate::gamebin::LINUX { "linux" } else { "windows" };
+    let ham = std::fs::read(game.join(ham_rel(os))).ok().map(|b| hex(&Sha256::digest(&b)));
+    Raw { files, modules, ham, os }
 }
 
 fn hex(b: &[u8]) -> String {
@@ -769,7 +771,7 @@ mod tests {
             "atStop": false, "build": {"brain": "ls-next3 797048d"}}).to_string()).unwrap();
         std::fs::write(g.join("ls_crash.20261113-0051.log"), "Fri Nov 13 00:51:39 2026\nexception 0xc0000005 at 0xfff4fadc (first-chance)\nwhere:\nreturn addresses on the stack (newest first):\n  0x7bebea40  kernel32.dll+0xea40\nlast marks:\n     1704.86  frame end   0\n").unwrap();
         std::fs::write(g.join("ls_crash.log"), "Sat Nov 14 01:00:00 2026\nexception 0xc0000005 at 0x0a1b2c3d\nreturn addresses on the stack (newest first):\n  0x0a1b2c3d  mp.dll+0x1b2c3d\n  0x0a000010  hl.exe+0x10\n").unwrap();
-        std::fs::write(g.join("addons/amxmodx/modules/hamsandwich_amxx.dll"), b"the official one").unwrap();
+        std::fs::write(g.join(crate::gamebin::HAM), b"the official one").unwrap();
         std::fs::write(g.join("crashes/modules.json"), json!({"schema": "loner-strike/modules", "version": 1, "modules": [{"name": "fun", "file": "addons/amxmodx/modules/fun_amxx.dll", "verdict": "bad", "why": "This fun build crashes on map changes."}, {"name": "cstrike", "verdict": "ok"}]}).to_string()).unwrap();
         let raw = read_local(&g);
         assert_eq!(raw.files.len(), 3, "modules.json isn't a crash");
@@ -789,7 +791,7 @@ mod tests {
         assert!(w.iter().any(|x| x["id"] == "module:fun" && x["message"].as_str().unwrap().contains("fun build")), "{w:?}");
         assert!(!w.iter().any(|x| x["module"] == "cstrike"));
         // the fixed one: no Ham Sandwich warning
-        std::fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/windows/hamsandwich/hamsandwich_amxx.dll"), g.join("addons/amxmodx/modules/hamsandwich_amxx.dll")).unwrap();
+        std::fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join(crate::gamebin::HAM_FIXED_RES), g.join(crate::gamebin::HAM)).unwrap();
         assert!(!warnings(&read_local(&g), false).iter().any(|x| x["id"] == "hamsandwich"));
         let _ = std::fs::remove_dir_all(&g);
     }

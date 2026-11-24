@@ -170,7 +170,9 @@ async fn api_open_url(headers: HeaderMap, Json(req): Json<OpenUrlReq>) -> Reply 
     let r = std::process::Command::new("open").arg(&req.url).spawn().map(crate::sys::reap);
     #[cfg(windows)]
     let r = crate::sys::command("rundll32").args(["url.dll,FileProtocolHandler", &req.url]).spawn().map(crate::sys::reap);
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
+    let r = std::process::Command::new("xdg-open").arg(&req.url).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     let r: std::io::Result<()> = Err(std::io::Error::other("unsupported"));
     match r {
         Ok(_) => ok(json!({"ok": true})),
@@ -189,7 +191,9 @@ async fn api_open_folder(headers: HeaderMap) -> Reply {
     let r = std::process::Command::new("open").arg(&dir).spawn().map(crate::sys::reap);
     #[cfg(windows)]
     let r = std::process::Command::new("explorer").arg(&dir).spawn().map(crate::sys::reap);
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
+    let r = std::process::Command::new("xdg-open").arg(&dir).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     let r: std::io::Result<()> = Err(std::io::Error::other("unsupported"));
     match r {
         Ok(_) => ok(json!({"ok": true})),
@@ -208,6 +212,9 @@ pub fn custom_install(dir: &str) -> Option<crate::steam::Install> {
     }
     if cfg!(windows) {
         return Some(crate::steam::Install { hl, kind: "windows".into(), bottle: None, games, dedicated: false });
+    }
+    if cfg!(target_os = "linux") {
+        return Some(crate::steam::Install { hl, kind: "linux".into(), bottle: None, games, dedicated: false });
     }
     // on a Mac it has to be in a CrossOver bottle, so it can run
     let s = hl.to_string_lossy().to_string();

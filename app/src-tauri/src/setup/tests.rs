@@ -19,7 +19,7 @@ fn fake_game(root: &Path, game: &str) {
     std::fs::create_dir_all(g.join("dlls")).unwrap();
     std::fs::write(g.join("liblist.gam"), "game \"Counter-Strike\"\r\ngamedll \"dlls\\mp.dll\"\r\ngamedll_linux \"dlls/cs.so\"\r\n").unwrap();
     std::fs::write(g.join("config.cfg"), "bind \"w\" \"+forward\"\r\nname \"Player\"\r\n").unwrap();
-    std::fs::write(g.join("dlls/mp.dll"), b"MZ original server code").unwrap();
+    std::fs::write(g.join(crate::gamebin::MP), b"MZ original server code").unwrap();
     if game == "czero" {
         std::fs::write(g.join("BotProfile.db"), "Default\r\n\tSkill = 50\r\n\tAggression = 50\r\nEnd\r\n\r\nTemplate Expert\r\n\tSkill = 90\r\n\tReactionTime = 0.3\r\nEnd\r\n").unwrap();
     }
@@ -27,6 +27,9 @@ fn fake_game(root: &Path, game: &str) {
 
 fn install_at(hl: &Path) -> Install {
     let games = GAMES.iter().map(|(g, _)| g.to_string()).filter(|g| hl.join(g).join("liblist.gam").is_file()).collect();
+    if crate::gamebin::LINUX {
+        return Install { hl: hl.to_path_buf(), kind: "linux".into(), bottle: None, games, dedicated: false };
+    }
     Install { hl: hl.to_path_buf(), kind: "crossover".into(), bottle: Some("Steam".into()), games, dedicated: false }
 }
 
@@ -57,7 +60,7 @@ fn core_parts_install_and_undo() {
 
         let dir = hl.join(g);
         let lib = std::fs::read_to_string(dir.join("liblist.gam")).unwrap();
-        assert!(lib.contains("gamedll \"addons\\metamod\\dlls\\metamod.dll\""));
+        assert!(lib.contains(&format!("{} \"{}\"", crate::gamebin::LIBLIST_KEY, crate::gamebin::METAMOD_LIBLIST)));
         let cfg = std::fs::read_to_string(dir.join("config.cfg")).unwrap();
         assert!(cfg.ends_with("bind \"F3\" \"gamemenu\"\r\nbind \"F4\" \"gamequick\"\r\n"), "{cfg:?}");
         let modes_ini = std::fs::read_to_string(dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap();
@@ -357,10 +360,16 @@ fn setup_end_to_end() {
         for p in ["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "pb_gameplay", "pb_weapons", "dice_main", "dice_items_cstrike"] {
             assert!(dir.join(format!("addons/amxmodx/plugins/{p}.amxx")).is_file(), "{g}: {p}.amxx");
         }
-        assert!(dir.join("addons/metamod/dlls/metamod.dll").is_file());
+        let lib = std::fs::read_to_string(dir.join("liblist.gam")).unwrap();
+        // every set of the game's binaries (on Linux the native and Proton's Windows ones)
+        for f in crate::gamebin::FLAVORS {
+            for rel in [f.metamod, f.amxx_mm, f.ham, f.mp] {
+                assert!(dir.join(rel).is_file(), "{g}: {rel}");
+            }
+            assert!(lib.contains(&format!("{} \"{}\"", f.liblist_key, f.metamod_liblist)), "{g}: {lib}");
+        }
         assert!(dir.join("sound/DICE/zeus.wav").is_file());
         assert!(dir.join("models/paintballR/v_marker_b.mdl").is_file());
-        let lib = std::fs::read_to_string(dir.join("liblist.gam")).unwrap();
         assert!(lib.contains(foundation::METAMOD_DLL));
         let modes = std::fs::read_to_string(dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap();
         assert!(modes.contains("paintball"));
@@ -369,7 +378,7 @@ fn setup_end_to_end() {
         // the DICE patches went in
         let ini = std::fs::read_to_string(dir.join("addons/amxmodx/scripting/dice/dice_main.sma")).unwrap();
         assert!(ini.to_lowercase().contains("bot"));
-        assert!(rec.data.files["dlls/mp.dll"].backup.is_some());
+        assert!(rec.data.files[crate::gamebin::MP].backup.is_some());
 
         // the same as the Python installer made from the same starting files
         if let Some(py) = std::env::var_os("LS_SETUP_TEST_PYTHON_HL").map(PathBuf::from) {

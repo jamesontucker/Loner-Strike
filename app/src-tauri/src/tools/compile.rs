@@ -2662,7 +2662,8 @@ mod tests {
         std::fs::create_dir_all(game.join("valve")).unwrap();
         std::fs::write(game.join("valve/halflife.wad"), b"WAD3\0\0\0\0\0\0\0\0").unwrap();
         std::fs::write(game.join("valve/mine.wad"), b"WAD3\0\0\0\0\0\0\0\0").unwrap();
-        let find = |n: &str| Some(game.join("valve").join(n.rsplit(['\\', '/']).next().unwrap())).filter(|p| p.is_file());
+        // (whatever the case: the app's finder ignores it, like Windows and the Mac do)
+        let find = |n: &str| Some(game.join("valve").join(n.rsplit(['\\', '/']).next().unwrap().to_lowercase())).filter(|p| p.is_file());
         let mut l = native(&dir.join("sdhlt/tools").to_string_lossy());
         let names = vec!["\\half-life\\valve\\HALFLIFE.WAD".to_string(), "D:\\sierra\\mine.wad".into(), "gone.wad".into(), "zhlt.wad".into()];
         let w = resolve_wads(&names, &find, &l, &dir.join("copies")).unwrap();

@@ -1,5 +1,5 @@
-# Builds the Loner-Strike app for Mac (signed + notarized, Apple Silicon and Intel)
-# and Windows, and attaches them to a draft GitHub release with the updater files.
+# Builds the Loner-Strike app for Mac (signed + notarized, Apple Silicon and Intel),
+# Windows and Linux (x86_64: AppImage and .deb, beta), and attaches them to a draft GitHub release with the updater files.
 #
 # Release: push a tag like v0.1.0 (it must match "version" in app/src-tauri/tauri.conf.json),
 # check the draft release on GitHub, then publish it. Published releases are what the
@@ -69,6 +69,9 @@ jobs:
             args: --target universal-apple-darwin
           - platform: windows-latest
             args: ""
+          # the oldest Ubuntu runner: the AppImage runs on systems at least this new (glibc 2.35)
+          - platform: ubuntu-22.04
+            args: ""
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -107,7 +110,7 @@ jobs:
             echo "$section"
             echo ""
             echo "---"
-            echo "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway."
+            echo "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Linux (beta): the .AppImage, or the .deb on Debian and Ubuntu. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway."
             echo ""
             echo "Found a bug? In the app, open Settings and click Copy next to Copy diagnostics, then post it on Discord (https://discord.gg/K9eBHVVwZE) or in Issues."
             echo "LS_NOTES_END"
@@ -139,6 +142,13 @@ jobs:
             ( cd "$(dirname "$p")" && if command -v sha256sum >/dev/null; then sha256sum -c "$(basename "$p").sha256"; else shasum -a 256 -c "$(basename "$p").sha256"; fi )
           done
 
+      # what Tauri needs to build on Linux (WebKitGTK and friends)
+      - name: Install build tools (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -168,6 +178,28 @@ jobs:
           cp target/aarch64-apple-darwin/release/playitd "$B/playitd-aarch64-apple-darwin"
           cp target/x86_64-apple-darwin/release/playitd "$B/playitd-x86_64-apple-darwin"
           lipo -create "$B/playitd-aarch64-apple-darwin" "$B/playitd-x86_64-apple-darwin" -output "$B/playitd-universal-apple-darwin"
+
+      # playit publishes no Linux playitd (only its CLI): built from the same source as the Mac's
+      - name: Build playit's agent (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          git clone --depth 1 --branch v1.2.0 https://github.com/playit-cloud/playit-agent "$RUNNER_TEMP/playit"
+          cd "$RUNNER_TEMP/playit"
+          test "$(git rev-parse HEAD)" = 7acf13568a99707dda73028234fdb376e45b15da
+          cargo build --release --locked -p playitd
+          mkdir -p "$GITHUB_WORKSPACE/app/src-tauri/binaries"
+          cp target/release/playitd "$GITHUB_WORKSPACE/app/src-tauri/binaries/playitd-x86_64-unknown-linux-gnu"
+
+      # the app's own ls-voice and ls-intent on Linux are the servers' builds from above
+      # (Debian 11's glibc, so they run wherever the AppImage does), checked already
+      - name: ls-voice and ls-intent (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          B=app/src-tauri/binaries; mkdir -p "$B"
+          for p in voice intent; do
+            cp app/src-tauri/resources/linux/ls-$p/ls-$p "$B/ls-$p-x86_64-unknown-linux-gnu"
+            chmod +x "$B/ls-$p-x86_64-unknown-linux-gnu"
+          done
 
       - name: Get playit's agent (Windows)
         if: matrix.platform == 'windows-latest'
@@ -275,4 +307,6 @@ jobs:
             app/src-tauri/target/**/bundle/dmg/*.dmg
             app/src-tauri/target/**/bundle/macos/*.app.tar.gz
             app/src-tauri/target/**/bundle/nsis/*.exe
+            app/src-tauri/target/**/bundle/appimage/*.AppImage
+            app/src-tauri/target/**/bundle/deb/*.deb
           if-no-files-found: warn

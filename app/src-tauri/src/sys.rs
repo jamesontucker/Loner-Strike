@@ -606,6 +606,11 @@ pub fn close_game() -> Result<(), String> {
         c.args(["/IM", "hl.exe", "/F"]);
         let _ = run_output(c, Duration::from_secs(5));
     }
+    #[cfg(target_os = "linux")]
+    for (pid, _) in linux_games() {
+        // SAFETY: a plain signal to a process of this user's
+        unsafe { libc::kill(pid, libc::SIGTERM) };
+    }
     for _ in 0..30 {
         if !game_running() {
             // Steam takes a moment to see the game has gone before it starts it again
@@ -631,8 +636,42 @@ pub fn game_running() -> bool {
         c.args(["/FI", "IMAGENAME eq hl.exe", "/NH"]);
         matches!(run_output(c, Duration::from_secs(5)), Some((_, out, _)) if out.to_lowercase().contains("hl.exe"))
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
+    {
+        !linux_games().is_empty()
+    }
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     false
+}
+
+/// The game's processes on Linux with their Half-Life folders, from /proc: the native game
+/// (hl_linux), and the Windows one under Proton (hl.exe, whose command line names it the Wine
+/// way: Z:\home\...\Half-Life\hl.exe, Z: being /).
+#[cfg(target_os = "linux")]
+pub fn linux_games() -> Vec<(i32, std::path::PathBuf)> {
+    let Ok(rd) = std::fs::read_dir("/proc") else { return vec![] };
+    rd.flatten()
+        .filter_map(|e| {
+            let pid: i32 = e.file_name().to_str()?.parse().ok()?;
+            if let Ok(exe) = std::fs::read_link(e.path().join("exe")) {
+                if exe.file_name()? == "hl_linux" {
+                    return Some((pid, exe.parent().map(|p| p.to_path_buf()).unwrap_or_default()));
+                }
+            }
+            let cmd = std::fs::read(e.path().join("cmdline")).ok()?;
+            let first = String::from_utf8_lossy(cmd.split(|b| *b == 0).next()?).to_string();
+            proton_game_dir(&first).map(|d| (pid, d))
+        })
+        .collect()
+}
+
+/// The Half-Life folder from a Proton game's first argument ("Z:\\home\\me\\...\\Half-Life\\hl.exe"
+/// or a plain Linux path to hl.exe); None for anything else.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn proton_game_dir(arg0: &str) -> Option<std::path::PathBuf> {
+    let unix = if arg0.len() > 2 && arg0[..2].eq_ignore_ascii_case("z:") { arg0[2..].replace('\\', "/") } else if arg0.starts_with('/') { arg0.to_string() } else { return None };
+    let p = std::path::PathBuf::from(unix);
+    p.file_name()?.to_str()?.eq_ignore_ascii_case("hl.exe").then(|| p.parent().map(|d| d.to_path_buf())).flatten()
 }
 
 /// The folders the running game (hl.exe) was started from, as the system names them: a full
@@ -664,7 +703,11 @@ pub fn running_game_dirs() -> Vec<String> {
             _ => Vec::new(),
         }
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_games().into_iter().map(|(_, d)| d.to_string_lossy().to_string()).collect()
+    }
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     Vec::new()
 }
 
@@ -687,6 +730,10 @@ pub fn same_game_dir(running: &str, ours: &Path) -> bool {
     let name = |s: &str| s.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next().unwrap_or("").to_lowercase();
     if cfg!(windows) {
         return same_windows_path(running, &ours.to_string_lossy());
+    }
+    if cfg!(target_os = "linux") {
+        let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        return real(Path::new(running)) == real(ours);
     }
     name(running) == name(&ours.to_string_lossy())
 }
@@ -773,13 +820,27 @@ mod path_tests {
     }
 
     #[test]
+    fn proton_game_folder() {
+        use super::proton_game_dir;
+        assert_eq!(proton_game_dir(r"Z:\home\me\.local\share\Steam\steamapps\common\Half-Life\hl.exe").unwrap(), std::path::PathBuf::from("/home/me/.local/share/Steam/steamapps/common/Half-Life"));
+        assert_eq!(proton_game_dir("/mnt/lib/steamapps/common/Half-Life/HL.EXE").unwrap(), std::path::PathBuf::from("/mnt/lib/steamapps/common/Half-Life"));
+        assert_eq!(proton_game_dir(r"C:\windows\system32\steam.exe"), None);
+        assert_eq!(proton_game_dir("/usr/bin/bash"), None);
+    }
+
+    #[test]
     fn running_game_folder() {
         use super::{game_dir_in, same_game_dir};
         assert_eq!(game_dir_in(r"12345 C:\Program Files (x86)\Steam\steamapps\common\Half-Life\hl.exe -steam -game czero").as_deref(), Some(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life"));
         assert_eq!(game_dir_in(r"F:\Counter-Strike Condition Zero 1.2 build 2771\hl.exe").as_deref(), Some(r"F:\Counter-Strike Condition Zero 1.2 build 2771"));
         assert_eq!(game_dir_in("bash something"), None);
         assert_eq!(game_dir_in(r"812 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine C:\Games\Half-Life\hl.exe -steam").as_deref(), Some(r"C:\Games\Half-Life"));
-        if !cfg!(windows) {
+        if cfg!(target_os = "linux") {
+            // the native game's own folder, from /proc: compared as paths
+            let ours = std::path::Path::new("/home/x/.local/share/Steam/steamapps/common/Half-Life");
+            assert!(same_game_dir("/home/x/.local/share/Steam/steamapps/common/Half-Life", ours));
+            assert!(!same_game_dir("/mnt/games/SteamLibrary/steamapps/common/Half-Life", ours));
+        } else if !cfg!(windows) {
             let ours = std::path::Path::new("/Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life");
             assert!(same_game_dir(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life", ours));
             assert!(!same_game_dir(r"F:\Counter-Strike Condition Zero 1.2 build 2771", ours));

@@ -906,10 +906,7 @@ async fn api_folder(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
             None => std::process::Command::new("explorer").arg(&dir).spawn().map(crate::sys::reap),
         };
         #[cfg(not(any(target_os = "macos", windows)))]
-        let r: std::io::Result<()> = {
-            let _ = (&demo, &dir);
-            Err(std::io::Error::other("unsupported"))
-        };
+        let r = std::process::Command::new("xdg-open").arg(demo.as_ref().and_then(|p| p.parent()).unwrap_or(&dir)).spawn().map(crate::sys::reap);
         r.map(|_| json!({"ok": true})).map_err(|err| format!("Couldn't open the folder ({err})."))
     })
     .await

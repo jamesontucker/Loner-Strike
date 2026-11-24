@@ -2366,7 +2366,10 @@ mod tests {
             let tp = dir.join("twin.tar");
             // the same entry twice under two spellings of one path
             assert!(std::process::Command::new("/usr/bin/tar")
-                .arg("-cf").arg(&tp).arg("-C").arg(&pk).arg("-s").arg(",^creatures.ini.bak,a/CREATURES.INI,").arg("a/creatures.ini").arg("creatures.ini.bak")
+                .arg("-cf").arg(&tp).arg("-C").arg(&pk)
+                // (bsdtar's -s; GNU tar on Linux calls it --transform)
+                .args(if cfg!(target_os = "linux") { vec!["--transform=s,^creatures.ini.bak,a/CREATURES.INI,"] } else { vec!["-s", ",^creatures.ini.bak,a/CREATURES.INI,"] })
+                .arg("a/creatures.ini").arg("creatures.ini.bak")
                 .status().unwrap().success());
             let out = fresh("t");
             let r = crate::archive::extract(&tp, &out, 1 << 20);

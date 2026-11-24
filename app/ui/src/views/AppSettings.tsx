@@ -474,7 +474,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                 <b>Loner-Strike's folder</b>
                 {storage ? <p className="muted mono small">{storage.folder}</p> : <span className="size-skeleton wide" aria-hidden="true" />}
               </div>
-              <BusyButton busy={busy("app:open-folder")} label={`Show in ${navigator.platform.startsWith("Mac") ? "Finder" : "Explorer"}`} busyLabel="Opening…" onClick={openFolder} />
+              <BusyButton busy={busy("app:open-folder")} label={navigator.platform.startsWith("Mac") ? "Show in Finder" : navigator.platform.startsWith("Win") ? "Show in Explorer" : "Show folder"} busyLabel="Opening…" onClick={openFolder} />
             </div>
           )}
         </div>
@@ -609,7 +609,7 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
             <ul className="plain-list mono small">
               {left.map((f) => <li key={f}>{f}</li>)}
             </ul>
-            <p className="muted">{mac ? "Then drag Loner-Strike to the Trash." : "Then uninstall Loner-Strike in Windows Settings, Apps."}</p>
+            <p className="muted">{mac ? "Then drag Loner-Strike to the Trash." : navigator.platform.startsWith("Win") ? "Then uninstall Loner-Strike in Windows Settings, Apps." : "Then delete the Loner-Strike app file (or uninstall its package)."}</p>
             <div className="row">
               <BusyButton className="btn primary" busy={busy("app:quit")} label="Quit Loner-Strike" busyLabel="Quitting…" onClick={quit} />
             </div>

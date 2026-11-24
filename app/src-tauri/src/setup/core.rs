@@ -22,9 +22,14 @@ pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequic
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
 
-/// A command that runs a Windows program (the plugin compiler) for this install:
-/// through CrossOver's wine on a Mac, directly on Windows.
+/// A command that runs the game's own tool (the plugin compiler) for this install:
+/// through CrossOver's wine on a Mac, directly on Windows and on Linux (the Linux build, made
+/// runnable first: unpacking doesn't keep that).
 pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -> std::process::Command {
+    #[cfg(target_os = "linux")]
+    if install.kind == "linux" {
+        return linux_tool_command(exe);
+    }
     if install.kind == "crossover" {
         let mut c = crate::sys::command(CROSSOVER_WINE);
         c.arg("--bottle").arg(install.bottle.as_deref().unwrap_or("Steam")).arg("--wait-children").arg(exe);
@@ -34,11 +39,48 @@ pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -
     }
 }
 
+/// The Linux amxxpc: a 32-bit program that loads amxxpc32.so from the folder it's run in and
+/// needs the 32-bit C++ library, which Steam's own runtime has (the system may not). Made
+/// runnable first: unpacking doesn't keep that.
+#[cfg(target_os = "linux")]
+fn linux_tool_command(exe: &std::path::Path) -> std::process::Command {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(m) = std::fs::metadata(exe) {
+        if m.permissions().mode() & 0o111 == 0 {
+            let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(m.permissions().mode() | 0o755));
+        }
+    }
+    let dir = exe.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+    let mut libs = vec![dir.clone()];
+    for root in crate::steam::linux_steam_roots() {
+        let rt = root.join("ubuntu12_32/steam-runtime");
+        // (the 32-bit half of the runtime is under i386/: ubuntu12_32/steam-runtime/i386/usr/lib/i386-linux-gnu)
+        libs.extend(["i386/lib/i386-linux-gnu", "i386/usr/lib/i386-linux-gnu"].map(|l| rt.join(l)).into_iter().filter(|p| p.is_dir()));
+    }
+    if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
+        libs.extend(std::env::split_paths(&old));
+    }
+    let mut c = crate::sys::command(exe);
+    c.current_dir(&dir);
+    if let Ok(joined) = std::env::join_paths(libs) {
+        c.env("LD_LIBRARY_PATH", joined);
+    }
+    c
+}
+
+/// What to tell a Linux player whose plugin compiler couldn't start for a missing library.
+pub const LINUX_32BIT_LIBS: &str = "The plugin compiler needs your system's 32-bit C++ library. On Ubuntu or Debian: sudo apt install libstdc++6:i386 (Fedora: sudo dnf install libstdc++.i686), then try again.";
+
+/// The compiler's output says a library was missing (Linux).
+pub fn missing_library(output: &str) -> bool {
+    crate::gamebin::LINUX && output.contains("error while loading shared libraries")
+}
+
 /// Compiles addons/amxmodx/scripting/<src_rel> into plugins/<out_name>.amxx.
 /// Ok(true) when it compiled; Ok(false) (with the reason shown) when it didn't.
 pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str, include_rel: Option<&str>) -> Result<bool, String> {
     let am = rec.game.join("addons").join("amxmodx");
-    let exe = am.join("scripting").join("amxxpc.exe");
+    let exe = am.join("scripting").join(crate::gamebin::AMXXPC);
     // one folder at a time, so Windows gets backslashes throughout: amxxpc takes the
     // plugin's folder (where its own includes are) from the last backslash, and
     // scripting\basebuilder/basebuilder.sma sent it looking one folder too high
@@ -78,6 +120,10 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         ctx.progress.note(&format!("Couldn't compile {src_rel}: the compiler didn't run or took too long."));
         return Ok(false);
     };
+    // (Linux: the 32-bit libraries it needs aren't there; every plugin would fail the same way)
+    if missing_library(&format!("{out}{err}")) {
+        return Err(LINUX_32BIT_LIBS.into());
+    }
     // CrossOver's own chatter (graphics setup, "fixme" notes) isn't the compiler's
     let all: String = format!("{out}{err}").lines().filter(|l| !is_wine_noise(l)).collect::<Vec<_>>().join("\n");
     if !all.contains("Done.") {

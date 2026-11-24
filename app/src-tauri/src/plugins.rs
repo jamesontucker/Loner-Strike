@@ -91,10 +91,13 @@ pub fn add(g: &crate::game::Game, file: &Path) -> Result<String, String> {
             if install.kind == "crossover" && !Path::new("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine").is_file() {
                 return Err("CrossOver isn't installed in Applications, so the plugin can't be compiled. Add its .amxx instead.".into());
             }
-            let mut cmd = crate::setup::core::windows_command(&install, &am.join("scripting/amxxpc.exe"));
+            let mut cmd = crate::setup::core::windows_command(&install, &am.join("scripting").join(crate::gamebin::AMXXPC));
             cmd.arg(&src).arg(format!("-o{}", out.display()));
             let (_, o, e) = crate::sys::run_output(cmd, Duration::from_secs(120)).ok_or("The compiler didn't run.")?;
             let all = format!("{o}{e}");
+            if crate::setup::core::missing_library(&all) {
+                return Err(crate::setup::core::LINUX_32BIT_LIBS.into());
+            }
             if !all.contains("Done.") || !out.is_file() {
                 let errors: Vec<&str> = all.lines().filter(|l| l.to_lowercase().contains("error")).take(4).collect();
                 return Err(format!("It didn't compile: {}", if errors.is_empty() { "the compiler gave no reason".into() } else { errors.join(" / ") }));

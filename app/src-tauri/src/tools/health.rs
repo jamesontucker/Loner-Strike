@@ -1177,7 +1177,7 @@ fn ensure_recorder(install: &crate::steam::Install, am: &Path, server: &str) -> 
     if out.is_file() && std::fs::read_to_string(&stamp).map(|s| s.trim() == hash).unwrap_or(false) {
         return Ok(());
     }
-    let exe = am.join("scripting").join("amxxpc.exe");
+    let exe = am.join("scripting").join(crate::gamebin::AMXXPC);
     if !exe.is_file() {
         return Err(format!("\u{201c}{server}\u{201d} has no AMX Mod X compiler, which the map simulator needs once to build its recorder. Update that server's files and try again."));
     }
@@ -1709,6 +1709,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     }
     let game = st.local_game().ok_or(NO_GAME)?;
     let client = crate::servers::client(st).ok_or(NO_GAME)?;
+    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }

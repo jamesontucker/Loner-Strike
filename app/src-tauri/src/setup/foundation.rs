@@ -49,7 +49,42 @@ pub const REAPI: Pinned = Pinned {
     sha256: "f33a7435540bea8706db3fa948e51a85b511f5b18c383b97402a204dc5419195",
     what: "ReAPI",
 };
-pub const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
+#[allow(dead_code)] // (tests)
+pub const METAMOD_DLL: &str = crate::gamebin::METAMOD_LIBLIST;
+
+/// The Linux builds of the same versions (the native Linux game, and Linux servers: remote.rs)
+pub const METAMOD_LINUX: Pinned = Pinned {
+    url: "https://github.com/Bots-United/metamod-p/releases/download/v1.21p109/metamod-p-v1.21p109-linux_ubuntu2404.tar.xz",
+    sha256: "bea62478a9d50023820188bda3893c720e7e7b1b01570292c747c5ef71829365",
+    what: "Metamod-P",
+};
+pub const AMXX_BASE_LINUX: Pinned = Pinned {
+    url: "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-base-linux.tar.gz",
+    sha256: "d82d1d65c907f358c48bdebc07e20084e7e8c4f4d0e95af275e8b43f32815c7e",
+    what: "AMX Mod X",
+};
+pub const AMXX_CSTRIKE_LINUX: Pinned = Pinned {
+    url: "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-cstrike-linux.tar.gz",
+    sha256: "6a7541a213ef71c47c1348b3457722e95669c0135c60102d5cb5a876341aa808",
+    what: "AMX Mod X's Counter-Strike module",
+};
+
+use crate::gamebin::{Flavor, FLAVORS};
+
+fn is_linux(f: &Flavor) -> bool {
+    f.liblist_key == crate::gamebin::LINUX_FLAVOR.liblist_key
+}
+
+/// The downloads for one set of the game's binaries (gamebin.rs): Metamod-P, AMX Mod X base and
+/// its Counter-Strike addon
+fn pins(f: &Flavor) -> [&'static Pinned; 3] {
+    if is_linux(f) { [&METAMOD_LINUX, &AMXX_BASE_LINUX, &AMXX_CSTRIKE_LINUX] } else { [&METAMOD, &AMXX_BASE, &AMXX_CSTRIKE] }
+}
+
+/// A sub-folder name for one set's unpacked download
+fn sub_for(f: &Flavor, name: &str) -> String {
+    if is_linux(f) { format!("{name}_linux") } else { name.to_string() }
+}
 
 /// AMX Mod X files a player may have customised: never replaced if present, whoever put
 /// them there (plugins.ini with the player's own plugins, users.ini with admins added in the
@@ -106,10 +141,15 @@ fn mentions(rec: &Record, rel: &str, needle: &[u8]) -> bool {
 /// changed, so a download that fails (no internet, a checksum that doesn't match) leaves the
 /// game as it was instead of half updated. The steps then unpack them from the cache.
 pub fn prefetch(rec: &Record, ctx: &Ctx) -> Result<(), String> {
-    let mut all = vec![&AMXX_BASE, &AMXX_CSTRIKE, &REGAMEDLL];
-    if !theirs(rec, "addons/metamod/dlls/metamod.dll") {
-        all.insert(0, &METAMOD);
+    let mut all = vec![];
+    for f in FLAVORS {
+        let [mm, base, cs] = pins(f);
+        if !theirs(rec, f.metamod) {
+            all.push(mm);
+        }
+        all.extend([base, cs]);
     }
+    all.push(&REGAMEDLL);
     for p in all {
         fetch::download(p.url, Some(p.sha256), p.what, ctx.progress)?;
     }
@@ -117,28 +157,45 @@ pub fn prefetch(rec: &Record, ctx: &Ctx) -> Result<(), String> {
 }
 
 pub fn metamod(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
-    // a server that already runs Metamod (often Metamod-R) keeps its own
-    if theirs(rec, "addons/metamod/dlls/metamod.dll") {
-        ctx.progress.note("Kept the Metamod that was already there.");
-    } else {
-        let mm = get(&METAMOD, ctx, tmp, "mm")?;
-        rec.copy(&need(mm.join("addons/metamod/dlls/metamod.dll"), "Metamod-P")?, "addons/metamod/dlls/metamod.dll")?;
+    for f in FLAVORS {
+        // a server that already runs Metamod (often Metamod-R) keeps its own
+        if theirs(rec, f.metamod) {
+            ctx.progress.note("Kept the Metamod that was already there.");
+        } else {
+            let mm = get(pins(f)[0], ctx, tmp, &sub_for(f, "mm"))?;
+            rec.copy(&need(mm.join(f.metamod), "Metamod-P")?, f.metamod)?;
+        }
     }
     let plugins_ini = rec.read("addons/metamod/plugins.ini").unwrap_or_default();
-    if !plugins_ini.to_lowercase().contains("amxmodx_mm.dll") {
-        let sep = if plugins_ini.trim().is_empty() { "" } else { "\r\n" };
-        let text = format!("{}{sep}win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n", plugins_ini.trim_end_matches(['\r', '\n']));
+    if let Some(text) = add_amxx_lines(&plugins_ini) {
         rec.write("addons/metamod/plugins.ini", &text)?;
     }
     Ok(())
+}
+
+/// Metamod's plugins.ini with the line that loads AMX Mod X for each set of binaries (Metamod
+/// reads the win32 lines on Windows and the linux ones on Linux), or None if it has them.
+pub fn add_amxx_lines(plugins_ini: &str) -> Option<String> {
+    let mut text = plugins_ini.to_string();
+    for f in FLAVORS {
+        let file = f.amxx_mm.rsplit('/').next().unwrap_or_default();
+        if !text.to_lowercase().contains(file) {
+            let sep = if text.trim().is_empty() { "" } else { "\r\n" };
+            text = format!("{}{sep}{}\r\n", text.trim_end_matches(['\r', '\n']), f.amxx_mm_line);
+        }
+    }
+    (text != plugins_ini).then_some(text)
 }
 
 pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     // what's there before this step (the Counter-Strike addon's plugins.ini still replaces the
     // base one it just put in on a first install)
     let kept = present(&rec.game);
-    for (p, sub) in [(&AMXX_BASE, "amxx_base"), (&AMXX_CSTRIKE, "amxx_cstrike")] {
-        let src = get(p, ctx, tmp, sub)?;
+    // (the other set first: the native one's copies of the files both have go in last)
+    for f in FLAVORS.iter().rev() {
+    let [_, base, cs] = pins(f);
+    for (p, sub) in [(base, sub_for(f, "amxx_base")), (cs, sub_for(f, "amxx_cstrike"))] {
+        let src = get(p, ctx, tmp, &sub)?;
         ctx.progress.detail("Copying AMX Mod X into the game");
         for (full, rel) in tree(&src) {
             if !rel.starts_with("addons/") {
@@ -150,19 +207,21 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
             rec.copy(&full, &rel)?;
         }
     }
+    }
     // Ham Sandwich with the special-bot queue fix (resources/windows/hamsandwich/README.md).
     // Without it hl.exe uses freed memory on map changes: real Windows crashes on it, Wine
     // on the Mac happens to survive it, but it's the same Windows game there, so CrossOver
-    // installs get the fixed module too. (A server on Linux has its own .so.)
-    if cfg!(windows) || ctx.install.kind == "crossover" {
+    // installs get the fixed module too. The native Linux game gets the fixed .so, the one
+    // Linux servers use.
+    for f in FLAVORS {
         // the app's resources, or the repo's own copy in a dev build
-        let rel = Path::new("windows").join("hamsandwich").join("hamsandwich_amxx.dll");
+        let rel = Path::new(f.ham_fixed_res);
         let mut places = vec![ctx.res.join(&rel)];
         if cfg!(debug_assertions) {
             places.push(super::repo_root().join("app/src-tauri/resources").join(&rel));
         }
         if let Some(patched) = places.into_iter().find(|p| p.is_file()) {
-            rec.copy(&patched, "addons/amxmodx/modules/hamsandwich_amxx.dll")?;
+            rec.copy(&patched, f.ham)?;
         } else {
             ctx.progress.note("Loner-Strike's fixed Ham Sandwich module is missing from the app, so the game may crash on map changes. Reinstalling the app should fix it.");
         }
@@ -183,11 +242,16 @@ pub enum ServerCode {
     Replace,
 }
 
+#[allow(dead_code)] // (tests)
 pub fn server_code(rec: &Record) -> ServerCode {
-    const MP: &str = "dlls/mp.dll";
-    if mentions(rec, MP, b"bot_ls_") {
+    server_code_of(rec, crate::gamebin::MP)
+}
+
+/// The same for one set's server code (`mp`: dlls/mp.dll or dlls/cs.so)
+pub fn server_code_of(rec: &Record, mp: &str) -> ServerCode {
+    if mentions(rec, mp, b"bot_ls_") {
         ServerCode::OurBrain
-    } else if theirs(rec, MP) && mentions(rec, MP, b"ReGameDLL") {
+    } else if theirs(rec, mp) && mentions(rec, mp, b"ReGameDLL") {
         ServerCode::OtherReGameDll
     } else {
         ServerCode::Replace
@@ -198,22 +262,26 @@ pub fn server_code(rec: &Record) -> ServerCode {
 /// ReGameDLL is kept (see ServerCode); Loner-Strike's own brain of any version is updated.
 pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
-    match server_code(rec) {
-        ServerCode::OtherReGameDll => {
-            ctx.progress.note(KEPT_OTHER_REGAMEDLL);
-            ctx.progress.kept_other_brain();
-        }
-        code => {
-            let was_ours_elsewhere = code == ServerCode::OurBrain && !rec.ours("dlls/mp.dll");
-            rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
-            if was_ours_elsewhere {
-                ctx.progress.note("Updated Loner-Strike's bot brain (its ReGameDLL) to the current one. The old one is backed up.");
+    let (mut kept_other, mut updated) = (false, false);
+    for f in FLAVORS {
+        match server_code_of(rec, f.mp) {
+            ServerCode::OtherReGameDll => kept_other = true,
+            code => {
+                updated |= code == ServerCode::OurBrain && !rec.ours(f.mp);
+                rec.copy(&need(rg.join(f.mp_in_regamedll), "ReGameDLL")?, f.mp)?;
             }
         }
     }
+    if kept_other {
+        ctx.progress.note(KEPT_OTHER_REGAMEDLL);
+        ctx.progress.kept_other_brain();
+    }
+    if updated {
+        ctx.progress.note("Updated Loner-Strike's bot brain (its ReGameDLL) to the current one. The old one is backed up.");
+    }
     for cfg in ["game.cfg", "game_init.cfg"] {
         if !rec.exists(cfg) {
-            rec.copy(&need(rg.join("bin/win32/cstrike").join(cfg), "ReGameDLL")?, cfg)?;
+            rec.copy(&need(rg.join(crate::gamebin::NATIVE.regamedll_cfg_dir).join(cfg), "ReGameDLL")?, cfg)?;
         }
     }
     Ok(())
@@ -227,21 +295,34 @@ pub const KEPT_OTHER_REGAMEDLL: &str =
 pub fn use_our_brain(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
     rec.begin("foundation");
-    rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    for f in FLAVORS {
+        rec.copy(&need(rg.join(f.mp_in_regamedll), "ReGameDLL")?, f.mp)?;
+    }
     rec.save()
 }
 
-/// liblist.gam with gamedll pointing at Metamod, or None if it already does.
+/// liblist.gam with gamedll (and on Linux gamedll_linux too) pointing at Metamod, or None if it
+/// already does.
 pub fn point_at_metamod(lib: &str) -> Option<String> {
-    let re = Regex::new(r#"(?m)^gamedll\s+"([^"]*)""#).unwrap();
+    let mut text = lib.to_string();
+    for f in FLAVORS {
+        if let Some(new) = point_key_at_metamod(&text, f.liblist_key, f.metamod_liblist) {
+            text = new;
+        }
+    }
+    (text != lib).then_some(text)
+}
+
+fn point_key_at_metamod(lib: &str, key: &str, mm: &str) -> Option<String> {
+    let re = Regex::new(&format!(r#"(?m)^{key}\s+"([^"]*)""#)).unwrap();
     match re.captures(lib) {
-        None => Some(format!("{}\r\ngamedll \"{METAMOD_DLL}\"\r\n", lib.trim_end_matches(['\r', '\n']))),
+        None => Some(format!("{}\r\n{key} \"{mm}\"\r\n", lib.trim_end_matches(['\r', '\n']))),
         Some(c) => {
             let g = c.get(1).unwrap();
-            if g.as_str().eq_ignore_ascii_case(METAMOD_DLL) {
+            if g.as_str().eq_ignore_ascii_case(mm) {
                 None
             } else {
-                Some(format!("{}{}{}", &lib[..g.start()], METAMOD_DLL, &lib[g.end()..]))
+                Some(format!("{}{}{}", &lib[..g.start()], mm, &lib[g.end()..]))
             }
         }
     }
@@ -266,6 +347,18 @@ mod tests {
 
     #[test]
     fn liblist_rewrite() {
+        if crate::gamebin::LINUX {
+            // the native Linux game reads gamedll_linux (gamedll stays as it was)
+            // both lines: the native game reads gamedll_linux, Proton's Windows one gamedll
+            let lib = "game \"Counter-Strike\"\r\ngamedll \"dlls\\mp.dll\"\r\ngamedll_linux \"dlls/cs.so\"\r\n";
+            assert_eq!(point_at_metamod(lib).unwrap(), "game \"Counter-Strike\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\ngamedll_linux \"addons/metamod/dlls/metamod.so\"\r\n");
+            assert_eq!(point_at_metamod(&point_at_metamod(lib).unwrap()), None);
+            assert_eq!(point_at_metamod("game \"x\"\n\n").unwrap(), "game \"x\"\r\ngamedll_linux \"addons/metamod/dlls/metamod.so\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
+            let ini = add_amxx_lines("; mine\r\n").unwrap();
+            assert_eq!(ini, "; mine\r\nlinux addons/amxmodx/dlls/amxmodx_mm_i386.so\r\nwin32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n");
+            assert_eq!(add_amxx_lines(&ini), None);
+            return;
+        }
         let lib = "game \"Counter-Strike\"\r\ngamedll \"dlls\\mp.dll\"\r\ngamedll_linux \"dlls/cs.so\"\r\n";
         assert_eq!(
             point_at_metamod(lib).unwrap(),
@@ -283,7 +376,7 @@ mod tests {
         for game in ["cstrike", "czero"] {
             let dir = root.join(game);
             std::fs::create_dir_all(dir.join("dlls")).unwrap();
-            let put = |b: &[u8]| std::fs::write(dir.join("dlls/mp.dll"), b).unwrap();
+            let put = |b: &[u8]| std::fs::write(dir.join(crate::gamebin::MP), b).unwrap();
             let rec = Record::open(&dir);
             put(b"MZ...ReGameDLL version: 5.30.0.841-dev...bot_ls_lines\0");
             assert_eq!(server_code(&rec), ServerCode::OurBrain, "an older Loner-Strike brain left behind: updated");
@@ -295,7 +388,7 @@ mod tests {
             let mut rec = Record::open(&dir);
             put(b"MZ...ReGameDLL version: 5.30.0.814-dev...");
             rec.begin("foundation");
-            rec.copy(&dir.join("dlls/mp.dll"), "dlls/mp.dll").unwrap();
+            rec.copy(&dir.join(crate::gamebin::MP), crate::gamebin::MP).unwrap();
             assert_eq!(server_code(&rec), ServerCode::Replace, "{game}: one setup wrote, without the brain");
         }
         let _ = std::fs::remove_dir_all(&root);
