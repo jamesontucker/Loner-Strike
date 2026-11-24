@@ -747,6 +747,23 @@ fn remove_maps(store: &Option<Arc<MapStore>>, mods: &[i64]) -> usize {
     mods.iter().filter(|m| store.uninstall(**m).is_ok()).count()
 }
 
+/// Files Loner-Strike writes in a game folder while it's in use, outside the record: the health
+/// check's liblist.gam backups (liblist.gam.steam-<stamp>, made when Steam had reset it) and the
+/// bot brain's crash and watchdog logs. Removed on a full uninstall; returns how many.
+pub(crate) fn remove_leftovers(game_dir: &Path) -> usize {
+    let Ok(rd) = std::fs::read_dir(game_dir) else { return 0 };
+    rd.flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name == "ls_crash.log"
+                || name == "ls_watchdog.log"
+                || name.strip_prefix("liblist.gam.steam-").is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit() || c == '-'))
+        })
+        .filter(|e| std::fs::remove_file(e.path()).is_ok())
+        .count()
+}
+
 fn uninstall_game(job: &Job, plan: &UninstallPlan, ctx: &Ctx, g: &str) -> Result<(), String> {
     let has = |id: &str| plan.steps.iter().any(|s| s.id == format!("{g}/{id}"));
     let mut rec = open_record(&plan.install, g)?;
@@ -758,6 +775,7 @@ fn uninstall_game(job: &Job, plan: &UninstallPlan, ctx: &Ctx, g: &str) -> Result
             let maps = rec.all_map_mods();
             run_step(job, &format!("{g}/remove"), || {
                 rec.uninstall(None)?;
+                remove_leftovers(&plan.install.hl.join(g));
                 // what the Game Mode Menu and the admin list write themselves, outside the
                 // record (left in place only when AMX Mod X was the player's own)
                 let configs = plan.install.hl.join(g).join("addons/amxmodx/configs");

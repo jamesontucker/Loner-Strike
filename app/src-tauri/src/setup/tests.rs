@@ -507,3 +507,18 @@ fn bots_enabled_in_game_init() {
     assert_eq!(enable_bots("sv_x 1").unwrap(), "sv_x 1\r\nbot_enable \"1\"\r\n");
 }
 
+
+/// A full uninstall's cleanup of what the app and the bot brain write outside the record
+#[test]
+fn uninstall_removes_leftovers() {
+    let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "leftovers-").unwrap();
+    let g = root.as_path();
+    for f in ["liblist.gam.steam-20261124-203912", "ls_crash.log", "ls_watchdog.log", "liblist.gam", "liblist.gam.steam-", "liblist.gam.steam-mine", "config.cfg"] {
+        std::fs::write(g.join(f), "x").unwrap();
+    }
+    assert_eq!(super::remove_leftovers(g), 3);
+    let mut left: Vec<String> = std::fs::read_dir(g).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+    left.sort();
+    assert_eq!(left, ["config.cfg", "liblist.gam", "liblist.gam.steam-", "liblist.gam.steam-mine"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
