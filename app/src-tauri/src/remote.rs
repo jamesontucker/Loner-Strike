@@ -908,8 +908,8 @@ step ready
 
 /// Linux builds of the foundation, the same versions as setup/foundation.rs's Windows ones.
 pub const FOUNDATION_ENV: &[(&str, &str)] = &[
-    ("MM_URL", crate::setup::foundation::METAMOD_LINUX.url),
-    ("MM_SHA", crate::setup::foundation::METAMOD_LINUX.sha256),
+    ("MM_URL", crate::setup::foundation::METAMOD_LINUX_SERVER.url),
+    ("MM_SHA", crate::setup::foundation::METAMOD_LINUX_SERVER.sha256),
     ("AMXX_URL", crate::setup::foundation::AMXX_BASE_LINUX.url),
     ("AMXX_SHA", crate::setup::foundation::AMXX_BASE_LINUX.sha256),
     ("AMXXCS_URL", crate::setup::foundation::AMXX_CSTRIKE_LINUX.url),

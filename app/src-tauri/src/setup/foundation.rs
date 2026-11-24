@@ -52,8 +52,17 @@ pub const REAPI: Pinned = Pinned {
 #[allow(dead_code)] // (tests)
 pub const METAMOD_DLL: &str = crate::gamebin::METAMOD_LIBLIST;
 
-/// The Linux builds of the same versions (the native Linux game, and Linux servers: remote.rs)
+/// The Linux builds of the same versions (the native Linux game, and Linux servers: remote.rs).
+/// The game's Metamod is the Ubuntu 18.04 build (needs glibc 2.4): Steam runs the game in its
+/// own runtime, where the Ubuntu 24.04 build (needs glibc 2.38) fails to load on any system
+/// older than that (Ubuntu 22.04, Mint 21: "version `GLIBC_2.38' not found").
 pub const METAMOD_LINUX: Pinned = Pinned {
+    url: "https://github.com/Bots-United/metamod-p/releases/download/v1.21p109/metamod-p-v1.21p109-linux_ubuntu1804.tar.xz",
+    sha256: "3b77d804cd5687ee18a8535ec02d085e42c9d0da1c12a0683c6aeb25e88d3e1e",
+    what: "Metamod-P",
+};
+/// Linux servers (remote.rs) keep the build they've always had
+pub const METAMOD_LINUX_SERVER: Pinned = Pinned {
     url: "https://github.com/Bots-United/metamod-p/releases/download/v1.21p109/metamod-p-v1.21p109-linux_ubuntu2404.tar.xz",
     sha256: "bea62478a9d50023820188bda3893c720e7e7b1b01570292c747c5ef71829365",
     what: "Metamod-P",
@@ -164,6 +173,13 @@ pub fn metamod(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
         } else {
             let mm = get(pins(f)[0], ctx, tmp, &sub_for(f, "mm"))?;
             rec.copy(&need(mm.join(f.metamod), "Metamod-P")?, f.metamod)?;
+            // the same release with Loner-Strike's fix, where it needs one
+            if let Some(res) = f.metamod_fixed_res {
+                match bundled(ctx, res) {
+                    Some(fixed) => rec.copy(&fixed, f.metamod)?,
+                    None => ctx.progress.note("Loner-Strike's fixed Metamod is missing from the app, so the game may crash when you start a match. Reinstalling the app should fix it."),
+                }
+            }
         }
     }
     let plugins_ini = rec.read("addons/metamod/plugins.ini").unwrap_or_default();
@@ -214,19 +230,23 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
     // installs get the fixed module too. The native Linux game gets the fixed .so, the one
     // Linux servers use.
     for f in FLAVORS {
-        // the app's resources, or the repo's own copy in a dev build
-        let rel = Path::new(f.ham_fixed_res);
-        let mut places = vec![ctx.res.join(&rel)];
-        if cfg!(debug_assertions) {
-            places.push(super::repo_root().join("app/src-tauri/resources").join(&rel));
-        }
-        if let Some(patched) = places.into_iter().find(|p| p.is_file()) {
+        if let Some(patched) = bundled(ctx, f.ham_fixed_res) {
             rec.copy(&patched, f.ham)?;
         } else {
             ctx.progress.note("Loner-Strike's fixed Ham Sandwich module is missing from the app, so the game may crash on map changes. Reinstalling the app should fix it.");
         }
     }
     Ok(())
+}
+
+/// A file Loner-Strike ships under its resources: the app's, or the repo's own copy in a dev build
+fn bundled(ctx: &Ctx, res_rel: &str) -> Option<std::path::PathBuf> {
+    let rel = Path::new(res_rel);
+    let mut places = vec![ctx.res.join(rel)];
+    if cfg!(debug_assertions) {
+        places.push(super::repo_root().join("app/src-tauri/resources").join(rel));
+    }
+    places.into_iter().find(|p| p.is_file())
 }
 
 /// What server code (mp.dll) a game has, as setup sees it (QA4-CORE F4).

@@ -1,0 +1,22 @@
+--- a/metamod/engineinfo.cpp	2026-11-24 13:02:18
++++ b/metamod/engineinfo.cpp	2026-11-24 13:02:18
+@@ -73,6 +73,19 @@
+ 
+ 	const char* pType;
+ 
++	// Loner-Strike: when the game itself hosts (a listen server) the engine is the
++	// client's hw.so (or sw.so), as hw.dll/sw.dll on Windows. Not recognising it left
++	// the code range unset (STATE_NULL, not STATE_INVALID), so every newer engine
++	// function (GetPlayerAuthId on) was judged invalid and passed to plugins as NULL:
++	// AMX Mod X then crashed calling GetPlayerAuthId as a player joined.
++	pC = strrchr( _pName, '/' );
++	pC = pC ? pC + 1 : _pName;
++	if ( 0 == strcmp(pC, "hw.so") || 0 == strcmp(pC, "sw.so") ) {
++		m_type[0] = pC[0];
++		m_type[1] = pC[1];
++		m_type[2] = '\0';
++		return true;
++	}
+ 
+ 	size = strlen( _pName );
+ 	if ( size < 11 ) {

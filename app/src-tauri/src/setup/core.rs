@@ -53,9 +53,14 @@ fn linux_tool_command(exe: &std::path::Path) -> std::process::Command {
     let dir = exe.parent().map(|d| d.to_path_buf()).unwrap_or_default();
     let mut libs = vec![dir.clone()];
     for root in crate::steam::linux_steam_roots() {
-        let rt = root.join("ubuntu12_32/steam-runtime");
-        // (the 32-bit half of the runtime is under i386/: ubuntu12_32/steam-runtime/i386/usr/lib/i386-linux-gnu)
-        libs.extend(["i386/lib/i386-linux-gnu", "i386/usr/lib/i386-linux-gnu"].map(|l| rt.join(l)).into_iter().filter(|p| p.is_dir()));
+        // Steam's own 32-bit libraries: the scout runtime is now a Steam "game"
+        // (steamapps/common/SteamLinuxRuntime, seen 2026-11 with an empty i386 half left in
+        // ubuntu12_32); older clients kept it under ubuntu12_32/steam-runtime/i386
+        let scout = root.join("steamapps/common/SteamLinuxRuntime/steam-runtime");
+        let old = root.join("ubuntu12_32/steam-runtime/i386");
+        for rt in [scout, old] {
+            libs.extend(["lib/i386-linux-gnu", "usr/lib/i386-linux-gnu"].map(|l| rt.join(l)).into_iter().filter(|p| p.is_dir()));
+        }
     }
     if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
         libs.extend(std::env::split_paths(&old));

@@ -28,6 +28,8 @@ pub struct Flavor {
     pub ham: &'static str,
     /// Loner-Strike's fixed Ham Sandwich under the app's resources
     pub ham_fixed_res: &'static str,
+    /// Loner-Strike's fixed Metamod-P under the app's resources, where the download needs a fix
+    pub metamod_fixed_res: Option<&'static str>,
 }
 
 pub const WINDOWS_FLAVOR: Flavor = Flavor {
@@ -41,6 +43,7 @@ pub const WINDOWS_FLAVOR: Flavor = Flavor {
     amxx_mm_line: r"win32 addons\amxmodx\dlls\amxmodx_mm.dll",
     ham: "addons/amxmodx/modules/hamsandwich_amxx.dll",
     ham_fixed_res: "windows/hamsandwich/hamsandwich_amxx.dll",
+    metamod_fixed_res: None,
 };
 
 pub const LINUX_FLAVOR: Flavor = Flavor {
@@ -54,6 +57,9 @@ pub const LINUX_FLAVOR: Flavor = Flavor {
     amxx_mm_line: "linux addons/amxmodx/dlls/amxmodx_mm_i386.so",
     ham: "addons/amxmodx/modules/hamsandwich_amxx_i386.so",
     ham_fixed_res: "linux/hamsandwich/hamsandwich_amxx_i386.so",
+    // the game itself hosting runs its engine as hw.so, which the release doesn't recognise
+    // (resources/linux/metamod/README.md)
+    metamod_fixed_res: Some("linux/metamod/metamod.so"),
 };
 
 /// The sets setup puts in on this computer: the native one first.

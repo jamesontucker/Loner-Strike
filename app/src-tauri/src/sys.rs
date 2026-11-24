@@ -646,7 +646,7 @@ pub fn game_running() -> bool {
 
 /// The game's processes on Linux with their Half-Life folders, from /proc: the native game
 /// (hl_linux), and the Windows one under Proton (hl.exe, whose command line names it the Wine
-/// way: Z:\home\...\Half-Life\hl.exe, Z: being /).
+/// way: Z:\home\...\Half-Life\hl.exe, Z: being /, or under Proton 11 S:\steamapps\...).
 #[cfg(target_os = "linux")]
 pub fn linux_games() -> Vec<(i32, std::path::PathBuf)> {
     let Ok(rd) = std::fs::read_dir("/proc") else { return vec![] };
@@ -660,17 +660,36 @@ pub fn linux_games() -> Vec<(i32, std::path::PathBuf)> {
             }
             let cmd = std::fs::read(e.path().join("cmdline")).ok()?;
             let first = String::from_utf8_lossy(cmd.split(|b| *b == 0).next()?).to_string();
-            proton_game_dir(&first).map(|d| (pid, d))
+            // (Proton maps the Steam library to its own drive, S: in Proton 11: the prefix's
+            // dosdevices links say where each drive is)
+            let drive = |letter: char| {
+                let env = std::fs::read(e.path().join("environ")).ok()?;
+                let prefix = env.split(|b| *b == 0).find_map(|v| v.strip_prefix(b"WINEPREFIX="))?;
+                let devices = std::path::PathBuf::from(String::from_utf8_lossy(prefix).to_string()).join("dosdevices");
+                let target = std::fs::read_link(devices.join(format!("{}:", letter.to_ascii_lowercase()))).ok()?;
+                Some(devices.join(target))
+            };
+            proton_game_dir(&first, drive).map(|d| (pid, d))
         })
         .collect()
 }
 
-/// The Half-Life folder from a Proton game's first argument ("Z:\\home\\me\\...\\Half-Life\\hl.exe"
-/// or a plain Linux path to hl.exe); None for anything else.
+/// The Half-Life folder from a Proton game's first argument: a Wine path to hl.exe
+/// ("Z:\\home\\me\\...\\Half-Life\\hl.exe", Z: being /; another drive through `drive`, which
+/// gives where a drive letter points: "S:\\steamapps\\common\\Half-Life\\hl.exe" with S: the
+/// Steam folder) or a plain Linux path to it; None for anything else.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn proton_game_dir(arg0: &str) -> Option<std::path::PathBuf> {
-    let unix = if arg0.len() > 2 && arg0[..2].eq_ignore_ascii_case("z:") { arg0[2..].replace('\\', "/") } else if arg0.starts_with('/') { arg0.to_string() } else { return None };
-    let p = std::path::PathBuf::from(unix);
+fn proton_game_dir(arg0: &str, drive: impl Fn(char) -> Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    let b = arg0.as_bytes();
+    let p = if b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\' {
+        let rest = arg0[3..].replace('\\', "/");
+        let letter = b[0] as char;
+        if letter.eq_ignore_ascii_case(&'z') { std::path::PathBuf::from("/").join(rest) } else { drive(letter)?.join(rest) }
+    } else if arg0.starts_with('/') {
+        std::path::PathBuf::from(arg0)
+    } else {
+        return None;
+    };
     p.file_name()?.to_str()?.eq_ignore_ascii_case("hl.exe").then(|| p.parent().map(|d| d.to_path_buf())).flatten()
 }
 
@@ -822,10 +841,16 @@ mod path_tests {
     #[test]
     fn proton_game_folder() {
         use super::proton_game_dir;
-        assert_eq!(proton_game_dir(r"Z:\home\me\.local\share\Steam\steamapps\common\Half-Life\hl.exe").unwrap(), std::path::PathBuf::from("/home/me/.local/share/Steam/steamapps/common/Half-Life"));
-        assert_eq!(proton_game_dir("/mnt/lib/steamapps/common/Half-Life/HL.EXE").unwrap(), std::path::PathBuf::from("/mnt/lib/steamapps/common/Half-Life"));
-        assert_eq!(proton_game_dir(r"C:\windows\system32\steam.exe"), None);
-        assert_eq!(proton_game_dir("/usr/bin/bash"), None);
+        use std::path::PathBuf;
+        let none = |_: char| None;
+        assert_eq!(proton_game_dir(r"Z:\home\me\.local\share\Steam\steamapps\common\Half-Life\hl.exe", none).unwrap(), PathBuf::from("/home/me/.local/share/Steam/steamapps/common/Half-Life"));
+        assert_eq!(proton_game_dir("/mnt/lib/steamapps/common/Half-Life/HL.EXE", none).unwrap(), PathBuf::from("/mnt/lib/steamapps/common/Half-Life"));
+        assert_eq!(proton_game_dir(r"C:\windows\system32\steam.exe", none), None);
+        assert_eq!(proton_game_dir("/usr/bin/bash", none), None);
+        // Proton 11 (seen 2026-11-24): the Steam library as S:
+        let s = |l: char| (l == 'S').then(|| PathBuf::from("/home/me/.local/share/Steam"));
+        assert_eq!(proton_game_dir(r"S:\steamapps\common\Half-Life\hl.exe", s).unwrap(), PathBuf::from("/home/me/.local/share/Steam/steamapps/common/Half-Life"));
+        assert_eq!(proton_game_dir(r"S:\steamapps\common\Half-Life\hl.exe", none), None);
     }
 
     #[test]

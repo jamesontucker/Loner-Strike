@@ -222,7 +222,8 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
     }
     // Windows 10's tar.exe (libarchive 3.5) can list but not unpack RAR files that use
     // filters ("Parsing filters is unsupported"), which many older maps do: 7-Zip can.
-    #[cfg(windows)]
+    // Linux's GNU tar reads no rar or 7z at all: 7-Zip there too
+    #[cfg(any(windows, target_os = "linux"))]
     if let Some(sz) = seven_zip() {
         match seven_zip_listing(&sz, archive) {
             Some((_, true, _)) => return Err(HAS_LINKS.into()),
@@ -273,7 +274,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
     let hint = if unar.is_none() && cfg!(target_os = "macos") {
         " Installing unar (brew install unar) lets Loner-Strike open newer RAR files."
     } else if unar.is_none() && cfg!(target_os = "linux") {
-        " Installing unar (or libarchive-tools, for bsdtar) from your system's packages lets Loner-Strike open RAR and 7z files."
+        " Installing unar or 7zip (7zz) from your system's packages lets Loner-Strike open it."
     } else {
         ""
     };
@@ -326,13 +327,38 @@ fn seven_zip() -> Option<PathBuf> {
     bundled.into_iter().chain(installed).find(|p| p.is_file())
 }
 
+/// 7-Zip for Linux: the official static build (7zzs, 7-Zip 26.05 x64) the Linux build ships
+/// (bundle resource linux/7zip/, see tauri.linux.conf.json), run from a copy in the app's data
+/// folder when the bundled one can't be run in place; then a 7zz the user installed.
+#[cfg(target_os = "linux")]
+fn seven_zip() -> Option<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let runnable = |p: &Path| p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0);
+    if let Some(b) = crate::hamguard::bundled("linux/7zip/7zzs") {
+        if runnable(&b) {
+            return Some(b);
+        }
+        let copy = crate::localdata::dir("tools/7zip").join("7zzs");
+        let fresh = copy.metadata().ok().map(|m| m.len()) == b.metadata().ok().map(|m| m.len());
+        if !fresh || !runnable(&copy) {
+            let _ = std::fs::create_dir_all(copy.parent()?);
+            let _ = std::fs::copy(&b, &copy);
+            let _ = std::fs::set_permissions(&copy, std::fs::Permissions::from_mode(0o755));
+        }
+        if runnable(&copy) {
+            return Some(copy);
+        }
+    }
+    sys::find_tool("7zz")
+}
+
 /// `7z x` arguments (before the archive). 7-Zip does make symbolic and hard links on
 /// extraction unless told not to (seen with 26.05: "Cannot create symbolic link" under Wine),
 /// so -snl- -snh- skip link entries; -sns- writes no NTFS alternate streams (they'd be
 /// invisible to the size watcher) and turns a ':' in a name into '_'. Without -spf it keeps
 /// every path inside dest: "..", drive letters and \\server\share are dropped, CON/AUX/NUL
 /// get a leading '_'. The output folder goes in as an OsString so no character is lost.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn seven_zip_x_args(dest: &Path) -> Vec<std::ffi::OsString> {
     let mut out = std::ffi::OsString::from("-o");
     out.push(dest.as_os_str());
@@ -343,7 +369,7 @@ fn seven_zip_x_args(dest: &Path) -> Vec<std::ffi::OsString> {
 
 /// The line worth showing from 7-Zip's stderr: its last ERROR line ("Open ERROR: Cannot
 /// open the file as [7z] archive", "ERROR: Data Error : maps\x.bsp"), else its last line.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn seven_zip_error(stderr: &str) -> String {
     let lines: Vec<&str> = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     let line = lines.iter().rev().find(|l| l.contains("ERROR")).or(lines.last()).copied().unwrap_or("unknown error");
@@ -351,7 +377,7 @@ fn seven_zip_error(stderr: &str) -> String {
 }
 
 /// (total unpacked size, has links, entries) from `7z l -slt`, or None if 7-Zip can't read it.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn seven_zip_listing(sz: &Path, archive: &Path) -> Option<(u64, bool, usize)> {
     let mut c = sys::command(sz);
     c.args(["l", "-slt"]).arg(archive);

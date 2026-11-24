@@ -3,7 +3,9 @@
   "bundle": {
     "targets": ["appimage", "deb"],
     "resources": {
-      "resources/linux/hamsandwich/": "linux/hamsandwich/"
+      "resources/linux/hamsandwich/": "linux/hamsandwich/",
+      "resources/linux/7zip/": "linux/7zip/",
+      "resources/linux/metamod/": "linux/metamod/"
     },
     "linux": {
       "deb": {

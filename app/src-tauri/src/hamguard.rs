@@ -44,6 +44,12 @@ fn fixed_dll() -> Option<PathBuf> {
     fixed_from(crate::gamebin::HAM_FIXED_RES)
 }
 
+/// A file the app ships under its resources (res_rel as in the bundle config)
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) fn bundled(res_rel: &str) -> Option<PathBuf> {
+    fixed_from(res_rel)
+}
+
 fn fixed_from(res_rel: &str) -> Option<PathBuf> {
     let rel = Path::new(res_rel);
     let mut places: Vec<PathBuf> = RES.get().map(|r| r.join(rel)).into_iter().collect();
