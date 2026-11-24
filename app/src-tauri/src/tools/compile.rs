@@ -130,8 +130,12 @@ const MARKER: &str = "loner-strike-verified.json";
 fn required_files() -> Vec<String> {
     let mut v = vec!["LICENSE.md".to_string(), "tools/sdhlt.wad".into(), "tools/settings.txt".into(), "tools/lights.rad".into()];
     for s in Stage::ALL {
-        v.push(format!("tools/Win64/{}_x64.exe", s.program()));
-        v.push(format!("tools/Win32/{}.exe", s.program()));
+        if crate::gamebin::LINUX {
+            v.push(format!("tools/Linux/{}", s.program()));
+        } else {
+            v.push(format!("tools/Win64/{}_x64.exe", s.program()));
+            v.push(format!("tools/Win32/{}.exe", s.program()));
+        }
     }
     v
 }
@@ -148,7 +152,8 @@ pub fn checksum_ok(path: &Path, expected: &str) -> bool {
 }
 
 /// Unpacks a downloaded release zip (already checked) into `dir`: the zip's own top folder
-/// is dropped, the Linux builds aren't kept, and a marker says it was checked.
+/// is dropped, the Linux builds are kept only on Linux (made runnable there), and a marker
+/// says it was checked.
 pub fn install_zip(zip: &Path, dir: &Path) -> Result<(), String> {
     if !checksum_ok(zip, SDHLT_SHA256) {
         return Err("The SDHLT download isn't the file Loner-Strike was tested with, so it wasn't used. Try again later.".into());
@@ -159,7 +164,16 @@ pub fn install_zip(zip: &Path, dir: &Path) -> Result<(), String> {
     crate::setup::fetch::unpack(zip, &tmp)?;
     let root = tmp.join(ZIP_ROOT);
     let from = if root.is_dir() { root } else { tmp.clone() };
-    let _ = std::fs::remove_dir_all(from.join("tools").join("Linux"));
+    if crate::gamebin::LINUX {
+        // (zip entries don't carry the Unix run permission)
+        #[cfg(unix)]
+        for e in std::fs::read_dir(from.join("tools").join("Linux")).into_iter().flatten().flatten() {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(e.path(), std::fs::Permissions::from_mode(0o755));
+        }
+    } else {
+        let _ = std::fs::remove_dir_all(from.join("tools").join("Linux"));
+    }
     let _ = std::fs::remove_dir_all(from.join("media"));
     let _ = std::fs::remove_dir_all(dir);
     std::fs::rename(&from, dir).map_err(|e| format!("Couldn't put SDHLT in place ({e})."))?;
@@ -339,7 +353,10 @@ impl Layout {
     }
 
     pub fn exe(&self, stage: Stage) -> PathBuf {
-        if self.x64 {
+        if crate::gamebin::LINUX && self.runner == Runner::Native {
+            // the release's own Linux builds (64-bit)
+            self.tools.join("Linux").join(stage.program())
+        } else if self.x64 {
             self.tools.join("Win64").join(format!("{}_x64.exe", stage.program()))
         } else {
             self.tools.join("Win32").join(format!("{}.exe", stage.program()))
@@ -402,9 +419,37 @@ pub fn layout_for(client: &crate::steam::Install, install: &Path, copy: bool) ->
         Ok(Layout { runner: Runner::Wine { wine, bottle: client.bottle.clone().unwrap_or_else(|| "Steam".into()) }, tools, work: base.join("work"), x64: bottle_is_64(&bottle_dir), threads: None })
     } else if cfg!(windows) {
         Ok(Layout { runner: Runner::Native, tools: install.join("tools"), work: compile_dir().join("work"), x64: std::env::consts::ARCH != "x86", threads: None })
+    } else if crate::gamebin::LINUX {
+        linux_glibc_ok()?;
+        Ok(Layout { runner: Runner::Native, tools: install.join("tools"), work: compile_dir().join("work"), x64: true, threads: None })
     } else {
         Err("Compiling maps works on Windows, and on a Mac with CrossOver.".into())
     }
+}
+
+/// SDHLT's Linux builds (made on Ubuntu 24.04) need glibc 2.38 or newer.
+#[cfg(target_os = "linux")]
+fn linux_glibc_ok() -> Result<(), String> {
+    // SAFETY: gnu_get_libc_version returns a static string
+    let v = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) }.to_string_lossy().to_string();
+    if glibc_at_least(&v, 2, 38) {
+        Ok(())
+    } else {
+        Err(format!("The map compiler needs a newer Linux than this one (it needs glibc 2.38; this system has {v}): Ubuntu 24.04, Linux Mint 22, Fedora 39, the Steam Deck or newer."))
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_glibc_ok() -> Result<(), String> {
+    Ok(())
+}
+
+/// "2.35" against 2.38
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn glibc_at_least(v: &str, major: u32, minor: u32) -> bool {
+    let mut it = v.split('.').map(|p| p.trim().parse::<u32>().unwrap_or(0));
+    let (a, b) = (it.next().unwrap_or(0), it.next().unwrap_or(0));
+    (a, b) >= (major, minor)
 }
 
 /// Copies the tools folder (not the Linux builds) where wine can see it; files already there
@@ -2570,7 +2615,7 @@ mod tests {
         assert!(!is_installed(&dest));
         std::fs::write(dest.join(MARKER), json!({"sha256": SDHLT_SHA256}).to_string()).unwrap();
         assert!(is_installed(&dest));
-        std::fs::remove_file(dest.join("tools/Win64/sdHLRAD_x64.exe")).unwrap();
+        std::fs::remove_file(dest.join(if crate::gamebin::LINUX { "tools/Linux/sdHLRAD" } else { "tools/Win64/sdHLRAD_x64.exe" })).unwrap();
         assert!(!is_installed(&dest));
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(SDHLT_SHA256.len(), 64);
@@ -2582,8 +2627,13 @@ mod tests {
         let w = native("C:\\Users\\a\\AppData\\Roaming\\Loner-Strike\\tools\\sdhlt\\v1.3.1\\tools");
         let map = Path::new("C:\\work\\room\\room");
         let (prog, args) = w.command_line(Stage::Csg, Preset::Normal, map, &wadinclude_args(&["mine.wad".into()])).unwrap();
-        assert!(prog.to_string_lossy().ends_with("sdHLCSG_x64.exe"));
-        assert!(prog.to_string_lossy().contains("Win64"));
+        if crate::gamebin::LINUX {
+            // (Linux: the release's own Linux build)
+            assert!(prog.to_string_lossy().ends_with("Linux/sdHLCSG"), "{}", prog.display());
+        } else {
+            assert!(prog.to_string_lossy().ends_with("sdHLCSG_x64.exe"));
+            assert!(prog.to_string_lossy().contains("Win64"));
+        }
         assert_eq!(args, vec!["-low", "-wadinclude", "mine.wad", "C:\\work\\room\\room"]);
         let (_, args) = w.command_line(Stage::Rad, Preset::Fast, map, &[]).unwrap();
         assert_eq!(args, vec!["-low", "-fast", "C:\\work\\room\\room"]);
@@ -2600,7 +2650,9 @@ mod tests {
         assert_eq!(args, vec!["-low", "-threads", "6", "C:\\work\\room\\room"]);
         let mut w32 = w.clone();
         w32.x64 = false;
-        assert!(w32.exe(Stage::Bsp).ends_with("Win32/sdHLBSP.exe") || w32.exe(Stage::Bsp).to_string_lossy().ends_with("sdHLBSP.exe"));
+        if !crate::gamebin::LINUX {
+            assert!(w32.exe(Stage::Bsp).ends_with("Win32/sdHLBSP.exe") || w32.exe(Stage::Bsp).to_string_lossy().ends_with("sdHLBSP.exe"));
+        }
 
         // macOS: CrossOver's wine with the bottle, everything as C:\ paths, the cap after the exe
         let mut m = wine();

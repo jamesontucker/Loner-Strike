@@ -1564,9 +1564,6 @@ fn check_extras(e: &mut Entry, all: &[Entry], notes: &mut Vec<String>) {
 /// A new server for a restore: fresh id, folder and port, with the backup's choices.
 fn new_entry(st: &Shared, m: &Manifest, saved: Option<&Saved>, name: &str, remote: Option<crate::remote::RemoteInfo>, notes: &mut Vec<String>) -> Result<Entry, String> {
     let client = servers::client(st).ok_or("Set up the game on this computer first: servers are made from it, and their plugins are built with it.")?;
-    if remote.is_none() {
-        servers::local_servers_here(&client)?;
-    }
     if client.kind == "crossover" && !Path::new(servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. It's needed to run and build servers on a Mac.".into());
     }

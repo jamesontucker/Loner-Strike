@@ -1009,7 +1009,7 @@ fn setup_busy() -> Option<String> {
 
 /// The player's servers on this computer a hidden copy can be made of, for a game.
 pub(crate) fn sources(game: &str) -> Vec<crate::servers::Entry> {
-    crate::servers::load().into_iter().filter(|e| e.remote.is_none() && e.ready && e.game == game && e.dir.join("hlds.exe").is_file()).collect()
+    crate::servers::load().into_iter().filter(|e| e.remote.is_none() && e.ready && e.game == game && crate::servers::hlds_in(&e.dir).is_file()).collect()
 }
 
 pub(crate) fn game_folder(g: &crate::game::Game) -> &'static str {
@@ -1258,16 +1258,8 @@ fn low_priority(cmd: &mut std::process::Command) {
 }
 
 pub(crate) fn spawn(client: &crate::steam::Install, dir: &Path, args: &[String], log: std::fs::File) -> Result<std::process::Child, String> {
-    let hlds = dir.join("hlds.exe");
-    let mut cmd = if client.kind == "crossover" {
-        let mut c = crate::sys::command(crate::servers::CROSSOVER_WINE);
-        let win = crate::servers::windows_path(&hlds).ok_or("The hidden server has to be inside the game's CrossOver bottle.")?;
-        c.arg("--bottle").arg(client.bottle.as_deref().unwrap_or("Steam")).arg(win);
-        c.env("WINEDEBUG", "-all");
-        c
-    } else {
-        crate::sys::command(&hlds)
-    };
+    let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, true)
+        .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
     low_priority(&mut cmd);
     cmd.args(args).current_dir(dir).stdin(std::process::Stdio::null()).stdout(log.try_clone().map_err(|e| e.to_string())?).stderr(log);
     cmd.spawn().map_err(|e| format!("The hidden server didn't start ({e})."))
@@ -1583,7 +1575,7 @@ fn run(p: Plan) -> Result<Option<String>, String> {
         update(|r| r.detail = "Clearing the old hidden server".into());
         std::fs::remove_dir_all(&p.hidden).map_err(|e| format!("Couldn't clear the old hidden server ({e})."))?;
     }
-    let first = !p.hidden.join("hlds.exe").is_file();
+    let first = !crate::servers::hlds_in(&p.hidden).is_file();
     match &p.src.dir {
         Some(dir) => {
             update(|r| r.detail = if first { format!("Making a hidden copy of \u{201c}{}\u{201d} (the first time takes a while)", p.src.name) } else { format!("Bringing the hidden copy of \u{201c}{}\u{201d} up to date", p.src.name) });
@@ -1709,7 +1701,6 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     }
     let game = st.local_game().ok_or(NO_GAME)?;
     let client = crate::servers::client(st).ok_or(NO_GAME)?;
-    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }

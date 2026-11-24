@@ -1318,7 +1318,6 @@ fn state_json(m: &MapFile, v: &View, ctx: &MapCtx, extra: Value, can_rebuild: Re
 /// Whether this computer can rebuild knowledge (Err: why not, in plain words).
 fn rebuild_ready(st: &Shared, m: &MapFile) -> Result<(), String> {
     let client = crate::servers::client(st).ok_or("Set up the game on this computer first.")?;
-    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !std::path::Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
@@ -1615,14 +1614,13 @@ fn read_new(path: &std::path::Path, from: &mut u64) -> String {
 /// Starts the rebuild job for the saved nav at `nav_path`. Returns the job id.
 fn start_rebuild(client: crate::steam::Install, m: MapFile, nav_path: PathBuf) -> Result<String, String> {
     use crate::navs::Learner;
-    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !std::path::Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
     let brain = brain_dll(&m)?;
     let n = Nav::parse(&crate::caps::read_file(&nav_path, "saved nav", crate::goldsrc::nav::MAX_NAV)?).map_err(|e| e.to_string())?; // [Caps]
     let root = crate::servers::root_for(&client)?;
-    let first = !root.join(".base/hlds.exe").is_file();
+    let first = !crate::servers::hlds_in(&root.join(".base")).is_file();
     let secs = rebuild_seconds(n.areas.len());
     let steps = vec![
         crate::setup::server_step(&m.game, "knowfix-prep", if first { "Getting a hidden server ready (downloads Valve's server the first time, about 1 GB)" } else { "Getting a hidden server ready" }, 1.0),
@@ -1697,22 +1695,15 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
         let mut rng = rand::thread_rng();
         (0..20).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect()
     };
-    let hlds = dir.join("hlds.exe");
+    let hlds = crate::servers::hlds_in(dir);
     if !hlds.is_file() {
         return Err("The hidden server's files are missing.".into());
     }
     let log_path = dir.join("knowledge-server.log");
     let log = std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
     let spawn = |log: std::fs::File| -> Result<std::process::Child, String> {
-        let mut cmd = if client.kind == "crossover" {
-            let mut c = crate::sys::command(crate::servers::CROSSOVER_WINE);
-            let win = crate::servers::windows_path(&hlds).ok_or("The hidden server has to be inside the game's CrossOver bottle.")?;
-            c.arg("--bottle").arg(client.bottle.as_deref().unwrap_or("Steam")).arg(win);
-            c.env("WINEDEBUG", "-all");
-            c
-        } else {
-            crate::sys::command(&hlds)
-        };
+        let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, true)
+            .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
         low_priority(&mut cmd);
         cmd.args(crate::navs::learn_args(&m.game, port, &password, &m.name))
             .current_dir(dir)

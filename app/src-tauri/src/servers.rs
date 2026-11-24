@@ -28,17 +28,67 @@ use std::time::{Duration, Instant};
 
 pub(crate) const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
 
-/// Servers on this computer run Valve's Windows server (through CrossOver on a Mac); the native
-/// Linux one isn't wired up yet, so on Linux they (and the hidden server behind map learning,
-/// the map simulator, Studio's test runs) say so instead of starting. Servers on a VPS work.
-pub(crate) const LINUX_NO_LOCAL: &str = "Servers on this computer aren't available on Linux yet, so this can't run here. A server on a Linux VPS works (Servers, New server).";
+/// The dedicated server program in a server folder: Valve's Linux server on Linux (servers on
+/// this computer, the hidden ones behind map learning, the map simulator and Studio's test runs),
+/// the Windows one elsewhere (through CrossOver on a Mac).
+pub(crate) fn hlds_in(dir: &Path) -> PathBuf {
+    dir.join(HLDS)
+}
 
-/// Err(LINUX_NO_LOCAL) for the native Linux game.
-pub(crate) fn local_servers_here(client: &Install) -> Result<(), String> {
-    if client.kind == "linux" {
-        return Err(LINUX_NO_LOCAL.into());
+/// Its file name (hlds_linux, hlds.exe)
+pub(crate) const HLDS: &str = if crate::gamebin::LINUX { "hlds_linux" } else { "hlds.exe" };
+
+/// A command that starts the dedicated server in `dir` (its arguments, folder and output are
+/// the caller's): CrossOver's wine with the bottle for the Mac's Windows server, the program
+/// itself on Windows and Linux. On Linux it finds its own libraries in its folder
+/// (LD_LIBRARY_PATH, as hlds_run sets it) and Steam's steamclient.so in ~/.steam/sdk32.
+pub(crate) fn hlds_command(kind: &str, bottle: Option<&str>, dir: &Path, quiet_wine: bool) -> Result<std::process::Command, String> {
+    let hlds = hlds_in(dir);
+    if kind == "crossover" {
+        let mut c = sys::command(CROSSOVER_WINE);
+        let win = windows_path(&hlds).ok_or("The server has to be inside the game's CrossOver bottle.")?;
+        c.arg("--bottle").arg(bottle.unwrap_or("Steam")).arg(win);
+        if quiet_wine {
+            c.env("WINEDEBUG", "-all");
+        }
+        return Ok(c);
     }
-    Ok(())
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(m) = std::fs::metadata(&hlds) {
+            if m.permissions().mode() & 0o111 == 0 {
+                let _ = std::fs::set_permissions(&hlds, std::fs::Permissions::from_mode(m.permissions().mode() | 0o755));
+            }
+        }
+        linux_steamclient();
+        let mut c = sys::command(&hlds);
+        let mut libs = vec![dir.to_path_buf()];
+        if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
+            libs.extend(std::env::split_paths(&old));
+        }
+        if let Ok(joined) = std::env::join_paths(libs) {
+            c.env("LD_LIBRARY_PATH", joined);
+        }
+        return Ok(c);
+    }
+    #[allow(unreachable_code)]
+    Ok(sys::command(&hlds))
+}
+
+/// The Linux server loads Steam's 32-bit steamclient.so from ~/.steam/sdk32 (the Steam client
+/// keeps one there; else SteamCMD's own copy is linked in, as on a VPS).
+#[cfg(target_os = "linux")]
+fn linux_steamclient() {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
+    let sdk = home.join(".steam/sdk32");
+    if sdk.join("steamclient.so").exists() {
+        return;
+    }
+    let ours = steamcmd_dir().join("linux32/steamclient.so");
+    if ours.is_file() && std::fs::create_dir_all(&sdk).is_ok() {
+        let _ = std::os::unix::fs::symlink(&ours, sdk.join("steamclient.so"));
+    }
 }
 /// Where servers went before they moved into Loner-Strike/Servers (still recognised)
 const FOLDER: &str = "Loner-Strike Servers";
@@ -59,7 +109,7 @@ pub struct Entry {
     pub port: u16,
     /// The server's folder (hlds.exe and the game folder inside)
     pub dir: PathBuf,
-    /// "crossover" (Mac) or "windows", like the game it was made from
+    /// "crossover" (Mac), "windows" or "linux", like the game it was made from
     pub kind: String,
     pub bottle: Option<String>,
     /// "lan": this network only; "unlisted": anyone with the address; "listed": in Steam's server browser
@@ -262,7 +312,7 @@ impl Entry {
     }
 
     fn hlds(&self) -> PathBuf {
-        self.dir.join("hlds.exe")
+        hlds_in(&self.dir)
     }
 
     /// The panel's RCON password, shared with the plugin (game.rs writes it).
@@ -826,8 +876,12 @@ pub(crate) fn download_hlds(job: &Job, dir: &Path, game: &str) -> Result<(), Str
 /// Counter-Strike (app 10) from an existing download and still said "Success!" (QA4-F F7),
 /// and a server made from that hangs at "Console initialized." forever.
 pub(crate) fn base_problem(dir: &Path, game: &str) -> Option<String> {
-    let need = ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"];
-    for f in need.iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+    let need = if crate::gamebin::LINUX {
+        ["hlds_linux", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.so", "valve/liblist.gam"]
+    } else {
+        ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"]
+    };
+    for f in need.iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/{}", crate::gamebin::MP)]) {
         if !dir.join(&f).is_file() {
             return Some(format!("{f} is missing"));
         }
@@ -929,7 +983,8 @@ fn steamcmd_app_90(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
         let mut cmd = sys::command(steamcmd_exe());
         cmd.current_dir(steamcmd_dir())
             .arg("+@sSteamCmdForcePlatformType")
-            .arg("windows")
+            // (Valve's Windows server, run through CrossOver on a Mac; Linux runs its own)
+            .arg(if crate::gamebin::LINUX { "linux" } else { "windows" })
             .arg("+force_install_dir")
             .arg(dir)
             .arg("+login")
@@ -962,7 +1017,7 @@ fn steamcmd_app_90(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
         }
         let _ = child.wait();
         sys::untie(child.id());
-        if ok && dir.join("hlds.exe").is_file() && dir.join(game).join("liblist.gam").is_file() {
+        if ok && hlds_in(dir).is_file() && dir.join(game).join("liblist.gam").is_file() {
             return Ok(());
         }
         setup::Progress::detail(job, &format!("Trying again ({attempt} of 4)…"));
@@ -1111,7 +1166,6 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     if !crate::sharing::password_ok(&join_pw) {
         return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
     }
-    local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The server runs through it, like the game.".into());
     }
@@ -2188,8 +2242,8 @@ fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(
     };
 
     let rh = get(&REHLDS, "rh")?;
-    let bin = rh.join("bin").join("win32");
-    if !bin.join("swds.dll").is_file() {
+    let (bin, engine) = if crate::gamebin::LINUX { (rh.join("bin").join("linux32"), "engine_i486.so") } else { (rh.join("bin").join("win32"), "swds.dll") };
+    if !bin.join(engine).is_file() {
         return Err("The ReHLDS download is missing its engine. Try again.".into());
     }
     let keep = dir.join(".valve-engine");
@@ -2204,7 +2258,8 @@ fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(
 
     let gdir = dir.join(game);
     let ra = get(&REAPI, "reapi")?;
-    copy(&ra.join("addons/amxmodx/modules/reapi_amxx.dll"), &gdir.join("addons/amxmodx/modules/reapi_amxx.dll"))?;
+    let reapi = if crate::gamebin::LINUX { "addons/amxmodx/modules/reapi_amxx_i386.so" } else { "addons/amxmodx/modules/reapi_amxx.dll" };
+    copy(&ra.join(reapi), &gdir.join(reapi))?;
 
     let ini = gdir.join("addons/metamod/plugins.ini");
     // as bytes: the file may not be UTF-8, and its other lines must stay as they are
@@ -2316,8 +2371,8 @@ fn import_motd(game_dir: &Path, cfg: &str, data: &Path) -> &'static str {
 
 pub fn import(dir: &Path) -> Result<Value, String> {
     let dir = sys::canonical(dir).map_err(|_| "That folder isn't there.".to_string())?;
-    if !dir.join("hlds.exe").is_file() {
-        return Err("That folder has no hlds.exe. Pick the folder the dedicated server is in.".into());
+    if !hlds_in(&dir).is_file() {
+        return Err(format!("That folder has no {HLDS}. Pick the folder the dedicated server is in."));
     }
     let game = ["cstrike", "czero"]
         .into_iter()
@@ -2325,6 +2380,8 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         .ok_or("No Counter-Strike 1.6 or Condition Zero folder in there.")?;
     let (kind, bottle) = if cfg!(windows) {
         ("windows".to_string(), None)
+    } else if crate::gamebin::LINUX {
+        ("linux".to_string(), None)
     } else {
         let b = bottle_of(&dir).ok_or("On a Mac the server has to be inside a CrossOver bottle (its drive_c), so it can run.")?;
         ("crossover".to_string(), Some(b))
@@ -2526,7 +2583,7 @@ pub(crate) fn launch_args(e: &Entry) -> Vec<String> {
     // bot_join_after_player back on every map, so friends.cfg carries it, see write_bots_line)
     let extra = extra_args(&e.extra_args).unwrap_or_default();
     let cfg = sys::read_latin1(&e.dir.join(&e.game).join("server.cfg")).unwrap_or_default();
-    a.extend(netcode_args(&extra, &cfg, e.remote.is_some(), e.tick_rate));
+    a.extend(netcode_args(&extra, &cfg, e.remote.is_some() || e.kind == "linux", e.tick_rate));
     a.extend(extra);
     a
 }
@@ -2604,7 +2661,7 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         c.arg("--bottle").arg(e.bottle.as_deref().unwrap_or("Steam")).arg(win);
         c
     } else {
-        sys::command(e.hlds())
+        hlds_command(&e.kind, None, &e.dir, false)?
     };
     cmd.args(launch_args(e))
         .current_dir(&e.dir)
@@ -4138,7 +4195,7 @@ async fn api_pick_folder(State(st): State<Shared>, headers: HeaderMap, body: Opt
     let title = match body.as_ref().and_then(|Json(b)| b["purpose"].as_str()) {
         Some("servers") => "Pick the folder new servers go in",
         Some("game") => "Pick the Half-Life folder (with cstrike or czero inside)",
-        _ => "Pick the dedicated server's folder (with hlds.exe)",
+        _ => if crate::gamebin::LINUX { "Pick the dedicated server's folder (with hlds_linux)" } else { "Pick the dedicated server's folder (with hlds.exe)" },
     };
     let picked = tokio::task::spawn_blocking(move || app.dialog().file().set_title(title).blocking_pick_folder())
         .await
@@ -4372,7 +4429,8 @@ mod tests {
 
     /// P5 (QA4-F F7): a whole fake server download (the files base_problem checks, 1000 in valve, 3 maps).
     fn fake_base(dir: &Path, game: &str) {
-        for f in ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"].iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+        let (hl, server) = if crate::gamebin::LINUX { ("valve/dlls/hl.so", "dlls/cs.so") } else { ("valve/dlls/hl.dll", "dlls/mp.dll") };
+        for f in [HLDS, "valve/gfx.wad", "valve/delta.lst", hl, "valve/liblist.gam"].iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/{server}")]) {
             let p = dir.join(f);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(p, b"x").unwrap();

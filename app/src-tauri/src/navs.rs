@@ -453,7 +453,6 @@ const KNOWN: &str = "known";
 /// Starts teaching bots `maps` (the ones they already know only with `relearn`). Returns
 /// the job id.
 pub fn start_learning(client: Install, maps: Vec<String>, relearn: bool) -> Result<String, String> {
-    servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
@@ -684,19 +683,12 @@ impl LocalLearner {
     }
 
     fn spawn(&self, args: &[String], log: std::fs::File) -> Result<Child, String> {
-        let hlds = self.dir.join("hlds.exe");
+        let hlds = servers::hlds_in(&self.dir);
         if !hlds.is_file() {
             return Err("The hidden server's files are missing.".into());
         }
-        let mut cmd = if self.client.kind == "crossover" {
-            let mut c = sys::command(servers::CROSSOVER_WINE);
-            let win = servers::windows_path(&hlds).ok_or("The hidden server has to be inside the game's CrossOver bottle.")?;
-            c.arg("--bottle").arg(self.client.bottle.as_deref().unwrap_or("Steam")).arg(win);
-            c.env("WINEDEBUG", "-all");
-            c
-        } else {
-            sys::command(&hlds)
-        };
+        let mut cmd = servers::hlds_command(&self.client.kind, self.client.bottle.as_deref(), &self.dir, true)
+            .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
         low_priority(&mut cmd);
         cmd.args(args)
             .current_dir(&self.dir)
@@ -816,7 +808,7 @@ fn read_new(path: &Path, from: &mut u64) -> String {
 impl Learner for LocalLearner {
     fn prepare(&mut self, job: &Job, games: &[String]) -> Result<(), String> {
         for g in games {
-            if !(self.base.join("hlds.exe").is_file() && self.base.join(g).join("liblist.gam").is_file()) {
+            if !(servers::hlds_in(&self.base).is_file() && self.base.join(g).join("liblist.gam").is_file()) {
                 job.detail("Downloading the server from Valve (the first time only, about 1 GB)");
                 servers::ensure_steamcmd(job)?;
                 servers::download_hlds(job, &self.base, g)?;

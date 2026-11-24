@@ -249,7 +249,6 @@ struct Hidden {
 fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), String> {
     let game = st.local_game().ok_or(super::NO_GAME)?;
     let client = crate::servers::client(st).ok_or(super::NO_GAME)?;
-    crate::servers::local_servers_here(&client)?;
     if client.kind == "crossover" && !Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
@@ -264,7 +263,7 @@ fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), S
     let dir = root.join(HIDDEN);
     // (testing: LS_TEST_RUN_SOURCE, a server folder to copy when the app lists none: a sim copy)
     let src = super::super::health::sources(&gf).into_iter().next().map(|e| (e.id, e.name, e.dir)).or_else(|| {
-        std::env::var_os("LS_TEST_RUN_SOURCE").map(PathBuf::from).filter(|d| d.join("hlds.exe").is_file()).map(|d| ("test-source".to_string(), "the test server".to_string(), d))
+        std::env::var_os("LS_TEST_RUN_SOURCE").map(PathBuf::from).filter(|d| crate::servers::hlds_in(d).is_file()).map(|d| ("test-source".to_string(), "the test server".to_string(), d))
     });
     let id = src.as_ref().map(|e| e.0.clone()).unwrap_or_else(|| "game".into());
     let mark = dir.join(MARK);
@@ -272,7 +271,7 @@ fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), S
         step("Clearing the old hidden server");
         std::fs::remove_dir_all(&dir).map_err(|e| format!("Couldn't clear the old hidden server ({e})."))?;
     }
-    let first = !dir.join("hlds.exe").is_file();
+    let first = !crate::servers::hlds_in(&dir).is_file();
     let temporary = src.is_none();
     match src {
         Some((_, name, from)) => {
@@ -359,7 +358,14 @@ fn pkill_ours(dir: &Path) {
         c.arg("-f").arg(format!(r"{parent}.\.studio-test.hlds\.exe"));
         let _ = crate::sys::run_output(c, Duration::from_secs(5));
     }
-    #[cfg(not(target_os = "macos"))]
+    // (Linux: the server is its own program, hlds_linux in that folder)
+    #[cfg(target_os = "linux")]
+    {
+        let mut c = crate::sys::command("pkill");
+        c.arg("-f").arg(format!("^{}", regex::escape(&crate::servers::hlds_in(dir).to_string_lossy())));
+        let _ = crate::sys::run_output(c, Duration::from_secs(5));
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = dir;
 }
 
