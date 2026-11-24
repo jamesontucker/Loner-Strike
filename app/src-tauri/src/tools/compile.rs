@@ -46,9 +46,19 @@ pub const SDHLT_URL: &str = "https://github.com/seedee/SDHLT/releases/download/v
 /// SHA-256 of sdhlt-v1.3.1.zip as published on 2026-10-16 (checked 2026-11-12).
 pub const SDHLT_SHA256: &str = "d206ddb73dc0d37f577b70b7e2503277a5092e7ab3e5b198a949fb49273ea8ea";
 pub const SDHLT_BYTES: u64 = 3_030_448;
+/// Linux: Loner-Strike's own build of the same version's Linux tools, from seedee's source,
+/// unmodified (resources/linux/sdhlt/: made on Ubuntu 20.04 with the C++ runtime linked in, it
+/// needs glibc 2.29; the release's own Linux build needs 2.38, so Ubuntu 24.04 or newer). Put
+/// over the release's tools/Linux after the release itself is checked and unpacked.
+pub const SDHLT_LINUX_URL: &str = "https://dl.lonerstrike.com/tools/sdhlt-v1.3.1-linux-x64.tar.xz";
+pub const SDHLT_LINUX_SHA256: &str = "51871fa72b0c94ab881752c29a5a677dcf501788da53a79db4d4f1acfd65ac79";
 /// The folder everything is in inside the zip.
 const ZIP_ROOT: &str = "sdhlt-v1.3.1";
-const LICENCE: &str = "SDHLT is free software under the GPL v2, with the Valve SDK 2.3 license taking priority where needed. It isn't part of Loner-Strike: it's downloaded from its official GitHub release and kept with its license (LICENSE.md).";
+const LICENCE: &str = if crate::gamebin::LINUX {
+    "SDHLT is free software under the GPL v2, with the Valve SDK 2.3 license taking priority where needed. It isn't part of Loner-Strike: it's downloaded from its official GitHub release and kept with its license (LICENSE.md). Its Linux programs are Loner-Strike's build of the same version's source, unchanged, so they also run on older Linux versions."
+} else {
+    "SDHLT is free software under the GPL v2, with the Valve SDK 2.3 license taking priority where needed. It isn't part of Loner-Strike: it's downloaded from its official GitHub release and kept with its license (LICENSE.md)."
+};
 
 const INTERNAL: &str = "Loner-Strike hit an internal error with the map compiler. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_GAME: &str = "Set up the game on this computer first: the compiler needs its texture files.";
@@ -142,8 +152,16 @@ fn required_files() -> Vec<String> {
 
 /// Whether the pinned release is unpacked in `dir`, checked (its marker names the pinned sum).
 pub fn is_installed(dir: &Path) -> bool {
-    let marked = std::fs::read_to_string(dir.join(MARKER)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|v| v["sha256"] == SDHLT_SHA256);
-    marked && required_files().iter().all(|f| dir.join(f).is_file())
+    release_installed(dir) && (!crate::gamebin::LINUX || marker(dir).is_some_and(|v| v["linux_sha256"] == SDHLT_LINUX_SHA256))
+}
+
+/// The release alone (Linux's own build of the tools goes in after it)
+fn release_installed(dir: &Path) -> bool {
+    marker(dir).is_some_and(|v| v["sha256"] == SDHLT_SHA256) && required_files().iter().all(|f| dir.join(f).is_file())
+}
+
+fn marker(dir: &Path) -> Option<Value> {
+    std::fs::read_to_string(dir.join(MARKER)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())
 }
 
 /// Whether a file's SHA-256 is the expected one.
@@ -180,7 +198,7 @@ pub fn install_zip(zip: &Path, dir: &Path) -> Result<(), String> {
     let _ = std::fs::remove_dir_all(&tmp);
     let marker = json!({"version": SDHLT_VERSION, "sha256": SDHLT_SHA256, "from": SDHLT_URL});
     std::fs::write(dir.join(MARKER), marker.to_string()).map_err(|e| format!("Couldn't finish installing SDHLT ({e})."))?;
-    if !is_installed(dir) {
+    if !release_installed(dir) {
         return Err("The SDHLT download is missing some of its programs, so it wasn't used.".into());
     }
     Ok(())
@@ -427,15 +445,15 @@ pub fn layout_for(client: &crate::steam::Install, install: &Path, copy: bool) ->
     }
 }
 
-/// SDHLT's Linux builds (made on Ubuntu 24.04) need glibc 2.38 or newer.
+/// Loner-Strike's Linux build of SDHLT (made on Ubuntu 20.04) needs glibc 2.29 or newer.
 #[cfg(target_os = "linux")]
 fn linux_glibc_ok() -> Result<(), String> {
     // SAFETY: gnu_get_libc_version returns a static string
     let v = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) }.to_string_lossy().to_string();
-    if glibc_at_least(&v, 2, 38) {
+    if glibc_at_least(&v, 2, 29) {
         Ok(())
     } else {
-        Err(format!("The map compiler needs a newer Linux than this one (it needs glibc 2.38; this system has {v}): Ubuntu 24.04, Linux Mint 22, Fedora 39, the Steam Deck or newer."))
+        Err(format!("The map compiler needs a newer Linux than this one (it needs glibc 2.29; this system has {v}): Ubuntu 20.04, Debian 11, Linux Mint 20 or newer."))
     }
 }
 
@@ -1672,7 +1690,72 @@ fn download_and_install(dir: &Path) -> Result<(), String> {
     });
     let r = install_zip(&zip, dir);
     let _ = std::fs::remove_file(&zip);
-    r
+    r?;
+    if crate::gamebin::LINUX {
+        install_linux_tools(dir)?;
+    }
+    Ok(())
+}
+
+/// Linux: Loner-Strike's build of the tools (SDHLT_LINUX_URL) over the release's tools/Linux,
+/// checked against its pinned sum; the marker then names it too.
+fn install_linux_tools(dir: &Path) -> Result<(), String> {
+    with_job(|j| j.label = "Downloading SDHLT's Linux programs…".into());
+    let fail = |e: String| format!("Couldn't download SDHLT's Linux programs ({e}). Check your internet connection and try again.");
+    let tar = dir.join(".linux-tools.tar.xz");
+    let mut resp = crate::sys::http_download().get(SDHLT_LINUX_URL).header("User-Agent", "Loner-Strike").send().map_err(|e| fail(e.to_string()))?;
+    if !resp.status().is_success() {
+        return Err(fail(format!("the download server answered {}", resp.status())));
+    }
+    let mut out = std::fs::File::create(&tar).map_err(|e| fail(e.to_string()))?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut got = 0u64;
+    loop {
+        if STOP.load(Ordering::SeqCst) {
+            drop(out);
+            let _ = std::fs::remove_file(&tar);
+            return Err("stopped".into());
+        }
+        let n = resp.read(&mut buf).map_err(|e| fail(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        got += n as u64;
+        if got > 64 << 20 {
+            let _ = std::fs::remove_file(&tar);
+            return Err(fail("it's far bigger than expected".into()));
+        }
+        std::io::Write::write_all(&mut out, &buf[..n]).map_err(|e| fail(e.to_string()))?;
+    }
+    drop(out);
+    if !checksum_ok(&tar, SDHLT_LINUX_SHA256) {
+        let _ = std::fs::remove_file(&tar);
+        return Err("SDHLT's Linux programs didn't match the file Loner-Strike was tested with, so they weren't used. Try again later.".into());
+    }
+    let tmp = dir.join(".linux-tools");
+    let _ = std::fs::remove_dir_all(&tmp);
+    let r = crate::setup::fetch::unpack(&tar, &tmp);
+    let _ = std::fs::remove_file(&tar);
+    r?;
+    let into = dir.join("tools").join("Linux");
+    std::fs::create_dir_all(&into).map_err(|e| e.to_string())?;
+    for s in Stage::ALL.iter().map(|s| s.program()).chain(["sdRIPENT"]) {
+        let from = tmp.join("Linux").join(s);
+        if !from.is_file() {
+            let _ = std::fs::remove_dir_all(&tmp);
+            return Err("SDHLT's Linux download is missing some of its programs, so it wasn't used.".into());
+        }
+        std::fs::copy(&from, into.join(s)).map_err(|e| format!("Couldn't put SDHLT's Linux programs in place ({e})."))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(into.join(s), std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+    let marker = json!({"version": SDHLT_VERSION, "sha256": SDHLT_SHA256, "from": SDHLT_URL, "linux_sha256": SDHLT_LINUX_SHA256, "linux_from": SDHLT_LINUX_URL});
+    std::fs::write(dir.join(MARKER), marker.to_string()).map_err(|e| format!("Couldn't finish installing SDHLT ({e})."))?;
+    Ok(())
 }
 
 fn start_setup() -> Result<Value, String> {
@@ -2613,7 +2696,7 @@ mod tests {
             std::fs::write(p, b"x").unwrap();
         }
         assert!(!is_installed(&dest));
-        std::fs::write(dest.join(MARKER), json!({"sha256": SDHLT_SHA256}).to_string()).unwrap();
+        std::fs::write(dest.join(MARKER), json!({"sha256": SDHLT_SHA256, "linux_sha256": SDHLT_LINUX_SHA256}).to_string()).unwrap();
         assert!(is_installed(&dest));
         std::fs::remove_file(dest.join(if crate::gamebin::LINUX { "tools/Linux/sdHLRAD" } else { "tools/Win64/sdHLRAD_x64.exe" })).unwrap();
         assert!(!is_installed(&dest));
