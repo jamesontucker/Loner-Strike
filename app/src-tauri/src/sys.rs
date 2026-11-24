@@ -360,6 +360,25 @@ fn latin1_bytes(text: &str) -> Vec<u8> {
     text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect()
 }
 
+/// A program the app ships for Linux servers, read whole: the file itself, or its .gz (the
+/// Linux build ships them gzipped: the AppImage's packager, linuxdeploy, rewrites every Linux
+/// program it bundles, which would break their checksums). The path is the plain file's.
+pub fn read_shipped(bin: &Path) -> Option<Vec<u8>> {
+    if bin.is_file() {
+        return std::fs::read(bin).ok();
+    }
+    let gz = std::fs::File::open(PathBuf::from(format!("{}.gz", bin.display()))).ok()?;
+    let mut out = Vec::new();
+    // (a few MB at most; anything far bigger isn't it)
+    std::io::Read::read_to_end(&mut std::io::Read::take(flate2::read::GzDecoder::new(gz), 256 << 20), &mut out).ok()?;
+    Some(out)
+}
+
+/// Whether read_shipped finds `bin` (it or its .gz)
+pub fn shipped_here(bin: &Path) -> bool {
+    bin.is_file() || PathBuf::from(format!("{}.gz", bin.display())).is_file()
+}
+
 /// A program on PATH, or in one of the usual extra places (Homebrew on a Mac).
 /// Where a program shipped with the app may be: next to the app's own program, or in its
 /// resources (inside a Mac .app too).

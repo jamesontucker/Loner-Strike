@@ -241,6 +241,10 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
 
 /// A file Loner-Strike ships under its resources: the app's, or the repo's own copy in a dev build
 fn bundled(ctx: &Ctx, res_rel: &str) -> Option<std::path::PathBuf> {
+    // (Linux: the patched modules compiled into the app, hamguard::embedded)
+    if let Some(p) = crate::hamguard::embedded(res_rel) {
+        return Some(p);
+    }
     let rel = Path::new(res_rel);
     let mut places = vec![ctx.res.join(rel)];
     if cfg!(debug_assertions) {

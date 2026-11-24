@@ -829,6 +829,7 @@ fn steamcmd_exe() -> PathBuf {
 /// fetched over HTTPS from Valve's CDN and updates itself on first run.
 pub(crate) fn ensure_steamcmd(job: &Job) -> Result<(), String> {
     if steamcmd_exe().is_file() {
+        steamcmd_runnable();
         return Ok(());
     }
     let url = if cfg!(windows) {
@@ -840,17 +841,26 @@ pub(crate) fn ensure_steamcmd(job: &Job) -> Result<(), String> {
     };
     let archive = setup::fetch::download(url, None, "SteamCMD", job)?;
     setup::fetch::unpack(&archive, &steamcmd_dir())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        for f in ["steamcmd.sh", "steamcmd"] {
-            let _ = std::fs::set_permissions(steamcmd_dir().join(f), std::fs::Permissions::from_mode(0o755));
-        }
-    }
+    steamcmd_runnable();
     if steamcmd_exe().is_file() {
         Ok(())
     } else {
         Err("SteamCMD didn't unpack properly. Try again.".into())
+    }
+}
+
+/// SteamCMD's programs marked runnable (the unpack doesn't keep the archive's permissions): its
+/// script, and the program it starts (steamcmd on a Mac, linux32/steamcmd on Linux).
+fn steamcmd_runnable() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for f in ["steamcmd.sh", "steamcmd", "linux32/steamcmd"] {
+            let p = steamcmd_dir().join(f);
+            if p.is_file() {
+                let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755));
+            }
+        }
     }
 }
 

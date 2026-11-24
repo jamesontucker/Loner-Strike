@@ -3,9 +3,16 @@
   "bundle": {
     "targets": ["appimage", "deb"],
     "resources": {
-      "resources/linux/hamsandwich/": "linux/hamsandwich/",
       "resources/linux/7zip/": "linux/7zip/",
-      "resources/linux/metamod/": "linux/metamod/"
+      "resources/linux/ls-control/": null,
+      "resources/linux/ls-voice/": null,
+      "resources/linux/ls-intent/": null,
+      "resources/linux/ls-control/ls-control.gz": "linux/ls-control/ls-control.gz",
+      "resources/linux/ls-control/ls-control.sha256": "linux/ls-control/ls-control.sha256",
+      "resources/linux/ls-voice/ls-voice.gz": "linux/ls-voice/ls-voice.gz",
+      "resources/linux/ls-voice/ls-voice.sha256": "linux/ls-voice/ls-voice.sha256",
+      "resources/linux/ls-intent/ls-intent.gz": "linux/ls-intent/ls-intent.gz",
+      "resources/linux/ls-intent/ls-intent.sha256": "linux/ls-intent/ls-intent.sha256"
     },
     "linux": {
       "deb": {

@@ -50,7 +50,39 @@ pub(crate) fn bundled(res_rel: &str) -> Option<PathBuf> {
     fixed_from(res_rel)
 }
 
+/// Linux: Loner-Strike's patched Linux modules are compiled into the app itself and written out
+/// to its data folder when needed. The AppImage's packager (linuxdeploy) rewrites every Linux
+/// library it bundles (it adds a library search path), so a bundled copy no longer matches the
+/// checksums the app knows its fixed builds by, and would be taken for the official module.
+#[cfg(target_os = "linux")]
+const EMBEDDED: &[(&str, &[u8])] = &[
+    ("linux/hamsandwich/hamsandwich_amxx_i386.so", include_bytes!("../resources/linux/hamsandwich/hamsandwich_amxx_i386.so")),
+    ("linux/metamod/metamod.so", include_bytes!("../resources/linux/metamod/metamod.so")),
+];
+
+/// The compiled-in copy of `res_rel` as a file (written again whenever it isn't exactly it)
+#[cfg(target_os = "linux")]
+pub(crate) fn embedded(res_rel: &str) -> Option<PathBuf> {
+    let (_, bytes) = EMBEDDED.iter().find(|(rel, _)| *rel == res_rel)?;
+    let p = crate::localdata::dir("bundled").join(res_rel);
+    if std::fs::read(&p).ok().as_deref() != Some(*bytes) {
+        std::fs::create_dir_all(p.parent()?).ok()?;
+        let tmp = p.with_extension("part");
+        std::fs::write(&tmp, bytes).ok()?;
+        std::fs::rename(&tmp, &p).ok()?;
+    }
+    Some(p)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn embedded(_res_rel: &str) -> Option<PathBuf> {
+    None
+}
+
 fn fixed_from(res_rel: &str) -> Option<PathBuf> {
+    if let Some(p) = embedded(res_rel) {
+        return Some(p);
+    }
     let rel = Path::new(res_rel);
     let mut places: Vec<PathBuf> = RES.get().map(|r| r.join(rel)).into_iter().collect();
     places.extend(std::env::var_os("LONER_STRIKE_RESOURCES").map(|r| PathBuf::from(r).join(rel)));
@@ -187,6 +219,18 @@ fn before_start_at(game_dir: &Path, what: &str, rel: &str, res_rel: &str) -> Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Linux build carries the fixed Ham Sandwich and the patched Metamod-P compiled in,
+    /// byte for byte the builds their checksums name (the AppImage would rewrite bundled copies)
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_modules_are_compiled_in_unchanged() {
+        let sum = |b: &[u8]| Sha256::digest(b).iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let ham = EMBEDDED.iter().find(|(r, _)| *r == crate::gamebin::LINUX_FLAVOR.ham_fixed_res).unwrap().1;
+        assert_eq!(sum(ham), crate::crashes::FIXED_HAM_LINUX);
+        let mm = EMBEDDED.iter().find(|(r, _)| Some(*r) == crate::gamebin::LINUX_FLAVOR.metamod_fixed_res).unwrap().1;
+        assert_eq!(sum(mm), "3401efe77b0e332d7347c860e851399e1872ce21091f329fa5c9ebb61de772e0");
+    }
 
     fn game(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("ls-hamguard-{tag}-{}", std::process::id()));

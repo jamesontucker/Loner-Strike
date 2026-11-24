@@ -68,8 +68,8 @@ pub fn shipped(res: &Path) -> Result<(String, Vec<u8>), String> {
         places.push(crate::setup::repo_root().join("app/src-tauri/resources").join(RES));
     }
     let missing = "This copy of Loner-Strike doesn't include the server's shared control program (ls-control). Reinstalling the app should fix it; in a build from source, run scripts/build-server-agent.sh.";
-    let bin = places.into_iter().find(|p| p.is_file()).ok_or(missing)?;
-    let bytes = std::fs::read(&bin).map_err(|e| format!("Couldn't read ls-control ({e})."))?;
+    let bin = places.into_iter().find(|p| crate::sys::shipped_here(p)).ok_or(missing)?;
+    let bytes = crate::sys::read_shipped(&bin).ok_or("Couldn't read ls-control.")?;
     let want = std::fs::read_to_string(PathBuf::from(format!("{}.sha256", bin.display()))).map_err(|_| missing.to_string())?;
     let want = want.split_whitespace().next().unwrap_or("").to_ascii_lowercase();
     let have: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
