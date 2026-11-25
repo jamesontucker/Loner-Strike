@@ -17,7 +17,7 @@ const NOTES: Record<string, string> = {
   gm_hb_reaction: "Bots wait a human reaction time before shooting",
   gm_hb_aim: "Flicks that overshoot, aim wobble, sprays in bursts",
   gm_hb_mistakes: "The odd whiffed shot, late reaction or panic spray",
-  gm_hb_bhop: "Locked in, Hackers and Gods hop between fights",
+  gm_hb_bhop: "Locked in and Gods hop between fights, and hackers with the bhop script",
   gm_hack_level: "Closet hackers could pass for good players. Mixed goes by each one's personality: show-offs and trolls rage, careful players hide it. Rage is as blatant as it gets",
   gm_hack_wall: "Hackers know where you are through walls: the crosshair follows you, they walk to you, and CTs know where the bomb is",
   gm_hack_aim: "A snap to the head the moment they see you, all round them and through smoke",
@@ -238,7 +238,7 @@ function savedVisible(s: Setting, mode: Mode | undefined, all: Setting[], founda
   // the style's own personalities replace the roster; its switches only matter with a style on
   if (s.cvar === "bot_profile_db") return style === 0;
   if ((/^gm_(hb|bf)_/.test(s.cvar) || s.cvar === "gm_personality" || s.cvar === "gm_botchat_stop") && style === 0) return false;
-  // only Locked In, Hackers, Gods and Mixed lobby's Locked In players hop
+  // only Locked In, Gods, Hackers (with the bhop script) and Mixed lobby's Locked In players hop
   if (s.cvar === "gm_hb_bhop") return style >= 5 && style <= 8;
   // a hacking server's cheats (Hackers, 6), or the occasional hacker's in any other style
   const occasional = all.find((x) => x.cvar === "gm_hack_occasional")?.value === "1";

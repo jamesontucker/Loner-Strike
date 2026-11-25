@@ -18,7 +18,8 @@
 	and AI are left alone (tested: v_angle offsets make CZ bots stop firing).
 
 	gm_botstyle      0 Classic (off), 1 Pub server, 2 Matchmaking, 3 Veterans, 4 Newbie lobby,
-	                 5 Locked In, 6 Hackers (most bullets snap to you, notice you behind them),
+	                 5 Locked In, 6 Hackers (a hacking server: every bot cheats, its own kit of
+	                   cheats from who it is, gm_hack_*),
 	                 7 Gods (everything maxed: nearly every bullet near you is a headshot),
 	                 8 Mixed lobby (each bot plays at its own level, newbie to Locked In,
 	                   and keeps it while it's on the server)
