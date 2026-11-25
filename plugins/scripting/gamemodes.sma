@@ -5349,26 +5349,24 @@ show_quick(id)
 	if (!g_Career)
 	{
 		menu_additem(menu, "Restart round", "restart")
-		if (admin)
-		{
-			menu_additem(menu, fmt("Bots +1 \d(%d now)", get_playersnum_ex(GetPlayers_ExcludeHuman)), "botup")
-			menu_additem(menu, "Bots -1", "botdown")
-		}
+		menu_additem(menu, fmt("Bots +1 \d(%d now)", get_playersnum_ex(GetPlayers_ExcludeHuman)), "botup")
+		menu_additem(menu, "Bots -1", "botdown")
+		menu_additem(menu, fmt("Peaceful bots: %s", get_cvar_num("bot_zombie") ? "\yOn" : "\dOff"), "peace")
+		menu_additem(menu, "Start a map vote", "votemap")
+		if (mode_vote_here())
+			menu_additem(menu, "Start a mode vote", "votemode")
 	}
-	if (owner)
-	{
+	if (grid_allows(id, "gm_vip_god"))
 		menu_additem(menu, fmt("God mode: %s", g_God[id] ? "\yOn" : "\dOff"), "god")
+	if (grid_allows(id, "gm_vip_noclip"))
 		menu_additem(menu, fmt("Noclip: %s", g_Noclip[id] ? "\yOn" : "\dOff"), "noclip")
-	}
 	if (admin)
 		menu_additem(menu, "Respawn me", "respawn")
-	if (owner)
+	if (grid_allows(id, "gm_vip_tp"))
 	{
 		menu_additem(menu, g_HasPos[id] ? "Save my spot \d(replaces the saved one)" : "Save my spot", "save")
 		menu_additem(menu, g_HasPos[id] ? "Back to my saved spot" : "\dBack to my saved spot", "load")
 	}
-	if (!g_Career && admin)
-		menu_additem(menu, fmt("Peaceful bots: %s", get_cvar_num("bot_zombie") ? "\yOn" : "\dOff"), "peace")
 	if (owner)
 	{
 		new map[32]
@@ -5384,15 +5382,54 @@ show_quick(id)
 	menu_display(id, menu)
 }
 
-// What F4 item each role may use (show_quick shows the same)
+// The role as gm_vip counts it for its ability grid (1 vip, 2 moderator, 4 admin, 8 owner)
+quick_role_bit(id)
+{
+	new flags = get_user_flags(id)
+	if (flags & ADMIN_RCON)
+		return 8
+	if (flags & ADMIN_BAN)
+		return 4
+	if (flags & ADMIN_KICK)
+		return 2
+	if (flags & ADMIN_LEVEL_H)
+		return 1
+	return 0
+}
+
+// F4's god mode, noclip and saved spot follow the Admins page's ability grid (gm_vip's masks:
+// /god, /noclip, /save and /tp go by the same), the Owner always has them
+bool:grid_allows(id, const cvar[])
+{
+	if (is_owner(id))
+		return true
+	new p = get_cvar_pointer(cvar)
+	return p && (get_pcvar_num(p) & quick_role_bit(id)) != 0
+}
+
+// gm_pubserver runs the mode vote (gm_votemode): only offered when it's loaded
+bool:mode_vote_here()
+{
+	return is_plugin_loaded("gm_pubserver.amxx", true) != -1
+}
+
+// What F4 item each role may use (show_quick shows the same): Moderators and up keep the game
+// going (restart, bots, peaceful bots, map and mode votes), Admins and up respawn, the grid
+// decides god mode, noclip and the saved spot, the rest is the Owner's
 bool:quick_allowed(id, const info[])
 {
 	if (is_owner(id))
 		return true
-	if (equal(info, "restart"))
+	if (equal(info, "restart") || equal(info, "botup") || equal(info, "botdown") || equal(info, "peace") || equal(info, "votemap") || equal(info, "votemode"))
 		return can_quick(id)
-	if (equal(info, "botup") || equal(info, "botdown") || equal(info, "respawn") || equal(info, "peace"))
+	if (equal(info, "respawn"))
 		return can_match(id)
+	if (equal(info, "god"))
+		return grid_allows(id, "gm_vip_god")
+	if (equal(info, "noclip"))
+		return grid_allows(id, "gm_vip_noclip")
+	if (equal(info, "save") || equal(info, "load"))
+		return grid_allows(id, "gm_vip_tp")
 	return false
 }
 
@@ -5412,6 +5449,12 @@ public quick_handler(id, menu, item)
 	// bots still trickling in (gm_pubserver) count as in already
 	new ramp = get_cvar_pointer("gm_botjoin_target")
 	new bots = max(get_playersnum_ex(GetPlayers_ExcludeHuman), ramp ? get_pcvar_num(ramp) : 0)
+	if (equal(info, "votemap") || equal(info, "votemode"))
+	{
+		// (the vote's own menu takes over: F4 isn't shown again)
+		client_cmd(id, equal(info, "votemap") ? "amx_votemapmenu" : "gm_votemode")
+		return PLUGIN_HANDLED
+	}
 	if (equal(info, "restart"))      do_match("restart")
 	else if (equal(info, "botup"))   do_bots("count", bots + 1)
 	else if (equal(info, "botdown")) do_bots("count", max(bots - 1, 0))

@@ -6,7 +6,7 @@
 
 	Perks (each one can be switched off):
 	  free kevlar + helmet on spawn, a defuse kit for CTs, free grenades,
-	  extra money each round, "VIP" on the scoreboard, a green [VIP] chat tag.
+	  extra money each round, "VIP" on the scoreboard, a green [VIP] chat tag (staff get their role's: [OWNER], [ADMIN], [MOD]).
 	Spawn perks and money only apply in modes where they don't wreck the balance
 	(see mode_perks); the scoreboard mark and chat tag work everywhere (flag "t").
 
@@ -44,7 +44,7 @@
 	Settings: data/gamemodes/vip.cfg (written by the app), re-read with gm_vipreload.
 	Cvars: gm_vip_armor, gm_vip_defuse, gm_vip_nades 0/1, gm_vip_money <amount>,
 	       gm_vip_tag, gm_vip_chat 0/1, gm_vip_host 0/1, gm_vip_donate "<url>",
-	       the ability masks above and gm_vip_anymode 0/1
+	       the ability masks above, gm_vip_tagroles (the roles whose chat tag shows) and gm_vip_anymode 0/1
 
 	The listen-server host has every flag (users.ini "loopback"), so the host only
 	gets perks and abilities (as an owner) with gm_vip_host 1.
@@ -91,7 +91,7 @@ new const AB_NAME[AB_COUNT][] = { "Spawn gear", "The grappling hook", "Double ju
 new const bool:AB_UNFAIR[AB_COUNT] = { false, false, true, true, true, true, false }
 
 new g_pArmor, g_pDefuse, g_pNades, g_pMoney, g_pTag, g_pChat, g_pHost, g_pDonate
-new g_pAb[AB_COUNT], g_pAnyMode
+new g_pAb[AB_COUNT], g_pAnyMode, g_pTagRoles
 new g_pReserve, g_pSlots, g_pJoinMsg, g_pSupChat, g_pSupScore, bool:g_SetVisible
 new g_DataDir[128]
 new g_Perks = PERKS_NONE
@@ -115,6 +115,8 @@ public plugin_init()
 	for (new i = 0; i < AB_COUNT; i++)
 		g_pAb[i] = register_cvar(AB_CVAR[i], AB_DEFAULT[i])
 	g_pAnyMode = register_cvar("gm_vip_anymode", "0")
+	// which roles show their chat tag (the same role bits as the abilities; all by default)
+	g_pTagRoles = register_cvar("gm_vip_tagroles", "15")
 	g_pReserve = register_cvar("gm_vip_reserve", "17")
 	g_pSlots   = register_cvar("gm_vip_slots", "0")
 	g_pJoinMsg = register_cvar("gm_vip_joinmsg", "16")
@@ -656,7 +658,23 @@ public msg_saytext(msgid, dest, receiver)
 	if (get_msg_args() < 4 || !get_pcvar_num(g_pChat))
 		return PLUGIN_CONTINUE
 	new id = get_msg_arg_int(1)
-	if (id < 1 || id > MaxClients || !is_marked(id, true))
+	// staff by their role, so players can see who runs the server and who's keeping order;
+	// then VIPs (and supporters the host lets have it). The listen-server host has no tag.
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new rb = role_bit(id), tag[12]
+	if (rb == ROLE_OWNER)
+		copy(tag, charsmax(tag), "[OWNER]")
+	else if (rb == ROLE_ADMIN)
+		copy(tag, charsmax(tag), "[ADMIN]")
+	else if (rb == ROLE_MOD)
+		copy(tag, charsmax(tag), "[MOD]")
+	else if (is_marked(id, true))
+		copy(tag, charsmax(tag), "[VIP]")
+	else
+		return PLUGIN_CONTINUE
+	// a role the Admins page's grid leaves without a tag (a supporter's [VIP] has its own switch)
+	if (rb >= ROLE_VIP && rb <= ROLE_OWNER && !(get_pcvar_num(g_pTagRoles) & rb))
 		return PLUGIN_CONTINUE
 
 	new token[32]
@@ -681,7 +699,7 @@ public msg_saytext(msgid, dest, receiver)
 	else
 		return PLUGIN_CONTINUE      // name changes, plugin messages: leave alone
 
-	set_msg_arg_string(2, fmt("%s^4[VIP] ^3%%s1^1 :  %%s2", prefix))
+	set_msg_arg_string(2, fmt("%s^4%s ^3%%s1^1 :  %%s2", prefix, tag))
 	return PLUGIN_CONTINUE
 }
 

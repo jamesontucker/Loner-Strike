@@ -64,8 +64,8 @@ impl Role {
     pub fn flags(self) -> &'static str {
         match self {
             Role::Owner => "abcdefghijklmnopqrstu",
-            Role::Admin => "bcdefijtu",
-            Role::Moderator => "ceiju",
+            Role::Admin => "bcdefijmtu",
+            Role::Moderator => "bceijmu",
             Role::Vip => "bt",
         }
     }
@@ -117,6 +117,8 @@ pub struct Abilities {
     pub god: Vec<Role>,
     /// say /save, /tp
     pub tp: Vec<Role>,
+    /// the chat tag of their role ([VIP], [MOD], [ADMIN], [OWNER])
+    pub tag: Vec<Role>,
     /// double jump, respawn, noclip and god in modes they'd break too
     pub every_mode: bool,
 }
@@ -133,6 +135,7 @@ impl Default for Abilities {
             noclip: vec![Role::Admin, Role::Owner],
             god: vec![Role::Owner],
             tp: vec![Role::Admin, Role::Owner],
+            tag: VIP_UP.to_vec(),
             every_mode: false,
         }
     }
@@ -145,7 +148,7 @@ fn role_mask(roles: &[Role]) -> u8 {
 
 impl Abilities {
     /// (gm_vip cvar, roles) for each ability
-    fn cvars(&self) -> [(&'static str, &Vec<Role>); 7] {
+    fn cvars(&self) -> [(&'static str, &Vec<Role>); 8] {
         [
             ("gm_vip_gear", &self.gear),
             ("gm_vip_hook", &self.hook),
@@ -154,12 +157,13 @@ impl Abilities {
             ("gm_vip_noclip", &self.noclip),
             ("gm_vip_god", &self.god),
             ("gm_vip_tp", &self.tp),
+            ("gm_vip_tagroles", &self.tag),
         ]
     }
 
     /// Each list in VIP..Owner order without repeats.
     fn tidy(mut self) -> Self {
-        for list in [&mut self.gear, &mut self.hook, &mut self.jump, &mut self.respawn, &mut self.noclip, &mut self.god, &mut self.tp] {
+        for list in [&mut self.gear, &mut self.hook, &mut self.jump, &mut self.respawn, &mut self.noclip, &mut self.god, &mut self.tp, &mut self.tag] {
             let m = role_mask(list);
             *list = VIP_UP.iter().copied().filter(|r| m & r.bit() != 0).collect();
         }
@@ -573,7 +577,11 @@ fn tell_game(g: &Game, line: &str) -> Result<bool, String> {
 }
 
 fn reload(g: &Game) {
-    let _ = tell_game(g, "amx_reloadadmins; gm_vipreload");
+    // one at a time: the server's console doesn't split an rcon line on ';', so
+    // "amx_reloadadmins; gm_vipreload" reloaded nothing and a new role only counted from the
+    // next map (seen 2026-11-24)
+    let _ = tell_game(g, "amx_reloadadmins");
+    let _ = tell_game(g, "gm_vipreload");
 }
 
 // ---- bans ------------------------------------------------------------------------
@@ -1296,7 +1304,7 @@ mod tests {
         let user = "; Users configuration file\r\n\"loopback\" \"\" \"abcdefghijklmnopqrstuv\" \"de\"\r\n";
         let once = rewrite_users(user, &people, "2026-11-06");
         assert!(once.starts_with(user), "the user's own lines stay");
-        assert!(once.contains("\"STEAM_0:1:111\" \"\" \"bcdefijtu\" \"ce\"\r\n"));
+        assert!(once.contains("\"STEAM_0:1:111\" \"\" \"bcdefijmtu\" \"ce\"\r\n"));
         assert!(once.contains("\"STEAM_0:0:222\" \"\" \"bt\" \"ce\"\r\n"));
         assert!(once.contains("; Sam (vip, until 2026-12-12)"));
         assert!(!once.contains("STEAM_0:0:333"), "expired people are dropped");
@@ -1349,7 +1357,7 @@ mod tests {
         assert!(Role::Owner.flags().contains('l') && Role::Owner.flags().contains('a') && Role::Owner.flags().contains('t'));
         assert!(!Role::Admin.flags().contains('l') && !Role::Admin.flags().contains('g') && !Role::Admin.flags().contains('h'));
         assert!(Role::Admin.flags().contains('t') && Role::Admin.flags().contains('d'));
-        assert_eq!(Role::Moderator.flags(), "ceiju");
+        assert_eq!(Role::Moderator.flags(), "bceijmu");
         assert_eq!(Role::Vip.flags(), "bt");
     }
 

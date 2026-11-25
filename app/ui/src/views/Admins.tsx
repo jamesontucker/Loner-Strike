@@ -12,7 +12,7 @@ import { useDirty, useNav } from "../store";
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
 type Perks = { armor: boolean; defuse: boolean; nades: boolean; money: number; tag: boolean; chat: boolean; host: boolean };
-type AbilityKey = "gear" | "hook" | "jump" | "respawn" | "noclip" | "god" | "tp";
+type AbilityKey = "gear" | "hook" | "jump" | "respawn" | "noclip" | "god" | "tp" | "tag";
 type Abilities = Record<AbilityKey, Role[]> & { every_mode: boolean };
 type Ban = { kind: "id" | "ip"; value: string };
 type Seen = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
@@ -21,9 +21,9 @@ type Data = { people: Person[]; donate: string; perks: Perks; abilities: Abiliti
 type Reply = Data | { ok: false; error: string };
 
 const ROLES: { id: Role; name: string; what: string }[] = [
-  { id: "owner", name: "Owner", what: "Everything, including server settings, console commands and the whole Game Mode Menu (F3, F4). Can't be kicked by other admins." },
-  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus, and the match side of the Game Mode Menu (mode, map, bots, match settings; F4 restarts, bots, respawn). Plus the abilities you pick below." },
-  { id: "moderator", name: "Moderator", what: "Kick, slay, votes, admin chat and menus, and a round restart from F4. No bans or map changes." },
+  { id: "owner", name: "Owner", what: "Everything, including server settings, console commands and the whole Game Mode Menu (F3, F4). An [OWNER] tag. Can't be kicked by other admins." },
+  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, move players between teams, votes, admin chat and menus, and the match side of the Game Mode Menu (mode, map, bots, match settings; F4 restarts, bots, respawn, votes). A reserved slot and an [ADMIN] tag. Plus the abilities you pick below." },
+  { id: "moderator", name: "Moderator", what: "Kick, slay, move players between teams, votes, admin chat and menus, and from F4 a round restart, the bot count, peaceful bots and map or mode votes. A reserved slot and a [MOD] tag. No bans, no forced map changes." },
   { id: "vip", name: "VIP", what: "A reserved slot, the VIP tags and the abilities you pick below. No admin powers." },
 ];
 const roleName = (r: Role) => ROLES.find((x) => x.id === r)?.name ?? r;
@@ -40,6 +40,7 @@ const ABILITIES: { key: AbilityKey; name: string; what: string; how: string; unf
   { key: "noclip", name: "Noclip", what: "Fly through walls. Ends when they die or the round restarts.", how: "Say /noclip to switch it on and off", unfair: true },
   { key: "god", name: "God mode", what: "Nothing can hurt them. Ends when the round restarts.", how: "Say /god to switch it on and off", unfair: true },
   { key: "tp", name: "Save and teleport", what: "Save a spot and jump back to it any time that map.", how: "Say /save, then /tp" },
+  { key: "tag", name: "Chat tag", what: "Their role in front of their name in chat: [VIP], [MOD], [ADMIN] or [OWNER].", how: "Shown automatically" },
 ];
 
 /** Admin powers per role (from the role's AMX Mod X flags; not changeable here). */
@@ -355,7 +356,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
             </div>
           </div>
           <Perk label="VIP on the scoreboard" note="The scoreboard's VIP column." on={d.perks.tag} busy={busy("perk:tag")} set={(v) => setPerks({ tag: v })} />
-          <Perk label="[VIP] chat tag" note="A green tag in front of their name in chat." on={d.perks.chat} busy={busy("perk:chat")} set={(v) => setPerks({ chat: v })} />
+          <Perk label="Chat tags" note="A green tag in front of their name in chat: [VIP], and for staff their role ([MOD], [ADMIN], [OWNER])." on={d.perks.chat} busy={busy("perk:chat")} set={(v) => setPerks({ chat: v })} />
           <Perk label="You get the perks too" note="As the host you're counted as an owner, for spawn gear and the abilities above." on={d.perks.host} busy={busy("perk:host")} set={(v) => setPerks({ host: v })} />
         </div>
         <p className="muted small-note">
