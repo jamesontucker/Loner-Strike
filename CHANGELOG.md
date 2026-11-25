@@ -2,17 +2,35 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
-## 1.0.3
+## 1.1.0
 
-Two fixes:
-- The app could open to a white square on a black window (Windows, after updating) until it was restarted
-- Creature Studio's model viewer glitched when switching creatures quickly
+Loner-Strike on Linux and the Steam Deck (beta), and fixes for everyone:
+- Linux and the Steam Deck: setup, play, servers on your computer and the map editor, native or with Proton
+- Admins and Moderators get the parts of the in-game menus their role is for
+- Maps like the editor's starter room now count as learned by the bots
+- The app could open to a white square on a black window (Windows, after updating)
+
+### Linux and the Steam Deck (beta)
+- Downloads: an AppImage for any 64-bit Linux and the Steam Deck, a .deb for Ubuntu, Mint and Pop!_OS, and an .rpm for Fedora and Nobara. All three update from the app.
+- Works with Steam's own Counter-Strike and Condition Zero, native or with Proton turned on: setup puts in the mods for both, so you can switch any time. Steam is found in its usual places, Flatpak and Snap included.
+- Play, the in-game menus, bots, the Game Mode Studio, the map editor and its compiler, and servers on your computer, all on Linux.
+- On the Steam Deck: run setup in desktop mode, then play in Game Mode. The app opens maximized on small screens.
+
+### In-game menus
+- The Game Mode Menu follows each person's role on a server: an Owner gets everything; an Admin gets the match side of F3 (modes, maps, bots, match settings) and F4's restart, bot count, respawn and peaceful bots; a Moderator gets F4's round restart. God mode, noclip, healing, money, add-ons and the server's setup stay the Owner's.
+- Whoever runs Loner-Strike is made Owner on their own servers when they start.
+
+### Maps and bots
+- A map that's one open room (like the editor's starter map) learns to a single nav area, which the app took for an empty nav: such maps showed as not learned, and teaching the bots waited 45 minutes. They count as learned now, and a nav with nothing in it ends the learning at once.
+- Bots learn Counter-Strike 1.6 maps on the hidden server reliably, and maps with a hyphen in their name (like aim_ak-colt) can be learned.
 
 ### The app
 - The window opens in the app's own color and shows once its page is ready, instead of white. If the page hasn't loaded after 8 seconds, it's loaded again by itself.
+- Uninstalling also removes the backups and logs Loner-Strike wrote while in use.
 
-### Creature Studio
-- Switching creatures quickly keeps the 3D view up: the last model stays, dimmed, until the next one is ready, instead of a blank panel, another creature's model or a black shape.
+### Game Mode Studio and Creature Studio
+- The Test run tab has its own start button, and Help reads "Help" in the narrow layout's More menu.
+- Creature Studio: switching creatures quickly keeps the 3D view up: the last model stays, dimmed, until the next one is ready, instead of a blank panel, another creature's model or a black shape.
 
 ## 1.0.2
 
