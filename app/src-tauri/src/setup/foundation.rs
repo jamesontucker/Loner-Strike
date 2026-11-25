@@ -33,15 +33,15 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls23/regamedll-bin-5.30.0.814-ls23.zip",
-    sha256: "0facd6895e32a132b0fdac2992e243a70ab85b3e0c6628c7739ab180f45794f2",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls24/regamedll-bin-5.30.0.814-ls24.zip",
+    sha256: "dbe7fe942d39f3ccdd6286a76dd4a931eee8285bb08e1c79a2638e192b3ec3a6",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
 /// engine for dedicated servers
 pub const REHLDS: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls8/rehlds-bin-3.15.0.896-ls8.zip",
-    sha256: "95973fca8731b89e95def1168bc3a8ea0a2b72e2a0bd00c89a1859e9cdfca721",
+    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls9/rehlds-bin-3.15.0.896-ls9.zip",
+    sha256: "04fb257b6b800e62b73b72c5210891a3a2c8ebe023bf91bb70bec5bcf1648d75",
     what: "ReHLDS",
 };
 pub const REAPI: Pinned = Pinned {
@@ -453,7 +453,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A fresh install's server code is the pinned brain (ls23: 5.30.0.1318-dev): the pinned
+    /// A fresh install's server code is the pinned brain (ls24: 5.30.0.1322-dev): the pinned
     /// ReGameDLL through the app's own download path (mirror first, SHA-256 checked) into a
     /// scratch game, as setup's ReGameDLL step puts it in. Network:
     /// `LS_APP_DIR=<scratch> cargo test -- --ignored pinned_brain_installs`.
@@ -475,8 +475,8 @@ mod tests {
         regamedll(&mut rec, &ctx, &tmp).unwrap();
         let dll = std::fs::read(game.join("dlls/mp.dll")).unwrap();
         let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
-        assert!(has(b"5.30.0.1318-dev") && has(b"bot_ls_"), "the pinned brain");
-        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls23.zip"));
+        assert!(has(b"5.30.0.1322-dev") && has(b"bot_ls_"), "the pinned brain");
+        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls24.zip"));
         // Valve's was backed up, and is what an uninstall puts back
         assert!(rec.ours("dlls/mp.dll"));
         let _ = std::fs::remove_dir_all(&root);
