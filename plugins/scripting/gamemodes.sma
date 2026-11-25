@@ -72,12 +72,24 @@ new const SETTINGS[][SettingData] =
 	{ "gm_bot_weapons",     "Bot weapons",      "0 1 2 3",                  "Any Pistols Snipers Knives",          CAT_BOT,    SC_MODE,   "" },
 	{ "bot_chatter",        "Bot chatter",      "normal minimal radio off", "Normal Minimal Radio Off",            CAT_BOT,    SC_GLOBAL, "" },
 	{ "bot_join_team",      "Bots join",        "any T CT",                 "Any Terrorists CTs",                  CAT_BOT,    SC_GLOBAL, "" },
-	{ "gm_botstyle",        "Bot style",        "0 4 1 8 9 2 3 10 5 6 7",   "Original|Newbie lobby|Pub server|Mixed lobby|LAN party|Matchmaking|Veterans|Old-timers|Locked In|Hackers|Gods", CAT_BOT, SC_GLOBAL, "" },
+	{ "gm_botstyle",        "Bot style",        "0 4 1 8 9 2 3 10 5 7 6",   "Original|Newbie lobby|Pub server|Mixed lobby|LAN party|Matchmaking|Veterans|Old-timers|Locked In|Gods|Hackers", CAT_BOT, SC_GLOBAL, "" },
 	{ "gm_mood",            "Lobby mood",       "0 1 2",                    "Friendly|Normal|Toxic",               CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_reaction",     "Human reaction times", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_aim",          "Human aim & bursts", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_mistakes",     "Bot mistakes",     "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_bhop",         "Pro bots bunnyhop", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_level",      "How blatant",      "0 1 2",                    "Closet|Mixed|Rage",                   CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_wall",       "Wallhack and ESP", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_aim",        "Aimbot",           "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_trigger",    "Triggerbot",       "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_spin",       "Spinbot",          "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_recoil",     "No recoil",        "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_spread",     "No spread",        "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_noflash",    "No flash or smoke", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_wallbang",   "Wallbangs",        "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_bhop",       "Bhop script",      "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_backtrack",  "Backtrack",        "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hack_occasional", "Occasional hacker", "0 1",                     "Off On",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_personality",     "Personality",      "0 50 100 150 200",         "Plain|Mild|Normal|Strong|Exaggerated", CAT_BOT,   SC_GLOBAL, "" },
 	{ "gm_hb_hold",         "Bots hold angles", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "bot_profile_db",     "Bot roster",       "BotProfile.db BotProfileEnhanced.db", "Classic|Enhanced (next map)", CAT_BOT, SC_GLOBAL, "" },
@@ -3449,6 +3461,12 @@ setting_visible(s, cat)
 			return false
 		// only Locked In (5), Hackers (6) and Gods (7) hop, and Mixed lobby's (8) Locked In players
 		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_bhop") && !(5 <= get_cvar_num("gm_botstyle") <= 8))
+			return false
+		// a hacking server's cheats (Hackers, 6); the occasional hacker in any other style
+		if (equal(SETTINGS[s][SD_Cvar], "gm_hack_", 8) && !equal(SETTINGS[s][SD_Cvar], "gm_hack_occasional") && get_cvar_num("gm_botstyle") != 6
+			&& !(styled && get_cvar_num("gm_hack_occasional")))
+			return false
+		if (equal(SETTINGS[s][SD_Cvar], "gm_hack_occasional") && (!styled || get_cvar_num("gm_botstyle") == 6))
 			return false
 	}
 	// saluting, looking around, celebrating and stopping to type need Loner-Strike's game DLL

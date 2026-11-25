@@ -11,7 +11,7 @@ export type People = { archetypes: Arch[]; weights: Weight[]; conflicts: Conflic
 export type Problem = { where: string; text: string; error: boolean };
 export type Catalog = { traits: { key: string; values: string[] }[]; hobbies: string[]; letters: { letter: string; desc: string }[] };
 export type Regular = { profile: string; name: string };
-export type Who = { name: string; arch?: string; archIndex?: number; traits?: Record<string, string>; hobbies?: string[] };
+export type Who = { name: string; arch?: string; archIndex?: number; traits?: Record<string, string>; hobbies?: string[]; hacker?: { level: string; cheats: string[] } };
 
 export type Status = {
   game: string;

@@ -18,6 +18,18 @@ const NOTES: Record<string, string> = {
   gm_hb_aim: "Flicks that overshoot, aim wobble, sprays in bursts",
   gm_hb_mistakes: "The odd whiffed shot, late reaction or panic spray",
   gm_hb_bhop: "Locked in, Hackers and Gods hop between fights",
+  gm_hack_level: "Closet hackers could pass for good players. Mixed goes by each one's personality: show-offs and trolls rage, careful players hide it. Rage is as blatant as it gets",
+  gm_hack_wall: "Hackers know where you are through walls: the crosshair follows you, they walk to you, and CTs know where the bomb is",
+  gm_hack_aim: "A snap to the head the moment they see you, all round them and through smoke",
+  gm_hack_trigger: "They fire the instant you cross their crosshair",
+  gm_hack_spin: "The body spins round and round, and the shots still land",
+  gm_hack_recoil: "Sprays stay dead on target",
+  gm_hack_spread: "Every bullet goes exactly where the crosshair is",
+  gm_hack_noflash: "Flashbangs don't blind them and smoke doesn't hide you",
+  gm_hack_wallbang: "They shoot through thin walls at someone they know is there",
+  gm_hack_bhop: "Perfect chained bunnyhops",
+  gm_hack_backtrack: "The odd shot still lands just after you got behind cover. Only the most blatant hackers use it",
+  gm_hack_occasional: "Now and then one or two hackers slip into this lobby, about one map in twelve",
   gm_regulars: "The same regulars keep coming back, plus the odd newcomer",
   gm_churn: "Now and then someone leaves and a new player takes the slot",
   gm_hb_habits: "Each bot plays like its personality: favorite guns, warming up, getting tired, nervous reloads, a rival",
@@ -228,6 +240,10 @@ function savedVisible(s: Setting, mode: Mode | undefined, all: Setting[], founda
   if ((/^gm_(hb|bf)_/.test(s.cvar) || s.cvar === "gm_personality" || s.cvar === "gm_botchat_stop") && style === 0) return false;
   // only Locked In, Hackers, Gods and Mixed lobby's Locked In players hop
   if (s.cvar === "gm_hb_bhop") return style >= 5 && style <= 8;
+  // a hacking server's cheats (Hackers, 6), or the occasional hacker's in any other style
+  const occasional = all.find((x) => x.cvar === "gm_hack_occasional")?.value === "1";
+  if (s.cvar === "gm_hack_occasional") return style !== 0 && style !== 6;
+  if (s.cvar.startsWith("gm_hack_")) return style === 6 || (style !== 0 && occasional);
   return true;
 }
 

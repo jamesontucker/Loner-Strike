@@ -23,7 +23,7 @@ export const BOT_RATING_INFO = "How well bots play each mode. Some modes are mad
 /** Bot styles (gm_botstyle), in the order the in-game menu shows them. */
 // Original first, then easiest to hardest (Mixed and LAN party are mixes of levels, about Pub to
 // Matchmaking on average; Old-timers mostly Veteran level with a few a notch below)
-export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["9", "LAN party"], ["2", "Matchmaking"], ["10", "Old-timers"], ["3", "Veterans"], ["5", "Locked in"], ["6", "Hackers"], ["7", "Gods"]];
+export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["9", "LAN party"], ["2", "Matchmaking"], ["10", "Old-timers"], ["3", "Veterans"], ["5", "Locked in"], ["7", "Gods"], ["6", "Hackers"]];
 
 /** What each bot style is like, by gm_botstyle value. */
 export const BOT_STYLE_NOTE: Record<string, string> = {
@@ -36,6 +36,6 @@ export const BOT_STYLE_NOTE: Record<string, string> = {
   "3": "Experienced: quick, accurate, short bursts",
   "10": "Good aim, slow and methodical. They camp a lot and rarely talk",
   "5": "Very good and focused. They bunnyhop between fights",
-  "6": "Suspiciously good: most bullets find you and they notice you from behind",
+  "6": "A hacking server: everyone cheats (wallhacks, aimbots, spinbots, triggerbots), each their own way",
   "7": "Everything maxed. Nearly every bullet near you is a headshot",
 };

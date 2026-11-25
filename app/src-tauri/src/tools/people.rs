@@ -742,6 +742,55 @@ pub fn who(p: &People, name: &str) -> Option<(usize, [usize; 10], [usize; 2])> {
     Some((a, traits, [hob[0] as usize, hob[1] as usize]))
 }
 
+/// gm_humanbots' name_hash: the bare name, h = h * 131 + c (24 bits).
+fn hb_name_hash(name: &str) -> i32 {
+    let mut h: i32 = 33;
+    for &c in bare_name(name).as_bytes() {
+        h = (h.wrapping_mul(131).wrapping_add(c as i8 as i32)) & 0xFF_FFFF;
+    }
+    h
+}
+
+/// The cheats this bot uses as a hacker (gm_humanbots' kit_level and make_kit, every cheat
+/// allowed, gm_hack_level Mixed): its level (0 closet, 1 mixed, 2 rage) and the cheats.
+pub fn hacker_kit(name: &str, traits: &[usize; 10]) -> (usize, Vec<&'static str>) {
+    let h = hb_name_hash(name);
+    let mut score = h % 5 - 2;
+    let (ego, temper, humor, style) = (traits[1], traits[2], traits[4], traits[9]);
+    if ego == 2 {
+        score += 2;
+    }
+    if ego == 0 {
+        score -= 1;
+    }
+    if humor == 3 {
+        score += 2;
+    } else if humor == 2 {
+        score += 1;
+    }
+    if temper == 2 {
+        score += 1;
+    }
+    if matches!(style, 2..=4) {
+        score -= 2;
+    }
+    if style == 0 || style == 10 {
+        score += 1;
+    }
+    let lvl = if score >= 2 { 2 } else if score <= -2 { 0 } else { 1 };
+    const CHEATS: [&str; 10] = ["wallhack", "aimbot", "triggerbot", "spinbot", "no recoil", "no flash", "wallbangs", "bhop", "no spread", "backtrack"];
+    const PCT: [[i32; 3]; 10] = [[100, 100, 100], [60, 100, 100], [90, 80, 90], [0, 35, 90], [50, 85, 100], [30, 70, 100], [20, 60, 95], [20, 60, 90], [0, 50, 100], [0, 0, 40]];
+    let mut r = h;
+    let mut kit = vec![];
+    for (i, c) in CHEATS.iter().enumerate() {
+        r = r.wrapping_mul(1103515245).wrapping_add(12345) & 0x7FFF_FFFF;
+        if (r / 7) % 100 < PCT[i][lvl] && kit.len() < 11 {
+            kit.push(*c);
+        }
+    }
+    (lvl, kit)
+}
+
 fn who_json(p: &People, name: &str) -> Value {
     match who(p, name) {
         None => json!({"name": name}),
@@ -750,7 +799,10 @@ fn who_json(p: &People, name: &str) -> Value {
             for (i, (k, vals)) in TRAITS.iter().enumerate() {
                 traits.insert(k.to_string(), json!(vals[t[i]]));
             }
-            json!({"name": name, "arch": p.archetypes[a].name, "archIndex": a, "traits": traits, "hobbies": [HOBBIES[h[0]], HOBBIES[h[1]]]})
+            let (lvl, kit) = hacker_kit(name, &t);
+            let level = ["closet", "mixed", "rage"][lvl];
+            let hacker = json!({"level": level, "cheats": kit});
+            json!({"name": name, "arch": p.archetypes[a].name, "archIndex": a, "traits": traits, "hobbies": [HOBBIES[h[0]], HOBBIES[h[1]]], "hacker": hacker})
         }
     }
 }
@@ -1177,6 +1229,22 @@ mod tests {
         assert_eq!(regulars(t), vec![("Dash".into(), "|=HaZe=| Vapor".into()), ("Zed".into(), "-=WaR=- OldRattle".into())]);
         assert_eq!(forget_regulars(t, &["Dash".into()]), "Zed = -=WaR=- OldRattle\n");
         assert_eq!(forget_regulars(t, &["Dash".into(), "Zed".into()]), "");
+    }
+
+    #[test]
+    fn hacker_kits_follow_who_they_are() {
+        // always walls; a rage one spins and a closet one never does
+        let mut rage = [0usize; 10];
+        rage[1] = 2; // showoff
+        rage[4] = 3; // troll
+        let (lvl, kit) = hacker_kit("Zed", &rage);
+        assert!(lvl >= 1 && kit.contains(&"wallhack"));
+        let mut quiet = [0usize; 10];
+        quiet[1] = 0; // humble
+        quiet[9] = 3; // careful
+        let (lvl, kit) = hacker_kit("Zed", &quiet);
+        assert!(lvl <= 1 && !kit.contains(&"backtrack"));
+        assert_eq!(hacker_kit("[clan] Zed", &quiet), hacker_kit("Zed", &quiet));
     }
 
     #[test]

@@ -63,3 +63,5 @@
 .pp-regs li.gone strong { text-decoration: line-through; color: var(--bone-faint); }
 .pp-regs + .btn { margin-top: 10px; }
 
+/* the cheats the bot uses as a hacker, on a line of its own under who it is */
+.pp-hack { display: block; font-size: 0.85em; }

@@ -128,6 +128,8 @@ native bf_ask_drop(asker, want, prefer)
 native hb_spray(id, const Float:at[3], const Float:normal[3])
 // gm_humanbots (optional): its own hold, crouch and afk on the bot end (a person's order comes first)
 native hb_release(id)
+// gm_humanbots (optional): a hacker (0 no, else its level + 1; +10 an occasional one in another lobby)
+native hb_bot_hacker(id)
 
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
@@ -305,6 +307,9 @@ new bool:g_PendRaw[MAX_PENDING]     // the model's text: said as it is
 new bool:g_PendAlive[MAX_PENDING]   // alive when it started typing (dying cuts it off)
 new g_PendWaited[MAX_PENDING]       // times put off already (it was in a fight)
 new bool:g_HumanBots                // gm_humanbots is running
+new bool:g_NoHackerNative           // ...but an older one, without hb_bot_hacker
+new g_HackerKills[33], bool:g_HackerVoted[33]   // the occasional hacker: kills this map, voted on yet
+#define TASK_VOTEKICK 7300000                    // a vote kick's result (+ userid)
 
 // smarter chat (gm_ai_url): one request per bot
 #define TASK_AI    2000000
@@ -798,6 +803,8 @@ public native_filter(const name[], index, trap)
 		g_NoTargetNative = true
 	if (!trap && equal(name, "hb_bot_afk"))
 		g_NoAfkNative = true
+	if (!trap && equal(name, "hb_bot_hacker"))
+		g_NoHackerNative = true
 	if (!trap && (equal(name, "people_", 7) || equal(name, "hb_", 3) || equal(name, "bf_", 3)))
 		return PLUGIN_HANDLED
 	// (an older gm_community without the voice filter: voice goes unfiltered there)
@@ -1232,6 +1239,8 @@ remember_all(human)
 
 public client_disconnected(id)
 {
+	g_HackerKills[id] = 0
+	g_HackerVoted[id] = false
 	// (the name is needed once more below; the next one in the slot works it out again)
 	set_task(0.1, "task_forget_name", TASK_FORGET + id)
 	// nothing this slot was asked to do (or about to do) carries over to whoever gets it next
@@ -3512,6 +3521,8 @@ public ev_death()
 
 	new bool:knife = bool:equal(weapon, "knife"), bool:nade = bool:equal(weapon, "grenade")
 	new how = how_killed(killer, victim, weapon)
+	if (killer != victim && is_user_bot(killer) && g_HumanBots && !g_NoHackerNative)
+		hacker_kill(killer, victim, hb_bot_hacker(killer))
 	if (how == HOW_WALL)
 	{
 		want(victim, "death_wallbang", killer, 0.5)
@@ -9495,4 +9506,56 @@ public task_ghost()
 		for (new k = 0; k < nm; k++)
 			server_cmd("ls_bot %d callout %.0f %.0f %.0f", mates[k], at[0], at[1], at[2])
 	}
+}
+
+// A hacker's kill. On a hacking server (Hackers) it's HvH: trash talk about configs and
+// resolvers. The occasional hacker on a normal server gets called out - by who it killed,
+// by a dead teammate watching - and after a few kills somebody starts a vote to kick it
+hacker_kill(killer, victim, hk)
+{
+	if (!hk)
+		return
+	if (hk < 10)
+	{
+		want(victim, "death_hvh", killer, 0.3)
+		want(killer, "kill_hvh", victim, 0.15)
+		return
+	}
+	new lvl = hk - 11                       // 0 closet, 1 mixed, 2 rage
+	want(victim, "death_hacker", killer, 0.3 + 0.15 * float(lvl))
+	new other = random_num(1, 100) <= 25 + 10 * lvl ? any_dead_bot_on(get_user_team(victim)) : 0
+	if (other && other != victim && other != killer)
+		want(other, "hacker_seen", killer, 0.5)
+	// (a closet one has to get away with it a while longer)
+	if (++g_HackerKills[killer] >= 6 - 2 * lvl + random_num(0, 2) && !g_HackerVoted[killer])
+	{
+		new caller = is_user_bot(victim) ? victim : any_dead_bot_on(get_user_team(victim))
+		if (!caller)
+			return
+		g_HackerVoted[killer] = true
+		want(caller, "hacker_votekick", killer, 1.0, 2.0)
+		set_task(random_float(9.0, 14.0), "task_votekick", TASK_VOTEKICK + get_user_userid(killer))
+	}
+}
+
+// The vote: most of a pub votes out an obvious hacker, a closet one sometimes stays
+public task_votekick(tid)
+{
+	new id = find_player("k", tid - TASK_VOTEKICK)
+	if (!id || !is_user_connected(id))
+		return
+	new hk = (g_HumanBots && !g_NoHackerNative) ? hb_bot_hacker(id) : 0
+	new name[32], players = 0
+	get_user_name(id, name, charsmax(name))
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && i != id)
+			players++
+	new bool:passes = random_num(1, 100) <= (hk >= 13 ? 90 : hk == 12 ? 75 : 55)
+	new yes = passes ? players * random_num(60, 90) / 100 : players * random_num(20, 45) / 100
+	client_print(0, print_chat, "Vote to kick %s: %s (%d of %d voted yes)", name, passes ? "passed" : "failed", yes, players)
+	if (passes)
+		server_cmd("kick #%d ^"Kicked by vote^"", get_user_userid(id))
+	else
+		g_HackerVoted[id] = false               // (they'll try again if it keeps going)
+	g_HackerKills[id] = 0
 }

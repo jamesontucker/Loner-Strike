@@ -501,6 +501,11 @@ export default function People() {
                             </button>
                           ) : null}
                           {w?.traits && ` · ${word(w.traits.skill)}, ${word(w.traits.style).toLowerCase()}, ${word(w.traits.talk).toLowerCase()}, from ${word(w.traits.region)}`}
+                          {w?.hacker && (
+                            <span className="pp-hack" title="With Hackers and How blatant set to Mixed. Turning cheats off in the bot settings leaves them out">
+                              As a hacker: {w.hacker.level}, {w.hacker.cheats.join(", ")}
+                            </span>
+                          )}
                         </span>
                         <span className="pp-name-actions">
                           <button type="button" className="btn small" onClick={() => setRenaming({ from: n, to: n })}>

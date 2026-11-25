@@ -55,6 +55,16 @@
 	gm_hb_aim        1 flicks, wobble and bursts
 	gm_hb_mistakes   1 occasional mistakes
 	gm_hb_bhop       1 Locked In and Hackers bunnyhop between fights
+	gm_hack_wall gm_hack_aim gm_hack_trigger gm_hack_spin gm_hack_recoil gm_hack_noflash
+	gm_hack_wallbang gm_hack_bhop gm_hack_spread gm_hack_backtrack  1  the cheats a hacker may
+	                   use (each bot's kit is some of them, from who it is): wallhack and ESP,
+	                   aimbot, triggerbot, spinbot, no recoil, no flash and no smoke, wallbangs,
+	                   perfect bunnyhops, no spread, backtrack (shots land where you were a
+	                   moment ago)
+	gm_hack_level    1 how blatant: 0 closet (could pass for a good player), 1 mixed (each
+	                   by who they are: some closet, some rage), 2 rage
+	gm_hack_occasional 0  now and then a hacker slips into another style's lobby (not a
+	                   match): gm_hack_occasional_pct is the chance a map gets one (rarely two)
 	gm_hb_hold       1 careful players and lurkers stop now and then and hold an angle for a
 	                   few seconds (crouched sometimes); more on aim and duel maps. Not in
 	                   a match or deathmatch, and only while nothing is going on around it
@@ -139,6 +149,15 @@ new const STYLES[STYLE_COUNT][StyleData] =
 }
 
 new g_pRoundTime                                // mp_roundtime (read often: kept)
+// Hackers: each hacker's cheats (gm_hack_*), as sent to the brain (ls_bot <id> hack)
+new g_pHackCheat[10], g_pHackLevel, g_pHackOcc, g_pHackOccPct
+// (the letters the brain knows them by, in gm_hack_*'s order)
+new const HACK_LETTERS[] = "watsrfbhnk"
+new const HACK_CVARS[][] = { "gm_hack_wall", "gm_hack_aim", "gm_hack_trigger", "gm_hack_spin", "gm_hack_recoil",
+	"gm_hack_noflash", "gm_hack_wallbang", "gm_hack_bhop", "gm_hack_spread", "gm_hack_backtrack" }
+new g_Kit[33][12], g_KitLevel[33], g_KitSent[33][16]
+new bool:g_Occ[33]                              // the occasional hacker in another style's lobby
+new bool:g_OccRolled, g_OccWant                 // this map's roll, and how many it wants
 new g_pRoundInf                                 // mp_round_infinite (ReGameDLL; 0 when it isn't there)
 new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt, g_pShowoff
 new g_Mix[33]                                   // Mixed lobby: this bot's own style
@@ -236,6 +255,17 @@ public plugin_init()
 	// any radio call (people, the bots' own): the sound each teammate gets
 	g_pHold      = register_cvar("gm_hb_hold", "1")
 	g_pPersonality = register_cvar("gm_personality", "100")
+	for (new i = 0; i < sizeof HACK_CVARS; i++)
+	{
+		g_pHackCheat[i] = register_cvar(HACK_CVARS[i], "1")
+		hook_cvar_change(g_pHackCheat[i], "hack_changed")
+	}
+	g_pHackLevel  = register_cvar("gm_hack_level", "1")
+	g_pHackOcc    = register_cvar("gm_hack_occasional", "0")
+	g_pHackOccPct = register_cvar("gm_hack_occasional_pct", "8")
+	hook_cvar_change(g_pHackLevel, "hack_changed")
+	hook_cvar_change(g_pHackOcc, "hack_changed")
+	set_task(5.0, "task_hackers", _, _, _, "b")
 	register_logevent("ev_round_start", 2, "1=Round_Start")
 	register_event("HLTV", "ev_new_round_sprays", "a", "1=0", "2=0")
 	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
@@ -273,6 +303,7 @@ public plugin_natives()
 	register_native("hb_spray", "n_spray")
 	register_native("hb_release", "n_release")
 	register_native("hb_urgent_until", "n_urgent_until")
+	register_native("hb_bot_hacker", "n_bot_hacker")
 	set_native_filter("native_filter")
 }
 
@@ -752,6 +783,8 @@ style()
 // old-timers its own (from the name, so a regular keeps their level)
 bot_style(id)
 {
+	if (g_Occ[id])
+		return STYLE_HACKER
 	new s = style()
 	if (s == STYLE_LAN || s == STYLE_OLD)
 	{
@@ -1121,6 +1154,8 @@ public fw_spawn_post(id)
 	if (is_user_bot(id) && (g_KnifeOut[id] || g_KnifeRun[id]))
 		ensure_gun(id)
 	reset_bot(id)
+	if (is_user_bot(id))
+		send_kit(id)
 	// (deathmatch has no rounds for a mood to settle between: a respawn does it, and time
 	// does too, so a tilted bot doesn't snowball for a whole map)
 	if (dm_mode())
@@ -1149,6 +1184,10 @@ public fw_spawn_post(id)
 
 public client_disconnected(id)
 {
+	// (an occasional hacker kicked or gone: not replaced by another this map)
+	if (g_Occ[id] && g_OccWant > 0)
+		g_OccWant--
+	g_Occ[id] = false
 	// a rival leaving: remembered (by SteamID) for a while, in case they're back
 	new Float:now = get_gametime()
 	for (new k = 1; k <= MaxClients; k++)
@@ -1180,6 +1219,9 @@ public task_old_rivals(tid)
 public client_putinserver(id)
 {
 	reset_bot(id)
+	g_Occ[id] = false
+	g_Kit[id][0] = 0
+	g_KitSent[id][0] = 0
 	g_DmSprayAt[id] = 0.0
 	g_SkillStyle[id] = STYLE_CLASSIC
 	g_Mix[id] = 0
@@ -1860,6 +1902,9 @@ public fw_cmdstart(id, uc, seed)
 	// one's reaction to hold back)
 	if (hold && g_Brain && pev(id, pev_euser4) != g_Target[id])
 		hold = false
+	// (a hacker's aimbot or triggerbot doesn't wait to react)
+	if (hold && (kit_has(id, 'a') || kit_has(id, 't')))
+		hold = false
 	if (hold)
 		set_uc(uc, UC_Buttons, buttons & ~IN_ATTACK)
 	return FMRES_IGNORED
@@ -1906,7 +1951,17 @@ public fw_prethink(id)
 	switch (s)
 	{
 		case STYLE_LOCKED: { chance = 0.12; gain = 1.06; cap = 320.0; hopsLo = 2; hopsHi = 5; }
-		case STYLE_HACKER: { chance = 0.3;  gain = 1.08; cap = 350.0; hopsLo = 3; hopsHi = 6; }
+		case STYLE_HACKER:
+		{
+			// (a hacker without the bunnyhop script doesn't hop; one with it chains them perfectly)
+			if (g_Kit[id][0] && !kit_has(id, 'h'))
+			{
+				g_HopsLeft[id] = 0
+				return
+			}
+			if (kit_has(id, 'h')) { chance = 0.6; gain = 1.1; cap = 420.0; hopsLo = 5; hopsHi = 10; }
+			else { chance = 0.3;  gain = 1.08; cap = 350.0; hopsLo = 3; hopsHi = 6; }
+		}
 		case STYLE_GOD:    { chance = 0.35; gain = 1.10; cap = 380.0; hopsLo = 3; hopsHi = 7; }
 		case STYLE_PUB, STYLE_NEWBIE:
 		{
@@ -2065,6 +2120,10 @@ public fw_traceline(const Float:start[3], const Float:end[3], cond, skip, tr)
 
 	new id = skip
 	g_Fired[id] = true
+	// a hacker: the brain aims for it (aimbot); no spread sends the bullet dead along the
+	// crosshair; backtrack lets one land on someone who just got behind cover
+	if (g_Kit[id][0])
+		return hack_bullet(id, start, dir, len, cond, skip, tr)
 	new Float:yaw = g_WobbleYaw[id], Float:pitch = g_WobblePitch[id]
 
 	new Float:now = get_gametime()
@@ -2127,6 +2186,195 @@ bool:snap_to_target(id, const Float:start[3], Float:dir[3], s)
 	for (new i = 0; i < 3; i++)
 		dir[i] = want[i] / b * a
 	return true
+}
+
+// ---------------------------------------------------------------------------
+// Hackers: each hacker's kit of cheats, from who it is (gm_people) and gm_hack_*; the brain
+// does the view (aimbot, wallhack, triggerbot, spinbot, no recoil, no flash, wallbangs), this
+// the bullets (no spread, backtrack) and the hops
+// ---------------------------------------------------------------------------
+
+bool:kit_has(id, c)
+{
+	return g_Kit[id][0] && contain(g_Kit[id], fmt("%c", c)) != -1
+}
+
+bool:is_hacker(id)
+{
+	return is_user_bot(id) && bot_style(id) == STYLE_HACKER && style() != STYLE_CLASSIC
+}
+
+// hb_bot_hacker(id): 0 not a hacker, else its level + 1 (1 closet, 2 mixed, 3 rage); +10 for the
+// occasional hacker in another style's lobby (people notice that one)
+public n_bot_hacker(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients || !g_Kit[id][0])
+		return 0
+	return g_KitLevel[id] + 1 + (g_Occ[id] ? 10 : 0)
+}
+
+// How blatant this one is: the lobby's level, or (mixed) from who it is - a show-off or a troll
+// rages, a careful or quiet player closet-cheats
+kit_level(id, h)
+{
+	new lvl = clamp(get_pcvar_num(g_pHackLevel), 0, 2)
+	if (lvl != 1)
+		return lvl
+	new score = (h % 5) - 2                 // -2..2: some spread whoever it is
+	if (g_PeopleLib)
+	{
+		if (people_get(id, "ego") == 2) score += 2
+		if (people_get(id, "ego") == 0) score -= 1
+		new humor = people_get(id, "humor")
+		if (humor == 3) score += 2
+		else if (humor == 2) score += 1
+		if (people_get(id, "temper") == 2) score += 1
+		new st = people_get(id, "style")
+		if (st == 2 || st == 3 || st == 4) score -= 2   // lurker careful camper
+		if (st == 0 || st == 10) score += 1             // rusher weirdgun
+	}
+	return score >= 2 ? 2 : (score <= -2 ? 0 : 1)
+}
+
+// The cheats it uses: always some walls and a trigger or aim; the rest by level, from the
+// name (a regular keeps its kit), only the ones gm_hack_cheats allows
+make_kit(id)
+{
+	new h = name_hash(id), allowed[16], kit[12], n = 0, na = 0
+	for (new i = 0; i < sizeof HACK_CVARS; i++)
+		if (get_pcvar_num(g_pHackCheat[i]))
+			allowed[na++] = HACK_LETTERS[i]
+	allowed[na] = 0
+	new lvl = kit_level(id, h)
+	// chance in percent of each cheat at closet, mixed, rage
+	static const CHEATS[] = { 'w', 'a', 't', 's', 'r', 'f', 'b', 'h', 'n', 'k' }
+	static const PCT[][3] = { {100, 100, 100}, {60, 100, 100}, {90, 80, 90}, {0, 35, 90}, {50, 85, 100},
+		{30, 70, 100}, {20, 60, 95}, {20, 60, 90}, {0, 50, 100}, {0, 0, 40} }
+	new r = h
+	for (new i = 0; i < sizeof CHEATS; i++)
+	{
+		r = (r * 1103515245 + 12345) & 0x7FFFFFFF
+		if (contain(allowed, fmt("%c", CHEATS[i])) != -1 && (r / 7) % 100 < PCT[i][lvl] && n < charsmax(kit))
+			kit[n++] = CHEATS[i]
+	}
+	kit[n] = 0
+	copy(g_Kit[id], charsmax(g_Kit[]), kit)
+	g_KitLevel[id] = lvl
+}
+
+// Tell the brain, when it changed (and "-" to a bot that stopped hacking)
+send_kit(id)
+{
+	if (!is_user_connected(id) || !is_user_bot(id))
+		return
+	if (is_hacker(id))
+		make_kit(id)
+	else
+		g_Kit[id][0] = 0
+	new now[16]
+	formatex(now, charsmax(now), "%s %d", g_Kit[id][0] ? g_Kit[id] : "-", g_KitLevel[id])
+	if (equal(now, g_KitSent[id]) || (!g_KitSent[id][0] && !g_Kit[id][0]))
+		return
+	copy(g_KitSent[id], charsmax(g_KitSent[]), now)
+	server_cmd("ls_bot %d hack %s", id, now)
+}
+
+public hack_changed(pcvar, const old_value[], const new_value[])
+{
+	if (pcvar == g_pHackOcc && !str_to_num(new_value))
+		for (new id = 1; id <= MaxClients; id++)
+			g_Occ[id] = false
+	for (new id = 1; id <= MaxClients; id++)
+		send_kit(id)
+}
+
+// Every few seconds: kits follow the style, and the occasional hacker (one map in so many,
+// now and then two) turns up among the bots
+public task_hackers()
+{
+	new s = style()
+	if (!g_OccRolled && get_gametime() > 20.0)
+	{
+		g_OccRolled = true
+		new Float:pct = get_pcvar_float(g_pHackOcc) > 0.0 ? get_pcvar_float(g_pHackOccPct) : 0.0
+		g_OccWant = random_float(0.0, 100.0) < pct ? (random_num(1, 5) == 1 ? 2 : 1) : 0
+	}
+	if (g_OccWant && get_pcvar_num(g_pHackOcc) && s != STYLE_CLASSIC && s != STYLE_HACKER && !match_like() && g_IdleMode)
+	{
+		new have, bots[32], nb
+		for (new id = 1; id <= MaxClients; id++)
+		{
+			if (!is_user_connected(id) || !is_user_bot(id))
+				continue
+			if (g_Occ[id])
+				have++
+			else
+				bots[nb++] = id
+		}
+		while (have < g_OccWant && nb)
+		{
+			new k = random(nb), id = bots[k]
+			bots[k] = bots[--nb]
+			g_Occ[id] = true
+			g_SkillStyle[id] = STYLE_CLASSIC
+			have++
+		}
+	}
+	for (new id = 1; id <= MaxClients; id++)
+		if (g_Occ[id] && (s == STYLE_HACKER || !get_pcvar_num(g_pHackOcc)))
+			g_Occ[id] = false
+	for (new id = 1; id <= MaxClients; id++)
+		send_kit(id)
+}
+
+// A hacker's bullet: dead along the crosshair with no spread (n), else left to the gun; with
+// backtrack (k) one fired at someone who ducked behind cover a moment ago still finds them
+hack_bullet(id, const Float:start[3], Float:dir[3], Float:len, cond, skip, tr)
+{
+	new Float:want[3], Float:end[3], bool:bend = false
+	if (kit_has(id, 'n'))
+	{
+		new Float:ang[3], Float:punch[3], Float:fwd[3]
+		pev(id, pev_v_angle, ang)
+		pev(id, pev_punchangle, punch)
+		for (new i = 0; i < 3; i++)
+			ang[i] += punch[i]
+		angle_vector(ang, ANGLEVECTOR_FORWARD, fwd)
+		for (new i = 0; i < 3; i++)
+			want[i] = fwd[i] * len
+		bend = true
+	}
+	else
+		for (new i = 0; i < 3; i++)
+			want[i] = dir[i]
+	// (the one it was on, out of sight for a quarter of a second at most)
+	new t = g_Target[id] ? 0 : g_LastTarget[id]
+	if (kit_has(id, 'k') && t && is_user_alive(t) && get_gametime() - g_LostAt[id] < 0.25)
+	{
+		new Float:head[3]
+		eye_pos(t, head)
+		for (new i = 0; i < 3; i++)
+			end[i] = start[i] + want[i]
+		// (only a shot that would miss now: the target's gone behind something)
+		engfunc(EngFunc_TraceLine, start, head, IGNORE_MONSTERS, skip, 0)
+		new Float:frac
+		get_tr2(0, TR_flFraction, frac)
+		if (frac < 1.0 && random_num(1, 3) == 1)
+		{
+			g_Bending = true
+			ExecuteHamB(Ham_TakeDamage, t, id, id, random_float(30.0, 60.0), DMG_BULLET)
+			g_Bending = false
+		}
+	}
+	if (!bend)
+		return FMRES_IGNORED
+	for (new i = 0; i < 3; i++)
+		end[i] = start[i] + want[i]
+	g_Bending = true
+	engfunc(EngFunc_TraceLine, start, end, cond, skip, tr)
+	g_Bending = false
+	return FMRES_SUPERCEDE
 }
 
 // ---------------------------------------------------------------------------
