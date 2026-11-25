@@ -38,7 +38,7 @@ export function testText(run: TestRunState | null, stale: boolean, now: number):
   return `${what} ${ago}${stale ? " (edited since)" : ""}`;
 }
 
-function TestRunTab({ focus, titleOf }: { focus: (id: string) => void; titleOf: (id: string) => string }) {
+function TestRunTab({ focus, titleOf, onStart }: { focus: (id: string) => void; titleOf: (id: string) => string; onStart?: () => void }) {
   const run = useStudio((s) => s.testRun);
   const [now, setNow] = useState(Date.now());
   const [showNever, setShowNever] = useState(false);
@@ -48,7 +48,13 @@ function TestRunTab({ focus, titleOf }: { focus: (id: string) => void; titleOf: 
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, [run?.phase]);
-  if (!run) return <p className="st-muted st-test-empty">Test run plays the mode on a hidden server with bots for about a minute and a half (a stretch without the mode first, then the mode, a round restart and a map change) and says what happened. Your game isn't touched.</p>;
+  if (!run)
+    return (
+      <div className="st-test-empty">
+        <p className="st-muted">Test run plays the mode on a hidden server with bots for about a minute and a half (a stretch without the mode first, then the mode, a round restart and a map change) and says what happened. Your game isn't touched.</p>
+        {onStart && <button type="button" className="btn" data-testid="studio-test-start" onClick={onStart}>Start a test run</button>}
+      </div>
+    );
   const r = run.result;
   const steps = (
         <ol className="st-test-steps">
@@ -167,7 +173,7 @@ function BotsNoteActions({ node }: { node: string }) {
   );
 }
 
-export function Results({ focus }: { focus: (id: string) => void }) {
+export function Results({ focus, onTestRun }: { focus: (id: string) => void; onTestRun?: () => void }) {
   const graph = useStudio((s) => s.graph);
   const problems = useStudio((s) => s.problems);
   const output = useStudio((s) => s.output);
@@ -229,7 +235,7 @@ export function Results({ focus }: { focus: (id: string) => void }) {
           ))}
         </ul>
       )}
-      {open && tab === "testrun" && <TestRunTab focus={focus} titleOf={(id) => {
+      {open && tab === "testrun" && <TestRunTab focus={focus} onStart={onTestRun} titleOf={(id) => {
             const n = graph.nodes.find((x) => x.id === id);
             return n ? nodeTitle(graph, n) : id;
           }} />}

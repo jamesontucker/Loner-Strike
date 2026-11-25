@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Puts a release's installers on Polar: the Mac .dmg and the Windows setup .exe are uploaded,
-and the downloads benefit is changed to offer only those two (the files it had before are
-taken off it and deleted).
+and Linux's AppImage, .deb and .rpm when the release has them (beta), and the downloads benefit
+is changed to offer only those (the files it had before are taken off it and deleted).
 
   POLAR_ACCESS_TOKEN=... scripts/polar-release.py <folder with the release's files> <tag>
 
@@ -23,6 +23,9 @@ CHUNK = 10_000_000          # bytes per uploaded part
 # (Polar's firewall turns away Python's own User-Agent)
 UA = "Loner-Strike-release/1.0 (+https://github.com/jamesontucker/Loner-Strike)"
 INSTALLERS = [("*_universal.dmg", "application/x-apple-diskimage"), ("*_x64-setup.exe", "application/x-msdownload")]
+# only when the release has them (releases before Linux don't)
+OPTIONAL = [("*_amd64.AppImage", "application/octet-stream"), ("*_amd64.deb", "application/vnd.debian.binary-package"),
+            ("*.x86_64.rpm", "application/x-rpm")]
 
 
 def fail(msg):
@@ -94,6 +97,11 @@ def main():
         if len(hits) != 1:
             fail(f"Expected one {pattern} in the release, found {len(hits)}.")
         files.append((hits[0], mime))
+    for pattern, mime in OPTIONAL:
+        hits = glob.glob(os.path.join(folder, pattern))
+        if len(hits) > 1:
+            fail(f"Expected at most one {pattern} in the release, found {len(hits)}.")
+        files.extend((h, mime) for h in hits)
     b = benefit()
     old = list(b["properties"].get("files") or [])
     new = [upload(path, mime, tag.lstrip("v")) for path, mime in files]

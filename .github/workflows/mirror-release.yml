@@ -23,7 +23,8 @@
 # R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET (an R2 token limited to that bucket).
 #
 # The newest release also goes to Polar (job polar, scripts/polar-release.py): its Mac and
-# Windows installers replace the ones the downloads benefit offers. Secret POLAR_ACCESS_TOKEN
+# Windows installers (and Linux's AppImage, .deb and .rpm when it has them) replace the ones the
+# downloads benefit offers. Secret POLAR_ACCESS_TOKEN
 # (an Organization Access Token with benefits:read/write and files:read/write); variable
 # POLAR_BENEFIT_ID (a secret or a variable) if the benefit can't be found by its description
 # mentioning Loner-Strike.
@@ -174,7 +175,7 @@ jobs:
           [ "$newest" = "$TAG" ] || { echo "$TAG isn't the newest release ($newest): Polar left as it is"; exit 0; }
           mkdir dist
           for i in 1 2 3 4 5; do
-            gh release download "$TAG" -R "$REPO" -D dist -p '*_universal.dmg' -p '*_x64-setup.exe' --clobber && break
+            gh release download "$TAG" -R "$REPO" -D dist -p '*_universal.dmg' -p '*_x64-setup.exe' -p '*_amd64.AppImage' -p '*_amd64.deb' -p '*.x86_64.rpm' --clobber && break
             [ "$i" = 5 ] && { echo "::error::Couldn't download the installers."; exit 1; }
             sleep $((i * 10))
           done

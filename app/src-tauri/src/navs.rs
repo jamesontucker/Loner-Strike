@@ -33,6 +33,9 @@ pub const JOB_KIND: &str = "navlearn";
 const NAV_MAGIC: u32 = 0xFEED_FACE;
 /// Smaller than this, a nav is a partial or broken file: never sent
 pub const MIN_NAV: u64 = 1024;
+
+/// A learn that saved a nav with no walkable areas
+pub const EMPTY_NAV: &str = "the bot couldn't find any floor to walk on from its spawn. Check the spawns stand on a floor (not in it or above a gap), with room around them, and try again.";
 /// A nav changed this recently may still be being written by the game: left for later
 pub const SETTLE: Duration = Duration::from_secs(60);
 const GAMES: [&str; 2] = ["cstrike", "czero"];
@@ -909,6 +912,11 @@ impl Learner for LocalLearner {
             // (from the last restart on: a start tried again isn't this map's failure)
             let says = read_log(crate::tools::health::after_restart(&text), &m.name);
             // done: the file is there and whole (said so, or the same on two looks)
+            // saved, but with no walkable areas in it (79 bytes: the header alone): the bot found
+            // nothing it could walk on from where it started, and waiting won't change that
+            if says == LogSays::Saved && std::fs::metadata(&nav).is_ok_and(|x| x.len() < MIN_NAV) {
+                break Err(fail(EMPTY_NAV.into()));
+            }
             let now = std::fs::metadata(&nav).ok().filter(|x| x.len() >= MIN_NAV).and_then(|x| Some((x.len(), x.modified().ok()?)));
             if let Some(now) = now.filter(|_| read_head(&nav).is_some()) {
                 if says == LogSays::Saved || last == Some(now) {

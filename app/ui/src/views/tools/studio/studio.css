@@ -311,6 +311,7 @@
 /* Test run (Results tab) */
 .st-test { padding: 6px 8px; overflow-y: auto; font-size: 13px; display: grid; gap: 6px; align-content: start; }
 .st-test-empty { padding: 6px 8px; margin: 0; font-size: 13px; }
+.st-test-empty p { margin: 0 0 8px; }
 .st-test-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .st-test-steps li { display: flex; align-items: center; gap: 6px; color: var(--st-muted, #999); }
 .st-test-steps li.on { color: var(--text); }

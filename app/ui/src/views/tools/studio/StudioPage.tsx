@@ -993,7 +993,7 @@ function Studio({ maps }: ToolProps) {
           </button>
         )}
       </div>
-      <Results focus={(id) => focusRef.current(id)} />
+      <Results focus={(id) => focusRef.current(id)} onTestRun={() => void startTest()} />
       <StudioTour />
       <TableEditorHost toast={toast} />
       <DeleteDialogHost
