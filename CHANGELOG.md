@@ -18,7 +18,7 @@ Loner-Strike on Linux and the Steam Deck (beta), and fixes for everyone:
 
 ### In-game menus
 - The Game Mode Menu follows each person's role on a server: an Owner gets everything; an Admin gets the match side of F3 (modes, maps, bots, match settings) and F4's restart, bot count, respawn and peaceful bots; a Moderator gets F4's round restart. God mode, noclip, healing, money, add-ons and the server's setup stay the Owner's.
-- Whoever runs Loner-Strike is made Owner on their own servers when they start.
+- Whoever runs Loner-Strike is added as Owner on their own servers (a role they pick for themselves afterwards stays).
 
 ### Maps and bots
 - A map that's one open room (like the editor's starter map) learns to a single nav area, which the app took for an empty nav: such maps showed as not learned, and teaching the bots waited 45 minutes. They count as learned now, and a nav with nothing in it ends the learning at once.

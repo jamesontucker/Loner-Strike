@@ -814,22 +814,19 @@ fn change(g: &Game, f: impl FnOnce(&mut Admins) -> Result<(), String>) -> Result
 pub const OWNER_NOTE: &str = "You (this computer's Steam account)";
 
 /// Whoever runs Loner-Strike is Owner on their own servers (their SteamID from this computer's
-/// Steam): added, or moved up to Owner, when a server starts. Ok(true) when it changed the list.
+/// Steam): added as Owner when a server starts and they aren't on its list. Once they're on it,
+/// the role is theirs to pick (one they lowered on purpose stays). Ok(true) when it added them.
 pub fn ensure_owner(g: &Game, steam: &str, name: &str) -> Result<bool, String> {
     let steam = steam.trim().to_uppercase();
     if !valid_steamid(&steam) {
         return Ok(false);
     }
-    if load(&g.data).people.iter().any(|p| p.id == steam && p.role == Role::Owner && p.expires.is_none()) {
+    if load(&g.data).people.iter().any(|p| p.id == steam) {
         return Ok(false);
     }
     change(g, |a| {
-        match a.people.iter().position(|p| p.id == steam) {
-            Some(i) => {
-                a.people[i].role = Role::Owner;
-                a.people[i].expires = None;
-            }
-            None => a.people.push(Person { id: steam.clone(), name: clean_text(name, 32), role: Role::Owner, expires: None, note: OWNER_NOTE.into() }),
+        if !a.people.iter().any(|p| p.id == steam) {
+            a.people.push(Person { id: steam.clone(), name: clean_text(name, 32), role: Role::Owner, expires: None, note: OWNER_NOTE.into() });
         }
         Ok(())
     })?;
