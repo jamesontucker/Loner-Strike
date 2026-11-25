@@ -234,7 +234,7 @@ fn find_nav(f: &Finder, hl: &Path, m: &LocalMap) -> Option<PathBuf> {
         let mut b = Vec::with_capacity(12);
         std::fs::File::open(p).ok()?.take(12).read_to_end(&mut b).ok()?;
         let head = crate::navs::parse_head(&b)?;
-        let big = std::fs::metadata(p).ok()?.len() >= crate::navs::MIN_NAV;
+        let big = crate::navs::learned_nav(p, std::fs::metadata(p).ok()?.len());
         (big && (any_version || head.bsp_size.is_some_and(|b| b as u64 == size))).then_some(())
     };
     let own = m.bsp.with_extension("nav");

@@ -62,6 +62,37 @@ pub fn parse_head(b: &[u8]) -> Option<NavHead> {
     Some(NavHead { version, bsp_size })
 }
 
+/// How many areas a nav holds: after the header (magic, version, the map file's size from
+/// version 4) comes the place directory (version 5 on: a u16 count, then each name as a u16
+/// length and its bytes), then the area count (u32). None: not a nav, or cut short.
+pub fn area_count(b: &[u8]) -> Option<u32> {
+    let head = parse_head(b)?;
+    let mut at = if head.version >= 4 { 12 } else { 8 };
+    if head.version >= 5 {
+        let places = u16::from_le_bytes(b.get(at..at + 2)?.try_into().ok()?);
+        at += 2;
+        for _ in 0..places {
+            let len = u16::from_le_bytes(b.get(at..at + 2)?.try_into().ok()?) as usize;
+            at += 2 + len;
+        }
+    }
+    Some(u32::from_le_bytes(b.get(at..at + 4)?.try_into().ok()?))
+}
+
+/// The area count of a nav file (its start is enough: the place names are short)
+pub fn file_area_count(path: &Path) -> Option<u32> {
+    let mut b = Vec::with_capacity(4096);
+    std::fs::File::open(path).ok()?.take(1 << 16).read_to_end(&mut b).ok()?;
+    area_count(&b)
+}
+
+/// Whether a nav file is a learned nav: 1 KB or more, or with at least one area (a single
+/// open room is learned as one area: a file under 100 bytes, which a size rule alone took
+/// for an empty one and never counted as learned)
+pub fn learned_nav(path: &Path, len: u64) -> bool {
+    len >= MIN_NAV || file_area_count(path).is_some_and(|n| n > 0)
+}
+
 fn read_head(path: &Path) -> Option<NavHead> {
     let mut b = Vec::with_capacity(12);
     std::fs::File::open(path).ok()?.take(12).read_to_end(&mut b).ok()?;
@@ -98,7 +129,7 @@ pub fn local_navs(hl: &Path, now: SystemTime) -> LocalNavs {
             let Some(stem) = file.to_lowercase().strip_suffix(".nav").map(String::from) else { continue };
             let Ok(meta) = f.metadata() else { continue };
             let Ok(modified) = meta.modified() else { continue };
-            if !meta.is_file() || meta.len() < MIN_NAV {
+            if !meta.is_file() || !learned_nav(&f.path(), meta.len()) {
                 continue;
             }
             // (a time in the future is a clock that was off, not a file being written)
@@ -912,12 +943,12 @@ impl Learner for LocalLearner {
             // (from the last restart on: a start tried again isn't this map's failure)
             let says = read_log(crate::tools::health::after_restart(&text), &m.name);
             // done: the file is there and whole (said so, or the same on two looks)
-            // saved, but with no walkable areas in it (79 bytes: the header alone): the bot found
-            // nothing it could walk on from where it started, and waiting won't change that
-            if says == LogSays::Saved && std::fs::metadata(&nav).is_ok_and(|x| x.len() < MIN_NAV) {
+            // saved, but with no areas in it: the bot found nothing it could walk on from where
+            // it started, and waiting won't change that
+            if says == LogSays::Saved && file_area_count(&nav) == Some(0) {
                 break Err(fail(EMPTY_NAV.into()));
             }
-            let now = std::fs::metadata(&nav).ok().filter(|x| x.len() >= MIN_NAV).and_then(|x| Some((x.len(), x.modified().ok()?)));
+            let now = std::fs::metadata(&nav).ok().filter(|x| learned_nav(&nav, x.len())).and_then(|x| Some((x.len(), x.modified().ok()?)));
             if let Some(now) = now.filter(|_| read_head(&nav).is_some()) {
                 if says == LogSays::Saved || last == Some(now) {
                     break Ok(nav.clone());
@@ -1070,6 +1101,40 @@ pub fn owner_routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+
+    /// A nav is judged by its areas, not its size: the editor's starter room (one open 1024 x
+    /// 1024 floor) learns to a single area, 79 bytes, which the 1 KB rule took for empty
+    #[test]
+    fn small_navs_with_areas_count_as_learned() {
+        let hex = "cefaedfe050000003096000000000100000001000000000000fac30000fac39304003d0000fa430000fa439304003d9304003d9304003d000000000000000000000000000000000000000000000000";
+        let room: Vec<u8> = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
+        assert_eq!(room.len(), 79);
+        assert_eq!(parse_head(&room).unwrap().bsp_size, Some(38448));
+        assert_eq!(area_count(&room), Some(1));
+        // places before the count are skipped: two named places, then 3 areas
+        let mut named = room[..12].to_vec();
+        named.extend(2u16.to_le_bytes());
+        for p in ["BombsiteA", "CTSpawn"] {
+            named.extend(((p.len() + 1) as u16).to_le_bytes());
+            named.extend(p.as_bytes());
+            named.push(0);
+        }
+        named.extend(3u32.to_le_bytes());
+        assert_eq!(area_count(&named), Some(3));
+        // none at all, and a file cut short
+        let mut none = room[..14].to_vec();
+        none.extend(0u32.to_le_bytes());
+        assert_eq!(area_count(&none), Some(0));
+        assert_eq!(area_count(&room[..13]), None);
+        let dir = std::env::temp_dir().join(format!("ls-navareas-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("room.nav"), dir.join("none.nav"));
+        std::fs::write(&a, &room).unwrap();
+        std::fs::write(&b, &none).unwrap();
+        assert!(learned_nav(&a, 79));
+        assert!(!learned_nav(&b, 18));
+        std::fs::remove_dir_all(&dir).ok();
+    }
     use super::*;
 
     // a learn that was started again after Steam didn't answer: only the new attempt is read
