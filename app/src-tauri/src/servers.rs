@@ -42,7 +42,7 @@ pub(crate) const HLDS: &str = if crate::gamebin::LINUX { "hlds_linux" } else { "
 /// the caller's): CrossOver's wine with the bottle for the Mac's Windows server, the program
 /// itself on Windows and Linux. On Linux it finds its own libraries in its folder
 /// (LD_LIBRARY_PATH, as hlds_run sets it) and Steam's steamclient.so in ~/.steam/sdk32.
-pub(crate) fn hlds_command(kind: &str, bottle: Option<&str>, dir: &Path, quiet_wine: bool) -> Result<std::process::Command, String> {
+pub(crate) fn hlds_command(kind: &str, bottle: Option<&str>, dir: &Path, game: &str, quiet_wine: bool) -> Result<std::process::Command, String> {
     let hlds = hlds_in(dir);
     if kind == "crossover" {
         let mut c = sys::command(CROSSOVER_WINE);
@@ -62,6 +62,7 @@ pub(crate) fn hlds_command(kind: &str, bottle: Option<&str>, dir: &Path, quiet_w
             }
         }
         linux_steamclient();
+        steam_appid_file(dir, game);
         let mut c = sys::command(&hlds);
         let mut libs = vec![dir.to_path_buf()];
         if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
@@ -73,7 +74,29 @@ pub(crate) fn hlds_command(kind: &str, bottle: Option<&str>, dir: &Path, quiet_w
         return Ok(c);
     }
     #[allow(unreachable_code)]
-    Ok(sys::command(&hlds))
+    {
+        let _ = game;
+        Ok(sys::command(&hlds))
+    }
+}
+
+/// The game's Steam app id in steam_appid.txt next to the Linux server, before it starts. The
+/// engine writes it itself, but only once Steam has already been asked: without one there the
+/// first start of every new server folder ends "Unable to initialize Steam." and crashes (the
+/// next start works). Seen on Ubuntu 22.04 and SteamOS 3.9, 2026-11-24.
+#[cfg(target_os = "linux")]
+fn steam_appid_file(dir: &Path, game: &str) {
+    let id = if game == "czero" { "80" } else { "10" };
+    let p = dir.join("steam_appid.txt");
+    if std::fs::read_to_string(&p).map(|t| t.trim() != id).unwrap_or(true) {
+        let _ = std::fs::write(&p, format!("{id}\n"));
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+/// The -game of a server's start options (cstrike when it has none)
+pub(crate) fn game_in_args(args: &[String]) -> &str {
+    args.iter().position(|a| a == "-game").and_then(|i| args.get(i + 1)).map(String::as_str).unwrap_or("cstrike")
 }
 
 /// The Linux server loads Steam's 32-bit steamclient.so from ~/.steam/sdk32 (the Steam client
@@ -2671,7 +2694,7 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         c.arg("--bottle").arg(e.bottle.as_deref().unwrap_or("Steam")).arg(win);
         c
     } else {
-        hlds_command(&e.kind, None, &e.dir, false)?
+        hlds_command(&e.kind, None, &e.dir, &e.game, false)?
     };
     cmd.args(launch_args(e))
         .current_dir(&e.dir)

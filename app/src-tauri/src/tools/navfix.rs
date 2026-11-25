@@ -1703,7 +1703,7 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
     let log = std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
     crate::navs::write_learn_map(&dir.join(&m.game), &m.name)?;
     let spawn = |log: std::fs::File| -> Result<std::process::Child, String> {
-        let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, true)
+        let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, &m.game, true)
             .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
         low_priority(&mut cmd);
         cmd.args(crate::navs::learn_args(&m.game, port, &password))

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function HelpMenu({ onNodeHelp, onTour }: { onNodeHelp: () => void; onTour?: () => void }) {
+// (label: "?" in the toolbar; spelled out in the narrow layout's More menu, where a bare "?" says nothing)
+export function HelpMenu({ onNodeHelp, onTour, label = "?" }: { onNodeHelp: () => void; onTour?: () => void; label?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function HelpMenu({ onNodeHelp, onTour }: { onNodeHelp: () => void; onTou
   return (
     <div className="st-help-menu" ref={box}>
       <button type="button" className="btn" data-testid="studio-help-menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title="Help: the nodes, keyboard shortcuts and a tour" aria-label="Help">
-        ?
+        {label}
       </button>
       {open && (
         <div className="st-help-menu-list" role="menu">

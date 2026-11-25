@@ -1258,7 +1258,7 @@ fn low_priority(cmd: &mut std::process::Command) {
 }
 
 pub(crate) fn spawn(client: &crate::steam::Install, dir: &Path, args: &[String], log: std::fs::File) -> Result<std::process::Child, String> {
-    let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, true)
+    let mut cmd = crate::servers::hlds_command(&client.kind, client.bottle.as_deref(), dir, crate::servers::game_in_args(args), true)
         .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
     low_priority(&mut cmd);
     cmd.args(args).current_dir(dir).stdin(std::process::Stdio::null()).stdout(log.try_clone().map_err(|e| e.to_string())?).stderr(log);

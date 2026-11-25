@@ -169,10 +169,14 @@ fn main() {
             // a little roomier than before, but never taller or wider than the screen
             // (a 13" laptop is about 900 points tall, menu bar and Dock included)
             let (mut w, mut h) = (1320.0, 980.0);
+            // a small screen (the Steam Deck's 1280 x 800, its taskbar and the title bar take
+            // the rest): the window opens maximized, which the desktop fits between its panels
+            let mut small = false;
             if let Ok(Some(m)) = app.primary_monitor() {
                 let size = m.size().to_logical::<f64>(m.scale_factor());
                 w = f64::min(w, size.width - 40.0);
                 h = f64::min(h, size.height - 60.0);
+                small = size.height < 900.0;
             }
             // P5: the map editor's "Open in its own window" panels: window.open("") from the
             // app's page gets a real window sharing the page (so it can draw the panel into it);
@@ -221,6 +225,9 @@ fn main() {
                 })
                 .build()?;
             fit_on_screen(&window);
+            if small {
+                let _ = window.maximize();
+            }
             show_when_loaded(window, start_url);
             Ok(())
         })

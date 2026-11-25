@@ -700,7 +700,7 @@ impl LocalLearner {
         if !hlds.is_file() {
             return Err("The hidden server's files are missing.".into());
         }
-        let mut cmd = servers::hlds_command(&self.client.kind, self.client.bottle.as_deref(), &self.dir, true)
+        let mut cmd = servers::hlds_command(&self.client.kind, self.client.bottle.as_deref(), &self.dir, servers::game_in_args(args), true)
             .map_err(|_| "The hidden server has to be inside the game's CrossOver bottle.".to_string())?;
         low_priority(&mut cmd);
         cmd.args(args)

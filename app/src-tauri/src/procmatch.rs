@@ -76,7 +76,7 @@ pub fn end_if_ours(pid: u32, noted_start: Option<u64>, exe: &Path, also: Option<
 /// (`C:\Loner-Strike Servers\<id>\hlds.exe -console ...`). Ending the launcher leaves it running on
 /// its port. These are the pids in `ps -axo pid=,command=` output that are that program: the
 /// Windows-side process (its command line starts with the path) and any launcher running it.
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn wine_side_pids(ps: &str, win_exe: &str, me: u32) -> Vec<u32> {
     let exe = win_exe.to_lowercase();
     if exe.len() < 8 || !exe.ends_with(".exe") {
@@ -98,6 +98,7 @@ pub fn wine_side_pids(ps: &str, win_exe: &str, me: u32) -> Vec<u32> {
 /// Ends a CrossOver program by its Windows path (see wine_side_pids): asked first (SIGTERM),
 /// then made to (SIGKILL) if it's still there after `grace`. True when none is left.
 #[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn end_wine_side(win_exe: &str, grace: std::time::Duration) -> bool {
     let list = || {
         let mut c = crate::sys::command("ps");

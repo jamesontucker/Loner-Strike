@@ -934,7 +934,7 @@ function Studio({ maps }: ToolProps) {
             </span>
             {versionsBtn}
             {viewMenu}
-            {helpMenu}
+            <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} label="Help" />
             <span className="st-more-row">
               {testRunBtn}
               {testStatusBtn}
