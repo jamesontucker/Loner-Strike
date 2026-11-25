@@ -16,7 +16,9 @@ optdepends=('lib32-gcc-libs: the AMX Mod X plugin compiler (Steam already pulls 
 provides=('loner-strike')
 conflicts=('loner-strike')
 source=("https://github.com/jamesontucker/Loner-Strike/releases/download/v${pkgver}/Loner-Strike_${pkgver}_amd64.deb")
-sha256sums=('SKIP')
+# (not a valid sum on purpose: makepkg refuses to build until the release .deb's real
+# SHA-256 is here, so it can't be published unchecked)
+sha256sums=('SET-TO-THE-RELEASE-DEB-SHA256')
 
 package() {
   bsdtar -xf data.tar.* -C "${pkgdir}"
