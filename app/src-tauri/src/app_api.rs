@@ -320,6 +320,18 @@ async fn api_update_check(State(st): State<Shared>, headers: HeaderMap) -> (Stat
     }
 }
 
+/// On Linux outside an AppImage (APPIMAGE is set inside one): how to update instead.
+fn linux_package_update() -> Option<&'static str> {
+    if !crate::gamebin::LINUX || std::env::var_os("APPIMAGE").is_some() {
+        return None;
+    }
+    Some(if std::path::Path::new("/usr/bin/pacman").is_file() {
+        "This copy of Loner-Strike came from a package, so update it the same way: with your AUR helper (for example yay -Syu), or download the new version from lonerstrike.com."
+    } else {
+        "This copy of Loner-Strike came from a package (.deb or .rpm), so it can't update itself: download the new one from lonerstrike.com and open it, or update it with your system's software updater."
+    })
+}
+
 async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
@@ -327,6 +339,11 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     // restarting would cut a setup or restore off half way
     if crate::setup::current().state == "running" || crate::backup::restoring_any() {
         return (StatusCode::OK, Json(json!({"error": "Something is being set up or restored. Wait for it to finish, then update."})));
+    }
+    // Linux: only the AppImage updates itself; a .deb, .rpm or AUR install is updated by its
+    // package manager (the app's own files belong to the system there)
+    if let Some(how) = linux_package_update() {
+        return (StatusCode::OK, Json(json!({"error": how})));
     }
     let update = PENDING.lock().unwrap().take();
     let (Some(update), Some(app)) = (update, st.app.get().cloned()) else {

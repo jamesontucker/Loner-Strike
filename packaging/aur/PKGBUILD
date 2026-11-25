@@ -1,0 +1,25 @@
+# Maintainer: Loner-Strike <https://lonerstrike.com>
+# The AUR package of Loner-Strike's Linux build: the release's .deb, unpacked into place (the
+# .deb's files are exactly what the release built: the AppImage's packager rewrites bundled
+# programs, the .deb doesn't). Before publishing: set pkgver to the release and sha256sums to
+# the .deb's sum (sha256sum Loner-Strike_<ver>_amd64.deb), then makepkg --printsrcinfo > .SRCINFO.
+pkgname=loner-strike-bin
+pkgver=1.0.3
+pkgrel=1
+pkgdesc="Play Counter-Strike 1.6 and Condition Zero like it's 2004: human-like bots, classic community modes, and tools to build and host your own"
+arch=('x86_64')
+url="https://lonerstrike.com"
+license=('GPL-3.0-only')
+depends=('webkit2gtk-4.1' 'gtk3' 'hicolor-icon-theme')
+optdepends=('lib32-gcc-libs: the AMX Mod X plugin compiler (Steam already pulls it in)'
+            'steam: the games themselves')
+provides=('loner-strike')
+conflicts=('loner-strike')
+source=("https://github.com/jamesontucker/Loner-Strike/releases/download/v${pkgver}/Loner-Strike_${pkgver}_amd64.deb")
+sha256sums=('SKIP')
+
+package() {
+  bsdtar -xf data.tar.* -C "${pkgdir}"
+  # (the .deb puts its files under /usr: the program, its resources, the menu entry and icons)
+  chmod -R u=rwX,go=rX "${pkgdir}/usr"
+}

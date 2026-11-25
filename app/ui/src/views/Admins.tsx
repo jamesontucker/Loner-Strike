@@ -21,9 +21,9 @@ type Data = { people: Person[]; donate: string; perks: Perks; abilities: Abiliti
 type Reply = Data | { ok: false; error: string };
 
 const ROLES: { id: Role; name: string; what: string }[] = [
-  { id: "owner", name: "Owner", what: "Everything, including server settings and console commands. Can't be kicked by other admins." },
-  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus. Plus the abilities you pick below." },
-  { id: "moderator", name: "Moderator", what: "Kick, slay, votes, admin chat and menus. No bans or map changes." },
+  { id: "owner", name: "Owner", what: "Everything, including server settings, console commands and the whole Game Mode Menu (F3, F4). Can't be kicked by other admins." },
+  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus, and the match side of the Game Mode Menu (mode, map, bots, match settings; F4 restarts, bots, respawn). Plus the abilities you pick below." },
+  { id: "moderator", name: "Moderator", what: "Kick, slay, votes, admin chat and menus, and a round restart from F4. No bans or map changes." },
   { id: "vip", name: "VIP", what: "A reserved slot, the VIP tags and the abilities you pick below. No admin powers." },
 ];
 const roleName = (r: Role) => ROLES.find((x) => x.id === r)?.name ?? r;

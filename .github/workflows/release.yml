@@ -1,5 +1,5 @@
 # Builds the Loner-Strike app for Mac (signed + notarized, Apple Silicon and Intel),
-# Windows and Linux (x86_64: AppImage and .deb, beta), and attaches them to a draft GitHub release with the updater files.
+# Windows and Linux (x86_64: AppImage, .deb and .rpm, beta), and attaches them to a draft GitHub release with the updater files.
 #
 # Release: push a tag like v0.1.0 (it must match "version" in app/src-tauri/tauri.conf.json),
 # check the draft release on GitHub, then publish it. Published releases are what the
@@ -110,7 +110,7 @@ jobs:
             echo "$section"
             echo ""
             echo "---"
-            echo "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Linux (beta): the .AppImage, or the .deb on Debian and Ubuntu. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway."
+            echo "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Linux (beta): the .AppImage (any system, the Steam Deck too), the .deb on Ubuntu, Mint or Pop!_OS, or the .rpm on Fedora, Nobara or openSUSE. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway."
             echo ""
             echo "Found a bug? In the app, open Settings and click Copy next to Copy diagnostics, then post it on Discord (https://discord.gg/K9eBHVVwZE) or in Issues."
             echo "LS_NOTES_END"
@@ -320,4 +320,5 @@ jobs:
             app/src-tauri/target/**/bundle/nsis/*.exe
             app/src-tauri/target/**/bundle/appimage/*.AppImage
             app/src-tauri/target/**/bundle/deb/*.deb
+            app/src-tauri/target/**/bundle/rpm/*.rpm
           if-no-files-found: warn

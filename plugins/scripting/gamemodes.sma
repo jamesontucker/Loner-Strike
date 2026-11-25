@@ -2667,11 +2667,12 @@ public task_hint(taskid)
 		gm_print(id, "%s.", note)
 	}
 	// the menus are for admins (and the host): everyone else just hears what's on
-	new bool:admin = (get_user_flags(id) & ACCESS) != 0
-	if (g_CrashMap[0] && admin)
+	if (g_CrashMap[0] && is_owner(id))
 		gm_print(id, "Last session ended unexpectedly on %s. F3 shows what you can do about it.", g_CrashMap)
-	if (admin)
+	if (can_match(id))
 		gm_print(id, "Now playing %s. F3 opens the menu, F4 quick actions.", g_ModeName[g_Cur])
+	else if (can_quick(id))
+		gm_print(id, "Now playing %s. F4 has quick actions.", g_ModeName[g_Cur])
 	else
 		gm_print(id, "Now playing %s.", g_ModeName[g_Cur])
 }
@@ -2785,11 +2786,31 @@ get_info(menu, item, info[], len)
 // Main menu
 // ---------------------------------------------------------------------------
 
+// Who gets what in the menus (the app's roles, admins.rs): the Owner (ADMIN_CFG) everything;
+// an Admin (ADMIN_MAP) what runs the match: presets, the mode, the map, bots, match settings,
+// and from F4 a round restart, the bot count, respawn, peaceful bots; a Moderator (ADMIN_KICK)
+// only F4's round restart. Server-wide setup, fun effects and the god mode/noclip/money kind
+// stay the Owner's. Every handler checks again (a menu can be on screen when a role changes).
+bool:is_owner(id)
+{
+	return (get_user_flags(id) & ACCESS) != 0
+}
+
+bool:can_match(id)
+{
+	return is_owner(id) || (get_user_flags(id) & ADMIN_MAP) != 0
+}
+
+bool:can_quick(id)
+{
+	return can_match(id) || (get_user_flags(id) & ADMIN_KICK) != 0
+}
+
 bool:has_access(id)
 {
-	if (get_user_flags(id) & ACCESS)
+	if (can_match(id))
 		return true
-	gm_print(id, "You need admin access to use this menu.")
+	gm_print(id, can_quick(id) ? "The Game Mode Menu is for admins. F4 has the quick actions you can use." : "You need admin access to use this menu.")
 	return false
 }
 
@@ -2811,7 +2832,8 @@ show_main(id)
 
 	new const diff[][] = { "Easy", "Normal", "Hard", "Expert" }
 	new menu = menu_create(title, "main_handler")
-	if (g_CrashMap[0] && !g_Career)
+	new bool:owner = is_owner(id)
+	if (g_CrashMap[0] && !g_Career && owner)
 		menu_additem(menu, fmt("\rLast session crashed on %s", g_CrashMap), "crash")
 	if (!g_Career)
 	{
@@ -2822,9 +2844,12 @@ show_main(id)
 		menu_additem(menu, fmt("Bots: \y%d \d| \y%s", get_playersnum_ex(GetPlayers_ExcludeHuman), diff[clamp(get_cvar_num("bot_difficulty"), 0, 3)]), "bots")
 		menu_additem(menu, "Match settings", "match")
 	}
-	menu_additem(menu, "Fun & effects", "fun")
-	menu_additem(menu, "Player tools", "players")
-	if (g_AddonCount)
+	if (owner)
+	{
+		menu_additem(menu, "Fun & effects", "fun")
+		menu_additem(menu, "Player tools", "players")
+	}
+	if (g_AddonCount && owner)
 	{
 		new on
 		for (new a = 0; a < g_AddonCount; a++)
@@ -2832,7 +2857,8 @@ show_main(id)
 				on++
 		menu_additem(menu, addons_pending() ? "Add-ons: \rrestart map to apply" : fmt("Add-ons: \y%d on", on), "addons")
 	}
-	menu_additem(menu, "Admin tools", "admin")
+	if (owner)
+		menu_additem(menu, "Admin tools", "admin")
 	if (g_Career)
 		menu_additem(menu, "Help", "help")
 	menu_setprop(menu, MPROP_PERPAGE, 0)
@@ -2850,6 +2876,11 @@ public main_handler(id, menu, item)
 	new info[16]
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
+	if (!can_match(id))
+		return PLUGIN_HANDLED
+	// the Owner's own items (see is_owner)
+	if (!is_owner(id) && (equal(info, "crash") || equal(info, "fun") || equal(info, "players") || equal(info, "addons") || equal(info, "admin")))
+		return PLUGIN_HANDLED
 
 	if (equal(info, "crash"))        show_crash(id)
 	else if (equal(info, "presets")) show_presets(id)
@@ -3035,7 +3066,7 @@ show_map_root(id)
 			menu_additem(menu, fmt("%s \d(%d)", MAPCAT_NAMES[c], counts[c]), fmt("c%d", c))
 	menu_additem(menu, fmt("All maps \d(%d)", ArraySize(g_Maps)), fmt("c%d", MC_COUNT))
 
-	if (g_PickMode[id] < 0)
+	if (g_PickMode[id] < 0 && is_owner(id))
 	{
 		menu_additem(menu, list_has("favorites.txt", cur) ? fmt("Remove %s from favorites", cur) : fmt("Add %s to favorites", cur), "fav")
 		if (hidden)
@@ -3061,6 +3092,11 @@ public maproot_handler(id, menu, item)
 	new info[16]
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
+	if (!can_match(id))
+		return PLUGIN_HANDLED
+	// hidden maps, the nav tools, favorites and map presets are the Owner's
+	if (!is_owner(id) && (equal(info, "nav") || equal(info, "fav") || equal(info, "preset") || equal(info, "c-5")))
+		return PLUGIN_HANDLED
 
 	if (equal(info, "cur"))
 	{
@@ -4871,7 +4907,8 @@ show_presets(id)
 		num_to_str(i, info, charsmax(info))
 		menu_additem(menu, text, info)
 	}
-	menu_additem(menu, "\ySave current setup as a preset...", "save")
+	if (is_owner(id))
+		menu_additem(menu, "\ySave current setup as a preset...", "save")
 	menu_nav(menu)
 	menu_display(id, menu)
 }
@@ -4889,6 +4926,8 @@ public presets_handler(id, menu, item)
 	new info[8]
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
+	if (!can_match(id) || (equal(info, "save") && !is_owner(id)))
+		return PLUGIN_HANDLED
 
 	if (equal(info, "save"))
 	{
@@ -5296,37 +5335,65 @@ public srv_pos()
 
 public cmd_quick(id)
 {
-	if (has_access(id))
+	if (can_quick(id))
 		show_quick(id)
+	else
+		gm_print(id, "You need admin access to use this menu.")
 	return PLUGIN_HANDLED
 }
 
 show_quick(id)
 {
-	new menu = menu_create("\yQuick actions^n\dF3 opens the full menu", "quick_handler")
+	new bool:owner = is_owner(id), bool:admin = can_match(id)
+	new menu = menu_create(admin ? "\yQuick actions^n\dF3 opens the full menu" : "\yQuick actions", "quick_handler")
 	if (!g_Career)
 	{
 		menu_additem(menu, "Restart round", "restart")
-		menu_additem(menu, fmt("Bots +1 \d(%d now)", get_playersnum_ex(GetPlayers_ExcludeHuman)), "botup")
-		menu_additem(menu, "Bots -1", "botdown")
+		if (admin)
+		{
+			menu_additem(menu, fmt("Bots +1 \d(%d now)", get_playersnum_ex(GetPlayers_ExcludeHuman)), "botup")
+			menu_additem(menu, "Bots -1", "botdown")
+		}
 	}
-	menu_additem(menu, fmt("God mode: %s", g_God[id] ? "\yOn" : "\dOff"), "god")
-	menu_additem(menu, fmt("Noclip: %s", g_Noclip[id] ? "\yOn" : "\dOff"), "noclip")
-	menu_additem(menu, "Respawn me", "respawn")
-	menu_additem(menu, g_HasPos[id] ? "Save my spot \d(replaces the saved one)" : "Save my spot", "save")
-	menu_additem(menu, g_HasPos[id] ? "Back to my saved spot" : "\dBack to my saved spot", "load")
-	if (!g_Career)
+	if (owner)
+	{
+		menu_additem(menu, fmt("God mode: %s", g_God[id] ? "\yOn" : "\dOff"), "god")
+		menu_additem(menu, fmt("Noclip: %s", g_Noclip[id] ? "\yOn" : "\dOff"), "noclip")
+	}
+	if (admin)
+		menu_additem(menu, "Respawn me", "respawn")
+	if (owner)
+	{
+		menu_additem(menu, g_HasPos[id] ? "Save my spot \d(replaces the saved one)" : "Save my spot", "save")
+		menu_additem(menu, g_HasPos[id] ? "Back to my saved spot" : "\dBack to my saved spot", "load")
+	}
+	if (!g_Career && admin)
 		menu_additem(menu, fmt("Peaceful bots: %s", get_cvar_num("bot_zombie") ? "\yOn" : "\dOff"), "peace")
-	new map[32]
-	get_mapname(map, charsmax(map))
-	menu_additem(menu, list_has("favorites.txt", map) ? fmt("Favorite map: \y%s", map) : fmt("Add %s to favorites", map), "fav")
-	menu_additem(menu, "Heal me", "heal")
-	if (!g_Career)
-		menu_additem(menu, "Give me $16000", "money")
+	if (owner)
+	{
+		new map[32]
+		get_mapname(map, charsmax(map))
+		menu_additem(menu, list_has("favorites.txt", map) ? fmt("Favorite map: \y%s", map) : fmt("Add %s to favorites", map), "fav")
+		menu_additem(menu, "Heal me", "heal")
+		if (!g_Career)
+			menu_additem(menu, "Give me $16000", "money")
+	}
 	menu_setprop(menu, MPROP_BACKNAME, "Previous page")
 	menu_setprop(menu, MPROP_NEXTNAME, "More")
 	menu_setprop(menu, MPROP_EXITNAME, "Close")
 	menu_display(id, menu)
+}
+
+// What F4 item each role may use (show_quick shows the same)
+bool:quick_allowed(id, const info[])
+{
+	if (is_owner(id))
+		return true
+	if (equal(info, "restart"))
+		return can_quick(id)
+	if (equal(info, "botup") || equal(info, "botdown") || equal(info, "respawn") || equal(info, "peace"))
+		return can_match(id)
+	return false
 }
 
 public quick_handler(id, menu, item)
@@ -5339,6 +5406,8 @@ public quick_handler(id, menu, item)
 	new info[16]
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
+	if (!quick_allowed(id, info))
+		return PLUGIN_HANDLED
 
 	// bots still trickling in (gm_pubserver) count as in already
 	new ramp = get_cvar_pointer("gm_botjoin_target")
@@ -5410,8 +5479,10 @@ public task_summary()
 		if (!is_user_connected(id) || is_user_bot(id))
 			continue
 		set_hudmessage(233, 227, 207, -1.0, 0.18, 0, 0.0, 5.0, 0.4, 1.0, -1)
-		if (get_user_flags(id) & ACCESS)
+		if (can_match(id))
 			show_hudmessage(id, "%s%s%s^n%d bots, %s   |   F3 menu   F4 quick actions", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset, bots, diff[d])
+		else if (can_quick(id))
+			show_hudmessage(id, "%s%s%s^n%d bots, %s   |   F4 quick actions", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset, bots, diff[d])
 		else
 			show_hudmessage(id, "%s%s%s^n%d bots, %s", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset, bots, diff[d])
 	}
