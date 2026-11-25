@@ -810,6 +810,32 @@ fn change(g: &Game, f: impl FnOnce(&mut Admins) -> Result<(), String>) -> Result
     Ok(listing(g))
 }
 
+/// The note on the entry that makes whoever runs Loner-Strike Owner on their own servers
+pub const OWNER_NOTE: &str = "You (this computer's Steam account)";
+
+/// Whoever runs Loner-Strike is Owner on their own servers (their SteamID from this computer's
+/// Steam): added, or moved up to Owner, when a server starts. Ok(true) when it changed the list.
+pub fn ensure_owner(g: &Game, steam: &str, name: &str) -> Result<bool, String> {
+    let steam = steam.trim().to_uppercase();
+    if !valid_steamid(&steam) {
+        return Ok(false);
+    }
+    if load(&g.data).people.iter().any(|p| p.id == steam && p.role == Role::Owner && p.expires.is_none()) {
+        return Ok(false);
+    }
+    change(g, |a| {
+        match a.people.iter().position(|p| p.id == steam) {
+            Some(i) => {
+                a.people[i].role = Role::Owner;
+                a.people[i].expires = None;
+            }
+            None => a.people.push(Person { id: steam.clone(), name: clean_text(name, 32), role: Role::Owner, expires: None, note: OWNER_NOTE.into() }),
+        }
+        Ok(())
+    })?;
+    Ok(true)
+}
+
 /// The note on admins shared control adds, so it only ever changes or removes its own
 pub const SHARED_NOTE: &str = "Shared control";
 

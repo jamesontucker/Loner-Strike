@@ -638,14 +638,24 @@ pub(crate) fn entity_text(bsp: &Path) -> Option<String> {
 
 /// The hidden server's start options: this computer only, never listed, and a password
 /// for asking it to quit.
-pub fn learn_args(game: &str, port: u16, password: &str, map: &str) -> Vec<String> {
+pub fn learn_args(game: &str, port: u16, password: &str) -> Vec<String> {
     [
         "-console", "-game", game, "-port", &port.to_string(), "+ip", "127.0.0.1", "-nomaster", "-insecure", "-condebug", "+sv_lan", "1", "+maxplayers", "4",
-        "+bot_join_after_player", "0", "+bot_quota", "1", "+rcon_password", password, "+map", map,
+        "+bot_join_after_player", "0", "+bot_quota", "1", "+rcon_password", password, "+exec", LEARN_MAP_CFG,
     ]
     .iter()
     .map(|s| s.to_string())
     .collect()
+}
+
+/// The file the hidden server loads its map from (learn_args runs it last): Valve's Linux
+/// engine cuts a map name on its command line at a '-' ("+map aim_ak-colt" loads "aim_ak"),
+/// and a map command in a file is read whole, as the game's own start file is (app_api.rs).
+pub const LEARN_MAP_CFG: &str = "ls_learn_map.cfg";
+
+/// Writes LEARN_MAP_CFG into the hidden server's game folder, naming `map`.
+pub fn write_learn_map(game_dir: &Path, map: &str) -> Result<(), String> {
+    std::fs::write(game_dir.join(LEARN_MAP_CFG), format!("// Written by Loner-Strike: the map the hidden server learns\nmap \"{map}\"\n")).map_err(|e| format!("The hidden server's start file couldn't be written ({e})."))
 }
 
 /// server.cfg of the hidden server (run at every map start): one bot, joining with nobody
@@ -653,6 +663,9 @@ pub fn learn_args(game: &str, port: u16, password: &str, map: &str) -> Vec<Strin
 const LEARN_CFG: &str = "// Written by Loner-Strike: the hidden server that teaches bots maps\n\
 hostname \"Loner-Strike bot teacher\"\nsv_lan 1\nmp_timelimit 0\nmp_maxrounds 0\nmp_winlimit 0\n\
 bot_enable 1\nbot_quota 1\nbot_quota_mode normal\nbot_join_after_player 0\nbot_join_delay 0\nbot_join_team any\n";
+
+/// game_init.cfg of the hidden server (run once as its game starts)
+const LEARN_INIT_CFG: &str = "// Written by Loner-Strike: bots on the hidden server that teaches bots maps\nbot_enable \"1\"\n";
 
 /// The hidden server on this computer: a copy of Valve's server (the one servers are made
 /// from, downloaded first if there isn't one) in <servers folder>/.nav-learner, with no
@@ -831,6 +844,10 @@ impl Learner for LocalLearner {
                 return Err(format!("Valve's server for {} came without bots and your game has none to lend it. Open Mods and click Repair, then try again.", setup::game_name(g)));
             }
             std::fs::write(gdir.join("server.cfg"), LEARN_CFG).map_err(|e| e.to_string())?;
+            // ReGameDLL lets bots into a CS 1.6 dedicated server only with bot_enable 1 when the
+            // game starts (game_init.cfg; server.cfg runs too late, and without it no bot cvar or
+            // command exists): as setup does for the game (setup::core::enable_bots)
+            std::fs::write(gdir.join("game_init.cfg"), LEARN_INIT_CFG).map_err(|e| e.to_string())?;
         }
         Ok(())
     }
@@ -864,7 +881,8 @@ impl Learner for LocalLearner {
         from[2] = 0;
         // (one left from an earlier run that never ended: it would hold the files and a port)
         self.end_wine_side();
-        let args = learn_args(&m.game, port, &password, &m.name);
+        write_learn_map(&self.dir.join(&m.game), &m.name).map_err(fail)?;
+        let args = learn_args(&m.game, port, &password);
         let mut child = self.spawn(&args, out).map_err(fail)?;
         sys::tie_to_app(&child);
         let mut started = Instant::now();
@@ -1074,6 +1092,7 @@ mod tests {
         assert!(has_bot_profile(&server) && server.join("BotChatter.db").is_file());
         assert_eq!(std::fs::read(server.join(crate::gamebin::MP)).unwrap(), b"...lonerstrike_mapknow...");
         assert!(LEARN_CFG.contains("bot_enable 1"));
+        assert!(crate::setup::core::enable_bots(LEARN_INIT_CFG).is_none(), "game_init.cfg already turns bots on");
     }
 
     #[test]
@@ -1254,9 +1273,14 @@ mod tests {
 
     #[test]
     fn hidden_server_options() {
-        let a = learn_args("czero", 27090, "pw", "de_x").join(" ");
+        let a = learn_args("czero", 27090, "pw").join(" ");
         assert!(a.contains("-game czero") && a.contains("+ip 127.0.0.1") && a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+bot_join_after_player 0"));
-        assert!(a.ends_with("+map de_x"), "the map last, after the settings");
+        assert!(a.ends_with("+exec ls_learn_map.cfg"), "the map last, after the settings, from its file");
+        let dir = std::env::temp_dir().join(format!("ls-learnmap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        write_learn_map(&dir, "aim_ak-colt").unwrap();
+        assert!(std::fs::read_to_string(dir.join(LEARN_MAP_CFG)).unwrap().contains("map \"aim_ak-colt\""), "a hyphen kept whole");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

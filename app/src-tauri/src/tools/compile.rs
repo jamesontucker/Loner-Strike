@@ -52,6 +52,9 @@ pub const SDHLT_BYTES: u64 = 3_030_448;
 /// over the release's tools/Linux after the release itself is checked and unpacked.
 pub const SDHLT_LINUX_URL: &str = "https://dl.lonerstrike.com/tools/sdhlt-v1.3.1-linux-x64.tar.xz";
 pub const SDHLT_LINUX_SHA256: &str = "51871fa72b0c94ab881752c29a5a677dcf501788da53a79db4d4f1acfd65ac79";
+pub const SDHLT_LINUX_BYTES: u64 = 674_888;
+/// Everything the download fetches here (the release, and on Linux its Linux build too)
+pub const DOWNLOAD_BYTES: u64 = SDHLT_BYTES + if crate::gamebin::LINUX { SDHLT_LINUX_BYTES } else { 0 };
 /// The folder everything is in inside the zip.
 const ZIP_ROOT: &str = "sdhlt-v1.3.1";
 const LICENCE: &str = if crate::gamebin::LINUX {
@@ -2170,7 +2173,7 @@ fn status(st: &Shared) -> Value {
     json!({
         "installed": installed,
         "version": SDHLT_VERSION,
-        "bytes": SDHLT_BYTES,
+        "bytes": DOWNLOAD_BYTES,
         "url": SDHLT_URL,
         "licence": LICENCE,
         "folder": dir.to_string_lossy(),
@@ -3149,7 +3152,7 @@ mod tests {
         let (s, v) = call("GET", "/api/tools/compile/status", false, "").await;
         assert_eq!(s, StatusCode::OK);
         assert_eq!(v["version"], SDHLT_VERSION);
-        assert_eq!(v["bytes"], SDHLT_BYTES);
+        assert_eq!(v["bytes"], DOWNLOAD_BYTES);
         assert_eq!(v["canRun"], false, "no game set up");
         // POSTs need the panel header
         let (s, _) = call("POST", "/api/tools/compile/start", false, "{}").await;

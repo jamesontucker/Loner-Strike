@@ -2774,6 +2774,12 @@ pub fn start(id: &str) -> Result<(), String> {
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
+    // whoever runs Loner-Strike is Owner on their own server (their Steam account here)
+    if let Some(steam) = crate::steam::own_steamid(None) {
+        if let Some(g) = game_for(id, || None) {
+            let _ = crate::admins::ensure_owner(&g, &steam, &crate::steam::persona_name().unwrap_or_default());
+        }
+    }
     // whether bots play on an empty server and whether it's listed (friends.cfg runs after every map)
     let bots_changed = write_bots_line(&e).unwrap_or(false);
     // the creatures of maps that aren't on it any more go (tools/creaturesrv.rs)

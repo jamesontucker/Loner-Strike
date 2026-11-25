@@ -325,6 +325,73 @@ pub fn persona_name() -> Option<String> {
     None
 }
 
+/// The Steam account this computer's Steam last signed in with, as an in-game SteamID
+/// ("STEAM_0:0:12345"), from loginusers.vdf: the Steam that has the game at `hl` first
+/// (.../steamapps/common/Half-Life), then this computer's usual Steam folders (Linux's,
+/// Windows' from the registry, the Mac's CrossOver bottles).
+pub fn own_steamid(hl: Option<&Path>) -> Option<String> {
+    let mut roots: Vec<PathBuf> = hl.and_then(|h| h.ancestors().nth(3)).map(Path::to_path_buf).into_iter().collect();
+    roots.extend(steam_roots_here());
+    roots.into_iter().find_map(|r| std::fs::read_to_string(r.join("config").join("loginusers.vdf")).ok().and_then(|t| steamid_in(&t)))
+}
+
+fn steam_roots_here() -> Vec<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        linux_steam_roots()
+    }
+    #[cfg(windows)]
+    {
+        use winreg::enums::HKEY_CURRENT_USER;
+        use winreg::RegKey;
+        RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey("Software\\Valve\\Steam")
+            .ok()
+            .and_then(|k| k.get_value::<String, _>("SteamPath").ok())
+            .map(|p| PathBuf::from(p.replace('/', "\\")))
+            .into_iter()
+            .collect()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = dirs::home_dir() else { return Vec::new() };
+        let Ok(entries) = std::fs::read_dir(home.join("Library/Application Support/CrossOver/Bottles")) else { return Vec::new() };
+        entries
+            .flatten()
+            .flat_map(|b| ["Program Files (x86)/Steam", "Program Files/Steam"].map(|s| b.path().join("drive_c").join(s)))
+            .filter(|p| p.is_dir())
+            .collect()
+    }
+    #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+    {
+        Vec::new()
+    }
+}
+
+/// The SteamID of the account marked MostRecent "1" (else the first) in loginusers.vdf, whose
+/// accounts are keyed by their 64-bit id ("76561198...").
+pub(crate) fn steamid_in(vdf: &str) -> Option<String> {
+    let (mut first, mut current, mut recent) = (None, None::<u64>, None);
+    for line in vdf.lines() {
+        let t = line.trim();
+        if let Some(id) = t.strip_prefix('"').and_then(|r| r.strip_suffix('"')).filter(|r| r.len() == 17 && r.bytes().all(|b| b.is_ascii_digit())).and_then(|r| r.parse::<u64>().ok()) {
+            first.get_or_insert(id);
+            current = Some(id);
+        }
+        let key = t.strip_prefix("\"MostRecent\"").map(|r| r.trim().trim_matches('"').to_string());
+        if key.as_deref() == Some("1") {
+            recent = current;
+        }
+    }
+    steam2(recent.or(first)?)
+}
+
+/// 76561198056158890 -> STEAM_0:0:47946581
+pub(crate) fn steam2(id64: u64) -> Option<String> {
+    let account = id64.checked_sub(76_561_197_960_265_728).filter(|a| *a > 0 && *a <= u32::MAX as u64)?;
+    Some(format!("STEAM_0:{}:{}", account & 1, account >> 1))
+}
+
 /// The PersonaName of the account marked MostRecent "1" (else the first) in loginusers.vdf.
 #[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn persona_in(vdf: &str) -> Option<String> {
@@ -359,6 +426,16 @@ fn steam_exe() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod too_old_tests {
+
+    /// The owner's SteamID from loginusers.vdf: the MostRecent account, else the first
+    #[test]
+    fn own_steamid_from_loginusers() {
+        let vdf = "\"users\"\n{\n\t\"76561197960265729\"\n\t{\n\t\t\"PersonaName\"\t\t\"other\"\n\t\t\"MostRecent\"\t\t\"0\"\n\t}\n\t\"76561198056158890\"\n\t{\n\t\t\"PersonaName\"\t\t\"nanoshrine\"\n\t\t\"MostRecent\"\t\t\"1\"\n\t}\n}\n";
+        assert_eq!(super::steamid_in(vdf).as_deref(), Some("STEAM_0:0:47946581"));
+        assert_eq!(super::steamid_in(&vdf.replace("\"MostRecent\"\t\t\"1\"", "\"MostRecent\"\t\t\"0\"")).as_deref(), Some("STEAM_0:1:0"));
+        assert_eq!(super::steamid_in("nothing here"), None);
+        assert_eq!(super::steam2(76561197960265728), None);
+    }
     #[test]
     fn spots_a_pre_2013_copy() {
         let d = std::env::temp_dir().join(format!("ls-tooold-{}", std::process::id()));
