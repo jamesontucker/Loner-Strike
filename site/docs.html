@@ -636,8 +636,8 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
       <tr><td><b>Veterans</b></td><td>Quick, accurate, short bursts</td></tr>
       <tr><td><b>Old-timers</b></td><td>Good aim, slow, camp a lot, rarely talk</td></tr>
       <tr><td><b>Locked In</b></td><td>Very good and focused; bunnyhop between fights</td></tr>
-      <tr><td><b>Hackers</b></td><td>Suspiciously good; notice you from behind</td></tr>
       <tr><td><b>Gods</b></td><td>Everything maxed: nearly all headshots</td></tr>
+      <tr><td><b><a href="#hackers">Hackers</a></b></td><td>A hacking server: everyone cheats, each their own way</td></tr>
       <tr><td><b>Original</b></td><td>The game's stock bots, unchanged</td></tr>
     </tbody>
   </table>
@@ -667,6 +667,33 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
     </tbody>
   </table>
   </div>
+  <h2 id="hackers" data-keywords="hacker cheat wallhack aimbot spinbot triggerbot hvh occasional">Hackers</h2>
+  <p>Hackers is an HvH server: every bot cheats, so it's the hardest style. Each hacker uses its own set of cheats, picked by its personality, and a regular keeps the same set every time. <a href="#bot-people">Bot people</a> shows each regular's set.</p>
+  <div class="table">
+  <table>
+    <thead><tr><th>Cheat</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><b>Wallhack and ESP</b></td><td>Knows where you are through walls: the crosshair follows you, it walks to you, and CTs know where the bomb is</td></tr>
+      <tr><td><b>Aimbot</b></td><td>Snaps to your head the moment it sees you, all around it and through smoke</td></tr>
+      <tr><td><b>Triggerbot</b></td><td>Fires the instant you cross its crosshair</td></tr>
+      <tr><td><b>Spinbot</b></td><td>Spins on the spot, and the shots still land</td></tr>
+      <tr><td><b>No recoil</b>, <b>No spread</b></td><td>Sprays stay dead on target</td></tr>
+      <tr><td><b>No flash or smoke</b></td><td>Flashbangs don't blind it and smoke doesn't hide you</td></tr>
+      <tr><td><b>Wallbangs</b></td><td>Shoots through thin walls at someone it knows is there</td></tr>
+      <tr><td><b>Bhop script</b></td><td>Perfect chained bunnyhops</td></tr>
+      <tr><td><b>Backtrack</b></td><td>The odd shot still lands just after you got behind cover</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>With Hackers picked, the bot settings show <b>How blatant</b> and a switch for each cheat:</p>
+  <ul>
+    <li><b>Closet</b>: could pass for a good player. You can still win fights.</li>
+    <li><b>Mixed</b> (the default): by personality. Show-offs and trolls rage, careful players hide it.</li>
+    <li><b>Rage</b>: as blatant as it gets.</li>
+  </ul>
+  <p>Hackers talk like an HvH server: configs, resolvers, one taps.</p>
+  <h3 id="occasional-hacker">Occasional hacker</h3>
+  <p>In any other style, <b>Occasional hacker</b> lets one hacker (now and then two) slip in, on about one map in twelve. It's off until you turn it on, and never in a match. The others notice: they call it out in chat, and after a few of its kills someone starts a vote to kick it. An obvious hacker is usually kicked; a careful one sometimes stays.</p>
   <h2 id="every-bot">Every bot is someone</h2>
   <p>Bots tilt, panic when flashed and back off when outnumbered. About 1,600 regulars return with the same names, some in clans, and remember you (<a href="#bot-people">Bot people</a>). They play as a team in 5v5 matches, Base Builder, and Classic with Matchmaking; elsewhere, like individuals on a pub.</p>
 </section>
@@ -678,7 +705,7 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
   <h2 id="bots-ideas" data-keywords="killzone quake unreal fear ai">The ideas behind them</h2>
   <p>Map study ahead of time, like <b>Killzone</b> and <b>Quake III</b> (sightlines, cover, angles, wallbang spots); the <b>Unreal Tournament 2004 BotPrize</b> goal of bots you can't tell from people; and <b>F.E.A.R.</b>-style decisions they call out in chat and voice. On top: each bot knows the map only as well as its skill, wallbangs follow the game's real rules, and you can give orders by typing or talking.</p>
   <h2 id="bots-fair" data-keywords="wallhack cheat know">They only know what you would</h2>
-  <p>No wallhack. A bot knows where you are only if it saw or heard you, saw the radar or kill feed, or a teammate called you out, and it forgets over time. Sounds give only a rough direction.</p>
+  <p>No wallhack, except in <a href="#hackers">Hackers</a>. A bot knows where you are only if it saw or heard you, saw the radar or kill feed, or a teammate called you out, and it forgets over time. Sounds give only a rough direction.</p>
   <h2 id="bots-see" data-keywords="vision notice flash smoke">How they see</h2>
   <ul>
     <li>They see your body; better bots also catch a gun barrel or shoulder past cover.</li>
@@ -725,6 +752,8 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
       <tr><td><b>Auto difficulty</b></td><td>Adjusts to how you're doing</td></tr>
       <tr><td><b>Personality</b></td><td>Plain to Exaggerated</td></tr>
       <tr><td><b>Lobby mood</b></td><td>Friendly, Normal or Toxic</td></tr>
+      <tr><td><b>How blatant</b> and the cheats</td><td>With Hackers: Closet, Mixed or Rage, and each cheat on or off (<a href="#hackers">Hackers</a>)</td></tr>
+      <tr><td><b>Occasional hacker</b></td><td>Other styles: a rare hacker slips in. Off by default (<a href="#occasional-hacker">how it works</a>)</td></tr>
     </tbody>
   </table>
   </div>
