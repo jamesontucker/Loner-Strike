@@ -1848,7 +1848,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h1>Running a server</h1>
   <p class="lead">Each server has these as tabs; your own game has them in the sidebar.</p>
   <h2 id="admins">Admins and VIPs</h2>
-  <p>In <b>Admins</b>, add people by SteamID as admins or VIPs, for good or for some days. <b>What each role gets</b> sets their powers; VIP perks (free armor, a defuse kit, extra money, a tag) and an optional donate link are under <b>VIP &amp; donations</b>. Admin and ban lists can be shared across your servers.</p>
+  <p>In <b>Admins</b>, add people by SteamID as admins or VIPs, for good or for some days. <b>What each role gets</b> sets their powers, including which roles show a chat tag ([VIP], [MOD], [ADMIN], [OWNER]); Moderators and up also get a reserved slot. VIP perks (free armor, a defuse kit, extra money) and an optional donate link are under <b>VIP &amp; donations</b>. Admin and ban lists can be shared across your servers.</p>
   <h2 id="moderation">Moderation and stats</h2>
   <p><b>Moderation</b>: player reports (they notify you), chat log, mutes, word filter, bans and player history. <b>Stats</b>: ranks and 5v5 results.</p>
   <h2 id="welcome-page">Welcome page</h2>
@@ -2398,6 +2398,7 @@ args = ["--mcp-stdio"]</code></pre>
     <li>Over the internet without a tunnel, forward UDP 27015 on your router and allow it in your firewall (or use playit.gg or Tailscale).</li>
     <li>Allow the game when Windows Defender Firewall asks (on a Mac, when macOS asks), on private networks at least. Each server has its own <code>hlds.exe</code>, so a new server asks again.</li>
     <li>Clicked <b>Cancel</b> by mistake? Open Windows Security › Firewall &amp; network protection › <b>Allow an app through firewall</b> › Change settings, find <code>hlds.exe</code> (add it with Allow another app… from the server's folder if it isn't there) and tick both <b>Private</b> and <b>Public</b>.</li>
+    <li>On Linux, if you've turned on a firewall (such as ufw), allow UDP 27015 for the game.</li>
     <li>"Failed to contact game server" on Linux: allow UDP 27015 to 27020 in <a href="#open-ports">the provider's firewall</a>.</li>
   </ul>
 
@@ -2477,8 +2478,8 @@ args = ["--mcp-stdio"]</code></pre>
     <li><b>Everything</b>: <b>Remove everything</b> there removes it from every game and deletes your servers on this computer and all its data. Servers on Linux machines keep running.</li>
     <li>Then uninstall the app like any other.</li>
   </ul>
-  <h2 id="tools-mac">Do the tools work on a Mac? <a class="anchor" href="#tools-mac" aria-label="Link to this">#</a></h2>
-  <p>Yes, all of them. The map compiler runs through CrossOver, in your game's bottle.</p>
+  <h2 id="tools-mac">Do the tools work on a Mac or Linux? <a class="anchor" href="#tools-mac" aria-label="Link to this">#</a></h2>
+  <p>Yes, all of them. On a Mac the map compiler runs through CrossOver, in your game's bottle; on Linux it runs natively (<a href="#linux">more</a>).</p>
   <h2 id="tools-beta">What does Beta mean on the tools? <a class="anchor" href="#tools-beta" aria-label="Link to this">#</a></h2>
   <p>They're new and still settling in (<a href="#tools-safe">more</a>).</p>
   <h2 id="where-files">Where are its files? <a class="anchor" href="#where-files" aria-label="Link to this">#</a></h2>
