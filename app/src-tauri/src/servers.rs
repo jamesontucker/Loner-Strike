@@ -1163,6 +1163,9 @@ fn settings_filter(rel: &Path) -> bool {
     let history = matches!(
         name.as_str(),
         "stats.json" | "stats.json.part" | "playtime.txt" | "seen.json" | "reports.json" | "matches.json" | "scrim_status.json" | "recent.txt"
+        // (its bot regulars and who was on last map: a new server gets its own crowd - copied,
+        // every server made from one had the same faces)
+        | "regulars.ini" | "lastmap_people.txt"
     );
     !matches!(name.as_str(), "panel_rcon.txt" | "status.json" | "friends.json" | "friends.cfg")
         && !history
@@ -5040,7 +5043,7 @@ mod tests {
         assert!(!content_filter(Path::new("addons/amxmodx/x.amxx")) && !content_filter(Path::new("dlls/mp.dll")) && !content_filter(Path::new("sub/x.wad")));
         assert!(settings_filter(Path::new("presets/a.cfg")) && !settings_filter(Path::new("panel_rcon.txt")) && !settings_filter(Path::new("friends.json")));
         // a template's history stays with it
-        for f in ["stats.json", "seen.json", "reports.json", "chat.log", "matches.json"] {
+        for f in ["stats.json", "seen.json", "reports.json", "chat.log", "matches.json", "regulars.ini", "lastmap_people.txt"] {
             assert!(!settings_filter(Path::new(f)), "{f}");
         }
         assert!(settings_filter(Path::new("gags.txt")) && settings_filter(Path::new("favorites.txt")));
