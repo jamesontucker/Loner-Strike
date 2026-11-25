@@ -384,8 +384,13 @@ html { scroll-padding-top: 72px; }
 .btn.dl.yours .dl-note { color: #4a4419; }
 .btn.dl.yours:hover { background: #d4c55d; color: var(--ink); }
 .dl-fine { font-size: 15px; margin-top: 0; }
-.btn.dl.dl-linux { grid-column: 1 / -1; min-height: 0; }
-.dl-linux-more { font-size: 15px; margin: -2px 0 10px; }
+.dl-linux { margin: 4px 0 12px; }
+.dl-linux-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; font-weight: 700; }
+.dl-linux-head .beta { margin: 0; }
+.dl-linux-head a { margin-left: auto; font-size: 15px; font-weight: 500; }
+.dl-trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.dl-trio .btn.dl { min-height: 64px; padding: 10px 16px; }
+.dl-trio .btn.dl .dl-name { font-size: 1.05rem; }
 .steps.numbered { counter-reset: step; }
 .steps.numbered li { counter-increment: step; padding-left: 36px; }
 .steps.numbered li::before { content: counter(step); top: 1px; width: 24px; height: 24px; display: grid; place-items: center; font: 700 14px/1 var(--text); color: var(--ink); border-radius: 2px; }
@@ -406,7 +411,7 @@ html { scroll-padding-top: 72px; }
 .pack-after ol { margin: 0; padding-left: 20px; color: var(--dim); font-size: 15px; }
 .pack-after li { margin: 0 0 4px; }
 .pack-after + .get-foot { margin-top: 16px; }
-@media (max-width: 560px) { .dl-pair { grid-template-columns: 1fr; } .get-support { padding: 20px 18px; } }
+@media (max-width: 560px) { .dl-pair, .dl-trio { grid-template-columns: 1fr; } .get-support { padding: 20px 18px; } }
 @media (prefers-reduced-motion: reduce) { .btn.dl, .btn.pack-monthly { transition: none; } }
 .steps { list-style: none; margin: 18px 0 0; padding: 0; }
 .steps li { position: relative; padding: 0 0 14px 30px; color: var(--dim); }
@@ -1142,11 +1147,21 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <a class="btn dl" id="dl-mac" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Mac">
             <span class="dl-name">Download for Mac</span><span class="dl-note">Apple silicon and Intel</span>
           </a>
-          <a class="btn dl dl-linux" id="dl-linux" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Linux">
-            <span class="dl-name">Download for Linux <span class="beta">Beta</span></span><span class="dl-note">AppImage: any 64-bit Linux, the Steam Deck too</span>
-          </a>
         </div>
-        <p class="fine dl-linux-more">Linux packages: <a id="dl-deb" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux deb">.deb</a> for Ubuntu, Mint and Pop!_OS · <a id="dl-rpm" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux rpm">.rpm</a> for Fedora and Nobara · <a href="docs#linux">Linux notes</a></p>
+        <div class="dl-linux">
+          <p class="dl-linux-head">Linux <span class="beta">Beta</span> <a href="docs#linux">Linux notes</a></p>
+          <div class="dl-trio">
+            <a class="btn dl" id="dl-linux" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux AppImage">
+              <span class="dl-name">AppImage</span><span class="dl-note">Steam Deck, Arch, any Linux</span>
+            </a>
+            <a class="btn dl" id="dl-deb" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux deb">
+              <span class="dl-name">.deb</span><span class="dl-note">Ubuntu, Mint, Pop!_OS</span>
+            </a>
+            <a class="btn dl" id="dl-rpm" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux rpm">
+              <span class="dl-name">.rpm</span><span class="dl-note">Fedora, Nobara</span>
+            </a>
+          </div>
+        </div>
         <p class="fine dl-fine">Also on <a href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download from GitHub">GitHub</a> · Windows SmartScreen? <b>More info</b> → <b>Run anyway</b></p>
         <ol class="steps numbered">
           <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, set it up in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a> (<a href="docs#mac">how</a>), or run the Windows version in Parallels. On Linux, Steam's own version works, with or without Proton.</li>
