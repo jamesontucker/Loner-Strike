@@ -216,18 +216,20 @@ fn main() {
                 // until a restart (a tester, after updating)
                 .visible(false)
                 .background_color(tauri::window::Color(0x3e, 0x46, 0x37, 0xff))
-                .on_page_load(|w, p| {
+                .on_page_load(move |w, p| {
                     if p.event() == tauri::webview::PageLoadEvent::Finished {
                         PAGE_LOADED.store(true, std::sync::atomic::Ordering::SeqCst);
                         let _ = w.show();
+                        // (a small screen: maximized once it's shown; the Deck's desktop ignores
+                        // maximizing a window that's still hidden)
+                        if small {
+                            let _ = w.maximize();
+                        }
                         let _ = w.set_focus();
                     }
                 })
                 .build()?;
             fit_on_screen(&window);
-            if small {
-                let _ = window.maximize();
-            }
             show_when_loaded(window, start_url);
             Ok(())
         })
