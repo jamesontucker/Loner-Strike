@@ -320,16 +320,16 @@ async fn api_update_check(State(st): State<Shared>, headers: HeaderMap) -> (Stat
     }
 }
 
-/// On Linux outside an AppImage (APPIMAGE is set inside one): how to update instead.
+/// The Linux build installed from the AUR: Tauri's updater updates the AppImage, and a .deb or
+/// .rpm install with dpkg or rpm (behind the system's password prompt), but the AUR package
+/// is the .deb unpacked on a system without dpkg, which its AUR helper updates.
 fn linux_package_update() -> Option<&'static str> {
     if !crate::gamebin::LINUX || std::env::var_os("APPIMAGE").is_some() {
         return None;
     }
-    Some(if std::path::Path::new("/usr/bin/pacman").is_file() {
-        "This copy of Loner-Strike came from a package, so update it the same way: with your AUR helper (for example yay -Syu), or download the new version from lonerstrike.com."
-    } else {
-        "This copy of Loner-Strike came from a package (.deb or .rpm), so it can't update itself: download the new one from lonerstrike.com and open it, or update it with your system's software updater."
-    })
+    let has = |p: &str| std::path::Path::new(p).is_file();
+    (has("/usr/bin/pacman") && !has("/usr/bin/dpkg") && !has("/usr/bin/rpm"))
+        .then_some("This copy of Loner-Strike came from the AUR, so update it with your AUR helper (for example yay -Syu), or download the AppImage from lonerstrike.com.")
 }
 
 async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
@@ -340,8 +340,7 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     if crate::setup::current().state == "running" || crate::backup::restoring_any() {
         return (StatusCode::OK, Json(json!({"error": "Something is being set up or restored. Wait for it to finish, then update."})));
     }
-    // Linux: only the AppImage updates itself; a .deb, .rpm or AUR install is updated by its
-    // package manager (the app's own files belong to the system there)
+    // (an AUR install is updated by its AUR helper)
     if let Some(how) = linux_package_update() {
         return (StatusCode::OK, Json(json!({"error": how})));
     }

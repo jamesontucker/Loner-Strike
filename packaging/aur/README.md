@@ -13,5 +13,5 @@ Not published yet: it needs a release with the Linux build, and an AUR maintaine
 3. `makepkg --printsrcinfo > .SRCINFO`, then test with `makepkg -si` on an Arch system.
 4. Commit `PKGBUILD` and `.SRCINFO` to the AUR repo (`ssh://aur@aur.archlinux.org/loner-strike-bin.git`).
 
-In-app updates: the app's updater replaces an AppImage; installed from the AUR, updates come
-from the AUR helper instead.
+In-app updates: the app's updater handles the AppImage, .deb and .rpm; an AUR install (no
+dpkg on Arch) is told to update with its AUR helper (app_api.rs, linux_package_update).
