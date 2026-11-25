@@ -42,7 +42,7 @@
  "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app. It adds two modes of its own (Last Stand and Battle Royale), creation tools (a map editor that compiles with SDHLT and playtests with bots, Game Mode Studio with node graphs, Plugin Studio for AMX Mod X, Creature Studio, a nav fixer, map doctor, map simulator, radar maker and more), and a moderated Community browser for sharing maps and modes.",
  "applicationCategory": "GameApplication",
  "applicationSubCategory": "Game mod manager and server control panel",
- "operatingSystem": "Windows, macOS (through CrossOver)",
+ "operatingSystem": "Windows, macOS (through CrossOver), Linux",
  "offers": {
   "@type": "Offer",
   "price": "0",
@@ -129,6 +129,14 @@
    "acceptedAnswer": {
     "@type": "Answer",
     "text": "Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in CrossOver (paid, with a free trial), and Loner-Strike finds it there. With Parallels (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Does it work on Linux and the Steam Deck?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes, in beta. Use Steam's own Counter-Strike: native, or with Proton turned on for the game; Loner-Strike sets up both. Download the AppImage (any 64-bit Linux, the Steam Deck in desktop mode), or the .deb for Ubuntu, Mint and Pop!_OS, or the .rpm for Fedora and Nobara. Servers on your computer and the map editor's compiler work too."
    }
   },
   {
@@ -376,6 +384,8 @@ html { scroll-padding-top: 72px; }
 .btn.dl.yours .dl-note { color: #4a4419; }
 .btn.dl.yours:hover { background: #d4c55d; color: var(--ink); }
 .dl-fine { font-size: 15px; margin-top: 0; }
+.btn.dl.dl-linux { grid-column: 1 / -1; min-height: 0; }
+.dl-linux-more { font-size: 15px; margin: -2px 0 10px; }
 .steps.numbered { counter-reset: step; }
 .steps.numbered li { counter-increment: step; padding-left: 36px; }
 .steps.numbered li::before { content: counter(step); top: 1px; width: 24px; height: 24px; display: grid; place-items: center; font: 700 14px/1 var(--text); color: var(--ink); border-radius: 2px; }
@@ -785,7 +795,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
         </div>
-        <p class="fine">Free, for Counter-Strike 1.6 and Condition Zero on Steam. Windows, or a Mac with CrossOver.</p>
+        <p class="fine">Free, for Counter-Strike 1.6 and Condition Zero on Steam. Windows, a Mac with CrossOver, or Linux and the Steam Deck (beta).</p>
         <div class="loader" aria-hidden="true">
           <div class="loader-title">Loading…</div>
           <div class="loader-text">Establishing network connection to server…</div>
@@ -1048,7 +1058,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="group"><h3>Friends</h3><p>Seven ways to connect, an invite ready to send, and a server browser like Steam's old one.</p></div>
         <div class="group"><h3>Servers</h3><p>On your computer or a rented Linux machine, with admins, bans, HLTV and daily backups.</p></div>
         <div class="group"><h3>Make and share</h3><p>A map editor, Game Mode Studio and a dozen more tools, and Community to share what you make.</p></div>
-        <div class="group"><h3>The app</h3><p>Guided setup on Windows or a Mac, control from your phone, signed updates, open source.</p></div>
+        <div class="group"><h3>The app</h3><p>Guided setup on Windows, a Mac or Linux, control from your phone, signed updates, open source.</p></div>
       </div>
     </div>
   </section>
@@ -1132,10 +1142,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <a class="btn dl" id="dl-mac" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Mac">
             <span class="dl-name">Download for Mac</span><span class="dl-note">Apple silicon and Intel</span>
           </a>
+          <a class="btn dl dl-linux" id="dl-linux" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Linux">
+            <span class="dl-name">Download for Linux <span class="beta">Beta</span></span><span class="dl-note">AppImage: any 64-bit Linux, the Steam Deck too</span>
+          </a>
         </div>
+        <p class="fine dl-linux-more">Linux packages: <a id="dl-deb" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux deb">.deb</a> for Ubuntu, Mint and Pop!_OS · <a id="dl-rpm" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download Linux rpm">.rpm</a> for Fedora and Nobara · <a href="docs#linux">Linux notes</a></p>
         <p class="fine dl-fine">Also on <a href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download from GitHub">GitHub</a> · Windows SmartScreen? <b>More info</b> → <b>Run anyway</b></p>
         <ol class="steps numbered">
-          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, set it up in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a> (<a href="docs#mac">how</a>), or run the Windows version in Parallels.</li>
+          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, set it up in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a> (<a href="docs#mac">how</a>), or run the Windows version in Parallels. On Linux, Steam's own version works, with or without Proton.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and sets it up. Everything it changes is backed up.</li>
           <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
@@ -1146,7 +1160,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <ul class="pack">
           <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span><b>The Supporter role</b> in our Discord</span></li>
           <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.6"/></svg><span><b>A [VIP] tag, a reserved slot and a join message</b> on our official servers</span></li>
-          <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></svg><span><b>The apps</b> for Windows and Mac</span></li>
+          <li><svg class="pk-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></svg><span><b>The apps</b> for Windows, Mac and Linux</span></li>
         </ul>
         <p>Loner-Strike stays free for everyone.</p>
         <div class="pack-buy">
@@ -1224,6 +1238,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <details>
         <summary>Does it work on a Mac?</summary>
         <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. The map editor compiles through CrossOver too. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
+      </details>
+      <details>
+        <summary>Does it work on Linux and the Steam Deck?</summary>
+        <p>Yes, in beta. Use Steam's own Counter-Strike: native, or with <b>Proton</b> turned on for the game (Properties, Compatibility); Loner-Strike sets up both, so you can switch any time. Download the <b>AppImage</b> for any 64-bit Linux and the Steam Deck (run setup in desktop mode, then play in Game Mode), the <b>.deb</b> for Ubuntu, Mint and Pop!_OS, or the <b>.rpm</b> for Fedora and Nobara. Servers on your computer and the map editor's compiler work too. More in <a href="docs#linux">the docs</a>.</p>
       </details>
       <details>
         <summary>Windows says it protected my PC</summary>
@@ -1665,15 +1683,18 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   // This computer's button is the bright one; both stay.
   {
     const DL = "https://dl.lonerstrike.com/download/";
-    const files = { "dl-win": "Loner-Strike-windows-x64-setup.exe", "dl-mac": "Loner-Strike-mac.dmg" };
+    const files = { "dl-win": "Loner-Strike-windows-x64-setup.exe", "dl-mac": "Loner-Strike-mac.dmg",
+      "dl-linux": "Loner-Strike-linux-x86_64.AppImage", "dl-deb": "Loner-Strike-linux-amd64.deb", "dl-rpm": "Loner-Strike-linux-x86_64.rpm" };
     for (const [id, name] of Object.entries(files)) {
       fetch(DL + name, { method: "HEAD", cache: "no-store" })
         .then((r) => { if (r.ok) document.getElementById(id).href = DL + name; })
         .catch(() => {});
     }
     const ua = navigator.userAgent;
-    // a Mac gets the Mac button bright; everyone else Windows (the main audience); the other stays a clear button
-    const mine = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua) ? "dl-mac" : "dl-win";
+    // a Mac gets the Mac button bright, Linux (a Steam Deck too) the Linux one; everyone else
+    // Windows (the main audience); the others stay clear buttons
+    const mine = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua) ? "dl-mac"
+      : /Linux|X11|CrOS/.test(ua) && !/Android/.test(ua) ? "dl-linux" : "dl-win";
     document.getElementById(mine).classList.add("yours");
   }
 

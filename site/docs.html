@@ -280,11 +280,11 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
   <ul>
     <li><b>Counter-Strike 1.6 or Condition Zero on Steam</b>, the current version. Old retail or repacked copies can't run the mods (<a href="#old-copy">why</a>).</li>
     <li>Condition Zero's stock tutor tips are off on Loner-Strike servers (a mode's own hints still show); <code>ls_cz_tutor 1</code> turns them back on.</li>
-    <li><b>Windows 10 or 11</b>, or <b>a Mac</b> with the Windows version of Steam and the game in CrossOver (<a href="#mac">Mac setup</a>).</li>
+    <li><b>Windows 10 or 11</b>, <b>a Mac</b> with the Windows version of Steam and the game in CrossOver (<a href="#mac">Mac setup</a>), or <b>64-bit Linux</b> and the <b>Steam Deck</b> (beta, <a href="#linux">Linux setup</a>).</li>
   </ul>
   <h2 id="install">Install</h2>
   <ol>
-    <li>Download Loner-Strike from <a href="/#get">lonerstrike.com</a>: the <code>-setup.exe</code> on Windows (the <code>.dmg</code> on a Mac).</li>
+    <li>Download Loner-Strike from <a href="/#get">lonerstrike.com</a>: the <code>-setup.exe</code> on Windows (the <code>.dmg</code> on a Mac, and on Linux see <a href="#linux">below</a>).</li>
     <li>Run it. If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b> (<a href="#smartscreen">why</a>). It installs for your Windows user, with no admin prompt, in <code>C:\Users\&lt;you&gt;\AppData\Local\Loner-Strike</code>.</li>
     <li>Close Counter-Strike: setup can't change the game's files while it runs.</li>
     <li>Open Loner-Strike. It finds your game (Steam's usual place is <code>C:\Program Files (x86)\Steam\steamapps\common\Half-Life</code>, and other Steam libraries are found too) and you pick what to install: about 2 to 4 minutes for the basics, 4 to 8 for everything (the fun maps take most of it).</li>
@@ -297,6 +297,27 @@ input[type="search"]::-webkit-search-cancel-button:hover { background: #e8ecdf; 
     <li>Open Loner-Strike. It finds Steam in your bottles, and asks which one if there are several.</li>
   </ol>
   <p>A folder you pick by hand must be inside the bottle's <code>drive_c</code>. With Parallels, install the Windows version of Loner-Strike inside Windows instead.</p>
+  <h2 id="linux" data-keywords="linux steam deck steamos proton ubuntu mint fedora arch appimage deb rpm">Linux and the Steam Deck (beta)</h2>
+  <p>Loner-Strike works with Steam's own Counter-Strike on Linux, the native version or the Windows one through Proton:</p>
+  <ol>
+    <li>Download one of these from <a href="/#get">lonerstrike.com</a>:
+      <ul>
+        <li><b>AppImage</b>: any 64-bit Linux, and the Steam Deck. Make it runnable (right-click, Properties, Allow executing as a program, or <code>chmod +x</code>) and open it. Ubuntu 22.04 needs <code>sudo apt install libfuse2</code> for it first.</li>
+        <li><b>.deb</b> for Ubuntu, Linux Mint and Pop!_OS, or <b>.rpm</b> for Fedora and Nobara: open it to install, like any other app.</li>
+      </ul>
+    </li>
+    <li>Close Counter-Strike, open Loner-Strike and run setup. It finds Steam in its usual places, including the Flatpak and Snap versions.</li>
+    <li>Press Play.</li>
+  </ol>
+  <p><b>Native or Proton.</b> Setup puts in the mods for both, so you can switch any time: in Steam, right-click Counter-Strike, Properties, Compatibility. The native version has open crash reports in online play; if it crashes on you, try Proton.</p>
+  <p><b>Steam Deck.</b> Run setup in desktop mode (hold the power button, Switch to Desktop), then go back to Game Mode and start Counter-Strike as usual: the modes and bots come with it. The menus are on <span class="kbd">F3</span> and <span class="kbd">F4</span>: map two spare buttons (the back grips work well) to those keys in the game's controller settings.</p>
+  <p><b>Good to know.</b></p>
+  <ul>
+    <li>Servers on your computer run Valve's Linux server, and the map editor's compiler runs natively (it needs Ubuntu 20.04, Debian 11 or newer).</li>
+    <li>Building plugins needs your system's 32-bit C++ library, which Steam installs. If it's missing, the app says what to install.</li>
+    <li>The AppImage updates itself. The .deb and .rpm update by downloading the new one from the website.</li>
+    <li>Windows Steam inside Wine, Lutris or Bottles isn't supported: use the Linux Steam client.</li>
+  </ul>
   <h2 id="what-setup-installs">What setup installs</h2>
   <ul>
     <li><b>The mod loader</b>: Metamod-P, AMX Mod X and ReGameDLL.</li>

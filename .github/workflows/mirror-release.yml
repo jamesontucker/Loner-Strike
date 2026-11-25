@@ -7,7 +7,9 @@
 #                      for this first and GitHub's after it)
 #   download/Loner-Strike-windows-x64-setup.exe, download/Loner-Strike-mac.dmg
 #                      the newest installers under fixed names, for the website's download
-#                      buttons (the Mac build is universal: Apple silicon and Intel)
+#                      buttons (the Mac build is universal: Apple silicon and Intel); Linux's
+#                      too when the release has them: Loner-Strike-linux-x86_64.AppImage,
+#                      -linux-amd64.deb, -linux-x86_64.rpm
 #
 # Updates stay signed with the app's updater key and the app checks that signature, so a
 # copy on the mirror can't be swapped for something else. Only the newest release writes
@@ -128,6 +130,13 @@ jobs:
             }
             fixed '*_x64-setup.exe' download/Loner-Strike-windows-x64-setup.exe application/vnd.microsoft.portable-executable
             fixed '*_universal.dmg' download/Loner-Strike-mac.dmg application/x-apple-diskimage
+            # Linux (beta): only when the release has it (a release without one keeps the last)
+            for linux in '*_amd64.AppImage download/Loner-Strike-linux-x86_64.AppImage application/octet-stream' \
+                         '*_amd64.deb download/Loner-Strike-linux-amd64.deb application/vnd.debian.binary-package' \
+                         '*.x86_64.rpm download/Loner-Strike-linux-x86_64.rpm application/x-rpm'; do
+              set -f; set -- $linux; set +f
+              if ls dist/$1 >/dev/null 2>&1; then fixed "$1" "$2" "$3"; else echo "no $1 in this release: $2 left as it is"; fi
+            done
           else
             echo "$TAG isn't the newest release ($newest): latest.json left as it is"
           fi
