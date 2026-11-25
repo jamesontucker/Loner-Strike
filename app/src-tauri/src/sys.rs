@@ -371,7 +371,8 @@ pub fn read_shipped(bin: &Path) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     // (a few MB at most; anything far bigger isn't it)
     std::io::Read::read_to_end(&mut std::io::Read::take(flate2::read::GzDecoder::new(gz), 256 << 20), &mut out).ok()?;
-    Some(out)
+    // (an empty one: a build without that program)
+    (!out.is_empty()).then_some(out)
 }
 
 /// Whether read_shipped finds `bin` (it or its .gz)

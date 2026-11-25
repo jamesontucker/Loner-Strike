@@ -149,7 +149,7 @@ fn shipped(res: &std::path::Path, rel: &str) -> Result<(String, Vec<u8>), String
     }
     let missing = "This copy of Loner-Strike doesn't include the voice program for Linux servers. Reinstalling the app should fix it; in a build from source, run scripts/build-voice-agent.sh.";
     let bin = places.into_iter().find(|p| crate::sys::shipped_here(p)).ok_or(missing)?;
-    let bytes = crate::sys::read_shipped(&bin).ok_or("Couldn't read the voice program.")?;
+    let bytes = crate::sys::read_shipped(&bin).ok_or(missing)?;
     let want = std::fs::read_to_string(PathBuf::from(format!("{}.sha256", bin.display()))).map_err(|_| missing.to_string())?;
     let want = want.split_whitespace().next().unwrap_or("").to_ascii_lowercase();
     let have: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();

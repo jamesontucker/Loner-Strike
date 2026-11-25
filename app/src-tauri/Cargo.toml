@@ -8,6 +8,8 @@ edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# (gzips the Linux server programs for the Linux bundle, build.rs)
+flate2 = "1"
 
 [dependencies]
 tauri = { version = "2", features = [] }

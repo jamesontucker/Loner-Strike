@@ -142,17 +142,6 @@ jobs:
             ( cd "$(dirname "$p")" && if command -v sha256sum >/dev/null; then sha256sum -c "$(basename "$p").sha256"; else shasum -a 256 -c "$(basename "$p").sha256"; fi )
           done
 
-      # The AppImage's packager (linuxdeploy) rewrites every Linux program it bundles, which
-      # breaks the checksums the app sends these to servers by: the Linux build ships them
-      # gzipped (tauri.linux.conf.json; sys::read_shipped unpacks them)
-      - name: Gzip the Linux server programs (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          cd app/src-tauri/resources/linux
-          for p in ls-control/ls-control ls-voice/ls-voice ls-intent/ls-intent; do gzip -kn9f "$p"; done
-          ls -la ls-control ls-voice ls-intent
-
       # what Tauri needs to build on Linux (WebKitGTK and friends)
       - name: Install build tools (Linux)
         if: matrix.platform == 'ubuntu-22.04'

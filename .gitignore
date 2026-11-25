@@ -32,3 +32,6 @@ app/src-tauri/resources/linux/ls-voice/ls-voice
 app/src-tauri/resources/linux/ls-voice/ls-voice.sha256
 app/src-tauri/resources/linux/ls-intent/ls-intent
 app/src-tauri/resources/linux/ls-intent/ls-intent.sha256
+
+# made by app/src-tauri/build.rs for the Linux bundle
+app/src-tauri/resources/linux/*/*.gz
