@@ -2269,6 +2269,22 @@ send_kit(id)
 {
 	if (!is_user_connected(id) || !is_user_bot(id))
 		return
+	// (a test run: the brain's bot_ls_hack_test "<letters> <level> [team]" gives the kits; this
+	// takes the same ones, so the bullets, hops and reactions match what a real game does)
+	static test[32]
+	get_cvar_string("bot_ls_hack_test", test, charsmax(test))
+	if (test[0])
+	{
+		new letters[12], lvl[4], team[4]
+		parse(test, letters, charsmax(letters), lvl, charsmax(lvl), team, charsmax(team))
+		new tm = str_to_num(team)
+		if ((!tm || tm == get_user_team(id)) && letters[0] != '-')
+			copy(g_Kit[id], charsmax(g_Kit[]), letters)
+		else
+			g_Kit[id][0] = 0
+		g_KitLevel[id] = clamp(str_to_num(lvl), 0, 2)
+		return
+	}
 	if (is_hacker(id))
 		make_kit(id)
 	else
