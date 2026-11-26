@@ -42682,7 +42682,7 @@
 }
 ],
 "settings":[],
-"more":"Weapons and grenades from the ground (dropped ones, or a map's armoury), and armor from a map's armoury. Not what's bought, given by the mode, or handed out at spawn.",
+"more":"Weapons and grenades from the ground (dropped ones, or a map's armory), and armor from a map's armory. Not what's bought, given by the mode, or handed out at spawn.",
 "related":[
 "item.dropped",
 "player.give_weapon",
