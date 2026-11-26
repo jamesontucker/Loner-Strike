@@ -1676,6 +1676,33 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     document.head.appendChild(s);
   }
 
+  // A link to a place on this page (Get it, the menu) keeps that place in view while the
+  // sections above it fill in after loading (the creations list and the live servers add
+  // ~650 px), so the jump doesn't stop short. Scrolling yourself ends it at once
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    const target = a && a.getAttribute("href").length > 1 && document.getElementById(a.getAttribute("href").slice(1));
+    if (!target || !window.ResizeObserver) return;
+    let done = false;
+    const stop = () => {
+      if (done) return;
+      done = true;
+      ro.disconnect();
+      ["wheel", "touchstart", "keydown"].forEach((t) => removeEventListener(t, stop));
+    };
+    // (the header's room once: the target's scroll-margin or the page's scroll-padding, not both)
+    const room = () => Math.max(parseFloat(getComputedStyle(target).scrollMarginTop) || 0, parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0);
+    const ro = new ResizeObserver(() => {
+      if (!done) window.scrollTo({ top: target.getBoundingClientRect().top + scrollY - room(), behavior: "instant" });
+    });
+    // (after the browser's own smooth jump has started)
+    setTimeout(() => {
+      if (!done) ro.observe(document.body);
+    }, 50);
+    ["wheel", "touchstart", "keydown"].forEach((t) => addEventListener(t, stop, { passive: true }));
+    setTimeout(stop, 4000);
+  });
+
   // Plausible events for the buttons (downloads and outbound links are tracked by the script itself)
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-event]");
