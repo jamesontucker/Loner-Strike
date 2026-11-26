@@ -761,7 +761,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 </head>
 <body>
 
-<div class="release-banner" id="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 14. <a href="/discord">Join the Discord to hear when it's out</a></div>
+<div class="release-banner" id="release-banner" role="note">Loner-Strike 1.1.0 is out: now on Linux and the Steam Deck, with smarter bots and a new Hackers lobby. <a href="#get" data-event="Get it (banner)">Get it</a></div>
 
 <header class="top">
   <div class="wrap">
@@ -1681,17 +1681,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     const a = e.target.closest("[data-event]");
     if (a) window.plausible(a.dataset.event);
   });
-
-  // ---- release banner ----------------------------------------------------------
-  // Before release day it says when; from November 14 it says it's out.
-  {
-    const banner = document.getElementById("release-banner");
-    if (Date.now() >= Date.parse("2026-11-14T00:00:00-08:00")) {
-      const a = Object.assign(document.createElement("a"), { href: "#get", textContent: "Get it" });
-      a.dataset.event = "Get it (banner)";
-      banner.replaceChildren("Loner-Strike 1.0.0 is out: build maps and modes, play them with bots, host them and share them. ", a);
-    }
-  }
 
   // Downloads: the fixed-name copies on the download server (mirror-release.yml puts them there
   // with each release), checked first; until they're there, both buttons go to the GitHub release.
