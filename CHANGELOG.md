@@ -4,9 +4,11 @@ What changed in each version. The downloads are on the [Releases](https://github
 
 ## 1.1.0
 
-Loner-Strike on Linux and the Steam Deck (beta), and fixes for everyone:
+Loner-Strike on Linux and the Steam Deck (beta), bots that move more like people, and Hackers:
 - Linux and the Steam Deck: setup, play, servers on your computer and the map editor, native or with Proton
-- Admins and Moderators get the parts of the in-game menus their role is for
+- Bots look where they're going and check what they're about to step out into
+- Hackers is a hacking server: every bot cheats, each its own way
+- Admins and Moderators get the parts of the in-game menus their role is for, and chat tags
 - Maps like the editor's starter room now count as learned by the bots
 - The app could open to a white square on a black window (Windows, after updating)
 
@@ -16,9 +18,28 @@ Loner-Strike on Linux and the Steam Deck (beta), and fixes for everyone:
 - Play, the in-game menus, bots, the Game Mode Studio, the map editor and its compiler, and servers on your computer, all on Linux.
 - On the Steam Deck: run setup in desktop mode, then play in Game Mode. The app opens maximized on small screens.
 
-### In-game menus
-- The Game Mode Menu follows each person's role on a server: an Owner gets everything; an Admin gets the match side of F3 (modes, maps, bots, match settings) and F4's restart, bot count, respawn and peaceful bots; a Moderator gets F4's round restart. God mode, noclip, healing, money, add-ons and the server's setup stay the Owner's.
+### Bots
+- Bots look where they're going while they move, between checking angles, instead of running sideways into a doorway with their eyes on something else.
+- Before stepping out of cover (onto long A, through double doors, up past a ledge) a bot checks the places that will see it first, the busiest one first, aiming at the corner's edge. How often depends on its skill and personality: a careful player nearly always, a rusher less.
+- On hostage maps a share of the Terrorists guards the hostages each round, each on its own spot: fewer on cs_italy (about a quarter to a third), more on cs_assault (about half), 30 to 50% on other maps. Before, on cs_office most of the team sat on them.
+- A new server made from another one gets its own bot regulars and doesn't copy the last map's people, so servers don't share the same faces.
+
+### Hackers
+- Hackers is now a hacking server: every bot cheats. Each hacker's cheats come from its personality, and a regular keeps the same ones: wallhack and ESP, aimbot, triggerbot, spinbot, no recoil, no spread, no flash or smoke, wallbangs, a bhop script and backtrack. Bot people shows each regular's cheats.
+- How blatant: Closet (could pass for a good player), Mixed (by personality: show-offs and trolls rage, careful players hide it) or Rage. Each cheat can be turned off in the bot settings.
+- Hackers play aggressively and come for you, and talk like an HvH server.
+- Occasional hacker (off by default): in other styles, one hacker (now and then two) slips in on about one map in twelve. The others call it out, and after a few kills someone starts a vote to kick it.
+- Gods now comes before Hackers in the style list, since Hackers is the hardest.
+
+### In-game menus and roles
+- The Game Mode Menu follows each person's role on a server: an Owner gets everything; an Admin gets the match side of F3 (modes, maps, bots, match settings), F4's restart, bot count, respawn and peaceful bots, team moves and map and mode votes; a Moderator gets F4's round restart, bots, peaceful bots, team moves and the votes. God mode, noclip and saving a spot follow What each role gets. Healing, money, add-ons and the server's setup stay the Owner's.
+- Chat tags by role: [OWNER], [ADMIN], [MOD] and [VIP], each set in What each role gets.
+- Moderators get a reserved slot.
+- A role change applies at once, without the player rejoining.
 - Whoever runs Loner-Strike is added as Owner on their own servers (a role they pick for themselves afterwards stays).
+
+### Servers
+- A dedicated server no longer crashes when a packet arrives while Steam's server isn't running (seen on Linux).
 
 ### Maps and bots
 - A map that's one open room (like the editor's starter map) learns to a single nav area, which the app took for an empty nav: such maps showed as not learned, and teaching the bots waited 45 minutes. They count as learned now, and a nav with nothing in it ends the learning at once.
