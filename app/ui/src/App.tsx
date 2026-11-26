@@ -67,7 +67,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   // looking inside maps, right after Servers: on the computer only (3D over Wi-Fi on a phone
   // isn't a goal)
   // its own group: the sidebar lists every tool under it (ToolsNav)
-  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Tools", beta: true }] : []),
+  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Tools" }] : []),
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
@@ -775,7 +775,7 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
 const TOOLS_FOLD = "ls.toolsOpen";
 
 /**
- * Tools in the sidebar: its own group after Hosting. The group heading (with the Beta tag)
+ * Tools in the sidebar: its own group after Hosting. The group heading
  * folds it; under it Overview (the cards page), then the tools grouped Create / Map tools / Personalize / Watch & inspect / Share
  * (views/tools/registry.tsx), each straight to its page. Opening a tool unfolds it.
  */
@@ -816,7 +816,6 @@ function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: strin
     <>
       <button className="nav-group nav-group-fold" aria-expanded={open} aria-controls="side-tools" onClick={toggle}>
         Tools
-        <span className="tag nav-beta">Beta</span>
         {folded && <CountBadge n={updates} title={`${updates} community update${updates === 1 ? "" : "s"} ready`} />}
         <svg className="fold-caret" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <path d={open ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6"} />

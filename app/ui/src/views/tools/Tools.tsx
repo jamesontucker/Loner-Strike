@@ -99,7 +99,7 @@ function Overview() {
         title="Tools"
         note={
           <>
-            <span className="tag tools-beta">Beta</span> New in 1.0: make your own maps and modes, get any map ready for bots, and make the game yours.
+            Make your own maps and modes, get any map ready for bots, and make the game yours. The map editor and the studios are in beta.
           </>
         }
       />

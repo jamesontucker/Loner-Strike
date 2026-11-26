@@ -49,6 +49,9 @@ Loner-Strike on Linux and the Steam Deck (beta), bots that move more like people
 - The window opens in the app's own color and shows once its page is ready, instead of white. If the page hasn't loaded after 8 seconds, it's loaded again by itself.
 - Uninstalling also removes the backups and logs Loner-Strike wrote while in use.
 
+### Tools
+- Out of beta: Map doctor, Map simulator, Nav fixer, Callouts, Radar maker, Crosshair & config, Bot people, Demos, Textures & models and Community. The map editor, Game Mode Studio, Creature Studio and Plugin Studio stay in beta for now.
+
 ### Game Mode Studio and Creature Studio
 - The Test run tab has its own start button, and Help reads "Help" in the narrow layout's More menu.
 - Creature Studio: switching creatures quickly keeps the 3D view up: the last model stays, dimmed, until the next one is ready, instead of a blank panel, another creature's model or a black shape.
