@@ -4,9 +4,9 @@ What changed in each version. The downloads are on the [Releases](https://github
 
 ## 1.1.0
 
-Loner-Strike on Linux and the Steam Deck (beta), bots that move more like people, and Hackers:
+Loner-Strike on Linux and the Steam Deck (beta), smarter bots, and Hackers:
 - Linux and the Steam Deck: setup, play, servers on your computer and the map editor, native or with Proton
-- Bots look where they're going and check what they're about to step out into
+- Smarter, more human bot movement
 - Hackers is a hacking server: every bot cheats, each its own way
 - Admins and Moderators get the parts of the in-game menus their role is for, and chat tags
 - Maps like the editor's starter room now count as learned by the bots
@@ -19,9 +19,9 @@ Loner-Strike on Linux and the Steam Deck (beta), bots that move more like people
 - On the Steam Deck: run setup in desktop mode, then play in Game Mode. The app opens maximized on small screens.
 
 ### Bots
-- Bots look where they're going while they move, between checking angles, instead of running sideways into a doorway with their eyes on something else.
-- Before stepping out of cover (onto long A, through double doors, up past a ledge) a bot checks the places that will see it first, the busiest one first, aiming at the corner's edge. How often depends on its skill and personality: a careful player nearly always, a rusher less.
-- On hostage maps a share of the Terrorists guards the hostages each round, each on its own spot: fewer on cs_italy (about a quarter to a third), more on cs_assault (about half), 30 to 50% on other maps. Before, on cs_office most of the team sat on them.
+- Bots watch where they're going as they move, instead of running sideways into a doorway looking at something else.
+- Before stepping into the open, a bot checks what's ahead first. Better and more careful players check more.
+- On hostage maps, part of the Terrorist team guards the hostages, spread out, and the rest go out and play, instead of most of the team sitting on them.
 - A new server made from another one gets its own bot regulars and doesn't copy the last map's people, so servers don't share the same faces.
 
 ### Hackers
