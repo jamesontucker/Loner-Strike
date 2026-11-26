@@ -33,8 +33,8 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls24/regamedll-bin-5.30.0.814-ls24.zip",
-    sha256: "dbe7fe942d39f3ccdd6286a76dd4a931eee8285bb08e1c79a2638e192b3ec3a6",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls25/regamedll-bin-5.30.0.814-ls25.zip",
+    sha256: "11eee909f5fe1afab7566218bba518c8625db67198d8b9e432314687de1daef8",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
@@ -453,7 +453,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A fresh install's server code is the pinned brain (ls24: 5.30.0.1322-dev): the pinned
+    /// A fresh install's server code is the pinned brain (ls25: 5.30.0.1325-dev): the pinned
     /// ReGameDLL through the app's own download path (mirror first, SHA-256 checked) into a
     /// scratch game, as setup's ReGameDLL step puts it in. Network:
     /// `LS_APP_DIR=<scratch> cargo test -- --ignored pinned_brain_installs`.
@@ -475,8 +475,8 @@ mod tests {
         regamedll(&mut rec, &ctx, &tmp).unwrap();
         let dll = std::fs::read(game.join("dlls/mp.dll")).unwrap();
         let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
-        assert!(has(b"5.30.0.1322-dev") && has(b"bot_ls_"), "the pinned brain");
-        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls24.zip"));
+        assert!(has(b"5.30.0.1325-dev") && has(b"bot_ls_"), "the pinned brain");
+        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls25.zip"));
         // Valve's was backed up, and is what an uninstall puts back
         assert!(rec.ours("dlls/mp.dll"));
         let _ = std::fs::remove_dir_all(&root);
